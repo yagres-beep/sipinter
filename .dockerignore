@@ -1,0 +1,13 @@
+.git
+.gitignore
+node_modules
+vendor
+storage/logs/*.log
+storage/framework/cache/data/*
+storage/framework/sessions/*
+storage/framework/views/*
+.env
+.env.*
+!.env.example
+_docs
+tests
