@@ -1,0 +1,115 @@
+@extends('layouts.app')
+
+@section('title', 'Kelola Pengguna — SIPINTER')
+
+@section('breadcrumb', 'Kelola Pengguna')
+
+@section('content')
+    <div class="page-title">Kelola Pengguna</div>
+    <div class="page-sub">Verifikasi akun, keanggotaan tim, dan penugasan IKU dalam satu tempat.</div>
+
+    @if (session('status'))
+        <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>
+    @endif
+
+    <div x-data="{ tab: 'verifikasi' }">
+        <div class="subtabs">
+            <button type="button" class="subtab" :class="tab === 'verifikasi' ? 'on' : ''" @click="tab = 'verifikasi'">✅ Verifikasi Akun</button>
+            <button type="button" class="subtab" :class="tab === 'tim' ? 'on' : ''" @click="tab = 'tim'">👥 Keanggotaan Tim</button>
+            <button type="button" class="subtab" :class="tab === 'penugasan' ? 'on' : ''" @click="tab = 'penugasan'">📋 Penugasan IKU</button>
+        </div>
+
+        <div x-show="tab === 'verifikasi'">
+            <div class="info">ℹ️ Akun yang baru mendaftar berstatus menunggu. Tim SAKIP memeriksa lalu menyetujui/menolak. Akun hanya bisa dipakai setelah disetujui.</div>
+
+            <div class="card">
+                <div class="sec"><span>Menunggu Persetujuan</span> <span class="badge b-tunggu">{{ $pending->count() }}</span></div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nama</th>
+                            <th>Email</th>
+                            <th>Peran Diajukan</th>
+                            <th style="text-align:right">Tindakan</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse ($pending as $user)
+                            <tr>
+                                <td><b>{{ $user->nama }}</b></td>
+                                <td class="muted">{{ $user->email }}</td>
+                                <td><span class="badge b-ajukan">{{ $user->role->nama }}</span></td>
+                                <td style="text-align:right">
+                                    <div class="btn-row" style="margin-top:0;justify-content:flex-end">
+                                        <form method="POST" action="{{ route('verifikasi-akun.approve', $user) }}" style="display:inline">
+                                            @csrf
+                                            <button type="submit" class="btn btn-teal btn-sm">✓ Setujui</button>
+                                        </form>
+                                        <form method="POST" action="{{ route('verifikasi-akun.reject', $user) }}" style="display:inline">
+                                            @csrf
+                                            <button type="submit" class="btn btn-red btn-sm">✕ Tolak</button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="4" style="color:var(--muted)">Tidak ada pendaftaran yang menunggu.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card" style="margin-top:16px">
+                <div class="sec"><span>Akun Aktif</span></div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nama</th>
+                            <th>Email</th>
+                            <th>Status</th>
+                            <th>Peran</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse ($users as $user)
+                            <tr>
+                                <td><b>{{ $user->nama }}</b></td>
+                                <td class="muted">{{ $user->email }}</td>
+                                <td>
+                                    <x-badge-status :status="$user->status_verifikasi" />
+                                </td>
+                                <td>
+                                    <form method="POST" action="{{ route('verifikasi-akun.role', $user) }}" style="display:flex;gap:8px;align-items:center">
+                                        @csrf
+                                        @method('PUT')
+                                        <select name="role_id" class="inp filled" style="width:auto">
+                                            @foreach ($roles as $role)
+                                                <option value="{{ $role->id }}" @selected($user->role_id === $role->id)>{{ $role->nama }}</option>
+                                            @endforeach
+                                        </select>
+                                        <button type="submit" class="btn btn-ghost btn-sm">Simpan</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="4" style="color:var(--muted)">Belum ada pengguna lain.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+
+        <div x-show="tab === 'tim'" x-cloak>
+            <livewire:keanggotaan-tim />
+        </div>
+
+        <div x-show="tab === 'penugasan'" x-cloak>
+            <livewire:penugasan-iku />
+        </div>
+    </div>
+@endsection

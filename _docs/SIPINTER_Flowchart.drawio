@@ -1,0 +1,141 @@
+<mxfile host="app.diagrams.net" agent="SIPINTER" version="24.0.0" type="device">
+  <diagram id="flow-sipinter" name="Flowchart SIPINTER">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="SIPINTER — Flowchart Alur Pelaporan Kinerja SAKIP Triwulanan" style="text;html=1;fontSize=18;fontStyle=1;fontColor=#152449;align=left;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="900" height="34" as="geometry" />
+        </mxCell>
+
+        <!-- Swimlane pools -->
+        <mxCell id="lane_ketua" value="KETUA TIM" style="swimlane;horizontal=0;fillColor=#eff5ff;strokeColor=#2563eb;fontColor=#152449;fontStyle=1;fontSize=13;startSize=28;" vertex="1" parent="1">
+          <mxGeometry x="40" y="70" width="430" height="1760" as="geometry" />
+        </mxCell>
+        <mxCell id="lane_sakip" value="TIM SAKIP" style="swimlane;horizontal=0;fillColor=#eefbf8;strokeColor=#0d9488;fontColor=#152449;fontStyle=1;fontSize=13;startSize=28;" vertex="1" parent="1">
+          <mxGeometry x="470" y="70" width="470" height="1760" as="geometry" />
+        </mxCell>
+        <mxCell id="lane_kepala" value="KEPALA BPS" style="swimlane;horizontal=0;fillColor=#fff7ed;strokeColor=#b45309;fontColor=#152449;fontStyle=1;fontSize=13;startSize=28;" vertex="1" parent="1">
+          <mxGeometry x="940" y="70" width="410" height="1760" as="geometry" />
+        </mxCell>
+
+        <!-- KETUA -->
+        <mxCell id="start" value="Mulai" style="rounded=1;fillColor=#152449;fontColor=#ffffff;strokeColor=none;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="150" y="120" width="120" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="login" value="Login / Register&#10;(akun diverifikasi Tim SAKIP)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#2563eb;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="110" y="196" width="200" height="54" as="geometry" />
+        </mxCell>
+        <mxCell id="pilihperiode" value="Pilih periode:&#10;bulan &amp; tahun&#10;(TW dihitung otomatis)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#2563eb;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="110" y="282" width="200" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="isikeg" value="Isi Kegiatan (bisa &gt;1):&#10;uraian, jenis/tahapan,&#10;unggah bukti capaian (PDF, boleh &gt;1)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#2563eb;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="90" y="372" width="240" height="64" as="geometry" />
+        </mxCell>
+        <mxCell id="isiks" value="Isi Kendala &amp; Solusi&#10;(jika solusi diisi → bukti solusi PDF wajib)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#2563eb;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="90" y="468" width="240" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="evalrtl" value="Isi Evaluasi RTL periode sebelumnya&#10;(realisasi WAJIB, min. 1 poin/bulan)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#2563eb;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="90" y="560" width="240" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="isirtlbaru" value="Isi Rencana Kegiatan ke Depan&#10;(batas waktu otomatis = akhir TW berikutnya)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#2563eb;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="90" y="652" width="240" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="cekvalid" value="Semua isian&#10;wajib lengkap?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff7ed;strokeColor=#b45309;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="120" y="742" width="180" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="ajukan" value="Ajukan ke Tim SAKIP&#10;(status: diajukan)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#2563eb;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="110" y="872" width="200" height="54" as="geometry" />
+        </mxCell>
+        <mxCell id="perbaiki" value="Perbaiki isian&#10;yang dikembalikan" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#dc2626;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="110" y="1120" width="200" height="54" as="geometry" />
+        </mxCell>
+
+        <!-- SAKIP -->
+        <mxCell id="filter" value="Buka menu Verifikasi&#10;(cari + filter TW→bulan + urutkan)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#0d9488;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="530" y="872" width="240" height="54" as="geometry" />
+        </mxCell>
+        <mxCell id="isianalisis" value="Isi Analisis Capaian &amp; angka&#10;(target, realisasi, % capaian)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#0d9488;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="530" y="960" width="240" height="54" as="geometry" />
+        </mxCell>
+        <mxCell id="verifberkas" value="Verifikasi berkas per jenis&#10;(bukti di samping kegiatan/solusi/RTL)&#10;Tim SAKIP dapat menyunting teks isian" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#0d9488;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="510" y="1048" width="280" height="64" as="geometry" />
+        </mxCell>
+        <mxCell id="ceksesuai" value="Semua berkas&#10;sesuai?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff7ed;strokeColor=#b45309;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="560" y="1152" width="180" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="masuknotula" value="Tandai terverifikasi&#10;→ masuk ke Bagian I notula&#10;(status: diverifikasi)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ccfbf1;strokeColor=#0d9488;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="530" y="1290" width="240" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="unggahbagian" value="Unggah Bagian II &amp; III notula&#10;(.docx/.xlsx/.pdf/gambar → dikonversi PDF)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#0d9488;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="510" y="1382" width="280" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="gabungotomatis" value="Sistem GABUNG OTOMATIS&#10;Bagian I → II → III jadi 1 PDF&#10;(pratinjau: lihat, sunting Bagian I, unduh draf)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ccfbf1;strokeColor=#0d9488;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="510" y="1474" width="280" height="66" as="geometry" />
+        </mxCell>
+        <mxCell id="kirimkepala" value="Kirim notula gabungan&#10;ke Kepala BPS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#0d9488;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="530" y="1572" width="240" height="54" as="geometry" />
+        </mxCell>
+
+        <!-- KEPALA -->
+        <mxCell id="tinjau" value="Tinjau notula gabungan" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b45309;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="1572" width="240" height="54" as="geometry" />
+        </mxCell>
+        <mxCell id="ceksetuju" value="Setujui?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff7ed;strokeColor=#b45309;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="1656" width="160" height="86" as="geometry" />
+        </mxCell>
+        <mxCell id="mintarevisi" value="Minta revisi&#10;(kembali ke Tim SAKIP)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#dc2626;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="1470" width="240" height="54" as="geometry" />
+        </mxCell>
+        <mxCell id="ttd2" value="Setujui &amp; bubuhkan TTD elektronik&#10;status: disetujui" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#b45309;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="1300" width="240" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="arsip" value="Unduh final &amp; arsip notula&#10;ke Drive institusi&#10;(struktur folder triwulanan)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b45309;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="1120" width="240" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="selesai" value="Selesai" style="rounded=1;fillColor=#152449;fontColor=#ffffff;strokeColor=none;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="1030" width="120" height="44" as="geometry" />
+        </mxCell>
+
+        <!-- EDGES ketua -->
+        <mxCell id="ed1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#334155;" edge="1" parent="1" source="start" target="login"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="ed2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#334155;" edge="1" parent="1" source="login" target="pilihperiode"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="ed3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#334155;" edge="1" parent="1" source="pilihperiode" target="isikeg"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="ed4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#334155;" edge="1" parent="1" source="isikeg" target="isiks"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="ed5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#334155;" edge="1" parent="1" source="isiks" target="evalrtl"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="ed6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#334155;" edge="1" parent="1" source="evalrtl" target="isirtlbaru"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="ed7" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#334155;" edge="1" parent="1" source="isirtlbaru" target="cekvalid"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="ed8" value="Belum" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#dc2626;fontColor=#dc2626;" edge="1" parent="1" source="cekvalid" target="isikeg"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="60" y="787" /><mxPoint x="60" y="404" /></Array></mxGeometry></mxCell>
+        <mxCell id="ed9" value="Ya" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#16a34a;fontColor=#16a34a;" edge="1" parent="1" source="cekvalid" target="ajukan"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- ketua -> sakip -->
+        <mxCell id="ed10" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#334155;" edge="1" parent="1" source="ajukan" target="filter"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- sakip flow -->
+        <mxCell id="ed11" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#334155;" edge="1" parent="1" source="filter" target="isianalisis"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="ed12" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#334155;" edge="1" parent="1" source="isianalisis" target="verifberkas"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="ed13" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#334155;" edge="1" parent="1" source="verifberkas" target="ceksesuai"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="ed14" value="Tidak → kembalikan" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#dc2626;fontColor=#dc2626;" edge="1" parent="1" source="ceksesuai" target="perbaiki"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="490" y="1197" /><mxPoint x="490" y="1147" /></Array></mxGeometry></mxCell>
+        <mxCell id="ed15" value="Ya" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#16a34a;fontColor=#16a34a;" edge="1" parent="1" source="ceksesuai" target="masuknotula"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="ed15b" value="Perbaiki &amp; ajukan ulang" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#dc2626;fontColor=#dc2626;dashed=1;" edge="1" parent="1" source="perbaiki" target="isikeg"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="70" y="1147" /><mxPoint x="70" y="404" /></Array></mxGeometry></mxCell>
+        <mxCell id="ed16" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#334155;" edge="1" parent="1" source="masuknotula" target="unggahbagian"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="ed17" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#334155;" edge="1" parent="1" source="unggahbagian" target="gabungotomatis"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="ed18" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#334155;" edge="1" parent="1" source="gabungotomatis" target="kirimkepala"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- sakip -> kepala -->
+        <mxCell id="ed19" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#334155;" edge="1" parent="1" source="kirimkepala" target="tinjau"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="ed20" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#334155;" edge="1" parent="1" source="tinjau" target="ceksetuju"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="ed21b" value="Tidak" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#dc2626;fontColor=#dc2626;" edge="1" parent="1" source="ceksetuju" target="mintarevisi"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1270" y="1699" /><mxPoint x="1270" y="1497" /></Array></mxGeometry></mxCell>
+        <mxCell id="ed22" value="Revisi kembali ke Tim SAKIP" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#dc2626;fontColor=#dc2626;dashed=1;" edge="1" parent="1" source="mintarevisi" target="unggahbagian"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="960" y="1497" /><mxPoint x="960" y="1412" /></Array></mxGeometry></mxCell>
+        <mxCell id="ed23" value="Ya" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#16a34a;fontColor=#16a34a;" edge="1" parent="1" source="ceksetuju" target="ttd2"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1110" y="1420" /></Array></mxGeometry></mxCell>
+        <mxCell id="ed24" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#334155;" edge="1" parent="1" source="ttd2" target="arsip"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="ed25" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#334155;" edge="1" parent="1" source="arsip" target="selesai"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <mxCell id="statusnote" value="Alur status dokumen:  draft → diajukan → diverifikasi → (dikembalikan) → disetujui" style="text;html=1;fontSize=12;fontStyle=2;fontColor=#334155;align=left;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1848" width="900" height="24" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
