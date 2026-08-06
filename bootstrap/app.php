@@ -15,6 +15,12 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => EnsureUserHasRole::class,
         ]);
+
+        // Render (dan platform sejenis) meneruskan koneksi HTTPS ke container secara HTTP
+        // biasa lewat reverse proxy. Tanpa ini, Laravel tidak tahu request aslinya HTTPS,
+        // sehingga semua URL yang di-generate (aset, form, Livewire) memakai skema http://
+        // dan diblokir browser sebagai mixed content di halaman https://.
+        $middleware->trustProxies(at: '*');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
