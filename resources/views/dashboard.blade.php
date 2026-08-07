@@ -5,5 +5,25 @@
 @section('breadcrumb', 'Dasbor')
 
 @section('content')
-    <livewire:dasbor-utama />
+    @if (auth()->user()->namaRole() === 'Tim SAKIP')
+        <div x-data="{ tab: 'utama' }">
+            <div class="subtabs">
+                <button type="button" class="subtab" :class="tab === 'utama' ? 'on' : ''" @click="tab = 'utama'">🏠 Dasbor</button>
+                <button type="button" class="subtab" :class="tab === 'kinerja' ? 'on' : ''" @click="tab = 'kinerja'">📊 Dasbor Kinerja</button>
+                <button type="button" class="subtab" :class="tab === 'rekap' ? 'on' : ''" @click="tab = 'rekap'">📈 Rekapitulasi</button>
+            </div>
+
+            <div x-show="tab === 'utama'">
+                <livewire:dasbor-utama />
+            </div>
+            <div x-show="tab === 'kinerja'" x-cloak>
+                <livewire:dasbor-capaian />
+            </div>
+            <div x-show="tab === 'rekap'" x-cloak>
+                <livewire:rekapitulasi />
+            </div>
+        </div>
+    @else
+        <livewire:dasbor-utama />
+    @endif
 @endsection

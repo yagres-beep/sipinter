@@ -6,7 +6,7 @@
 
 @section('content')
     <div class="page-title">Kelola Pengguna</div>
-    <div class="page-sub">Verifikasi akun, keanggotaan tim, dan penugasan IKU dalam satu tempat.</div>
+    <div class="page-sub">Verifikasi akun, keanggotaan tim, penugasan IKU, dan akun penyimpanan Drive dalam satu tempat.</div>
 
     @if (session('status'))
         <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>
@@ -17,6 +17,7 @@
             <button type="button" class="subtab" :class="tab === 'verifikasi' ? 'on' : ''" @click="tab = 'verifikasi'">✅ Verifikasi Akun</button>
             <button type="button" class="subtab" :class="tab === 'tim' ? 'on' : ''" @click="tab = 'tim'">👥 Keanggotaan Tim</button>
             <button type="button" class="subtab" :class="tab === 'penugasan' ? 'on' : ''" @click="tab = 'penugasan'">📋 Penugasan IKU</button>
+            <button type="button" class="subtab" :class="tab === 'storage' ? 'on' : ''" @click="tab = 'storage'">☁️ Akun &amp; Storage</button>
         </div>
 
         <div x-show="tab === 'verifikasi'">
@@ -110,6 +111,10 @@
 
         <div x-show="tab === 'penugasan'" x-cloak>
             <livewire:penugasan-iku />
+        </div>
+
+        <div x-show="tab === 'storage'" x-cloak>
+            <livewire:storage-accounts />
         </div>
     </div>
 @endsection
