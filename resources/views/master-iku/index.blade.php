@@ -16,10 +16,10 @@
             <livewire:master-iku />
         </div>
         <div x-show="tab === 'folder'" x-cloak>
-            <livewire:folder-config-manager />
+            <livewire:folder-config-manager lazy />
         </div>
         <div x-show="tab === 'template'" x-cloak>
-            <livewire:template-notula />
+            <livewire:template-notula lazy />
         </div>
     </div>
 @endsection
