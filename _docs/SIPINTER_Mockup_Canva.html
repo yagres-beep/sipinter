@@ -70,7 +70,6 @@
   .brand h1{font-size:17px;color:#fff;letter-spacing:.4px;font-weight:700;line-height:1.05}
   .brand span{font-size:10px;color:#7183ad;display:block;margin-top:1px}
   .nav{flex:1;padding:8px 10px}
-  .nav-group{font-size:9.5px;text-transform:uppercase;letter-spacing:1.2px;color:#5b6d99;padding:12px 10px 7px}
   .nav a{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:10px;color:#aeb9d4;text-decoration:none;font-size:13px;margin-bottom:3px;font-weight:500}
   .nav a.active{background:linear-gradient(135deg,var(--blue),var(--blue-600));color:#fff}
   .nav a .ic{font-size:16px;display:flex}
@@ -208,6 +207,7 @@
   .filter-sel{padding:9px 28px 9px 12px;border:1.5px solid var(--line);border-radius:10px;font-size:12px;font-weight:600;color:var(--ink);background:var(--white)}
   .filter-sel.sel{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}
 
+  [x-cloak]{display:none!important}
   .subtabs{display:flex;gap:7px;margin-bottom:16px;flex-wrap:wrap}
   .subtab{display:inline-flex;align-items:center;gap:7px;padding:9px 15px;border-radius:10px;border:1.5px solid var(--line);background:var(--white);font-size:12.5px;font-weight:600;color:var(--muted)}
   .subtab.on{background:linear-gradient(135deg,var(--blue),var(--blue-600));color:#fff;border-color:transparent}
@@ -352,7 +352,7 @@
   <h1>Mockup SIPINTER — Semua Halaman</h1>
   <p class="lead">Kumpulan tampilan (mockup) dari seluruh halaman aplikasi <b>Sistem Informasi Pelaporan Kinerja Terpadu</b> — BPS Kabupaten Buton Utara, disusun mengikuti kode yang berjalan (Laravel 12 + Livewire v3). Disusun per peran: autentikasi, Ketua Tim, Tim SAKIP (merangkap Admin), dan Kepala BPS.</p>
   <div class="meta">
-    <span><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>19 tampilan halaman</span>
+    <span><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>13 tampilan halaman</span>
     <span><svg class="i" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>3 peran pengguna</span>
     <span><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Sesuai aplikasi berjalan</span>
   </div>
@@ -369,18 +369,12 @@
       <a href="#s5"><span class="rn rn-k">KT</span>Notula (riwayat)</a>
       <a href="#s6"><span class="rn rn-k">KT</span>Pengaturan Akun</a>
       <a href="#s7"><span class="rn rn-s">TS</span>Dasbor SAKIP</a>
-      <a href="#s8"><span class="rn rn-s">TS</span>Verifikasi Bukti (daftar)</a>
+      <a href="#s8"><span class="rn rn-s">TS</span>Verifikasi &amp; Notula</a>
       <a href="#s9"><span class="rn rn-s">TS</span>Detail Verifikasi</a>
       <a href="#s10"><span class="rn rn-s">TS</span>Periksa Berkas (modal)</a>
-      <a href="#s11"><span class="rn rn-s">TS</span>Kompilasi Notula</a>
-      <a href="#s12"><span class="rn rn-s">TS</span>Rekapitulasi</a>
-      <a href="#s13"><span class="rn rn-s">TS</span>Dasbor Kinerja</a>
-      <a href="#s14"><span class="rn rn-s">TS</span>Master IKU</a>
-      <a href="#s15"><span class="rn rn-s">TS</span>Struktur Folder</a>
-      <a href="#s16"><span class="rn rn-s">TS</span>Template Notula</a>
-      <a href="#s17"><span class="rn rn-s">TS</span>Akun &amp; Storage</a>
-      <a href="#s18"><span class="rn rn-s">TS</span>Kelola Pengguna</a>
-      <a href="#s19"><span class="rn rn-p">KP</span>Persetujuan Notula</a>
+      <a href="#s11"><span class="rn rn-s">TS</span>Master IKU</a>
+      <a href="#s12"><span class="rn rn-s">TS</span>Kelola Pengguna</a>
+      <a href="#s13"><span class="rn rn-p">KP</span>Persetujuan Notula</a>
     </div>
   </div>
 </div>
@@ -461,6 +455,7 @@
   </div>
 </div>
 
+
 <!-- ============================ KETUA TIM ============================ -->
 <div class="role-header">
   <div class="rh-inner">
@@ -477,7 +472,7 @@
     <div class="app">
       <aside class="sidebar">
         <div class="brand"><div class="logo"><svg class="i" viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg></div><div><h1>SIPINTER</h1><span>BPS Buton Utara</span></div></div>
-        <nav class="nav"><div class="nav-group">Menu</div>
+        <nav class="nav">
           <a class="active"><span class="ic"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg></span>Dasbor</a>
           <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg></span>Isian Kegiatan</a>
           <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></span>Notula</a>
@@ -519,7 +514,6 @@
     </div>
   </div>
 </div>
-
 <!-- S4 ISIAN KEGIATAN -->
 <div class="screen" id="s4">
   <div class="screen-label"><span class="sl-num">4</span><span class="sl-t">Isian Kegiatan</span><span class="sl-d">— kegiatan, kendala/solusi, evaluasi RTL, RTL baru; resources/views/livewire/pengisian-kegiatan.blade.php</span></div>
@@ -528,7 +522,7 @@
     <div class="app">
       <aside class="sidebar">
         <div class="brand"><div class="logo"><svg class="i" viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg></div><div><h1>SIPINTER</h1><span>BPS Buton Utara</span></div></div>
-        <nav class="nav"><div class="nav-group">Menu</div>
+        <nav class="nav">
           <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg></span>Dasbor</a>
           <a class="active"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg></span>Isian Kegiatan</a>
           <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></span>Notula</a>
@@ -613,7 +607,6 @@
     </div>
   </div>
 </div>
-
 <!-- S5 NOTULA RIWAYAT (KETUA / KEPALA) -->
 <div class="screen" id="s5">
   <div class="screen-label"><span class="sl-num">5</span><span class="sl-t">Notula (riwayat)</span><span class="sl-d">— pantau status per triwulan, unduh setelah disetujui Kepala; dipakai bersama oleh Ketua Tim &amp; Kepala (notula-riwayat.index)</span></div>
@@ -622,7 +615,7 @@
     <div class="app">
       <aside class="sidebar">
         <div class="brand"><div class="logo"><svg class="i" viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg></div><div><h1>SIPINTER</h1><span>BPS Buton Utara</span></div></div>
-        <nav class="nav"><div class="nav-group">Menu</div>
+        <nav class="nav">
           <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg></span>Dasbor</a>
           <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg></span>Isian Kegiatan</a>
           <a class="active"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></span>Notula</a>
@@ -648,7 +641,6 @@
     </div>
   </div>
 </div>
-
 <!-- S6 PENGATURAN AKUN -->
 <div class="screen" id="s6">
   <div class="screen-label"><span class="sl-num">6</span><span class="sl-t">Pengaturan Akun</span><span class="sl-d">— profil &amp; ubah kata sandi, sama untuk semua peran (resources/views/profile/edit.blade.php)</span></div>
@@ -657,7 +649,7 @@
     <div class="app">
       <aside class="sidebar">
         <div class="brand"><div class="logo"><svg class="i" viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg></div><div><h1>SIPINTER</h1><span>BPS Buton Utara</span></div></div>
-        <nav class="nav"><div class="nav-group">Menu</div>
+        <nav class="nav">
           <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg></span>Dasbor</a>
           <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg></span>Isian Kegiatan</a>
           <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></span>Notula</a>
@@ -701,25 +693,16 @@
 
 <!-- S7 DASBOR SAKIP -->
 <div class="screen" id="s7">
-  <div class="screen-label"><span class="sl-num">7</span><span class="sl-t">Dasbor SAKIP</span><span class="sl-d">— dasbor sama seperti Ketua Tim, dengan menu admin lengkap &amp; menu dikelompokkan</span></div>
+  <div class="screen-label"><span class="sl-num">7</span><span class="sl-t">Dasbor SAKIP</span><span class="sl-d">— route bersama <code>dashboard</code>, khusus Tim SAKIP tampil 3 subtab (Alpine, tanpa reload): Dasbor / Dasbor Kinerja / Rekapitulasi; resources/views/dashboard.blade.php</span></div>
   <div class="frame" data-document-role="page" data-label="SIPINTER Layar 7">
     <div class="browser-bar"><div class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></div><div class="url"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>sipinter.bps.go.id/dashboard</div></div>
     <div class="app">
       <aside class="sidebar">
         <div class="brand"><div class="logo"><svg class="i" viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg></div><div><h1>SIPINTER</h1><span>BPS Buton Utara</span></div></div>
-        <nav class="nav"><div class="nav-group">Menu</div>
+        <nav class="nav">
           <a class="active"><span class="ic"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg></span>Dasbor</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg></span>Verifikasi</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="m9 15 2 2 4-4"/></svg></span>Kompilasi Notula</a>
-          <div class="nav-group">Laporan</div>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></span>Rekapitulasi</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>Dasbor Kinerja</a>
-          <div class="nav-group">Data &amp; Master</div>
+          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg></span>Verifikasi &amp; Notula</a>
           <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/></svg></span>Master IKU</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z"/></svg></span>Struktur Folder</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></span>Template Notula</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h.79a4.5 4.5 0 1 1 0 9Z"/></svg></span>Akun &amp; Storage</a>
-          <div class="nav-group">Administrasi</div>
           <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></span>Kelola Pengguna</a>
           <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82"/></svg></span>Pengaturan Akun</a>
         </nav>
@@ -728,6 +711,14 @@
       <div class="main">
         <div class="topbar"><div class="crumb">Tim › <b>Dasbor</b></div><div class="user"><span>Tim SAKIP</span><div class="avatar av-s">TS</div></div></div>
         <div class="content">
+          <div x-data="{ tab: 'utama' }">
+            <div class="subtabs">
+              <button type="button" class="subtab" :class="tab === 'utama' ? 'on' : ''" @click="tab = 'utama'"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>Dasbor</button>
+              <button type="button" class="subtab" :class="tab === 'kinerja' ? 'on' : ''" @click="tab = 'kinerja'"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>Dasbor Kinerja</button>
+              <button type="button" class="subtab" :class="tab === 'rekap' ? 'on' : ''" @click="tab = 'rekap'"><svg class="i" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>Rekapitulasi</button>
+            </div>
+            <div x-show="tab === 'utama'">
+
           <div class="page-head"><h2>Dasbor Pemantauan</h2><p>Progres capaian kinerja SAKIP — klik baris untuk verifikasi</p></div>
           <div class="grid grid-4" style="margin-bottom:16px">
             <div class="card stat"><div class="ico ico-blue"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></div><span class="num">18</span><span class="lbl">Total IKU dipantau</span></div>
@@ -752,41 +743,89 @@
               </tbody>
             </table>
           </div>
+            </div>
+            <div x-show="tab === 'kinerja'" x-cloak>
+
+          <div class="page-head"><h2>Dasbor Capaian Kinerja</h2><p>Status isian dan capaian kinerja secara menyeluruh, terbarui setiap saat.</p></div>
+          <div class="period-banner"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><div><div class="pb-lbl">Periode Aktif</div><div class="pb-val"><b>Triwulan II</b> · 2026</div></div><span class="pb-tag">Triwulan II 2026</span></div>
+          <div class="stat-grid" style="margin-bottom:16px">
+            <div class="stat-tile"><div class="si"><svg class="i" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/></svg></div><div class="sv">18</div><div class="sl">Total Master IKU</div></div>
+            <div class="stat-tile"><div class="si"><svg class="i" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg></div><div class="sv">27</div><div class="sl">Kegiatan Triwulan Ini</div></div>
+            <div class="stat-tile"><div class="si"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></div><div class="sv">92%</div><div class="sl">Rata-rata Capaian</div></div>
+            <div class="stat-tile"><div class="si"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></div><div class="sv">14</div><div class="sl">IKU Aktif Triwulan Ini</div></div>
+          </div>
+          <div class="card">
+            <div class="card-h"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>Status Dokumen Kegiatan — Triwulan II 2026</div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <span class="badge b-draft">Draft: 2</span>
+              <span class="badge b-ajukan">Diajukan: 3</span>
+              <span class="badge b-verif">Diverifikasi: 9</span>
+              <span class="badge b-approve">Disetujui: 12</span>
+              <span class="badge b-tolak">Dikembalikan: 1</span>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-h"><svg class="i" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>Progres Verifikasi per Triwulan 2026</div>
+            <div style="margin-bottom:14px">
+              <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span style="font-weight:600">Triwulan I</span><span style="color:var(--muted)">18/18 kegiatan (100%)</span></div>
+              <div class="quota-bar"><div class="quota-fill" style="width:100%"></div></div>
+            </div>
+            <div style="margin-bottom:0">
+              <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span style="font-weight:600">Triwulan II</span><span style="color:var(--muted)">9/27 kegiatan (33%)</span></div>
+              <div class="quota-bar"><div class="quota-fill warn" style="width:33%"></div></div>
+            </div>
+          </div>
+            </div>
+            <div x-show="tab === 'rekap'" x-cloak>
+
+          <div class="page-head"><h2>Rekapitulasi Triwulanan</h2><p>Dibentuk otomatis dari capaian bulanan yang sudah terverifikasi — tanpa penyalinan manual.</p></div>
+          <div class="period-banner"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><div><div class="pb-lbl">Periode Aktif</div><div class="pb-val"><b>Triwulan II</b> · 2026</div></div><span class="pb-tag">Triwulan II 2026</span></div>
+          <div class="card">
+            <div class="card-h"><svg class="i" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>Rekap per IKU <span class="badge b-verif" style="margin-left:auto">rata-rata 92%</span></div>
+            <table>
+              <thead><tr><th>Kode</th><th>Indikator</th><th style="text-align:center">Kegiatan</th><th style="text-align:right">Target PK</th><th style="text-align:right">Target TW</th><th style="text-align:right">Realisasi</th><th style="text-align:right">Capaian %</th></tr></thead>
+              <tbody>
+                <tr><td><b>1131</b></td><td>Persentase Publikasi/Laporan Statistik Kesejahteraan Rakyat</td><td style="text-align:center">6</td><td style="text-align:right">100</td><td style="text-align:right">25,00</td><td style="text-align:right">25,00</td><td style="text-align:right"><span class="badge b-approve">100%</span></td></tr>
+                <tr><td><b>1141</b></td><td>Persentase Publikasi Statistik Ketahanan Sosial</td><td style="text-align:center">4</td><td style="text-align:right">100</td><td style="text-align:right">50,00</td><td style="text-align:right">42,50</td><td style="text-align:right"><span class="badge b-tunggu">85%</span></td></tr>
+                <tr><td><b>2511</b></td><td>Persentase Pembinaan Statistik Sektoral</td><td style="text-align:center">3</td><td style="text-align:right">100</td><td style="text-align:right">50,00</td><td style="text-align:right">30,00</td><td style="text-align:right"><span class="badge b-tolak">60%</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
   </div>
 </div>
-
 <!-- S8 VERIFIKASI LIST -->
 <div class="screen" id="s8">
-  <div class="screen-label"><span class="sl-num">8</span><span class="sl-t">Verifikasi Bukti (daftar)</span><span class="sl-d">— daftar isian berstatus diajukan; resources/views/livewire/verifikasi-list.blade.php</span></div>
+  <div class="screen-label"><span class="sl-num">8</span><span class="sl-t">Verifikasi &amp; Notula</span><span class="sl-d">— 2 subtab (Alpine, tanpa reload): Verifikasi (daftar isian berstatus diajukan) / Kompilasi Notula; resources/views/verifikasi/index.blade.php</span></div>
   <div class="frame" data-document-role="page" data-label="SIPINTER Layar 8">
     <div class="browser-bar"><div class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></div><div class="url"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>sipinter.bps.go.id/verifikasi</div></div>
     <div class="app">
       <aside class="sidebar">
         <div class="brand"><div class="logo"><svg class="i" viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg></div><div><h1>SIPINTER</h1><span>BPS Buton Utara</span></div></div>
-        <nav class="nav"><div class="nav-group">Menu</div>
+        <nav class="nav">
           <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg></span>Dasbor</a>
-          <a class="active"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg></span>Verifikasi</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="m9 15 2 2 4-4"/></svg></span>Kompilasi Notula</a>
-          <div class="nav-group">Laporan</div>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></span>Rekapitulasi</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>Dasbor Kinerja</a>
-          <div class="nav-group">Data &amp; Master</div>
+          <a class="active"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg></span>Verifikasi &amp; Notula</a>
           <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/></svg></span>Master IKU</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z"/></svg></span>Struktur Folder</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></span>Template Notula</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h.79a4.5 4.5 0 1 1 0 9Z"/></svg></span>Akun &amp; Storage</a>
-          <div class="nav-group">Administrasi</div>
           <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></span>Kelola Pengguna</a>
           <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82"/></svg></span>Pengaturan Akun</a>
         </nav>
         <div class="sidebar-foot"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>v1.0 · Aktualisasi 2026</div>
       </aside>
       <div class="main">
-        <div class="topbar"><div class="crumb">Tim › <b>Verifikasi</b></div><div class="user"><span>Tim SAKIP</span><div class="avatar av-s">TS</div></div></div>
+        <div class="topbar"><div class="crumb">Tim › <b>Verifikasi &amp; Notula</b></div><div class="user"><span>Tim SAKIP</span><div class="avatar av-s">TS</div></div></div>
         <div class="content">
+          <div x-data="{ tab: 'verifikasi' }">
+            <div class="subtabs">
+              <button type="button" class="subtab" :class="tab === 'verifikasi' ? 'on' : ''" @click="tab = 'verifikasi'"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>Verifikasi</button>
+              <button type="button" class="subtab" :class="tab === 'notula' ? 'on' : ''" @click="tab = 'notula'"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="m9 15 2 2 4-4"/></svg>Kompilasi Notula</button>
+            </div>
+            <div x-show="tab === 'verifikasi'">
+
           <div class="page-head"><h2>Verifikasi Bukti &amp; Angka Capaian</h2><p>Daftar isian berstatus <span class="badge b-ajukan">Diajukan</span> menunggu verifikasi.</p></div>
           <div class="period-banner"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><div><div class="pb-lbl">Periode Aktif</div><div class="pb-val"><b>Triwulan II</b> 2026 · Semua Bulan (Triwulan Penuh)</div></div><span class="pb-tag">Triwulan II 2026</span></div>
           <div class="info teal"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>Isi analisis capaian &amp; angka, verifikasi tiap berkas, beri catatan bila tidak sesuai.</div>
@@ -803,163 +842,9 @@
               </tbody>
             </table>
           </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- S9 DETAIL VERIFIKASI -->
-<div class="screen" id="s9">
-  <div class="screen-label"><span class="sl-num">9</span><span class="sl-t">Detail Verifikasi</span><span class="sl-d">— analisis &amp; angka, verifikasi berkas per kegiatan, cek realisasi RTL; resources/views/livewire/verifikasi-capaian.blade.php</span></div>
-  <div class="frame" data-document-role="page" data-label="SIPINTER Layar 9">
-    <div class="browser-bar"><div class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></div><div class="url"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>sipinter.bps.go.id/verifikasi/1131</div></div>
-    <div class="app">
-      <aside class="sidebar">
-        <div class="brand"><div class="logo"><svg class="i" viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg></div><div><h1>SIPINTER</h1><span>BPS Buton Utara</span></div></div>
-        <nav class="nav"><div class="nav-group">Menu</div>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg></span>Dasbor</a>
-          <a class="active"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg></span>Verifikasi</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="m9 15 2 2 4-4"/></svg></span>Kompilasi Notula</a>
-          <div class="nav-group">Laporan</div>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></span>Rekapitulasi</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>Dasbor Kinerja</a>
-          <div class="nav-group">Data &amp; Master</div>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/></svg></span>Master IKU</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z"/></svg></span>Struktur Folder</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></span>Template Notula</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h.79a4.5 4.5 0 1 1 0 9Z"/></svg></span>Akun &amp; Storage</a>
-          <div class="nav-group">Administrasi</div>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></span>Kelola Pengguna</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82"/></svg></span>Pengaturan Akun</a>
-        </nav>
-        <div class="sidebar-foot"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>v1.0 · Aktualisasi 2026</div>
-      </aside>
-      <div class="main">
-        <div class="topbar"><div class="crumb">Tim › <b>Detail Verifikasi</b></div><div class="user"><span>Tim SAKIP</span><div class="avatar av-s">TS</div></div></div>
-        <div class="content">
-          <div class="page-head"><h2>Detail Verifikasi — 1131</h2><p>Persentase Publikasi/Laporan Statistik Kesejahteraan Rakyat · Juni 2026 · 6 kegiatan pendukung</p></div>
-          <div class="info teal"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>Teks yang bergaris putus-putus (uraian kegiatan, kendala, solusi, realisasi RTL) bisa langsung disunting bila ada salah ketik dari isian ketua tim.</div>
-
-          <div class="card" style="margin-bottom:16px">
-            <div class="sec"><span>Angka Capaian</span><span class="badge b-tunggu" style="margin-left:auto">diisi Tim SAKIP</span></div>
-            <div class="field"><label>Kegiatan Pendukung IKU <span class="muted" style="font-weight:400">(otomatis dari isian ketua tim)</span></label>
-              <div style="padding:11px 13px;background:#fafbfd;border:1px solid var(--line);border-radius:9px;font-size:12px;line-height:1.7">
-                1. Kegiatan Sakernas Juni 2026 berupa pencacahan rumah tangga<br>
-                2. Refreshing petugas pendataan Sakernas Juni 2026<br>
-                3. Updating, pencacahan rumah tangga dan perbaikan anomali<br>
-                4. Pengumpulan data pendukung fenomena ketenagakerjaan<br>
-                5. Penyusunan Laporan Kegiatan Sakernas Juni 2026<br>
-                6. Rekrutmen tambahan petugas Sakernas Agustus 2026
-              </div>
-              <div class="fhint">Terisi otomatis dari kegiatan ketua tim — tidak perlu ketik ulang.</div>
             </div>
-            <div class="field"><label>Analisis Capaian</label><div class="inp ph" style="min-height:auto">mis. Secara kumulatif hingga triwulan II 2026, terdapat 1 laporan kegiatan yang telah disusun…</div></div>
-            <div class="num-grid">
-              <div class="num-cell"><label>Target PK</label><div class="box">100</div></div>
-              <div class="num-cell"><label>Target TW</label><div class="box">25,00</div></div>
-              <div class="num-cell"><label>Realisasi</label><div class="box">25,00</div></div>
-              <div class="num-cell"><label>Capaian %</label><div class="box">100,00</div></div>
-            </div>
-          </div>
+            <div x-show="tab === 'notula'" x-cloak>
 
-          <div class="card">
-            <div class="sec"><span>Verifikasi Bukti Capaian per Kegiatan</span></div>
-            <div class="info"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>Klik tiap berkas untuk memeriksa &amp; menandai sesuai/tidak. Uraian kegiatan bisa disunting bila ada salah ketik.</div>
-            <div class="keg">
-              <div class="keg-head"><span class="t">Kegiatan 1</span><span style="color:var(--muted);font-size:11.5px">Survei/Sensus · Pelaksanaan</span></div>
-              <div class="inp" style="font-style:italic;border-style:dashed">Pencacahan rumah tangga Sakernas Juni 2026</div>
-              <div class="filechip ok" style="margin-top:8px"><span class="nm"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>Pencacahan rumah tangga Sakernas_01.pdf</span><button class="btn btn-ghost btn-sm"><svg class="i" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>Periksa</button></div>
-            </div>
-            <div class="keg">
-              <div class="keg-head"><span class="t">Kegiatan 2</span><span style="color:var(--muted);font-size:11.5px">Bukan Survei/Sensus</span></div>
-              <div class="inp" style="font-style:italic;border-style:dashed">Refreshing petugas pendataan Sakernas Juni 2026</div>
-              <div class="filechip no" style="margin-top:8px"><span class="nm"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg><span>Refreshing petugas Sakernas_01.pdf<span class="sub" style="color:var(--red)">Tidak sesuai</span></span></span><button class="btn btn-ghost btn-sm"><svg class="i" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>Periksa</button></div>
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="sec"><span>Kendala &amp; Solusi</span></div>
-            <div class="keg">
-              <div class="field" style="margin-bottom:10px"><label style="font-size:11.5px">Kendala</label><div class="inp" style="font-style:italic;border-style:dashed">50% petugas belum berpengalaman di lapangan</div></div>
-              <div class="field" style="margin-bottom:0"><label style="font-size:11.5px">Solusi</label><div class="inp" style="font-style:italic;border-style:dashed">Pelatihan intensif &amp; pengawasan berjenjang</div></div>
-              <div class="filechip" style="margin-top:8px"><span class="nm"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg><span>Bukti pelatihan petugas_01.pdf<span class="sub">Bukti solusi</span></span></span><button class="btn btn-ghost btn-sm"><svg class="i" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>Periksa</button></div>
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="sec"><span>Pengecekan Realisasi RTL Triwulan Sebelumnya</span></div>
-            <div class="info"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>RTL yang direncanakan pada triwulan sebelumnya ditampilkan berdampingan dengan realisasi yang dilaporkan ketua tim, beserta bukti bila ada. Cukup periksa kesesuaiannya — tanpa skor persentase.</div>
-            <div class="match-row">
-              <div class="match-col"><div class="mc-lbl">RTL Direncanakan</div><div class="mc-txt">Penyusunan Laporan Kegiatan Susenas Maret 2026</div></div>
-              <div class="match-badge mb-ok"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></div>
-              <div class="match-col"><div class="mc-lbl">Realisasi Dilaporkan</div><div class="inp" style="font-style:italic;font-size:12px;border-style:dashed">Telah dilaksanakan &amp; laporan diunggah ke Drive tepat waktu</div></div>
-            </div>
-          </div>
-
-          <div class="btn-row" style="margin-top:16px"><button class="btn btn-teal"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Verifikasi Selesai — Masukkan ke Notula</button><button class="btn btn-red"><svg class="i" viewBox="0 0 24 24"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>Kembalikan ke Ketua Tim</button></div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- S10 MODAL PERIKSA BERKAS -->
-<div class="screen" id="s10">
-  <div class="screen-label"><span class="sl-num">10</span><span class="sl-t">Periksa Berkas (modal)</span><span class="sl-d">— pratinjau berkas asli + panel tandai sesuai/tidak, dibuka dari tombol "Periksa" di S9</span></div>
-  <div class="frame" data-document-role="page" data-label="SIPINTER Layar 10">
-    <div class="browser-bar"><div class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></div><div class="url"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>sipinter.bps.go.id/verifikasi/1131 · berkas</div></div>
-    <div class="modal-stage">
-      <div class="modal">
-        <div class="modal-top"><div class="mt-t"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>Refreshing petugas Sakernas_01.pdf</div><span class="x"><svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></span></div>
-        <div class="modal-body">
-          <div class="pdf-view">
-            <h4>BUKTI CAPAIAN</h4>
-            <div class="pmeta">Refreshing petugas Sakernas_01.pdf</div>
-            <p>Berkas asli dibuka di tab baru untuk diperiksa isinya secara lengkap sebelum ditandai sesuai/tidak.</p>
-            <a class="btn btn-ghost btn-sm" style="margin-top:14px"><svg class="i" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>Buka Berkas Asli</a>
-          </div>
-          <div class="verify-panel">
-            <div class="vp-t">Verifikasi Berkas</div>
-            <div class="mark"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Sesuai</div>
-            <div class="mark no"><svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>Tidak Sesuai</div>
-            <div class="field" style="margin-top:12px"><label style="font-size:11.5px">Catatan (wajib bila tidak sesuai)</label><div class="inp ph" style="min-height:56px;font-size:11.5px">mis. Bukti belum menunjukkan tanggal pelaksanaan…</div></div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- S11 KOMPILASI NOTULA -->
-<div class="screen" id="s11">
-  <div class="screen-label"><span class="sl-num">11</span><span class="sl-t">Kompilasi Notula</span><span class="sl-d">— satu dokumen bersambung: Bagian I disunting WYSIWYG, Bagian II &amp; III diunggah &amp; tampil sebagai pratinjau, lalu digabung; resources/views/livewire/kompilasi-notula.blade.php</span></div>
-  <div class="frame" data-document-role="page" data-label="SIPINTER Layar 11">
-    <div class="browser-bar"><div class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></div><div class="url"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>sipinter.bps.go.id/notula</div></div>
-    <div class="app">
-      <aside class="sidebar">
-        <div class="brand"><div class="logo"><svg class="i" viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg></div><div><h1>SIPINTER</h1><span>BPS Buton Utara</span></div></div>
-        <nav class="nav"><div class="nav-group">Menu</div>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg></span>Dasbor</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg></span>Verifikasi</a>
-          <a class="active"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="m9 15 2 2 4-4"/></svg></span>Kompilasi Notula</a>
-          <div class="nav-group">Laporan</div>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></span>Rekapitulasi</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>Dasbor Kinerja</a>
-          <div class="nav-group">Data &amp; Master</div>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/></svg></span>Master IKU</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z"/></svg></span>Struktur Folder</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></span>Template Notula</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h.79a4.5 4.5 0 1 1 0 9Z"/></svg></span>Akun &amp; Storage</a>
-          <div class="nav-group">Administrasi</div>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></span>Kelola Pengguna</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82"/></svg></span>Pengaturan Akun</a>
-        </nav>
-        <div class="sidebar-foot"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>v1.0 · Aktualisasi 2026</div>
-      </aside>
-      <div class="main">
-        <div class="topbar"><div class="crumb">Tim › <b>Kompilasi Notula</b></div><div class="user"><span>Tim SAKIP</span><div class="avatar av-s">TS</div></div></div>
-        <div class="content">
           <div class="page-head"><h2>Kompilasi Notula Triwulan II 2026</h2><p>Gabungkan tiga bagian menjadi satu PDF notula utuh. <span class="badge b-verif" style="margin-left:4px">Diverifikasi</span></p></div>
 
           <div class="period-banner"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><div><div class="pb-lbl">Triwulan</div><div class="pb-val"><b>Triwulan II</b> · 2026</div></div></div>
@@ -1040,53 +925,119 @@
             <div class="sec"><span>Riwayat Versi Ber-TTD</span></div>
             <div class="filechip ok"><span class="nm"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg><span>Notula TW I 2026<span class="sub">Disetujui 5 April 2026</span></span></span><button class="btn btn-ghost btn-sm"><svg class="i" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></svg>Unduh</button></div>
           </div>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
   </div>
 </div>
-
-<!-- S12 REKAPITULASI (BARU) -->
-<div class="screen" id="s12">
-  <div class="screen-label"><span class="sl-num">12</span><span class="sl-t">Rekapitulasi</span><span class="sl-d">— rekap triwulanan otomatis dari capaian bulanan terverifikasi; dipakai bersama oleh Tim SAKIP &amp; Kepala (rekapitulasi.index)</span></div>
-  <div class="frame" data-document-role="page" data-label="SIPINTER Layar 12">
-    <div class="browser-bar"><div class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></div><div class="url"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>sipinter.bps.go.id/rekapitulasi</div></div>
+<!-- S9 DETAIL VERIFIKASI -->
+<div class="screen" id="s9">
+  <div class="screen-label"><span class="sl-num">9</span><span class="sl-t">Detail Verifikasi</span><span class="sl-d">— dibuka dari tab Verifikasi (S8); analisis &amp; angka, verifikasi berkas per kegiatan, cek realisasi RTL; resources/views/livewire/verifikasi-capaian.blade.php</span></div>
+  <div class="frame" data-document-role="page" data-label="SIPINTER Layar 9">
+    <div class="browser-bar"><div class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></div><div class="url"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>sipinter.bps.go.id/verifikasi/1131</div></div>
     <div class="app">
       <aside class="sidebar">
         <div class="brand"><div class="logo"><svg class="i" viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg></div><div><h1>SIPINTER</h1><span>BPS Buton Utara</span></div></div>
-        <nav class="nav"><div class="nav-group">Menu</div>
+        <nav class="nav">
           <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg></span>Dasbor</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg></span>Verifikasi</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="m9 15 2 2 4-4"/></svg></span>Kompilasi Notula</a>
-          <div class="nav-group">Laporan</div>
-          <a class="active"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></span>Rekapitulasi</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>Dasbor Kinerja</a>
-          <div class="nav-group">Data &amp; Master</div>
+          <a class="active"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg></span>Verifikasi &amp; Notula</a>
           <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/></svg></span>Master IKU</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z"/></svg></span>Struktur Folder</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></span>Template Notula</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h.79a4.5 4.5 0 1 1 0 9Z"/></svg></span>Akun &amp; Storage</a>
-          <div class="nav-group">Administrasi</div>
           <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></span>Kelola Pengguna</a>
           <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82"/></svg></span>Pengaturan Akun</a>
         </nav>
         <div class="sidebar-foot"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>v1.0 · Aktualisasi 2026</div>
       </aside>
       <div class="main">
-        <div class="topbar"><div class="crumb">Tim › <b>Rekapitulasi</b></div><div class="user"><span>Tim SAKIP</span><div class="avatar av-s">TS</div></div></div>
+        <div class="topbar"><div class="crumb">Tim › <b>Detail Verifikasi</b></div><div class="user"><span>Tim SAKIP</span><div class="avatar av-s">TS</div></div></div>
         <div class="content">
-          <div class="page-head"><h2>Rekapitulasi Triwulanan</h2><p>Dibentuk otomatis dari capaian bulanan yang sudah terverifikasi — tanpa penyalinan manual.</p></div>
-          <div class="period-banner"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><div><div class="pb-lbl">Periode Aktif</div><div class="pb-val"><b>Triwulan II</b> · 2026</div></div><span class="pb-tag">Triwulan II 2026</span></div>
+          <div class="page-head"><h2>Detail Verifikasi — 1131</h2><p>Persentase Publikasi/Laporan Statistik Kesejahteraan Rakyat · Juni 2026 · 6 kegiatan pendukung</p></div>
+          <div class="info teal"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>Teks yang bergaris putus-putus (uraian kegiatan, kendala, solusi, realisasi RTL) bisa langsung disunting bila ada salah ketik dari isian ketua tim.</div>
+
+          <div class="card" style="margin-bottom:16px">
+            <div class="sec"><span>Angka Capaian</span><span class="badge b-tunggu" style="margin-left:auto">diisi Tim SAKIP</span></div>
+            <div class="field"><label>Kegiatan Pendukung IKU <span class="muted" style="font-weight:400">(otomatis dari isian ketua tim)</span></label>
+              <div style="padding:11px 13px;background:#fafbfd;border:1px solid var(--line);border-radius:9px;font-size:12px;line-height:1.7">
+                1. Kegiatan Sakernas Juni 2026 berupa pencacahan rumah tangga<br>
+                2. Refreshing petugas pendataan Sakernas Juni 2026<br>
+                3. Updating, pencacahan rumah tangga dan perbaikan anomali<br>
+                4. Pengumpulan data pendukung fenomena ketenagakerjaan<br>
+                5. Penyusunan Laporan Kegiatan Sakernas Juni 2026<br>
+                6. Rekrutmen tambahan petugas Sakernas Agustus 2026
+              </div>
+              <div class="fhint">Terisi otomatis dari kegiatan ketua tim — tidak perlu ketik ulang.</div>
+            </div>
+            <div class="field"><label>Analisis Capaian</label><div class="inp ph" style="min-height:auto">mis. Secara kumulatif hingga triwulan II 2026, terdapat 1 laporan kegiatan yang telah disusun…</div></div>
+            <div class="num-grid">
+              <div class="num-cell"><label>Target PK</label><div class="box">100</div></div>
+              <div class="num-cell"><label>Target TW</label><div class="box">25,00</div></div>
+              <div class="num-cell"><label>Realisasi</label><div class="box">25,00</div></div>
+              <div class="num-cell"><label>Capaian %</label><div class="box">100,00</div></div>
+            </div>
+          </div>
+
           <div class="card">
-            <div class="card-h"><svg class="i" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>Rekap per IKU <span class="badge b-verif" style="margin-left:auto">rata-rata 92%</span></div>
-            <table>
-              <thead><tr><th>Kode</th><th>Indikator</th><th style="text-align:center">Kegiatan</th><th style="text-align:right">Target PK</th><th style="text-align:right">Target TW</th><th style="text-align:right">Realisasi</th><th style="text-align:right">Capaian %</th></tr></thead>
-              <tbody>
-                <tr><td><b>1131</b></td><td>Persentase Publikasi/Laporan Statistik Kesejahteraan Rakyat</td><td style="text-align:center">6</td><td style="text-align:right">100</td><td style="text-align:right">25,00</td><td style="text-align:right">25,00</td><td style="text-align:right"><span class="badge b-approve">100%</span></td></tr>
-                <tr><td><b>1141</b></td><td>Persentase Publikasi Statistik Ketahanan Sosial</td><td style="text-align:center">4</td><td style="text-align:right">100</td><td style="text-align:right">50,00</td><td style="text-align:right">42,50</td><td style="text-align:right"><span class="badge b-tunggu">85%</span></td></tr>
-                <tr><td><b>2511</b></td><td>Persentase Pembinaan Statistik Sektoral</td><td style="text-align:center">3</td><td style="text-align:right">100</td><td style="text-align:right">50,00</td><td style="text-align:right">30,00</td><td style="text-align:right"><span class="badge b-tolak">60%</span></td></tr>
-              </tbody>
-            </table>
+            <div class="sec"><span>Verifikasi Bukti Capaian per Kegiatan</span></div>
+            <div class="info"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>Klik tiap berkas untuk memeriksa &amp; menandai sesuai/tidak. Uraian kegiatan bisa disunting bila ada salah ketik.</div>
+            <div class="keg">
+              <div class="keg-head"><span class="t">Kegiatan 1</span><span style="color:var(--muted);font-size:11.5px">Survei/Sensus · Pelaksanaan</span></div>
+              <div class="inp" style="font-style:italic;border-style:dashed">Pencacahan rumah tangga Sakernas Juni 2026</div>
+              <div class="filechip ok" style="margin-top:8px"><span class="nm"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>Pencacahan rumah tangga Sakernas_01.pdf</span><button class="btn btn-ghost btn-sm"><svg class="i" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>Periksa</button></div>
+            </div>
+            <div class="keg">
+              <div class="keg-head"><span class="t">Kegiatan 2</span><span style="color:var(--muted);font-size:11.5px">Bukan Survei/Sensus</span></div>
+              <div class="inp" style="font-style:italic;border-style:dashed">Refreshing petugas pendataan Sakernas Juni 2026</div>
+              <div class="filechip no" style="margin-top:8px"><span class="nm"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg><span>Refreshing petugas Sakernas_01.pdf<span class="sub" style="color:var(--red)">Tidak sesuai</span></span></span><button class="btn btn-ghost btn-sm"><svg class="i" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>Periksa</button></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="sec"><span>Kendala &amp; Solusi</span></div>
+            <div class="keg">
+              <div class="field" style="margin-bottom:10px"><label style="font-size:11.5px">Kendala</label><div class="inp" style="font-style:italic;border-style:dashed">50% petugas belum berpengalaman di lapangan</div></div>
+              <div class="field" style="margin-bottom:0"><label style="font-size:11.5px">Solusi</label><div class="inp" style="font-style:italic;border-style:dashed">Pelatihan intensif &amp; pengawasan berjenjang</div></div>
+              <div class="filechip" style="margin-top:8px"><span class="nm"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg><span>Bukti pelatihan petugas_01.pdf<span class="sub">Bukti solusi</span></span></span><button class="btn btn-ghost btn-sm"><svg class="i" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>Periksa</button></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="sec"><span>Pengecekan Realisasi RTL Triwulan Sebelumnya</span></div>
+            <div class="info"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>RTL yang direncanakan pada triwulan sebelumnya ditampilkan berdampingan dengan realisasi yang dilaporkan ketua tim, beserta bukti bila ada. Cukup periksa kesesuaiannya — tanpa skor persentase.</div>
+            <div class="match-row">
+              <div class="match-col"><div class="mc-lbl">RTL Direncanakan</div><div class="mc-txt">Penyusunan Laporan Kegiatan Susenas Maret 2026</div></div>
+              <div class="match-badge mb-ok"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></div>
+              <div class="match-col"><div class="mc-lbl">Realisasi Dilaporkan</div><div class="inp" style="font-style:italic;font-size:12px;border-style:dashed">Telah dilaksanakan &amp; laporan diunggah ke Drive tepat waktu</div></div>
+            </div>
+          </div>
+
+          <div class="btn-row" style="margin-top:16px"><button class="btn btn-teal"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Verifikasi Selesai — Masukkan ke Notula</button><button class="btn btn-red"><svg class="i" viewBox="0 0 24 24"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>Kembalikan ke Ketua Tim</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- S10 MODAL PERIKSA BERKAS -->
+<div class="screen" id="s10">
+  <div class="screen-label"><span class="sl-num">10</span><span class="sl-t">Periksa Berkas (modal)</span><span class="sl-d">— pratinjau berkas asli + panel tandai sesuai/tidak, dibuka dari tombol "Periksa" di S9</span></div>
+  <div class="frame" data-document-role="page" data-label="SIPINTER Layar 10">
+    <div class="browser-bar"><div class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></div><div class="url"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>sipinter.bps.go.id/verifikasi/1131 · berkas</div></div>
+    <div class="modal-stage">
+      <div class="modal">
+        <div class="modal-top"><div class="mt-t"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>Refreshing petugas Sakernas_01.pdf</div><span class="x"><svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></span></div>
+        <div class="modal-body">
+          <div class="pdf-view">
+            <h4>BUKTI CAPAIAN</h4>
+            <div class="pmeta">Refreshing petugas Sakernas_01.pdf</div>
+            <p>Berkas asli dibuka di tab baru untuk diperiksa isinya secara lengkap sebelum ditandai sesuai/tidak.</p>
+            <a class="btn btn-ghost btn-sm" style="margin-top:14px"><svg class="i" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>Buka Berkas Asli</a>
+          </div>
+          <div class="verify-panel">
+            <div class="vp-t">Verifikasi Berkas</div>
+            <div class="mark"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Sesuai</div>
+            <div class="mark no"><svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>Tidak Sesuai</div>
+            <div class="field" style="margin-top:12px"><label style="font-size:11.5px">Catatan (wajib bila tidak sesuai)</label><div class="inp ph" style="min-height:56px;font-size:11.5px">mis. Bukti belum menunjukkan tanggal pelaksanaan…</div></div>
           </div>
         </div>
       </div>
@@ -1094,91 +1045,18 @@
   </div>
 </div>
 
-<!-- S13 DASBOR KINERJA (BARU) -->
-<div class="screen" id="s13">
-  <div class="screen-label"><span class="sl-num">13</span><span class="sl-t">Dasbor Kinerja</span><span class="sl-d">— status dokumen &amp; progres verifikasi menyeluruh; dipakai bersama oleh Tim SAKIP &amp; Kepala (dasbor-kinerja.index)</span></div>
-  <div class="frame" data-document-role="page" data-label="SIPINTER Layar 13">
-    <div class="browser-bar"><div class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></div><div class="url"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>sipinter.bps.go.id/dasbor-kinerja</div></div>
-    <div class="app">
-      <aside class="sidebar">
-        <div class="brand"><div class="logo"><svg class="i" viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg></div><div><h1>SIPINTER</h1><span>BPS Buton Utara</span></div></div>
-        <nav class="nav"><div class="nav-group">Menu</div>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg></span>Dasbor</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg></span>Verifikasi</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="m9 15 2 2 4-4"/></svg></span>Kompilasi Notula</a>
-          <div class="nav-group">Laporan</div>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></span>Rekapitulasi</a>
-          <a class="active"><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>Dasbor Kinerja</a>
-          <div class="nav-group">Data &amp; Master</div>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/></svg></span>Master IKU</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z"/></svg></span>Struktur Folder</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></span>Template Notula</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h.79a4.5 4.5 0 1 1 0 9Z"/></svg></span>Akun &amp; Storage</a>
-          <div class="nav-group">Administrasi</div>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></span>Kelola Pengguna</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82"/></svg></span>Pengaturan Akun</a>
-        </nav>
-        <div class="sidebar-foot"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>v1.0 · Aktualisasi 2026</div>
-      </aside>
-      <div class="main">
-        <div class="topbar"><div class="crumb">Tim › <b>Dasbor Kinerja</b></div><div class="user"><span>Tim SAKIP</span><div class="avatar av-s">TS</div></div></div>
-        <div class="content">
-          <div class="page-head"><h2>Dasbor Capaian Kinerja</h2><p>Status isian dan capaian kinerja secara menyeluruh, terbarui setiap saat.</p></div>
-          <div class="period-banner"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><div><div class="pb-lbl">Periode Aktif</div><div class="pb-val"><b>Triwulan II</b> · 2026</div></div><span class="pb-tag">Triwulan II 2026</span></div>
-          <div class="stat-grid" style="margin-bottom:16px">
-            <div class="stat-tile"><div class="si"><svg class="i" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/></svg></div><div class="sv">18</div><div class="sl">Total Master IKU</div></div>
-            <div class="stat-tile"><div class="si"><svg class="i" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg></div><div class="sv">27</div><div class="sl">Kegiatan Triwulan Ini</div></div>
-            <div class="stat-tile"><div class="si"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></div><div class="sv">92%</div><div class="sl">Rata-rata Capaian</div></div>
-            <div class="stat-tile"><div class="si"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></div><div class="sv">14</div><div class="sl">IKU Aktif Triwulan Ini</div></div>
-          </div>
-          <div class="card">
-            <div class="card-h"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>Status Dokumen Kegiatan — Triwulan II 2026</div>
-            <div style="display:flex;gap:10px;flex-wrap:wrap">
-              <span class="badge b-draft">Draft: 2</span>
-              <span class="badge b-ajukan">Diajukan: 3</span>
-              <span class="badge b-verif">Diverifikasi: 9</span>
-              <span class="badge b-approve">Disetujui: 12</span>
-              <span class="badge b-tolak">Dikembalikan: 1</span>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-h"><svg class="i" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>Progres Verifikasi per Triwulan 2026</div>
-            <div style="margin-bottom:14px">
-              <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span style="font-weight:600">Triwulan I</span><span style="color:var(--muted)">18/18 kegiatan (100%)</span></div>
-              <div class="quota-bar"><div class="quota-fill" style="width:100%"></div></div>
-            </div>
-            <div style="margin-bottom:0">
-              <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span style="font-weight:600">Triwulan II</span><span style="color:var(--muted)">9/27 kegiatan (33%)</span></div>
-              <div class="quota-bar"><div class="quota-fill warn" style="width:33%"></div></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- S14 MASTER IKU -->
-<div class="screen" id="s14">
-  <div class="screen-label"><span class="sl-num">14</span><span class="sl-t">Master IKU</span><span class="sl-d">— unduh template Excel, unggah, kelola daftar IKU; resources/views/livewire/master-iku.blade.php</span></div>
-  <div class="frame" data-document-role="page" data-label="SIPINTER Layar 14">
+<!-- S11 MASTER IKU -->
+<div class="screen" id="s11">
+  <div class="screen-label"><span class="sl-num">11</span><span class="sl-t">Master IKU</span><span class="sl-d">— 3 subtab (Alpine, tanpa reload): Master IKU (unduh template, unggah, kelola daftar) / Struktur Folder / Template Notula; resources/views/master-iku/index.blade.php</span></div>
+  <div class="frame" data-document-role="page" data-label="SIPINTER Layar 11">
     <div class="browser-bar"><div class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></div><div class="url"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>sipinter.bps.go.id/master-iku</div></div>
     <div class="app">
       <aside class="sidebar">
         <div class="brand"><div class="logo"><svg class="i" viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg></div><div><h1>SIPINTER</h1><span>BPS Buton Utara</span></div></div>
-        <nav class="nav"><div class="nav-group">Menu</div>
+        <nav class="nav">
           <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg></span>Dasbor</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg></span>Verifikasi</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="m9 15 2 2 4-4"/></svg></span>Kompilasi Notula</a>
-          <div class="nav-group">Laporan</div>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></span>Rekapitulasi</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>Dasbor Kinerja</a>
-          <div class="nav-group">Data &amp; Master</div>
+          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg></span>Verifikasi &amp; Notula</a>
           <a class="active"><span class="ic"><svg class="i" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/></svg></span>Master IKU</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z"/></svg></span>Struktur Folder</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></span>Template Notula</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h.79a4.5 4.5 0 1 1 0 9Z"/></svg></span>Akun &amp; Storage</a>
-          <div class="nav-group">Administrasi</div>
           <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></span>Kelola Pengguna</a>
           <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82"/></svg></span>Pengaturan Akun</a>
         </nav>
@@ -1187,6 +1065,14 @@
       <div class="main">
         <div class="topbar"><div class="crumb">Tim › <b>Master IKU</b></div><div class="user"><span>Tim SAKIP</span><div class="avatar av-s">TS</div></div></div>
         <div class="content">
+          <div x-data="{ tab: 'iku' }">
+            <div class="subtabs">
+              <button type="button" class="subtab" :class="tab === 'iku' ? 'on' : ''" @click="tab = 'iku'"><svg class="i" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/></svg>Master IKU</button>
+              <button type="button" class="subtab" :class="tab === 'folder' ? 'on' : ''" @click="tab = 'folder'"><svg class="i" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z"/></svg>Struktur Folder</button>
+              <button type="button" class="subtab" :class="tab === 'template' ? 'on' : ''" @click="tab = 'template'"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg>Template Notula</button>
+            </div>
+            <div x-show="tab === 'iku'">
+
           <div class="page-head"><h2>Master IKU</h2><p>Kelola Indikator Kinerja Utama sebagai sumber dropdown &amp; penamaan otomatis di seluruh modul.</p></div>
           <div class="card" style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap">
             <div style="display:flex;align-items:center;gap:12px"><div class="ico ico-teal" style="width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center"><svg class="i" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></svg></div>
@@ -1223,41 +1109,9 @@
             </table>
             <div class="info" style="margin:14px 0 0"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>Bisa juga tambah/perbaiki satu IKU manual (Kode, Indikator, Tim, Penanggung Jawab) tanpa Excel.</div>
           </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
+            </div>
+            <div x-show="tab === 'folder'" x-cloak>
 
-<!-- S15 STRUKTUR FOLDER -->
-<div class="screen" id="s15">
-  <div class="screen-label"><span class="sl-num">15</span><span class="sl-t">Struktur Folder Drive</span><span class="sl-d">— tingkat folder, folder kategori (dengan subfolder per kegiatan), pratinjau jalur, folder tahun; resources/views/livewire/folder-config-manager.blade.php</span></div>
-  <div class="frame" data-document-role="page" data-label="SIPINTER Layar 15">
-    <div class="browser-bar"><div class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></div><div class="url"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>sipinter.bps.go.id/konfigurasi</div></div>
-    <div class="app">
-      <aside class="sidebar">
-        <div class="brand"><div class="logo"><svg class="i" viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg></div><div><h1>SIPINTER</h1><span>BPS Buton Utara</span></div></div>
-        <nav class="nav"><div class="nav-group">Menu</div>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg></span>Dasbor</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg></span>Verifikasi</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="m9 15 2 2 4-4"/></svg></span>Kompilasi Notula</a>
-          <div class="nav-group">Laporan</div>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></span>Rekapitulasi</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>Dasbor Kinerja</a>
-          <div class="nav-group">Data &amp; Master</div>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/></svg></span>Master IKU</a>
-          <a class="active"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z"/></svg></span>Struktur Folder</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></span>Template Notula</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h.79a4.5 4.5 0 1 1 0 9Z"/></svg></span>Akun &amp; Storage</a>
-          <div class="nav-group">Administrasi</div>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></span>Kelola Pengguna</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82"/></svg></span>Pengaturan Akun</a>
-        </nav>
-        <div class="sidebar-foot"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>v1.0 · Aktualisasi 2026</div>
-      </aside>
-      <div class="main">
-        <div class="topbar"><div class="crumb">Tim › <b>Struktur Folder</b></div><div class="user"><span>Tim SAKIP</span><div class="avatar av-s">TS</div></div></div>
-        <div class="content">
           <div class="page-head"><h2>Struktur Folder Drive</h2><p>Atur pola folder otomatis di Google Drive tanpa mengubah kode.</p></div>
           <div class="info"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>Dua bagian: <b>Tingkat folder</b> (hierarki induk → subfolder, "Tahun" selalu di posisi pertama &amp; tidak dapat dinonaktifkan) dan <b>Folder kategori</b> (folder sejajar di dalam folder terdalam — Capaian &amp; Bukti-Dukung-SAKIP wajib ada).</div>
           <div class="grid grid-2">
@@ -1308,41 +1162,9 @@
               </div>
             </div>
           </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
+            </div>
+            <div x-show="tab === 'template'" x-cloak>
 
-<!-- S16 TEMPLATE NOTULA -->
-<div class="screen" id="s16">
-  <div class="screen-label"><span class="sl-num">16</span><span class="sl-t">Template Notula</span><span class="sl-d">— unggah template .docx arsip dengan penanda otomatis; resources/views/livewire/template-notula.blade.php</span></div>
-  <div class="frame" data-document-role="page" data-label="SIPINTER Layar 16">
-    <div class="browser-bar"><div class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></div><div class="url"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>sipinter.bps.go.id/template-notula</div></div>
-    <div class="app">
-      <aside class="sidebar">
-        <div class="brand"><div class="logo"><svg class="i" viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg></div><div><h1>SIPINTER</h1><span>BPS Buton Utara</span></div></div>
-        <nav class="nav"><div class="nav-group">Menu</div>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg></span>Dasbor</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg></span>Verifikasi</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="m9 15 2 2 4-4"/></svg></span>Kompilasi Notula</a>
-          <div class="nav-group">Laporan</div>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></span>Rekapitulasi</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>Dasbor Kinerja</a>
-          <div class="nav-group">Data &amp; Master</div>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/></svg></span>Master IKU</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z"/></svg></span>Struktur Folder</a>
-          <a class="active"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></span>Template Notula</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h.79a4.5 4.5 0 1 1 0 9Z"/></svg></span>Akun &amp; Storage</a>
-          <div class="nav-group">Administrasi</div>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></span>Kelola Pengguna</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82"/></svg></span>Pengaturan Akun</a>
-        </nav>
-        <div class="sidebar-foot"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>v1.0 · Aktualisasi 2026</div>
-      </aside>
-      <div class="main">
-        <div class="topbar"><div class="crumb">Tim › <b>Template Notula</b></div><div class="user"><span>Tim SAKIP</span><div class="avatar av-s">TS</div></div></div>
-        <div class="content">
           <div class="page-head"><h2>Template Notula</h2><p>Unggah template resmi (.docx) berisi penanda otomatis untuk Bagian I.</p></div>
           <div class="info"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>Penanda yang didukung: <code>{{iku}}</code>, <code>{{analisis_capaian}}</code>, <code>{{kendala_solusi_kumulatif}}</code>, <code>{{rtl}}</code>, <code>{{ttd_kepala}}</code>. Template ini disimpan sebagai arsip format resmi — penyusunan Bagian I otomatis pada Kompilasi Notula tetap memakai tampilan bawaan sistem.</div>
           <div class="card">
@@ -1354,42 +1176,93 @@
             <div class="sec"><span>Template Tersimpan</span></div>
             <div class="filechip ok"><span class="nm"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg><span>Template_Notula_SAKIP.docx<span class="sub">Diperbarui 3 Januari 2026, 09:12</span></span></span><button class="btn btn-red btn-sm">Hapus</button></div>
           </div>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
   </div>
 </div>
-
-<!-- S17 AKUN & STORAGE (BARU) -->
-<div class="screen" id="s17">
-  <div class="screen-label"><span class="sl-num">17</span><span class="sl-t">Akun &amp; Storage</span><span class="sl-d">— kelola akun Gmail institusi &amp; kuota Google Drive; resources/views/livewire/storage-accounts.blade.php</span></div>
-  <div class="frame" data-document-role="page" data-label="SIPINTER Layar 17">
-    <div class="browser-bar"><div class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></div><div class="url"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>sipinter.bps.go.id/akun-storage</div></div>
+<!-- S12 KELOLA PENGGUNA -->
+<div class="screen" id="s12">
+  <div class="screen-label"><span class="sl-num">12</span><span class="sl-t">Kelola Pengguna</span><span class="sl-d">— 4 subtab (Alpine, tanpa reload): Verifikasi Akun / Keanggotaan Tim / Penugasan IKU / Akun &amp; Storage; resources/views/admin/verifikasi/index.blade.php</span></div>
+  <div class="frame" data-document-role="page" data-label="SIPINTER Layar 12">
+    <div class="browser-bar"><div class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></div><div class="url"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>sipinter.bps.go.id/verifikasi-akun</div></div>
     <div class="app">
       <aside class="sidebar">
         <div class="brand"><div class="logo"><svg class="i" viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg></div><div><h1>SIPINTER</h1><span>BPS Buton Utara</span></div></div>
-        <nav class="nav"><div class="nav-group">Menu</div>
+        <nav class="nav">
           <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg></span>Dasbor</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg></span>Verifikasi</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="m9 15 2 2 4-4"/></svg></span>Kompilasi Notula</a>
-          <div class="nav-group">Laporan</div>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></span>Rekapitulasi</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>Dasbor Kinerja</a>
-          <div class="nav-group">Data &amp; Master</div>
+          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg></span>Verifikasi &amp; Notula</a>
           <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/></svg></span>Master IKU</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z"/></svg></span>Struktur Folder</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></span>Template Notula</a>
-          <a class="active"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h.79a4.5 4.5 0 1 1 0 9Z"/></svg></span>Akun &amp; Storage</a>
-          <div class="nav-group">Administrasi</div>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></span>Kelola Pengguna</a>
+          <a class="active"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></span>Kelola Pengguna</a>
           <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82"/></svg></span>Pengaturan Akun</a>
         </nav>
         <div class="sidebar-foot"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>v1.0 · Aktualisasi 2026</div>
       </aside>
       <div class="main">
-        <div class="topbar"><div class="crumb">Tim › <b>Akun &amp; Storage</b></div><div class="user"><span>Tim SAKIP</span><div class="avatar av-s">TS</div></div></div>
+        <div class="topbar"><div class="crumb">Tim › <b>Kelola Pengguna</b></div><div class="user"><span>Tim SAKIP</span><div class="avatar av-s">TS</div></div></div>
         <div class="content">
-          <div class="page-head"><h2>Akun &amp; Storage</h2><p>Kelola akun Gmail institusi tempat seluruh bukti dukung tersimpan di Google Drive.</p></div>
+          <div class="page-head"><h2>Kelola Pengguna</h2><p>Verifikasi akun, keanggotaan tim, penugasan IKU, dan akun penyimpanan Drive dalam satu tempat.</p></div>
+          <div x-data="{ tab: 'verifikasi' }">
+            <div class="subtabs">
+              <button type="button" class="subtab" :class="tab === 'verifikasi' ? 'on' : ''" @click="tab = 'verifikasi'"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>Verifikasi Akun</button>
+              <button type="button" class="subtab" :class="tab === 'tim' ? 'on' : ''" @click="tab = 'tim'"><svg class="i" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Keanggotaan Tim</button>
+              <button type="button" class="subtab" :class="tab === 'penugasan' ? 'on' : ''" @click="tab = 'penugasan'"><svg class="i" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-4"/></svg>Penugasan IKU</button>
+              <button type="button" class="subtab" :class="tab === 'storage' ? 'on' : ''" @click="tab = 'storage'"><svg class="i" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h.79a4.5 4.5 0 1 1 0 9Z"/></svg>Akun &amp; Storage</button>
+            </div>
+            <div x-show="tab === 'verifikasi'">
+<div class="info"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>Akun yang baru mendaftar berstatus menunggu. Tim SAKIP memeriksa lalu menyetujui/menolak. Akun hanya bisa dipakai setelah disetujui.</div>
+          <div class="card">
+            <div class="sec"><span>Menunggu Persetujuan</span><span class="badge b-tunggu" style="margin-left:auto">2</span></div>
+            <table>
+              <thead><tr><th>Nama</th><th>Email</th><th>Peran Diajukan</th><th style="text-align:right">Tindakan</th></tr></thead>
+              <tbody>
+                <tr><td><b>Dewi Lestari</b></td><td class="muted">dewi.l@bps.go.id</td><td><span class="badge b-ajukan">Ketua Tim</span></td><td style="text-align:right"><div class="btn-row" style="margin-top:0;justify-content:flex-end"><button class="btn btn-teal btn-sm">✓ Setujui</button><button class="btn btn-red btn-sm">✕ Tolak</button></div></td></tr>
+                <tr><td><b>Bayu Pratama</b></td><td class="muted">bayu.p@bps.go.id</td><td><span class="badge b-ajukan">Ketua Tim</span></td><td style="text-align:right"><div class="btn-row" style="margin-top:0;justify-content:flex-end"><button class="btn btn-teal btn-sm">✓ Setujui</button><button class="btn btn-red btn-sm">✕ Tolak</button></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="card" style="margin-top:16px">
+            <div class="sec"><span>Akun Aktif</span></div>
+            <table>
+              <thead><tr><th>Nama</th><th>Email</th><th>Status</th><th>Peran</th></tr></thead>
+              <tbody>
+                <tr><td><b>Andi Saputra</b></td><td class="muted">andi.s@bps.go.id</td><td><span class="badge b-approve">Terverifikasi</span></td><td><div class="inp sel" style="display:inline-block;width:auto;padding:6px 28px 6px 10px">Ketua Tim</div></td></tr>
+                <tr><td><b>Rina Marlina</b></td><td class="muted">rina.m@bps.go.id</td><td><span class="badge b-approve">Terverifikasi</span></td><td><div class="inp sel" style="display:inline-block;width:auto;padding:6px 28px 6px 10px">Ketua Tim</div></td></tr>
+              </tbody>
+            </table>
+          </div>
+          
+            </div>
+            <div x-show="tab === 'tim'" x-cloak>
+            <div class="info teal"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>Tiap Ketua Tim tampil sebagai kartu dengan chip nama tim (bisa merangkap lebih dari satu tim) dan kolom tambah tim baru.</div>
+<div class="assign-card" style="margin-top:12px">
+            <div class="ac-person"><div class="ac-av">AS</div><div><div class="ac-name">Andi Saputra</div><div class="ac-sub">andi.s@bps.go.id</div></div></div>
+            <div class="ac-chips">
+              <span class="chip chip-tim">Sosial <span style="cursor:pointer;margin-left:4px">✕</span></span>
+              <span class="chip chip-tim">Produksi <span style="cursor:pointer;margin-left:4px">✕</span></span>
+              <div class="inp ph" style="width:auto;display:inline-block;min-width:160px;min-height:auto">Tambah tim…</div>
+              <button class="btn btn-ghost btn-sm">＋ Tambah</button>
+            </div>
+          </div>
+          
+            </div>
+            <div x-show="tab === 'penugasan'" x-cloak>
+            <div class="info teal"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>Tiap IKU tampil sebagai kartu dengan chip abu &ldquo;via tim&rdquo; (otomatis dari keanggotaan tim) dan chip biru untuk penugasan manual tambahan.</div>
+<div class="assign-card">
+            <div class="ac-person"><div class="ac-av">1131</div><div><div class="ac-name">Persentase Publikasi/Laporan Statistik Kesejahteraan Rakyat</div><div class="ac-sub">Tim: Sosial</div></div></div>
+            <div class="ac-chips">
+              <span class="chip chip-auto">Andi Saputra <span class="chip-via">via tim</span></span>
+              <span class="chip chip-tim">Dewi Lestari <span style="cursor:pointer;margin-left:4px">✕</span></span>
+              <div class="inp sel" style="width:auto;display:inline-block">＋ Tambah manual…</div>
+              <button class="btn btn-ghost btn-sm">＋ Tambah</button>
+            </div>
+          </div>
+            </div>
+            <div x-show="tab === 'storage'" x-cloak>
+
 
           <div class="card" style="border-color:#fca5a5;background:var(--red-soft);margin-bottom:16px">
             <div class="card-h" style="color:var(--red)"><svg class="i" viewBox="0 0 24 24"><path d="m21.7 18-9-16a1 1 0 0 0-1.7 0l-9 16A1 1 0 0 0 3 19.5h18a1 1 0 0 0 .7-1.5Z"/><path d="M12 9v4M12 17h.01"/></svg>Kuota Storage Aktif Hampir Penuh</div>
@@ -1426,87 +1299,9 @@
               </tbody>
             </table>
           </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
+            </div>
+          </div>
 
-<!-- S18 KELOLA PENGGUNA -->
-<div class="screen" id="s18">
-  <div class="screen-label"><span class="sl-num">18</span><span class="sl-t">Kelola Pengguna</span><span class="sl-d">— verifikasi akun · keanggotaan tim · penugasan IKU, 3 subtab (Alpine, tanpa reload)</span></div>
-  <div class="frame" data-document-role="page" data-label="SIPINTER Layar 18">
-    <div class="browser-bar"><div class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></div><div class="url"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>sipinter.bps.go.id/verifikasi-akun</div></div>
-    <div class="app">
-      <aside class="sidebar">
-        <div class="brand"><div class="logo"><svg class="i" viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg></div><div><h1>SIPINTER</h1><span>BPS Buton Utara</span></div></div>
-        <nav class="nav"><div class="nav-group">Menu</div>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg></span>Dasbor</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg></span>Verifikasi</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="m9 15 2 2 4-4"/></svg></span>Kompilasi Notula</a>
-          <div class="nav-group">Laporan</div>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></span>Rekapitulasi</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>Dasbor Kinerja</a>
-          <div class="nav-group">Data &amp; Master</div>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/></svg></span>Master IKU</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z"/></svg></span>Struktur Folder</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></span>Template Notula</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h.79a4.5 4.5 0 1 1 0 9Z"/></svg></span>Akun &amp; Storage</a>
-          <div class="nav-group">Administrasi</div>
-          <a class="active"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></span>Kelola Pengguna</a>
-          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82"/></svg></span>Pengaturan Akun</a>
-        </nav>
-        <div class="sidebar-foot"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>v1.0 · Aktualisasi 2026</div>
-      </aside>
-      <div class="main">
-        <div class="topbar"><div class="crumb">Tim › <b>Kelola Pengguna</b></div><div class="user"><span>Tim SAKIP</span><div class="avatar av-s">TS</div></div></div>
-        <div class="content">
-          <div class="page-head"><h2>Kelola Pengguna</h2><p>Verifikasi akun, keanggotaan tim, dan penugasan IKU dalam satu tempat.</p></div>
-          <div class="subtabs">
-            <button class="subtab on"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>Verifikasi Akun</button>
-            <button class="subtab"><svg class="i" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Keanggotaan Tim</button>
-            <button class="subtab"><svg class="i" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-4"/></svg>Penugasan IKU</button>
-          </div>
-          <div class="info"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>Akun yang baru mendaftar berstatus menunggu. Tim SAKIP memeriksa lalu menyetujui/menolak. Akun hanya bisa dipakai setelah disetujui.</div>
-          <div class="card">
-            <div class="sec"><span>Menunggu Persetujuan</span><span class="badge b-tunggu" style="margin-left:auto">2</span></div>
-            <table>
-              <thead><tr><th>Nama</th><th>Email</th><th>Peran Diajukan</th><th style="text-align:right">Tindakan</th></tr></thead>
-              <tbody>
-                <tr><td><b>Dewi Lestari</b></td><td class="muted">dewi.l@bps.go.id</td><td><span class="badge b-ajukan">Ketua Tim</span></td><td style="text-align:right"><div class="btn-row" style="margin-top:0;justify-content:flex-end"><button class="btn btn-teal btn-sm">✓ Setujui</button><button class="btn btn-red btn-sm">✕ Tolak</button></div></td></tr>
-                <tr><td><b>Bayu Pratama</b></td><td class="muted">bayu.p@bps.go.id</td><td><span class="badge b-ajukan">Ketua Tim</span></td><td style="text-align:right"><div class="btn-row" style="margin-top:0;justify-content:flex-end"><button class="btn btn-teal btn-sm">✓ Setujui</button><button class="btn btn-red btn-sm">✕ Tolak</button></div></td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="card" style="margin-top:16px">
-            <div class="sec"><span>Akun Aktif</span></div>
-            <table>
-              <thead><tr><th>Nama</th><th>Email</th><th>Status</th><th>Peran</th></tr></thead>
-              <tbody>
-                <tr><td><b>Andi Saputra</b></td><td class="muted">andi.s@bps.go.id</td><td><span class="badge b-approve">Terverifikasi</span></td><td><div class="inp sel" style="display:inline-block;width:auto;padding:6px 28px 6px 10px">Ketua Tim</div></td></tr>
-                <tr><td><b>Rina Marlina</b></td><td class="muted">rina.m@bps.go.id</td><td><span class="badge b-approve">Terverifikasi</span></td><td><div class="inp sel" style="display:inline-block;width:auto;padding:6px 28px 6px 10px">Ketua Tim</div></td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="info teal" style="margin-top:16px"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>Tab <b>Keanggotaan Tim</b>: tiap Ketua Tim tampil sebagai kartu dengan chip nama tim (bisa merangkap lebih dari satu tim) dan kolom tambah tim baru. Tab <b>Penugasan IKU</b>: tiap IKU tampil sebagai kartu dengan chip abu "via tim" (otomatis dari keanggotaan tim) dan chip biru untuk penugasan manual tambahan.</div>
-          <div class="assign-card" style="margin-top:12px">
-            <div class="ac-person"><div class="ac-av">AS</div><div><div class="ac-name">Andi Saputra</div><div class="ac-sub">andi.s@bps.go.id</div></div></div>
-            <div class="ac-chips">
-              <span class="chip chip-tim">Sosial <span style="cursor:pointer;margin-left:4px">✕</span></span>
-              <span class="chip chip-tim">Produksi <span style="cursor:pointer;margin-left:4px">✕</span></span>
-              <div class="inp ph" style="width:auto;display:inline-block;min-width:160px;min-height:auto">Tambah tim…</div>
-              <button class="btn btn-ghost btn-sm">＋ Tambah</button>
-            </div>
-          </div>
-          <div class="assign-card">
-            <div class="ac-person"><div class="ac-av">1131</div><div><div class="ac-name">Persentase Publikasi/Laporan Statistik Kesejahteraan Rakyat</div><div class="ac-sub">Tim: Sosial</div></div></div>
-            <div class="ac-chips">
-              <span class="chip chip-auto">Andi Saputra <span class="chip-via">via tim</span></span>
-              <span class="chip chip-tim">Dewi Lestari <span style="cursor:pointer;margin-left:4px">✕</span></span>
-              <div class="inp sel" style="width:auto;display:inline-block">＋ Tambah manual…</div>
-              <button class="btn btn-ghost btn-sm">＋ Tambah</button>
-            </div>
-          </div>
         </div>
       </div>
     </div>
@@ -1521,15 +1316,15 @@
   </div>
 </div>
 
-<!-- S19 PERSETUJUAN NOTULA -->
-<div class="screen" id="s19">
-  <div class="screen-label"><span class="sl-num">19</span><span class="sl-t">Persetujuan Notula</span><span class="sl-d">— pratinjau notula gabungan + tombol Setujui &amp; Bubuhkan TTD / Minta Revisi; resources/views/livewire/persetujuan-notula.blade.php</span></div>
-  <div class="frame" data-document-role="page" data-label="SIPINTER Layar 19">
+<!-- S13 PERSETUJUAN NOTULA -->
+<div class="screen" id="s13">
+  <div class="screen-label"><span class="sl-num">13</span><span class="sl-t">Persetujuan Notula</span><span class="sl-d">— pratinjau notula gabungan + tombol Setujui &amp; Bubuhkan TTD / Minta Revisi; resources/views/livewire/persetujuan-notula.blade.php</span></div>
+  <div class="frame" data-document-role="page" data-label="SIPINTER Layar 13">
     <div class="browser-bar"><div class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></div><div class="url"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>sipinter.bps.go.id/persetujuan</div></div>
     <div class="app">
       <aside class="sidebar">
         <div class="brand"><div class="logo"><svg class="i" viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg></div><div><h1>SIPINTER</h1><span>BPS Buton Utara</span></div></div>
-        <nav class="nav"><div class="nav-group">Menu</div>
+        <nav class="nav">
           <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg></span>Dasbor</a>
           <a class="active"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg></span>Persetujuan</a>
           <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>Dasbor Kinerja</a>
@@ -1570,7 +1365,7 @@
 </div>
 
 <div class="foot">
-  Mockup statis SIPINTER — 19 tampilan · disusun mengikuti kode aplikasi (Laravel 12 + Livewire v3) yang berjalan di Render · BPS Kabupaten Buton Utara · Agustus 2026
+  Mockup statis SIPINTER — 13 tampilan · disusun mengikuti kode aplikasi (Laravel 12 + Livewire v3) yang berjalan di Render · BPS Kabupaten Buton Utara · Agustus 2026
 </div>
 
 </body>

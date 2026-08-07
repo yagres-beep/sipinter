@@ -646,8 +646,8 @@ function batasWaktuRtl(){
 function updPeriode(){var sel=document.getElementById("isiBulan");if(!sel)return;var b=sel.value;var yl=document.getElementById("isiTahun");var y=yl?parseInt(yl.value,10):TAHUN_AKTIF;var tw=twDari(b);var ke=BULAN_TW[tw].indexOf(b)+1;var meta=document.getElementById("isiPeriodeMeta");if(meta)meta.innerHTML="&middot; Triwulan "+tw+" &middot; Bulan ke-"+ke+" triwulan &middot; Tahun "+y;var tag=document.getElementById("isiPeriodeTag");var note=document.getElementById("backfillNote");var aktif=(b===BULAN_AKTIF&&y===TAHUN_AKTIF);if(aktif){if(tag){tag.textContent="Periode aktif";tag.className="pb-tag";}if(note)note.style.display="none";}else{if(tag){tag.textContent="Periode terlewat";tag.className="pb-tag pb-tag-warn";}if(note)note.style.display="flex";}var dl=document.getElementById("rtlDeadline");if(dl)dl.value=batasWaktuRtl();}
 const ROLES={
  ketua:{name:"Ketua Tim Statistik Sosial",av:"KT",nav:[["dasbor","Dasbor","grid"],["isi","Isian Kegiatan","edit"],["notula","Notula","file-text"],["akun","Pengaturan Akun","settings"]]},
- sakip:{name:"Tim SAKIP",av:"TS",nav:[["dasbor","Dasbor","grid"],["verifikasi","Verifikasi","check-shield"],["kompilasi","Kompilasi Notula","file-check"],["pengguna","Kelola Pengguna","users"],["iku","Master IKU","database"],["folder","Struktur Folder","folder"],["template","Template Notula","file-text"],["akun","Pengaturan Akun","settings"]]},
- kepala:{name:"Kepala BPS",av:"KP",nav:[["dasbor","Dasbor","grid"],["approval","Persetujuan","check-shield"],["notula","Notula","file-text"],["akun","Pengaturan Akun","settings"]]},
+ sakip:{name:"Tim SAKIP",av:"TS",nav:[["dasbor","Dasbor","grid"],["verifikasi","Verifikasi & Notula","check-shield"],["iku","Master IKU","database"],["pengguna","Kelola Pengguna","users"],["akun","Pengaturan Akun","settings"]]},
+ kepala:{name:"Kepala BPS",av:"KP",nav:[["dasbor","Dasbor","grid"],["approval","Persetujuan","check-shield"],["dasborkinerja","Dasbor Kinerja","chart"],["rekapitulasi","Rekapitulasi","list"],["notula","Notula","file-text"],["akun","Pengaturan Akun","settings"]]},
 };
 let curRole="ketua",curPage="dasbor",notulaApproved=false,notulaEditing=false,curFileFlag=null;
 const NOTULA_VERSIONS=[]; // riwayat versi ttd
@@ -667,7 +667,7 @@ function doLogin(){document.getElementById("authWrap").style.display="none";docu
 function doRegister(){showAuth('login');toast("Pendaftaran terkirim — menunggu verifikasi Tim SAKIP sebelum akun dapat digunakan");}
 function doLogout(){document.getElementById("appWrap").style.display="none";document.getElementById("authWrap").style.display="block";showAuth('login');document.getElementById("sideUser").classList.remove("open");}
 function go(p){curPage=p;markActive();render();}
-function render(){var c=document.getElementById("content");document.getElementById("crumb").innerHTML=ROLES[curRole].name.split(" ")[0]+" &rsaquo; <b>"+pageTitle(curPage)+"</b>";c.innerHTML=(PAGES[curPage]||PAGES.dasbor)();window.scrollTo(0,0);if(curPage==='detail')renderRtlMatch();if(curPage==='isi'){updPeriode();validateIsi();}if(curPage==='folder')renderFolderPreview();if(curPage==='dasbor')renderDashTable();if(curPage==='verifikasi')renderVerifTable();if(curPage==='kompilasi')refreshMerge();}
+function render(){var c=document.getElementById("content");document.getElementById("crumb").innerHTML=ROLES[curRole].name.split(" ")[0]+" &rsaquo; <b>"+pageTitle(curPage)+"</b>";c.innerHTML=(PAGES[curPage]||PAGES.dasbor)();window.scrollTo(0,0);if(curPage==='detail')renderRtlMatch();if(curPage==='isi'){updPeriode();validateIsi();}if(curPage==='iku')renderFolderPreview();if(curPage==='dasbor')renderDashTable();if(curPage==='verifikasi'){renderVerifTable();refreshNotulaMerge();}}
 
 // --- validation: enable Ajukan only when all required inputs are complete ---
 function validateIsi(){
@@ -755,7 +755,7 @@ function overrideMatch(sel,i){
  else{var sc=parseInt(box.querySelector(".score").textContent);var v=verdict(sc);box.className="match "+v[0];lbl.textContent=v[1];}
  toast("Penilaian RTL diperbarui manual");
 }
-function pageTitle(p){return {dasbor:"Dasbor",isi:"Isian Kegiatan",notula:"Notula",verifikasi:"Verifikasi",kompilasi:"Kompilasi Notula",approval:"Persetujuan",iku:"Master IKU",template:"Template Notula",detail:"Detail Verifikasi",review:"Review Notula",pengguna:"Kelola Pengguna",akun:"Pengaturan Akun",folder:"Struktur Folder"}[p]||"Dasbor";}
+function pageTitle(p){return {dasbor:"Dasbor",isi:"Isian Kegiatan",notula:"Notula",verifikasi:"Verifikasi & Notula",approval:"Persetujuan",iku:"Master IKU",dasborkinerja:"Dasbor Kinerja",rekapitulasi:"Rekapitulasi",detail:"Detail Verifikasi",review:"Review Notula",pengguna:"Kelola Pengguna",akun:"Pengaturan Akun"}[p]||"Dasbor";}
 function toast(m){var t=document.getElementById("toast");document.getElementById("toastMsg").textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2200);}
 function badge(s){var m={draft:['b-draft','Draft','file'],ajukan:['b-ajukan','Diajukan','send'],verif:['b-verif','Diverifikasi','check'],kembali:['b-kembali','Dikembalikan','arrow-left'],approve:['b-approve','Disetujui','check-circle'],tunggu:['b-tunggu','Menunggu approval','clock']};var x=m[s]||m.draft;return '<span class="badge '+x[0]+'">'+ic(x[2])+x[1]+'</span>';}
 function badgeRole(r){var m={ketua:['b-ajukan','Ketua Tim'],sakip:['b-verif','Tim SAKIP'],kepala:['b-tunggu','Kepala']};var x=m[r]||m.ketua;return '<span class="badge '+x[0]+'">'+x[1]+'</span>';}
@@ -787,7 +787,7 @@ function simpanSandi(){var a=document.getElementById("pwNew").value,b=document.g
 var PAGES={};
 
 var dashState={q:"",tw:"",bulan:"",sortKey:"",sortDir:1};
-PAGES.dasbor=function(){return ''+
+function dasborUtamaBody(){return ''+
 '<div class="page-head"><h2>Dasbor Pemantauan</h2><p>Progres capaian kinerja SAKIP &mdash; klik baris untuk membuka detail</p></div>'+
 '<div class="grid grid-4" style="margin-bottom:20px">'+
 '<div class="card stat"><div class="ico ico-blue">'+ic("target")+'</div><span class="num">18</span><span class="lbl">Total IKU dipantau</span></div>'+
@@ -805,7 +805,44 @@ PAGES.dasbor=function(){return ''+
 sortTh("kode","Kode")+sortTh("iku","Indikator Kinerja")+sortTh("bulan","Bulan")+sortTh("tw","TW")+sortTh("tim","Tim")+sortTh("status","Status")+
 '</tr></thead><tbody id="dashBody"></tbody></table>'+
 '<div id="dashEmpty" class="hint" style="display:none;text-align:center;padding:24px">Tidak ada data yang cocok dengan filter.</div>'+
-'</div>';};
+'</div>';}
+function dasborKinerjaContent(){return ''+
+'<div class="grid grid-4" style="margin-bottom:20px">'+
+'<div class="card stat"><div class="ico ico-blue">'+ic("database")+'</div><span class="num">'+IKU.length+'</span><span class="lbl">Total Master IKU</span></div>'+
+'<div class="card stat"><div class="ico ico-teal">'+ic("edit")+'</div><span class="num">'+ENTRIES.length+'</span><span class="lbl">Kegiatan Triwulan Ini</span></div>'+
+'<div class="card stat"><div class="ico ico-amber">'+ic("target")+'</div><span class="num">92%</span><span class="lbl">Rata-rata Capaian</span></div>'+
+'<div class="card stat"><div class="ico ico-teal">'+ic("check-shield")+'</div><span class="num">4</span><span class="lbl">IKU Aktif Triwulan Ini</span></div></div>'+
+'<div class="card"><div class="sec" style="margin-top:0"><span>Status Dokumen Kegiatan &mdash; Triwulan II 2026</span></div>'+
+'<div style="display:flex;gap:10px;flex-wrap:wrap">'+
+'<span class="badge b-draft">Draft: 1</span><span class="badge b-ajukan">Diajukan: 2</span><span class="badge b-verif">Diverifikasi: 3</span><span class="badge b-approve">Disetujui: 6</span><span class="badge b-kembali">Dikembalikan: 1</span>'+
+'</div></div>'+
+'<div class="card"><div class="sec" style="margin-top:0"><span>Progres Verifikasi per Triwulan 2026</span></div>'+
+[["I",6,6],["II",7,8],["III",0,0],["IV",0,0]].map(function(r){var pct=r[2]?Math.round(r[1]/r[2]*100):0;return '<div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span style="font-weight:600">Triwulan '+r[0]+'</span><span class="muted">'+r[1]+'/'+r[2]+' kegiatan ('+pct+'%)</span></div>'+
+'<div style="height:9px;border-radius:6px;background:var(--line2);overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+(pct&&pct<50?"var(--amber)":"var(--blue)")+'"></div></div></div>';}).join("")+
+'</div>';}
+function rekapitulasiContent(){return ''+
+'<div class="card"><div class="sec" style="margin-top:0"><span>Rekap per IKU</span><span class="badge b-verif">rata-rata 92%</span></div>'+
+'<table><thead><tr><th>Kode</th><th>Indikator</th><th style="text-align:center">Kegiatan</th><th style="text-align:right">Target PK</th><th style="text-align:right">Target TW</th><th style="text-align:right">Realisasi</th><th style="text-align:right">Capaian %</th></tr></thead><tbody>'+
+IKU.map(function(i,ix){var pct=[100,95,88,72][ix%4];var real=(25*pct/100).toFixed(2).replace(".",",");return '<tr><td><b>'+i.kode+'</b></td><td>'+i.nama+'</td><td style="text-align:center">'+(ix+2)+'</td><td style="text-align:right">100</td><td style="text-align:right">25,00</td><td style="text-align:right">'+real+'</td><td style="text-align:right"><span class="badge '+(pct>=90?"b-approve":pct>=70?"b-tunggu":"b-kembali")+'">'+pct+'%</span></td></tr>';}).join("")+
+'</tbody></table></div>';}
+PAGES.dasbor=function(){
+ var utama=dasborUtamaBody();
+ if(curRole!=='sakip')return utama;
+ return '<div class="subtabs">'+
+ '<button class="subtab on" data-pane="utama" onclick="subTab(this,\'utama\',[\'utama\',\'kinerja\',\'rekap\'])">🏠 Dasbor</button>'+
+ '<button class="subtab" data-pane="kinerja" onclick="subTab(this,\'kinerja\',[\'utama\',\'kinerja\',\'rekap\'])">📊 Dasbor Kinerja</button>'+
+ '<button class="subtab" data-pane="rekap" onclick="subTab(this,\'rekap\',[\'utama\',\'kinerja\',\'rekap\'])">📈 Rekapitulasi</button>'+
+ '</div>'+
+ '<div class="subpane on" id="pane-utama">'+utama+'</div>'+
+ '<div class="subpane" id="pane-kinerja">'+dasborKinerjaContent()+'</div>'+
+ '<div class="subpane" id="pane-rekap">'+rekapitulasiContent()+'</div>';
+};
+PAGES.dasborkinerja=function(){return ''+
+'<div class="page-head"><h2>Dasbor Kinerja</h2><p>Status isian dan capaian kinerja secara menyeluruh, terbarui setiap saat</p></div>'+
+dasborKinerjaContent();};
+PAGES.rekapitulasi=function(){return ''+
+'<div class="page-head"><h2>Rekapitulasi Triwulanan</h2><p>Dibentuk otomatis dari capaian bulanan yang sudah terverifikasi &mdash; tanpa penyalinan manual</p></div>'+
+rekapitulasiContent();};
 function sortTh(key,label){var dir=dashState.sortKey===key?(dashState.sortDir===1?"asc":"desc"):"";return '<th class="th-sort'+(dir?" "+dir:"")+'" onclick="sortDash(&quot;'+key+'&quot;)">'+label+'<span class="th-arrow">'+ic(dir==="desc"?"arrow-down":"arrow-up")+'</span></th>';}
 function bulanIdx(b){return BULAN_URUT.indexOf(b);}
 function bulanOptions(tw,selected){var list=tw?BULAN_TW[tw]:BULAN_URUT;var opt='<option value=""'+(!selected?" selected":"")+'>'+(tw?"Semua bulan TW "+tw:"Semua bulan")+'</option>';return opt+list.map(function(b){return '<option value="'+b+'"'+(b===selected?" selected":"")+'>'+b+'</option>';}).join("");}
@@ -924,7 +961,7 @@ function renderVerifTable(){var body=document.getElementById("verifBody");if(!bo
 function sortVerif(key){if(verifState.sortKey===key){verifState.sortDir*=-1;}else{verifState.sortKey=key;verifState.sortDir=1;}renderVerifTable();}
 function resetVerifFilter(){verifState={q:"",tw:"",bulan:"",sortKey:"",sortDir:1};var s=document.getElementById("verifSearch");if(s)s.value="";var t=document.getElementById("fVerifTw");if(t)t.value="";var b=document.getElementById("fVerifBulan");if(b)b.innerHTML=bulanOptions("","");renderVerifTable();}
 
-PAGES.verifikasi=function(){return ''+
+function paneVerifikasiList(){return ''+
 '<div class="page-head"><h2>Verifikasi Bukti Dukung</h2><p>Isi analisis capaian &amp; angka, verifikasi tiap berkas, beri catatan bila tidak sesuai</p></div>'+
 '<div class="info teal">'+ic("shield-check")+'Tim SAKIP mengisi analisis capaian (narasi + kegiatan pendukung) dan angka, lalu memverifikasi setiap berkas satu per satu.</div>'+
 '<div class="card">'+
@@ -935,7 +972,14 @@ PAGES.verifikasi=function(){return ''+
 '<button class="btn btn-ghost btn-sm" onclick="resetVerifFilter()">'+ic("refresh")+'Reset</button></div>'+
 '<table class="verif-sortable"><thead><tr>'+verifHeadRow()+'</tr></thead><tbody id="verifBody"></tbody></table>'+
 '<div id="verifEmpty" class="hint" style="display:none;text-align:center;padding:24px">Tidak ada entri yang cocok dengan pencarian.</div>'+
-'</div>';};
+'</div>';}
+PAGES.verifikasi=function(){return ''+
+'<div class="subtabs">'+
+'<button class="subtab on" data-pane="verifikasi" onclick="subTab(this,\'verifikasi\',[\'verifikasi\',\'notula\'])">✅ Verifikasi</button>'+
+'<button class="subtab" data-pane="notula" onclick="subTab(this,\'notula\',[\'verifikasi\',\'notula\'])">📄 Kompilasi Notula</button>'+
+'</div>'+
+'<div class="subpane on" id="pane-verifikasi">'+paneVerifikasiList()+'</div>'+
+'<div class="subpane" id="pane-notula">'+paneKompilasiNotula()+'</div>';};
 
 PAGES.detail=function(){return ''+
 '<div class="page-head"><h2>Detail Verifikasi &mdash; IKU 1131</h2><p>Statistik Kesejahteraan Rakyat &middot; Juni 2026 &middot; 6 kegiatan pendukung</p></div>'+
@@ -985,93 +1029,97 @@ function fileItem(name,type,label){
  return '<div class="filechip" id="fi_'+id+'"><span class="nm" onclick="openPdf(&quot;'+name+'&quot;,&quot;'+type+'&quot;,&quot;'+id+'&quot;)">'+ic("file")+' '+name+sub+'</span><button class="btn btn-ghost btn-sm" onclick="openPdf(&quot;'+name+'&quot;,&quot;'+type+'&quot;,&quot;'+id+'&quot;)">'+ic("eye")+'Periksa</button></div>';
 }
 
-PAGES.kompilasi=function(){return ''+
-'<div class="page-head"><h2>Kompilasi Notula</h2><p>Susun draf notula dari entri terverifikasi</p></div>'+
-'<div class="info">'+ic("info")+'Setelah seluruh bukti terverifikasi, notula bisa langsung diunduh sebagai draf tanpa menunggu Kepala.</div>'+
+var BAGIAN_STATE={2:null,3:null,merged:false};
+var BAGIAN1_DEFAULT='<p><b>Sasaran:</b> Terwujudnya Penyediaan Data dan Insight Statistik Kesejahteraan Rakyat yang Berkualitas.</p>'+
+ '<p><b>Analisis Capaian:</b> Secara kumulatif hingga triwulan II 2026, terdapat 1 laporan kegiatan yang telah disusun melalui rangkaian kegiatan Sakernas Mei 2026.</p>'+
+ '<p><b>Kendala &amp; Solusi (Kumulatif TW I&ndash;II):</b> TW I keterlambatan dokumen &rarr; percepatan koordinasi; TW II 50% petugas belum berpengalaman &rarr; pelatihan intensif &amp; pengawasan.</p>'+
+ '<p><b>Rencana Kegiatan ke Depan (TW III):</b> Pelatihan dan persiapan Susenas September, pelaksanaan lapangan, serta pengolahan data Juli&ndash;September.</p>';
+
+function paneKompilasiNotula(){return ''+
+'<div class="page-head"><h2>Kompilasi Notula</h2><p>Gabungkan tiga bagian menjadi satu PDF notula utuh &mdash; satu dokumen dari atas ke bawah, sama seperti membuka file Word yang sudah lengkap</p></div>'+
+'<div class="info">'+ic("info")+'Bagian I bisa disunting langsung di bawah ini; Bagian II &amp; III tinggal diunggah dan langsung tampil sebagai kelanjutan dokumen yang sama.</div>'+
 '<div class="card"><div class="sec" style="margin-top:0"><span>Kesiapan per Sasaran</span></div>'+
 '<table><thead><tr><th>Sasaran</th><th>IKU siap</th><th>Status</th></tr></thead><tbody>'+
 '<tr><td>Statistik Kesejahteraan Rakyat</td><td>1/1</td><td>'+badge('verif')+'</td></tr>'+
 '<tr><td>Statistik Ketahanan Sosial</td><td>1/1</td><td>'+badge('verif')+'</td></tr>'+
-'<tr><td>Pembinaan Statistik Sektoral</td><td>1/1</td><td>'+badge('verif')+'</td></tr></tbody></table>'+
-'<div class="btn-row" style="margin-top:20px"><button class="btn btn-navy" onclick="go(&quot;review&quot;)">'+ic("edit")+' Buka & edit draf notula (Bagian I)</button></div></div>'+
+'<tr><td>Pembinaan Statistik Sektoral</td><td>1/1</td><td>'+badge('verif')+'</td></tr></tbody></table></div>'+
 
-'<div class="card" style="margin-top:18px"><div class="sec" style="margin-top:0"><span>Penyusunan Notula &mdash; 3 Bagian Digabung</span></div>'+
-'<div class="info">'+ic("info")+'Notula triwulanan terdiri atas tiga bagian yang <b>otomatis digabung</b> menjadi satu PDF utuh (urutan Bagian I &rarr; II &rarr; III) begitu Bagian II &amp; III diunggah &mdash; tanpa proses manual. Bagian I otomatis dari sistem; Bagian II &amp; III diunggah Tim SAKIP (format .docx/.xlsx/.pdf/gambar, dikonversi ke PDF).</div>'+
-'<div id="notulaBagian">'+
-bagianRow(1,"Bagian I &mdash; Capaian Kinerja","Otomatis dari data terverifikasi (analisis, angka, kendala&ndash;solusi kumulatif, RTL). Dapat disunting pada pratinjau web.",true)+
-bagianRow(2,"Bagian II &mdash; Peran BPS dalam Prioritas Nasional, Prioritas Presiden &amp; Isu Strategis","Diunggah oleh Tim SAKIP.",false)+
-bagianRow(3,"Bagian III &mdash; Realisasi Anggaran &amp; Upaya Efisiensi s.d. Triwulan Berjalan","Diunggah oleh Tim SAKIP.",false)+
-'</div>'+
-'<div class="merge-preview" id="mergePreview"><div class="mp-head">'+ic("file-text")+'<div><div class="mp-title">Pratinjau Notula Gabungan</div><div class="mp-sub" id="mergeStatus">Menunggu Bagian II &amp; III diunggah&hellip;</div></div><span class="mp-auto" id="mpAuto"></span></div>'+
-'<div class="mp-seq" id="mergeSeq"></div></div>'+
-'<div id="mergeDocWrap"></div></div>';};
+'<div class="card" style="margin-top:18px"><div class="sec" style="margin-top:0"><span>Pratinjau &amp; Sunting Notula &mdash; Bagian I, II, III</span></div>'+
+bagianBlock(1,"Bagian I &mdash; Capaian Kinerja","Tersusun otomatis dari data terverifikasi (analisis, angka, kendala&ndash;solusi kumulatif, RTL). Dapat disunting langsung di bawah ini.",bagian1Inner())+
+bagianBlock(2,"Bagian II &mdash; Peran BPS dalam Prioritas Nasional, Prioritas Presiden &amp; Isu Strategis","Diunggah oleh Tim SAKIP (docx/xlsx/pdf/gambar, dikonversi otomatis ke PDF).",bagianUpInner(2))+
+bagianBlock(3,"Bagian III &mdash; Realisasi Anggaran &amp; Upaya Efisiensi s.d. Triwulan Berjalan","Diunggah oleh Tim SAKIP (docx/xlsx/pdf/gambar, dikonversi otomatis ke PDF).",bagianUpInner(3))+
+'<div class="bagian-act" style="margin-top:6px;background:var(--navy);border-radius:12px;color:#fff">'+
+'<span style="font-size:12.5px;font-weight:600" id="mergeStatusTxt">'+mergeStatusText()+'</span>'+
+'<button class="btn btn-primary btn-sm" id="btnGabung" '+(BAGIAN_STATE[2]&&BAGIAN_STATE[3]?'':'disabled')+' onclick="gabungkanNotula()">'+ic("file-check")+'Gabungkan &rarr; PDF</button>'+
+'<span id="mergeDownloads">'+(BAGIAN_STATE.merged?downloadLinksHtml():"")+'</span>'+
+'</div></div>';}
 
-var BAGIAN_STATE={2:null,3:null,merged:false};
-function bagianRow(n,judul,ket,auto){
- var body;
- if(auto){body='<span class="bg-status bg-ready">'+ic("check")+'Otomatis tersedia</span><button class="btn btn-ghost btn-sm" onclick="go(&quot;review&quot;)">'+ic("eye")+'Pratinjau &amp; sunting</button>';}
- else{body='<span class="bg-status bg-wait" id="bgStat'+n+'">'+ic("clock")+'Belum diunggah</span>'+
-  '<div id="bgFile'+n+'"></div>'+
-  '<button class="btn btn-ghost btn-sm" onclick="uploadBagian('+n+')">'+ic("upload")+'Unggah berkas</button>';}
- return '<div class="vgrup bagian-row"><div class="bagian-head"><span class="bagian-badge bagian-badge-'+(auto?"auto":"up")+'">'+(n===1?"I":n===2?"II":"III")+'</span>'+
+function bagianBlock(n,judul,ket,innerBody){
+ return '<div class="vgrup bagian-row"><div class="bagian-head"><span class="bagian-badge '+(n===1?"bagian-badge-auto":"bagian-badge-up")+'">'+(n===1?"I":n===2?"II":"III")+'</span>'+
  '<div class="bagian-meta"><div class="bagian-judul">'+judul+'</div><div class="bagian-ket">'+ket+'</div></div></div>'+
- '<div class="bagian-act">'+body+'</div></div>';
+ '<div class="bagian-act" style="flex-direction:column;align-items:stretch">'+innerBody+'</div></div>';
+}
+function wysBtn(cmd,label){return '<button type="button" class="btn btn-ghost btn-sm" style="padding:8px 12px" onmousedown="event.preventDefault()" onclick="document.execCommand(&quot;'+cmd+'&quot;)">'+label+'</button>';}
+function wysBlockBtn(tag,label){return '<button type="button" class="btn btn-ghost btn-sm" style="padding:8px 12px" onmousedown="event.preventDefault()" onclick="document.execCommand(&quot;formatBlock&quot;,false,&quot;'+tag+'&quot;)">'+label+'</button>';}
+function bagian1Inner(){return ''+
+ '<span class="bg-status bg-ready">'+ic("check")+'Siap</span>'+
+ '<div class="btn-row" style="gap:6px;margin:10px 0 0">'+
+ wysBtn("bold","<b>B</b>")+wysBtn("italic","<i>I</i>")+wysBtn("underline","<u>U</u>")+
+ wysBlockBtn("h3","H3")+wysBlockBtn("p","&para;")+
+ wysBtn("insertUnorderedList","&bull; Daftar")+wysBtn("insertOrderedList","1. Daftar")+
+ '</div>'+
+ '<div class="notula" id="bagian1Doc" contenteditable="true" spellcheck="false" style="min-height:260px;max-height:420px;overflow-y:auto;margin-top:8px">'+BAGIAN1_DEFAULT+'</div>'+
+ '<div class="btn-row" style="margin-top:10px">'+
+ '<button class="btn btn-ghost btn-sm" onclick="susunUlangNotula()">'+ic("refresh")+'Susun Ulang Otomatis</button>'+
+ '<button class="btn btn-primary btn-sm" onclick="toast(&quot;Bagian I tersimpan&quot;)">'+ic("check")+'Simpan Bagian I</button></div>';}
+function bagianUpInner(n){return ''+
+ '<span class="bg-status '+(BAGIAN_STATE[n]?"bg-ready":"bg-wait")+'" id="bgStat'+n+'">'+(BAGIAN_STATE[n]?ic("check")+"Siap":ic("clock")+"Belum lengkap")+'</span>'+
+ '<div id="bagianBlok'+n+'" style="margin-top:10px">'+bagianUploadBlock(n)+'</div>';}
+function bagianUploadBlock(n){
+ var name=BAGIAN_STATE[n];
+ if(name){
+  return '<div class="filechip" style="margin-bottom:10px"><span class="nm">'+ic("file")+' '+name+'</span><span class="x" onclick="hapusBagian('+n+')">&times;</span></div>'+
+  '<div class="hint" style="margin-bottom:8px">Berkas dikonversi ke PDF &mdash; tampil sebagai halaman lanjutan pada notula gabungan.</div>'+
+  '<button class="btn btn-ghost btn-sm" onclick="uploadBagian('+n+')">'+ic("upload")+'Ganti berkas</button>';
+ }
+ return '<div class="upload need" onclick="uploadBagian('+n+')"><div class="big">'+ic("upload")+'</div>Klik untuk unggah Bagian '+(n===2?"II":"III")+' (docx, xlsx, pdf, atau gambar)</div>';
 }
 function uploadBagian(n){
  var names={2:"Bagian II - Peran BPS Prioritas Nasional.pdf",3:"Bagian III - Realisasi Anggaran & Efisiensi.pdf"};
  BAGIAN_STATE[n]=names[n];
- var stat=document.getElementById("bgStat"+n);if(stat){stat.className="bg-status bg-ready";stat.innerHTML=ic("check")+"Terunggah &middot; dikonversi ke PDF";}
- var fb=document.getElementById("bgFile"+n);if(fb)fb.innerHTML='<div class="filechip" style="margin:8px 0"><span class="nm">'+ic("file")+' '+names[n]+'</span><span class="x" onclick="hapusBagian('+n+')">&times;</span></div>';
- refreshMerge();toast("Bagian "+(n===2?"II":"III")+" terunggah &middot; dikonversi ke PDF");
+ var wrap=document.getElementById("bagianBlok"+n);if(wrap)wrap.innerHTML=bagianUploadBlock(n);
+ var stat=document.getElementById("bgStat"+n);if(stat){stat.className="bg-status bg-ready";stat.innerHTML=ic("check")+"Siap";}
+ refreshNotulaMerge();
+ toast("Bagian "+(n===2?"II":"III")+" terunggah &middot; dikonversi ke PDF");
 }
-function hapusBagian(n){BAGIAN_STATE[n]=null;BAGIAN_STATE.merged=false;var stat=document.getElementById("bgStat"+n);if(stat){stat.className="bg-status bg-wait";stat.innerHTML=ic("clock")+"Belum diunggah";}var fb=document.getElementById("bgFile"+n);if(fb)fb.innerHTML="";refreshMerge();}
-function refreshMerge(){
- var ok=BAGIAN_STATE[2]&&BAGIAN_STATE[3];
- // penggabungan otomatis: tak perlu tombol manual
- BAGIAN_STATE.merged=!!ok;
- var status=document.getElementById("mergeStatus");
- var seq=document.getElementById("mergeSeq");
- var auto=document.getElementById("mpAuto");
- var items=[{lbl:"Bagian I",sub:"Capaian Kinerja (otomatis)",ok:true},{lbl:"Bagian II",sub:BAGIAN_STATE[2]||"belum ada",ok:!!BAGIAN_STATE[2]},{lbl:"Bagian III",sub:BAGIAN_STATE[3]||"belum ada",ok:!!BAGIAN_STATE[3]}];
- if(seq)seq.innerHTML=items.map(function(it,i){return '<div class="mp-part '+(it.ok?"on":"off")+'"><span class="mp-num">'+(i+1)+'</span><div><div class="mp-part-lbl">'+it.lbl+'</div><div class="mp-part-sub">'+it.sub+'</div></div>'+(it.ok?ic("check"):ic("clock"))+'</div>'+(i<2?'<div class="mp-arrow">'+ic("arrow-right")+'</div>':'');}).join("");
- if(auto)auto.innerHTML=ok?'<span class="mp-auto-badge">'+ic("check")+'Tergabung otomatis</span>':'';
- if(status){status.innerHTML=ok?'&#10003; Ketiga bagian otomatis tergabung menjadi satu notula &mdash; lihat, sunting, atau unduh di bawah.':'Menunggu Bagian II &amp; III diunggah&hellip; (penggabungan berjalan otomatis begitu lengkap)';}
- renderMergeDoc(ok);
+function hapusBagian(n){
+ BAGIAN_STATE[n]=null;BAGIAN_STATE.merged=false;
+ var wrap=document.getElementById("bagianBlok"+n);if(wrap)wrap.innerHTML=bagianUploadBlock(n);
+ var stat=document.getElementById("bgStat"+n);if(stat){stat.className="bg-status bg-wait";stat.innerHTML=ic("clock")+"Belum lengkap";}
+ refreshNotulaMerge();
 }
-function renderMergeDoc(ok){
- var wrap=document.getElementById("mergeDocWrap");if(!wrap)return;
- if(!ok){wrap.innerHTML='';return;}
- wrap.innerHTML='<div class="merge-doc-bar"><div class="mdb-left">'+ic("file-check")+'<span>Notula_Gabungan_TW_II_2026.pdf &middot; 1 berkas (Bagian I + II + III)</span></div>'+
- '<div class="mdb-right"><button class="btn btn-ghost btn-sm" onclick="toggleMergeEdit(this)">'+ic("edit")+'<span>Sunting Bagian I</span></button>'+
- '<button class="btn btn-ghost btn-sm" onclick="toast(&quot;Unduh draf notula gabungan (tanpa TTD)&quot;)">'+ic("download")+'Unduh draf</button>'+
- '<button class="btn btn-teal btn-sm" onclick="toast(&quot;Unduh final tersedia setelah Kepala menyetujui&quot;)">'+ic("download")+'Unduh final</button></div></div>'+
- '<div class="merge-doc" id="mergeDoc">'+mergeDocBody()+'</div>';
+function mergeStatusText(){
+ if(BAGIAN_STATE.merged)return "&#10003; Bagian I, II, dan III sudah digabung menjadi satu PDF notula &mdash; siap diunduh.";
+ var ok2=!!BAGIAN_STATE[2],ok3=!!BAGIAN_STATE[3];
+ return "Status: Bagian I &#10003; &middot; II "+(ok2?"&#10003;":"&#10007;")+" &middot; III "+(ok3?"&#10003;":"&#10007;")+(ok2&&ok3?"":" &mdash; lengkapi seluruh bagian untuk menggabungkan");
 }
-function mergeDocBody(){
- return ''+
- '<div class="md-part"><div class="md-part-tab">BAGIAN I &middot; Capaian Kinerja <span class="md-auto">otomatis &middot; dapat disunting</span></div>'+
- '<div class="md-page" data-editable="1">'+
- '<h4>NOTULA CAPAIAN KINERJA SAKIP</h4><div class="md-sub">Triwulan II Tahun 2026 &middot; BPS Kabupaten Buton Utara</div>'+
- '<p><b>Sasaran:</b> Terwujudnya Penyediaan Data dan Insight Statistik Kesejahteraan Rakyat yang Berkualitas.</p>'+
- '<table class="md-tbl"><thead><tr><th>Indikator</th><th>Target PK</th><th>Target TW</th><th>Realisasi</th><th>Capaian</th></tr></thead>'+
- '<tbody><tr><td>Persentase Publikasi/Laporan Statistik Kesejahteraan Rakyat</td><td>100</td><td>25,00</td><td>25,00</td><td><b>100,00%</b></td></tr></tbody></table>'+
- '<p><b>Analisis Capaian:</b> Secara kumulatif hingga triwulan II 2026, terdapat 1 laporan kegiatan yang telah disusun melalui rangkaian kegiatan Sakernas Mei 2026.</p>'+
- '<p><b>Kendala &amp; Solusi (Kumulatif TW I&ndash;II):</b> TW I keterlambatan dokumen &rarr; percepatan koordinasi; TW II 50% petugas belum berpengalaman &rarr; pelatihan intensif &amp; pengawasan.</p>'+
- '<p><b>Rencana Kegiatan ke Depan (TW III):</b> Pelatihan dan persiapan Susenas September, pelaksanaan lapangan, serta pengolahan data Juli&ndash;September.</p>'+
- '</div></div>'+
- '<div class="md-part"><div class="md-part-tab">BAGIAN II &middot; Peran BPS dalam Prioritas Nasional</div>'+
- '<div class="md-page md-uploaded">'+ic("file")+'<div><div class="md-up-name">'+(BAGIAN_STATE[2]||'')+'</div><div class="md-up-note">Berkas unggahan Tim SAKIP (dikonversi ke PDF) &mdash; ditampilkan sebagai halaman lanjutan pada notula gabungan.</div></div></div></div>'+
- '<div class="md-part"><div class="md-part-tab">BAGIAN III &middot; Realisasi Anggaran &amp; Upaya Efisiensi</div>'+
- '<div class="md-page md-uploaded">'+ic("file")+'<div><div class="md-up-name">'+(BAGIAN_STATE[3]||'')+'</div><div class="md-up-note">Berkas unggahan Tim SAKIP (dikonversi ke PDF) &mdash; ditampilkan sebagai halaman lanjutan pada notula gabungan.</div></div></div></div>';
+function downloadLinksHtml(){return ''+
+ '<a class="btn btn-ghost btn-sm" onclick="toast(&quot;Draf notula gabungan diunduh&quot;)">'+ic("download")+'Unduh draf</a>'+
+ '<span class="btn btn-teal btn-sm" style="opacity:.55;cursor:not-allowed" title="Menunggu persetujuan Kepala">'+ic("download")+'Unduh final</span>';}
+function refreshNotulaMerge(){
+ var btn=document.getElementById("btnGabung");if(btn)btn.disabled=!(BAGIAN_STATE[2]&&BAGIAN_STATE[3]);
+ var txt=document.getElementById("mergeStatusTxt");if(txt)txt.innerHTML=mergeStatusText();
+ var dl=document.getElementById("mergeDownloads");if(dl)dl.innerHTML=BAGIAN_STATE.merged?downloadLinksHtml():"";
 }
-function toggleMergeEdit(btn){
- var doc=document.getElementById("mergeDoc");if(!doc)return;
- var page=doc.querySelector('.md-page[data-editable="1"]');if(!page)return;
- var on=page.getAttribute("contenteditable")==="true";
- page.setAttribute("contenteditable",on?"false":"true");
- page.classList.toggle("editing",!on);
- btn.querySelector("span").textContent=on?"Sunting Bagian I":"Simpan Bagian I";
- if(on)toast("Perubahan Bagian I disimpan");else{page.focus();toast("Bagian I dapat disunting");}
+function gabungkanNotula(){
+ if(!(BAGIAN_STATE[2]&&BAGIAN_STATE[3]))return;
+ BAGIAN_STATE.merged=true;
+ refreshNotulaMerge();
+ toast("Bagian I, II, III digabung menjadi satu PDF notula");
+}
+function susunUlangNotula(){
+ var doc=document.getElementById("bagian1Doc");if(doc)doc.innerHTML=BAGIAN1_DEFAULT;
+ toast("Bagian I disusun ulang otomatis dari data terverifikasi");
 }
 
 PAGES.approval=function(){return ''+
@@ -1110,17 +1158,43 @@ PAGES.notula=function(){return ''+
 '</tbody></table></div>'+
 (NOTULA_VERSIONS.length?'<div class="card" style="margin-top:18px"><div class="sec" style="margin-top:0"><span>Riwayat Versi di Drive &mdash; folder Notula TW II</span></div>'+NOTULA_VERSIONS.map(v=>'<div class="filechip"><span class="nm">'+ic("file")+' '+v+'</span><span class="badge b-approve">Ber-TTD</span></div>').join("")+'</div>':'');};
 
+var PENGGUNA_PANES=["akun","tim","tugas","storage"];
 PAGES.pengguna=function(){return ''+
-'<div class="page-head"><h2>Kelola Pengguna</h2><p>Verifikasi akun, keanggotaan tim, dan penugasan IKU dalam satu tempat</p></div>'+
+'<div class="page-head"><h2>Kelola Pengguna</h2><p>Verifikasi akun, keanggotaan tim, penugasan IKU, dan akun penyimpanan Drive dalam satu tempat</p></div>'+
 '<div class="subtabs">'+
-'<button class="subtab on" data-pane="akun" onclick="subTab(this,\'akun\')">'+ic("check-shield")+'Verifikasi Akun</button>'+
-'<button class="subtab" data-pane="tim" onclick="subTab(this,\'tim\')">'+ic("users")+'Keanggotaan Tim</button>'+
-'<button class="subtab" data-pane="tugas" onclick="subTab(this,\'tugas\')">'+ic("clipboard")+'Penugasan IKU</button>'+
+'<button class="subtab on" data-pane="akun" onclick="subTab(this,\'akun\',PENGGUNA_PANES)">'+ic("check-shield")+'Verifikasi Akun</button>'+
+'<button class="subtab" data-pane="tim" onclick="subTab(this,\'tim\',PENGGUNA_PANES)">'+ic("users")+'Keanggotaan Tim</button>'+
+'<button class="subtab" data-pane="tugas" onclick="subTab(this,\'tugas\',PENGGUNA_PANES)">'+ic("clipboard")+'Penugasan IKU</button>'+
+'<button class="subtab" data-pane="storage" onclick="subTab(this,\'storage\',PENGGUNA_PANES)">☁️ Akun &amp; Storage</button>'+
 '</div>'+
 '<div class="subpane on" id="pane-akun">'+paneVerifakun()+'</div>'+
 '<div class="subpane" id="pane-tim">'+paneTim()+'</div>'+
-'<div class="subpane" id="pane-tugas">'+panePenugasan()+'</div>';};
-function subTab(btn,name){var wrap=btn.closest(".subtabs");wrap.querySelectorAll(".subtab").forEach(function(b){b.classList.remove("on");});btn.classList.add("on");["akun","tim","tugas"].forEach(function(p){document.getElementById("pane-"+p).classList.toggle("on",p===name);});}
+'<div class="subpane" id="pane-tugas">'+panePenugasan()+'</div>'+
+'<div class="subpane" id="pane-storage">'+paneStorage()+'</div>';};
+const STORAGE_AKUN=[
+ {email:"sipinter.bps.buton.utara@gmail.com",status:"aktif",terpakai:72.4,total:100},
+ {email:"sipinter.cadangan01@gmail.com",status:"nonaktif",terpakai:3.1,total:100},
+];
+function paneStorage(){
+ var aktif=STORAGE_AKUN.filter(function(a){return a.status==='aktif';})[0];
+ var warn=aktif&&(aktif.terpakai/aktif.total*100)>=85;
+ return ''+
+ (warn?'<div class="info red">'+ic("alert")+'Kuota storage aktif hampir penuh &mdash; siapkan akun Gmail institusi berikutnya dan jadikan aktif sebelum kuota habis.</div>':'')+
+ '<div class="info teal">'+ic("info")+'Seluruh bukti dukung tersimpan di Google Drive melalui akun Gmail institusi berikut. Hanya satu akun yang aktif menerima berkas baru pada satu waktu.</div>'+
+ '<div class="card"><div class="sec" style="margin-top:0"><span>Tambah Akun Gmail Institusi</span></div>'+
+ '<div class="row2"><div class="field"><label>Email Gmail institusi <span class="req">*wajib</span></label><input placeholder="mis. sipinter.cadangan02@gmail.com"></div>'+
+ '<div class="field"><label>Kuota total (GB) <span class="req">*wajib</span></label><input type="number" placeholder="100"></div></div>'+
+ '<div class="field"><label>ID Folder induk Drive</label><input placeholder="ID folder yang sudah dibagikan ke Service Account"><div class="hint">Folder ini harus sudah dibagikan (share, peran Editor) ke email Service Account.</div></div>'+
+ '<div class="btn-row"><button class="btn btn-primary" onclick="toast(&quot;Akun storage ditambahkan&quot;)">'+ic("plus")+'Tambah akun</button></div></div>'+
+ '<div class="card" style="margin-top:18px"><div class="sec" style="margin-top:0"><span>Daftar Akun Storage</span></div>'+
+ '<table><thead><tr><th>Email</th><th>Status</th><th style="width:220px">Kuota terpakai</th><th style="text-align:right">Tindakan</th></tr></thead><tbody>'+
+ STORAGE_AKUN.map(function(a){var pct=Math.round(a.terpakai/a.total*100);return '<tr><td>'+a.email+'</td><td>'+(a.status==='aktif'?'<span class="badge b-approve">Aktif</span>':'<span class="badge b-draft">Tidak Aktif</span>')+'</td>'+
+ '<td><div style="height:8px;border-radius:6px;background:var(--line2);overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+(pct>=85?"var(--red)":"var(--blue)")+'"></div></div><div class="hint" style="margin-top:4px">'+a.terpakai+' GB / '+a.total+' GB ('+pct+'%)</div></td>'+
+ '<td style="text-align:right">'+(a.status==='aktif'?'<span class="muted" style="font-size:12px">Sedang dipakai</span>':'<button class="btn btn-teal btn-sm" onclick="toast(&quot;'+a.email+' dijadikan akun aktif&quot;)">Jadikan Aktif</button>')+'</td></tr>';}).join("")+
+ '</tbody></table></div>';
+}
+function subTab(btn,name,panes){var wrap=btn.closest(".subtabs");wrap.querySelectorAll(".subtab").forEach(function(b){b.classList.remove("on");});btn.classList.add("on");(panes||["akun","tim","tugas"]).forEach(function(p){var el=document.getElementById("pane-"+p);if(el)el.classList.toggle("on",p===name);});afterSubTab(name);}
+function afterSubTab(name){if(name==="notula")refreshNotulaMerge();if(name==="folder")renderFolderPreview();}
 
 function paneVerifakun(){return ''+
 '<div class="info">'+ic("info")+'Akun yang baru mendaftar berstatus menunggu. Tim SAKIP memeriksa data lalu menyetujui atau menolak. Akun hanya bisa dipakai setelah disetujui.</div>'+
@@ -1161,7 +1235,7 @@ IKU.map(function(i,ii){var auto=autoTugas(i);return '<tr><td><b>'+i.kode+'</b></
 '<div class="btn-row" style="margin-top:14px"><button class="btn btn-primary" onclick="toast(&quot;Penugasan tersimpan&quot;)">'+ic("check")+'Simpan penugasan</button></div></div>';}
 function chipAuto(nm){return '<span class="chip chip-auto"><span class="chip-dot">'+nm.split(" ").map(function(w){return w[0];}).join("").slice(0,2)+'</span>'+nm+'<span class="chip-via">via tim</span></span>';}
 
-PAGES.folder=function(){return ''+
+function paneFolder(){return ''+
 '<div class="page-head"><h2>Struktur Folder Drive</h2><p>Atur tingkatan folder &mdash; folder besar di atas, di bawahnya menjadi subfolder</p></div>'+
 '<div class="info">'+ic("info")+'Dua bagian: <b>Tingkat folder</b> (hierarki bertingkat: folder induk ke subfolder) dan <b>Folder kategori</b> (folder-folder setingkat di dalam folder terdalam, mis. Capaian, Solusi, Evaluasi-RTL). Keduanya bisa ditambah sesuai kebutuhan.</div>'+
 '<div class="grid grid-2">'+
@@ -1181,7 +1255,7 @@ FOLDER_LEVELS.map(function(l,i){return folderRow(l,i);}).join("")+
 '<div class="card" style="margin-top:18px"><div class="sec" style="margin-top:0"><span>Buat Folder Tahun</span></div>'+
 '<div class="info">'+ic("info")+'Folder Drive umumnya dibuat otomatis saat berkas pertama diunggah. Gunakan ini untuk menyiapkan folder tahun lebih awal, mis. menyiapkan '+((new Date().getFullYear())+1)+' sebelum tahun berjalan berakhir.</div>'+
 '<div class="fl-add" style="max-width:420px"><input id="newYear" type="number" min="2024" max="2100" value="'+((new Date().getFullYear())+1)+'" placeholder="mis. 2027"><button class="btn btn-primary btn-sm" onclick="buatFolderTahun()">'+ic("folder")+'Buat folder tahun</button></div>'+
-'<div id="yearList" class="yearlist">'+YEAR_FOLDERS.map(function(y){return yearRow(y);}).join("")+'</div></div>';};
+'<div id="yearList" class="yearlist">'+YEAR_FOLDERS.map(function(y){return yearRow(y);}).join("")+'</div></div>';}
 function yearRow(y){return '<div class="year-item" data-year="'+y+'">'+ic("folder")+'<span class="yi-name">'+y+'</span><span class="yi-sub">folder tahun siap</span></div>';}
 function buatFolderTahun(){var v=(document.getElementById("newYear").value||"").trim();if(!v||isNaN(v)){toast("Masukkan tahun yang valid");return;}if(YEAR_FOLDERS.indexOf(+v)>-1){toast("Folder tahun "+v+" sudah ada");return;}YEAR_FOLDERS.push(+v);YEAR_FOLDERS.sort(function(a,b){return a-b;});document.getElementById("yearList").innerHTML=YEAR_FOLDERS.map(function(y){return yearRow(y);}).join("");toast('Folder tahun '+v+' dibuat di Drive');}
 
@@ -1201,6 +1275,15 @@ PAGES.akun=function(){return ''+
 '</div>';};
 
 PAGES.iku=function(){return ''+
+'<div class="subtabs">'+
+'<button class="subtab on" data-pane="iku" onclick="subTab(this,\'iku\',[\'iku\',\'folder\',\'template\'])">📊 Master IKU</button>'+
+'<button class="subtab" data-pane="folder" onclick="subTab(this,\'folder\',[\'iku\',\'folder\',\'template\'])">📁 Struktur Folder</button>'+
+'<button class="subtab" data-pane="template" onclick="subTab(this,\'template\',[\'iku\',\'folder\',\'template\'])">🗎 Template Notula</button>'+
+'</div>'+
+'<div class="subpane on" id="pane-iku">'+paneMasterIku()+'</div>'+
+'<div class="subpane" id="pane-folder">'+paneFolder()+'</div>'+
+'<div class="subpane" id="pane-template">'+paneTemplate()+'</div>';};
+function paneMasterIku(){return ''+
 '<div class="page-head"><h2>Master IKU</h2><p>Unduh template, isi sesuai format, lalu unggah kembali</p></div>'+
 '<div class="card" style="margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">'+
 '<div style="display:flex;align-items:center;gap:14px"><div class="ico ico-teal" style="margin:0">'+ic("download")+'</div>'+
@@ -1216,13 +1299,13 @@ IKU.map((i,ix)=>'<tr id="ikur'+ix+'"><td><b>'+i.kode+'</b></td><td>'+i.nama+'</t
 '<div class="field" style="margin:0"><label style="font-size:12px">Indikator</label><input id="mIkuNama" placeholder="Nama indikator"></div>'+
 '<div class="field" style="margin:0"><label style="font-size:12px">Tim</label><select id="mIkuTim">'+TIM_LIST.map(t=>'<option>'+t+'</option>').join("")+'</select></div>'+
 '<button class="btn btn-teal btn-sm" onclick="addIkuManual()">'+ic("plus")+'Tambah</button>'+
-'</div></div>';};
+'</div></div>';}
 function addIkuManual(){var k=(document.getElementById("mIkuKode").value||"").trim(),n=(document.getElementById("mIkuNama").value||"").trim(),t=document.getElementById("mIkuTim").value;if(!k||!n){toast("Isi kode dan indikator dulu");return;}IKU.push({kode:k,nama:n,tim:t});go('iku');toast("IKU "+k+" ditambahkan");}
 function delIku(ix){IKU.splice(ix,1);go('iku');toast("IKU dihapus");}
 
-PAGES.template=function(){return ''+
+function paneTemplate(){return ''+
 '<div class="page-head"><h2>Template Notula</h2><p>Unggah template dengan penanda otomatis</p></div>'+
-'<div class="card"><div class="upload" onclick="toast(&quot;Template tersimpan&quot;)"><div class="big">'+ic("upload")+'</div><div style="margin-top:8px;font-weight:600">Unggah template (.docx)</div><div class="hint">Penanda: {{iku}}, {{analisis_capaian}}, {{kendala_solusi_kumulatif}}, {{rtl}}, {{ttd_kepala}}</div></div></div>';};
+'<div class="card"><div class="upload" onclick="toast(&quot;Template tersimpan&quot;)"><div class="big">'+ic("upload")+'</div><div style="margin-top:8px;font-weight:600">Unggah template (.docx)</div><div class="hint">Penanda: {{iku}}, {{analisis_capaian}}, {{kendala_solusi_kumulatif}}, {{rtl}}, {{ttd_kepala}}</div></div></div>';}
 
 // interactions
 function pickJenis(el,survei,n){el.parentElement.querySelectorAll(".pill").forEach(p=>p.classList.remove("on"));el.classList.add("on");document.getElementById("stageField"+n).classList.toggle("hide",!survei);if(!survei){var f=document.getElementById("folder"+n);f.classList.add("hide");}updFolder(n);}
