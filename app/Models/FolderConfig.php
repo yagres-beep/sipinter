@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\PolaFolderHierarki;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -38,7 +39,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 class FolderConfig extends Model
 {
-    use HasFactory;
+    use HasFactory, PolaFolderHierarki;
 
     protected $table = 'folder_config';
 
@@ -100,45 +101,6 @@ class FolderConfig extends Model
         ]);
     }
 
-    /**
-     * Urutan level hierarki yang AKTIF (RF-11), siap dipakai FolderStructureService.
-     * "tahun" dipaksa selalu ada & selalu di posisi pertama — lihat penjelasan di
-     * docblock kelas ini soal kenapa (RF-16 bergantung padanya).
-     *
-     * @return list<string> mis. ['tahun', 'triwulan', 'bulan', 'iku']
-     */
-    public function hierarkiAktif(): array
-    {
-        $sisanya = collect($this->pola_json['hierarki'] ?? [])
-            ->where('aktif', true)
-            ->pluck('level')
-            ->reject(fn ($level) => $level === self::LEVEL_TAHUN)
-            ->values()
-            ->all();
-
-        return [self::LEVEL_TAHUN, ...$sisanya];
-    }
-
-    /**
-     * Semua entri kategori folder (RF-12), sudah termasuk info wajib &
-     * subfolder_per_kegiatan, dalam urutan yang diatur Tim SAKIP (RF-15).
-     *
-     * @return list<array{nama: string, wajib: bool, subfolder_per_kegiatan: bool}>
-     */
-    public function kategoriList(): array
-    {
-        return $this->pola_json['kategori'] ?? [];
-    }
-
-    /**
-     * Nama kategori yang dikonfigurasi untuk punya subfolder per kegiatan (RF-13).
-     * Secara bawaan hanya "Capaian".
-     */
-    public function kategoriDenganSubfolderKegiatan(): array
-    {
-        return collect($this->kategoriList())
-            ->where('subfolder_per_kegiatan', true)
-            ->pluck('nama')
-            ->all();
-    }
+    // hierarkiAktif(), kategoriList(), kategoriDenganSubfolderKegiatan() ada di trait
+    // PolaFolderHierarki — dipakai bersama dengan IkuFolderConfig (pola override per-IKU).
 }

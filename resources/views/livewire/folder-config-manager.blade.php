@@ -127,4 +127,184 @@
             </div>
         </div>
     </div>
+
+<div class="card" style="margin-top:16px">
+    <div class="sec"><span>Pola Khusus per IKU</span></div>
+    <div class="info">ℹ️ Sebagian besar IKU cukup memakai pola folder global di atas. Bila ada IKU tertentu yang butuh susunan folder berbeda (mis. tambahan tingkat "Bulan" di dalam kategori tertentu), pilih IKU-nya di sini lalu atur pola sendiri untuk IKU itu saja — IKU lain tidak terpengaruh.</div>
+
+    <div class="field">
+        <label>Pilih IKU</label>
+        <select class="inp filled" wire:change="pilihIku($event.target.value)">
+            <option value="">— Pilih IKU —</option>
+            @foreach ($ikuList as $iku)
+                <option value="{{ $iku->id }}" @selected($ikuTerpilih === $iku->id)>
+                    {{ $iku->kode }} — {{ $iku->indikator }}
+                    @if (in_array($iku->id, $ikuDenganOverride, true)) (pola khusus) @endif
+                </option>
+            @endforeach
+        </select>
+    </div>
+
+    @if ($ikuTerpilih)
+        <div class="badge {{ $ikuPunyaOverride ? 'b-verif' : 'b-draft' }}" style="display:inline-block;margin-bottom:14px">
+            {{ $ikuPunyaOverride ? '✓ IKU ini memakai pola khusus' : 'Belum disimpan — masih salinan pola global' }}
+        </div>
+
+        <div class="grid grid-2" style="align-items:start">
+            <div>
+                <div class="sec" style="margin-top:0"><span>Tingkat Folder (khusus IKU ini)</span></div>
+
+                @foreach ($hierarkiIku as $i => $h)
+                    <div class="fl-row">
+                        <span class="fl-num">{{ $i + 1 }}</span>
+                        <label class="fl-name" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                            <input type="checkbox" wire:click="toggleHierarkiIku({{ $i }})" @checked($h['aktif']) @disabled($i === 0)>
+                            {{ ucfirst($h['level']) }}
+                            @if ($i === 0)
+                                <span class="badge b-draft">terkunci</span>
+                            @endif
+                            @if ($h['custom'] ?? false)
+                                <span class="fl-tag">kustom</span>
+                            @endif
+                        </label>
+                        <span class="fl-move">
+                            <button type="button" wire:click="naikkanHierarkiIku({{ $i }})" @disabled($i <= 1)>↑</button>
+                            <button type="button" wire:click="turunkanHierarkiIku({{ $i }})" @disabled($i === 0 || $i === count($hierarkiIku) - 1)>↓</button>
+                            @if ($h['custom'] ?? false)
+                                <button type="button" wire:click="hapusLevelIku({{ $i }})">✕</button>
+                            @endif
+                        </span>
+                    </div>
+                @endforeach
+
+                <div class="field" style="margin-top:10px;margin-bottom:0">
+                    <label style="font-size:11.5px">Tambah Tingkat Baru</label>
+                    <div style="display:flex;gap:8px">
+                        <input type="text" class="inp filled" wire:model="levelBaruIku" placeholder="mis. Bulan">
+                        <button type="button" class="btn btn-ghost btn-sm" wire:click="tambahLevelIku">＋ Tambah</button>
+                    </div>
+                    @error('levelBaruIku')
+                        <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                    @enderror
+                </div>
+
+                <div class="sec" style="margin-top:20px"><span>Folder Kategori (khusus IKU ini)</span></div>
+
+                @error('kategoriIku')
+                    <div style="color:var(--red);font-size:11.5px;margin-bottom:10px">{{ $message }}</div>
+                @enderror
+
+                @foreach ($kategoriIku as $i => $k)
+                    <div class="fl-row" style="flex-wrap:wrap">
+                        <span class="catchip" style="flex:1">
+                            {{ $k['nama'] }}
+                            @if ($k['wajib'])
+                                <span class="lock">wajib</span>
+                            @endif
+                        </span>
+                        <span class="fl-move">
+                            <button type="button" wire:click="naikkanKategoriIku({{ $i }})" @disabled($i === 0)>↑</button>
+                            <button type="button" wire:click="turunkanKategoriIku({{ $i }})" @disabled($i === count($kategoriIku) - 1)>↓</button>
+                            @unless ($k['wajib'])
+                                <button type="button" wire:click="hapusKategoriIku({{ $i }})">✕</button>
+                            @endunless
+                        </span>
+                        <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);width:100%;margin-top:6px">
+                            <input type="checkbox" wire:click="toggleSubfolderKegiatanIku({{ $i }})" @checked($k['subfolder_per_kegiatan'])>
+                            Subfolder per kegiatan
+                        </label>
+                    </div>
+                @endforeach
+
+                <div class="field" style="margin-top:14px">
+                    <label>Tambah Kategori Baru</label>
+                    <div style="display:flex;gap:8px">
+                        <input type="text" class="inp filled" wire:model="kategoriBaruIku" placeholder="mis. Dokumentasi Tambahan">
+                        <button type="button" class="btn btn-teal btn-sm" wire:click="tambahKategoriIku">＋ Tambah</button>
+                    </div>
+                    @error('kategoriBaruIku')
+                        <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                    @enderror
+                </div>
+
+                <div class="btn-row">
+                    <button type="button" class="btn btn-primary" wire:click="simpanPolaIku">💾 Simpan Pola IKU Ini</button>
+                    @if ($ikuPunyaOverride)
+                        <button type="button" class="btn btn-red" wire:click="hapusOverrideIku">🗑 Hapus Pola Khusus (kembali ke global)</button>
+                    @endif
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="sec"><span>Pratinjau Jalur Folder — IKU Ini</span></div>
+                <div class="foldertree">
+                    @foreach ($previewIku as $baris)
+                        <div class="ft-row {{ $baris['tipe'] === 'kategori' ? 'ft-cat' : '' }}" style="padding-left: {{ $baris['indent'] * 18 }}px">
+                            📁 {{ $baris['teks'] }}
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        </div>
+    @endif
+</div>
+
+<div class="card" style="margin-top:16px">
+    <div class="sec"><span>Tambah Folder Manual</span></div>
+    <div class="info">ℹ️ Untuk kebutuhan khusus di tengah tahun berjalan — buat satu folder tambahan langsung di lokasi Drive yang dipilih, tanpa mengubah pola folder otomatis untuk unggahan berikutnya. Kosongkan tingkat yang tidak relevan.</div>
+
+    <div class="grid grid-2">
+        <div class="field">
+            <label>Tahun <span class="req">*</span></label>
+            <input type="number" class="inp filled" wire:model="manualTahun">
+            @error('manualTahun')
+                <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+            @enderror
+        </div>
+        <div class="field">
+            <label>Triwulan (opsional)</label>
+            <select class="inp filled" wire:model="manualTriwulan">
+                <option value="">— Tidak dipakai —</option>
+                <option value="1">Triwulan I</option>
+                <option value="2">Triwulan II</option>
+                <option value="3">Triwulan III</option>
+                <option value="4">Triwulan IV</option>
+            </select>
+        </div>
+        <div class="field">
+            <label>Bulan (opsional)</label>
+            <select class="inp filled" wire:model="manualBulan">
+                <option value="">— Tidak dipakai —</option>
+                @foreach (['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'] as $idx => $namaBulan)
+                    <option value="{{ $idx + 1 }}">{{ $namaBulan }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div class="field">
+            <label>IKU (opsional)</label>
+            <select class="inp filled" wire:model="manualIkuId">
+                <option value="">— Tidak dipakai —</option>
+                @foreach ($ikuList as $iku)
+                    <option value="{{ $iku->id }}">{{ $iku->kode }} — {{ $iku->indikator }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div class="field">
+            <label>Folder Kategori Tujuan (opsional)</label>
+            <input type="text" class="inp filled" wire:model="manualKategoriNama" placeholder="mis. Capaian">
+            <div class="fhint">Kosongkan bila folder baru langsung di tingkat di atasnya, tanpa masuk ke folder kategori tertentu.</div>
+        </div>
+        <div class="field">
+            <label>Nama Folder Baru <span class="req">*</span></label>
+            <input type="text" class="inp filled" wire:model="manualNamaFolder" placeholder="mis. Dokumen Tambahan 2026">
+            @error('manualNamaFolder')
+                <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+            @enderror
+        </div>
+    </div>
+
+    <div class="btn-row">
+        <button type="button" class="btn btn-navy" wire:click="buatFolderManual">📁 Buat Folder</button>
+    </div>
+</div>
 </div>

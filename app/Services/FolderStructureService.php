@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\FolderConfig;
+use App\Models\IkuFolderConfig;
 use App\Models\Kegiatan;
 use App\Models\MasterIku;
 use App\Models\Periode;
@@ -128,7 +129,7 @@ class FolderStructureService
     public function resolveKategoriFolder(Periode $periode, MasterIku $iku, string $namaKategori): string
     {
         $akun = $this->akunAktifAtauGagal();
-        $config = FolderConfig::current();
+        $config = $this->configUntukIku($iku);
 
         $folderId = $this->resolveTahunFolder($akun, $periode->tahun);
 
@@ -215,7 +216,7 @@ class FolderStructureService
 
         $kategoriFolderId = $this->resolveKategoriFolder($periode, $iku, $namaKategori);
 
-        $config = FolderConfig::current();
+        $config = $this->configUntukIku($iku);
         $tujuanFolderId = ($kegiatan && in_array($namaKategori, $config->kategoriDenganSubfolderKegiatan(), true))
             ? $this->resolveKegiatanFolder($kegiatan, $kategoriFolderId)
             : $kategoriFolderId;
@@ -289,5 +290,64 @@ class FolderStructureService
     {
         return StorageAccount::aktif()
             ?? throw new RuntimeException('Belum ada storage aktif. Tambahkan & aktifkan akun di menu Akun & Storage terlebih dahulu.');
+    }
+
+    /**
+     * Pola folder yang berlaku untuk SATU IKU tertentu — pola KHUSUS IKU ini bila ada
+     * baris override di iku_folder_config, jatuh ke pola GLOBAL (FolderConfig) bila
+     * tidak. Dipakai resolveKategoriFolder() & unggahBerkas() supaya IKU yang diberi
+     * pola khusus (mis. tambahan folder Bulan di dalam Capaian) diperlakukan berbeda
+     * tanpa mengubah pola IKU lain.
+     */
+    protected function configUntukIku(MasterIku $iku): FolderConfig|IkuFolderConfig
+    {
+        return IkuFolderConfig::where('iku_id', $iku->id)->first() ?? FolderConfig::current();
+    }
+
+    // ================================================================
+    // Alat manual — buat SATU folder tambahan di lokasi bebas (mis. di
+    // tengah tahun berjalan), TIDAK terikat pola hierarki/kategori yang
+    // dikonfigurasi. Semua level bersifat opsional: isi yang relevan saja.
+    // ================================================================
+
+    /**
+     * @param  int  $tahun  wajib — folder tahun selalu jadi titik masuk paling atas.
+     * @param  int|null  $triwulan  1-4, lewati bila tidak perlu tingkat Triwulan.
+     * @param  int|null  $bulan  1-12, lewati bila tidak perlu tingkat Bulan.
+     * @param  MasterIku|null  $iku  lewati bila folder baru tidak spesifik ke satu IKU.
+     * @param  string|null  $kategoriNama  nama folder kategori tujuan (mis. "Capaian"), lewati bila folder baru langsung di tingkat di atasnya.
+     * @param  string  $namaFolderBaru  nama folder yang akan dibuat/ditemukan di lokasi hasil resolve level-level di atas.
+     * @return string ID folder baru (atau folder yang sudah ada dengan nama sama di lokasi itu).
+     */
+    public function buatFolderKustom(
+        int $tahun,
+        ?int $triwulan,
+        ?int $bulan,
+        ?MasterIku $iku,
+        ?string $kategoriNama,
+        string $namaFolderBaru,
+    ): string {
+        $akun = $this->akunAktifAtauGagal();
+        $folderId = $this->resolveTahunFolder($akun, $tahun);
+
+        if ($triwulan) {
+            $namaTriwulan = 'Triwulan '.(['I', 'II', 'III', 'IV'][$triwulan - 1] ?? $triwulan);
+            $folderId = $this->drive->findOrCreateFolder($namaTriwulan, $folderId);
+        }
+
+        if ($bulan) {
+            $namaBulan = Carbon::create($tahun, $bulan, 1)->locale('id')->translatedFormat('F');
+            $folderId = $this->drive->findOrCreateFolder($namaBulan, $folderId);
+        }
+
+        if ($iku) {
+            $folderId = $this->drive->findOrCreateFolder($iku->kode, $folderId);
+        }
+
+        if ($kategoriNama) {
+            $folderId = $this->drive->findOrCreateFolder($kategoriNama, $folderId);
+        }
+
+        return $this->drive->findOrCreateFolder($namaFolderBaru, $folderId);
     }
 }

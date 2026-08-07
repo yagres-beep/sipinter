@@ -352,7 +352,7 @@
   <h1>Mockup SIPINTER — Semua Halaman</h1>
   <p class="lead">Kumpulan tampilan (mockup) dari seluruh halaman aplikasi <b>Sistem Informasi Pelaporan Kinerja Terpadu</b> — BPS Kabupaten Buton Utara, disusun mengikuti kode yang berjalan (Laravel 12 + Livewire v3). Disusun per peran: autentikasi, Ketua Tim, Tim SAKIP (merangkap Admin), dan Kepala BPS.</p>
   <div class="meta">
-    <span><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>15 tampilan halaman</span>
+    <span><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>17 tampilan halaman</span>
     <span><svg class="i" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>3 peran pengguna</span>
     <span><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Sesuai aplikasi berjalan</span>
   </div>
@@ -366,17 +366,19 @@
       <a href="#s2"><span class="rn rn-a">AUTH</span>Daftar (Register)</a>
       <a href="#s3"><span class="rn rn-k">KT</span>Dasbor Pemantauan</a>
       <a href="#s4"><span class="rn rn-k">KT</span>Isian Kegiatan</a>
-      <a href="#s5"><span class="rn rn-k">KT</span>Notula (riwayat)</a>
-      <a href="#s6"><span class="rn rn-k">KT</span>Pengaturan Akun</a>
-      <a href="#s7"><span class="rn rn-s">TS</span>Dasbor SAKIP</a>
-      <a href="#s8"><span class="rn rn-s">TS</span>Verifikasi &amp; Notula</a>
-      <a href="#s9"><span class="rn rn-s">TS</span>Detail Verifikasi</a>
-      <a href="#s10"><span class="rn rn-s">TS</span>Periksa Berkas (modal)</a>
-      <a href="#s11"><span class="rn rn-s">TS</span>Master IKU</a>
-      <a href="#s12"><span class="rn rn-s">TS</span>Kelola Pengguna</a>
-      <a href="#s13"><span class="rn rn-p">KP</span>Persetujuan Notula</a>
-      <a href="#s14"><span class="rn rn-p">KP</span>Dasbor Kinerja</a>
-      <a href="#s15"><span class="rn rn-p">KP</span>Rekapitulasi</a>
+      <a href="#s5"><span class="rn rn-k">KT</span>Kendala &amp; Solusi (legacy)</a>
+      <a href="#s6"><span class="rn rn-k">KT</span>RTL &amp; Evaluasi (legacy)</a>
+      <a href="#s7"><span class="rn rn-k">KT</span>Notula (riwayat)</a>
+      <a href="#s8"><span class="rn rn-k">KT</span>Pengaturan Akun</a>
+      <a href="#s9"><span class="rn rn-s">TS</span>Dasbor SAKIP</a>
+      <a href="#s10"><span class="rn rn-s">TS</span>Verifikasi &amp; Notula</a>
+      <a href="#s11"><span class="rn rn-s">TS</span>Detail Verifikasi</a>
+      <a href="#s12"><span class="rn rn-s">TS</span>Periksa Berkas (modal)</a>
+      <a href="#s13"><span class="rn rn-s">TS</span>Master IKU</a>
+      <a href="#s14"><span class="rn rn-s">TS</span>Kelola Pengguna</a>
+      <a href="#s15"><span class="rn rn-p">KP</span>Persetujuan Notula</a>
+      <a href="#s16"><span class="rn rn-p">KP</span>Dasbor Kinerja</a>
+      <a href="#s17"><span class="rn rn-p">KP</span>Rekapitulasi</a>
     </div>
   </div>
 </div>
@@ -609,9 +611,134 @@
     </div>
   </div>
 </div>
-<!-- S5 NOTULA RIWAYAT (KETUA / KEPALA) -->
+
+<!-- S5 KENDALA & SOLUSI (LEGACY, TIDAK TERTAUT DI MENU) -->
 <div class="screen" id="s5">
-  <div class="screen-label"><span class="sl-num">5</span><span class="sl-t">Notula (riwayat)</span><span class="sl-d">— pantau status per triwulan, unduh setelah disetujui Kepala; dipakai bersama oleh Ketua Tim &amp; Kepala (notula-riwayat.index)</span></div>
+  <div class="screen-label"><span class="sl-num">5</span><span class="sl-t">Kendala &amp; Solusi</span><span class="sl-d">— route &amp; komponen masih berfungsi penuh, tapi tidak tertaut di menu navigasi karena fungsinya sudah tercakup dalam Isian Kegiatan (S4); resources/views/livewire/kendala-solusi.blade.php</span></div>
+  <div class="frame" data-document-role="page" data-label="SIPINTER Layar 5">
+    <div class="browser-bar"><div class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></div><div class="url"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>sipinter.bps.go.id/kendala-solusi</div></div>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand"><div class="logo"><svg class="i" viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg></div><div><h1>SIPINTER</h1><span>BPS Buton Utara</span></div></div>
+        <nav class="nav">
+          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg></span>Dasbor</a>
+          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg></span>Isian Kegiatan</a>
+          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></span>Notula</a>
+          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82"/></svg></span>Pengaturan Akun</a>
+        </nav>
+        <div class="sidebar-foot"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>v1.0 · Aktualisasi 2026</div>
+      </aside>
+      <div class="main">
+        <div class="topbar"><div class="crumb">Ketua › <b>Kendala &amp; Solusi</b></div><div class="user"><span>Ketua Tim</span><div class="avatar av-k">KT</div></div></div>
+        <div class="content">
+          <div class="page-head"><h2>Kendala &amp; Solusi</h2><p>Catat kendala dan solusi per IKU. Ditampilkan kumulatif pada notula sampai triwulan berjalan.</p></div>
+          <div class="info" style="margin-bottom:16px"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>Halaman berdiri sendiri ini tidak muncul di menu — Ketua Tim biasa mengisi kendala &amp; solusi lewat bagian 3 pada Isian Kegiatan (S4). Route ini tetap aktif untuk kompatibilitas.</div>
+
+          <div class="period-banner"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><div><div class="pb-lbl">Periode Pengisian</div><div class="pb-val"><b>Juni 2026</b></div></div><span class="pb-tag">TW II</span></div>
+
+          <div class="card">
+            <div class="sec"><span class="n">1</span><span>IKU</span></div>
+            <div class="field"><label>Indikator Kinerja (IKU) <span class="req">*</span></label><div class="inp sel">1131 — Persentase Publikasi/Laporan Statistik Kesejahteraan Rakyat</div></div>
+          </div>
+
+          <div class="card">
+            <div class="sec"><span>Riwayat Kumulatif Triwulan Berjalan</span> <span class="badge b-draft">hanya-baca</span></div>
+            <div style="font-size:12px;font-weight:700;color:var(--blue-600);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Triwulan II</div>
+            <div style="padding:10px 0;border-bottom:1px solid var(--line2);font-size:13px"><div><b>Kendala:</b> Anggaran Ground Check tidak tersedia</div><div style="margin-top:4px"><b>Solusi:</b> Menggunakan sebagian anggaran DTSEN</div></div>
+          </div>
+
+          <div class="card">
+            <div class="sec"><span class="n">2</span><span>Kendala &amp; Solusi</span></div>
+            <div class="info warn"><svg class="i" viewBox="0 0 24 24"><path d="m21.7 18-9-16a1 1 0 0 0-1.7 0l-9 16A1 1 0 0 0 3 19.5h18a1 1 0 0 0 .7-1.5Z"/><path d="M12 9v4M12 17h.01"/></svg>Jika mengisi solusi, wajib melampirkan bukti dukung solusinya.</div>
+            <div class="poin-row">
+              <span class="k-num">Pasangan 1</span>
+              <div class="field" style="margin-bottom:0"><label>Kendala <span class="req">*</span></label><textarea class="inp filled" rows="2" style="height:auto;display:block">Keterlambatan pengumpulan dokumen dari mitra</textarea></div>
+              <div>
+                <div class="field" style="margin-bottom:0"><label>Solusi</label><textarea class="inp filled" rows="2" style="height:auto;display:block">Percepatan koordinasi dengan mitra terkait</textarea></div>
+                <div style="margin-top:8px">
+                  <label style="font-size:11.5px;font-weight:600;margin-bottom:5px;display:block">Bukti Dukung Solusi (PDF) <span class="req">wajib</span></label>
+                  <div class="filechip ok"><span class="nm">📄 Bukti solusi_01.pdf</span><span class="x">✕</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="btn-row"><button class="btn btn-ghost btn-sm">＋ Tambah Pasangan</button><button class="btn btn-primary">Simpan Kendala &amp; Solusi</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- S6 RTL & EVALUASI (LEGACY, TIDAK TERTAUT DI MENU) -->
+<div class="screen" id="s6">
+  <div class="screen-label"><span class="sl-num">6</span><span class="sl-t">RTL &amp; Evaluasi</span><span class="sl-d">— route &amp; komponen masih berfungsi penuh, tapi tidak tertaut di menu navigasi karena fungsinya sudah tercakup dalam Isian Kegiatan (S4); resources/views/livewire/rtl-evaluasi.blade.php</span></div>
+  <div class="frame" data-document-role="page" data-label="SIPINTER Layar 6">
+    <div class="browser-bar"><div class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></div><div class="url"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>sipinter.bps.go.id/rtl-evaluasi</div></div>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand"><div class="logo"><svg class="i" viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg></div><div><h1>SIPINTER</h1><span>BPS Buton Utara</span></div></div>
+        <nav class="nav">
+          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg></span>Dasbor</a>
+          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg></span>Isian Kegiatan</a>
+          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></span>Notula</a>
+          <a><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82"/></svg></span>Pengaturan Akun</a>
+        </nav>
+        <div class="sidebar-foot"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>v1.0 · Aktualisasi 2026</div>
+      </aside>
+      <div class="main">
+        <div class="topbar"><div class="crumb">Ketua › <b>RTL &amp; Evaluasi</b></div><div class="user"><span>Ketua Tim</span><div class="avatar av-k">KT</div></div></div>
+        <div class="content">
+          <div class="page-head"><h2>Rencana Tindak Lanjut &amp; Evaluasi</h2><p>Evaluasi RTL triwulan sebelumnya, dan tetapkan RTL untuk triwulan berikutnya.</p></div>
+          <div class="info" style="margin-bottom:16px"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>Halaman berdiri sendiri ini tidak muncul di menu — Ketua Tim biasa mengisi evaluasi &amp; RTL lewat bagian 4-5 pada Isian Kegiatan (S4). Route ini tetap aktif untuk kompatibilitas.</div>
+
+          <div class="period-banner"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><div><div class="pb-lbl">Periode Berjalan</div><div class="pb-val"><b>Juni 2026</b></div></div><span class="pb-tag">TW II</span></div>
+
+          <div class="card">
+            <div class="sec"><span class="n">1</span><span>IKU</span></div>
+            <div class="field"><label>Indikator Kinerja (IKU) <span class="req">*</span></label><div class="inp sel">1131 — Persentase Publikasi/Laporan Statistik Kesejahteraan Rakyat</div></div>
+          </div>
+
+          <div class="card">
+            <div class="sec"><span>RTL Triwulan Berjalan</span> <span class="badge b-draft">hanya-baca</span></div>
+            <div style="padding:10px 0;border-bottom:1px solid var(--line2);font-size:13px">
+              <div>Melakukan pelatihan intensif petugas lapangan</div>
+              <div style="color:var(--muted);font-size:12px;margin-top:4px">Juli, Agustus, September · PIC: Budi Santoso · Batas waktu: 30 September 2026</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="sec"><span class="n">2</span><span>Evaluasi RTL Triwulan Sebelumnya</span></div>
+            <div class="info teal"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>Poin di bawah otomatis diambil dari RTL triwulan sebelumnya. Laporkan realisasinya dan lampirkan bukti bila ada.</div>
+            <div class="poin-single">
+              <span class="k-num stat-in">Poin 1</span>
+              <div class="rtl-planned"><div><span class="pl-lbl">Direncanakan (April, Mei, Juni)</span>Persiapan instrumen Sakernas triwulan berikutnya<div style="color:var(--muted);font-size:11px;margin-top:4px">PIC: Siti Aminah · Batas waktu: 30 Juni 2026</div></div></div>
+              <div class="field" style="margin:12px 0 10px"><label>Realisasi <span class="req">*</span></label><textarea class="inp filled" rows="2" style="height:auto;display:block">Instrumen selesai disusun dan diverifikasi tepat waktu</textarea></div>
+              <div class="field"><label>Status Kecocokan <span class="req">*</span></label><div class="inp sel">Cocok</div></div>
+              <div class="btn-row"><button class="btn btn-primary btn-sm">Simpan Evaluasi</button></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="sec"><span class="n">3</span><span>Tetapkan RTL untuk Triwulan III</span></div>
+            <div class="poin-single">
+              <span class="k-num stat-in">Poin RTL 1</span>
+              <div class="field"><label>RTL (satu blok mencakup keseluruhan triwulan) <span class="req">*</span></label><textarea class="inp filled" rows="2" style="height:auto;display:block">Melakukan pelatihan intensif petugas lapangan</textarea></div>
+              <div class="row2">
+                <div class="field"><label>PIC <span class="req">*</span></label><div class="inp">Budi Santoso</div></div>
+                <div class="field"><label>Batas Waktu <span class="req">*</span></label><div class="inp">30 September 2026</div></div>
+              </div>
+            </div>
+            <div class="btn-row"><button class="btn btn-ghost btn-sm">＋ Tambah Poin RTL</button><button class="btn btn-primary">Tetapkan RTL →</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- S7 NOTULA RIWAYAT (KETUA / KEPALA) -->
+<div class="screen" id="s7">
+  <div class="screen-label"><span class="sl-num">7</span><span class="sl-t">Notula (riwayat)</span><span class="sl-d">— pantau status per triwulan, unduh setelah disetujui Kepala; dipakai bersama oleh Ketua Tim &amp; Kepala (notula-riwayat.index)</span></div>
   <div class="frame" data-document-role="page" data-label="SIPINTER Layar 5">
     <div class="browser-bar"><div class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></div><div class="url"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>sipinter.bps.go.id/notula-riwayat</div></div>
     <div class="app">
@@ -644,8 +771,8 @@
   </div>
 </div>
 <!-- S6 PENGATURAN AKUN -->
-<div class="screen" id="s6">
-  <div class="screen-label"><span class="sl-num">6</span><span class="sl-t">Pengaturan Akun</span><span class="sl-d">— profil &amp; ubah kata sandi, sama untuk semua peran (resources/views/profile/edit.blade.php)</span></div>
+<div class="screen" id="s8">
+  <div class="screen-label"><span class="sl-num">8</span><span class="sl-t">Pengaturan Akun</span><span class="sl-d">— profil &amp; ubah kata sandi, sama untuk semua peran (resources/views/profile/edit.blade.php)</span></div>
   <div class="frame" data-document-role="page" data-label="SIPINTER Layar 6">
     <div class="browser-bar"><div class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></div><div class="url"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>sipinter.bps.go.id/profile</div></div>
     <div class="app">
@@ -694,8 +821,8 @@
 </div>
 
 <!-- S7 DASBOR SAKIP -->
-<div class="screen" id="s7">
-  <div class="screen-label"><span class="sl-num">7</span><span class="sl-t">Dasbor SAKIP</span><span class="sl-d">— route bersama <code>dashboard</code>, khusus Tim SAKIP tampil 3 subtab (Alpine, tanpa reload): Dasbor / Dasbor Kinerja / Rekapitulasi; resources/views/dashboard.blade.php</span></div>
+<div class="screen" id="s9">
+  <div class="screen-label"><span class="sl-num">9</span><span class="sl-t">Dasbor SAKIP</span><span class="sl-d">— route bersama <code>dashboard</code>, khusus Tim SAKIP tampil 3 subtab (Alpine, tanpa reload): Dasbor / Dasbor Kinerja / Rekapitulasi; resources/views/dashboard.blade.php</span></div>
   <div class="frame" data-document-role="page" data-label="SIPINTER Layar 7">
     <div class="browser-bar"><div class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></div><div class="url"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>sipinter.bps.go.id/dashboard</div></div>
     <div class="app">
@@ -802,8 +929,8 @@
   </div>
 </div>
 <!-- S8 VERIFIKASI LIST -->
-<div class="screen" id="s8">
-  <div class="screen-label"><span class="sl-num">8</span><span class="sl-t">Verifikasi &amp; Notula</span><span class="sl-d">— 2 subtab (Alpine, tanpa reload): Verifikasi (daftar isian berstatus diajukan) / Kompilasi Notula; resources/views/verifikasi/index.blade.php</span></div>
+<div class="screen" id="s10">
+  <div class="screen-label"><span class="sl-num">10</span><span class="sl-t">Verifikasi &amp; Notula</span><span class="sl-d">— 2 subtab (Alpine, tanpa reload): Verifikasi (daftar isian berstatus diajukan) / Kompilasi Notula; resources/views/verifikasi/index.blade.php</span></div>
   <div class="frame" data-document-role="page" data-label="SIPINTER Layar 8">
     <div class="browser-bar"><div class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></div><div class="url"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>sipinter.bps.go.id/verifikasi</div></div>
     <div class="app">
@@ -936,8 +1063,8 @@
   </div>
 </div>
 <!-- S9 DETAIL VERIFIKASI -->
-<div class="screen" id="s9">
-  <div class="screen-label"><span class="sl-num">9</span><span class="sl-t">Detail Verifikasi</span><span class="sl-d">— dibuka dari tab Verifikasi (S8); analisis &amp; angka, verifikasi berkas per kegiatan, cek realisasi RTL; resources/views/livewire/verifikasi-capaian.blade.php</span></div>
+<div class="screen" id="s11">
+  <div class="screen-label"><span class="sl-num">11</span><span class="sl-t">Detail Verifikasi</span><span class="sl-d">— dibuka dari tab Verifikasi (S8); analisis &amp; angka, verifikasi berkas per kegiatan, cek realisasi RTL; resources/views/livewire/verifikasi-capaian.blade.php</span></div>
   <div class="frame" data-document-role="page" data-label="SIPINTER Layar 9">
     <div class="browser-bar"><div class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></div><div class="url"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>sipinter.bps.go.id/verifikasi/1131</div></div>
     <div class="app">
@@ -1021,8 +1148,8 @@
   </div>
 </div>
 <!-- S10 MODAL PERIKSA BERKAS -->
-<div class="screen" id="s10">
-  <div class="screen-label"><span class="sl-num">10</span><span class="sl-t">Periksa Berkas (modal)</span><span class="sl-d">— pratinjau berkas asli + panel tandai sesuai/tidak, dibuka dari tombol "Periksa" di S9</span></div>
+<div class="screen" id="s12">
+  <div class="screen-label"><span class="sl-num">12</span><span class="sl-t">Periksa Berkas (modal)</span><span class="sl-d">— pratinjau berkas asli + panel tandai sesuai/tidak, dibuka dari tombol "Periksa" di S9</span></div>
   <div class="frame" data-document-role="page" data-label="SIPINTER Layar 10">
     <div class="browser-bar"><div class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></div><div class="url"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>sipinter.bps.go.id/verifikasi/1131 · berkas</div></div>
     <div class="modal-stage">
@@ -1048,8 +1175,8 @@
 </div>
 
 <!-- S11 MASTER IKU -->
-<div class="screen" id="s11">
-  <div class="screen-label"><span class="sl-num">11</span><span class="sl-t">Master IKU</span><span class="sl-d">— 3 subtab (Alpine, tanpa reload): Master IKU (unduh template, unggah, kelola daftar) / Struktur Folder / Template Notula; resources/views/master-iku/index.blade.php</span></div>
+<div class="screen" id="s13">
+  <div class="screen-label"><span class="sl-num">13</span><span class="sl-t">Master IKU</span><span class="sl-d">— 3 subtab (Alpine, tanpa reload): Master IKU (unduh template, unggah, kelola daftar) / Struktur Folder / Template Notula; resources/views/master-iku/index.blade.php</span></div>
   <div class="frame" data-document-role="page" data-label="SIPINTER Layar 11">
     <div class="browser-bar"><div class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></div><div class="url"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>sipinter.bps.go.id/master-iku</div></div>
     <div class="app">
@@ -1187,8 +1314,8 @@
   </div>
 </div>
 <!-- S12 KELOLA PENGGUNA -->
-<div class="screen" id="s12">
-  <div class="screen-label"><span class="sl-num">12</span><span class="sl-t">Kelola Pengguna</span><span class="sl-d">— 4 subtab (Alpine, tanpa reload): Verifikasi Akun / Keanggotaan Tim / Penugasan IKU / Akun &amp; Storage; resources/views/admin/verifikasi/index.blade.php</span></div>
+<div class="screen" id="s14">
+  <div class="screen-label"><span class="sl-num">14</span><span class="sl-t">Kelola Pengguna</span><span class="sl-d">— 4 subtab (Alpine, tanpa reload): Verifikasi Akun / Keanggotaan Tim / Penugasan IKU / Akun &amp; Storage; resources/views/admin/verifikasi/index.blade.php</span></div>
   <div class="frame" data-document-role="page" data-label="SIPINTER Layar 12">
     <div class="browser-bar"><div class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></div><div class="url"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>sipinter.bps.go.id/verifikasi-akun</div></div>
     <div class="app">
@@ -1319,8 +1446,8 @@
 </div>
 
 <!-- S13 PERSETUJUAN NOTULA -->
-<div class="screen" id="s13">
-  <div class="screen-label"><span class="sl-num">13</span><span class="sl-t">Persetujuan Notula</span><span class="sl-d">— pratinjau notula gabungan + tombol Setujui &amp; Bubuhkan TTD / Minta Revisi; resources/views/livewire/persetujuan-notula.blade.php</span></div>
+<div class="screen" id="s15">
+  <div class="screen-label"><span class="sl-num">15</span><span class="sl-t">Persetujuan Notula</span><span class="sl-d">— pratinjau notula gabungan + tombol Setujui &amp; Bubuhkan TTD / Minta Revisi; resources/views/livewire/persetujuan-notula.blade.php</span></div>
   <div class="frame" data-document-role="page" data-label="SIPINTER Layar 13">
     <div class="browser-bar"><div class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></div><div class="url"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>sipinter.bps.go.id/persetujuan</div></div>
     <div class="app">
@@ -1367,8 +1494,8 @@
 </div>
 
 <!-- S14 DASBOR KINERJA (KEPALA) -->
-<div class="screen" id="s14">
-  <div class="screen-label"><span class="sl-num">14</span><span class="sl-t">Dasbor Kinerja</span><span class="sl-d">— halaman berdiri sendiri di menu Kepala (route <code>dasbor-kinerja.index</code>, tidak digabung tab seperti Tim SAKIP); resources/views/dasbor-kinerja/index.blade.php</span></div>
+<div class="screen" id="s16">
+  <div class="screen-label"><span class="sl-num">16</span><span class="sl-t">Dasbor Kinerja</span><span class="sl-d">— halaman berdiri sendiri di menu Kepala (route <code>dasbor-kinerja.index</code>, tidak digabung tab seperti Tim SAKIP); resources/views/dasbor-kinerja/index.blade.php</span></div>
   <div class="frame" data-document-role="page" data-label="SIPINTER Layar 14">
     <div class="browser-bar"><div class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></div><div class="url"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>sipinter.bps.go.id/dasbor-kinerja</div></div>
     <div class="app">
@@ -1423,8 +1550,8 @@
 </div>
 
 <!-- S15 REKAPITULASI (KEPALA) -->
-<div class="screen" id="s15">
-  <div class="screen-label"><span class="sl-num">15</span><span class="sl-t">Rekapitulasi</span><span class="sl-d">— halaman berdiri sendiri di menu Kepala (route <code>rekapitulasi.index</code>, tidak digabung tab seperti Tim SAKIP); resources/views/rekapitulasi/index.blade.php</span></div>
+<div class="screen" id="s17">
+  <div class="screen-label"><span class="sl-num">17</span><span class="sl-t">Rekapitulasi</span><span class="sl-d">— halaman berdiri sendiri di menu Kepala (route <code>rekapitulasi.index</code>, tidak digabung tab seperti Tim SAKIP); resources/views/rekapitulasi/index.blade.php</span></div>
   <div class="frame" data-document-role="page" data-label="SIPINTER Layar 15">
     <div class="browser-bar"><div class="dots"><i class="dot-r"></i><i class="dot-y"></i><i class="dot-g"></i></div><div class="url"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>sipinter.bps.go.id/rekapitulasi</div></div>
     <div class="app">
@@ -1463,7 +1590,7 @@
 </div>
 
 <div class="foot">
-  Mockup statis SIPINTER — 15 tampilan · disusun mengikuti kode aplikasi (Laravel 12 + Livewire v3) yang berjalan di Render · BPS Kabupaten Buton Utara · Agustus 2026
+  Mockup statis SIPINTER — 17 tampilan · disusun mengikuti kode aplikasi (Laravel 12 + Livewire v3) yang berjalan di Render · BPS Kabupaten Buton Utara · Agustus 2026
 </div>
 
 </body>
