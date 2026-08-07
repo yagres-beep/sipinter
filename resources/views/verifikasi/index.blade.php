@@ -15,7 +15,7 @@
             <livewire:verifikasi-list />
         </div>
         <div x-show="tab === 'notula'" x-cloak>
-            <livewire:kompilasi-notula lazy />
+            <livewire:kompilasi-notula />
         </div>
     </div>
 @endsection

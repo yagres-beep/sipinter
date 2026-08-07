@@ -17,10 +17,10 @@
                 <livewire:dasbor-utama />
             </div>
             <div x-show="tab === 'kinerja'" x-cloak>
-                <livewire:dasbor-capaian lazy />
+                <livewire:dasbor-capaian />
             </div>
             <div x-show="tab === 'rekap'" x-cloak>
-                <livewire:rekapitulasi lazy />
+                <livewire:rekapitulasi />
             </div>
         </div>
     @else

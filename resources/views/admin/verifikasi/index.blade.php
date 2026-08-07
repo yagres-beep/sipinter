@@ -106,15 +106,15 @@
         </div>
 
         <div x-show="tab === 'tim'" x-cloak>
-            <livewire:keanggotaan-tim lazy />
+            <livewire:keanggotaan-tim />
         </div>
 
         <div x-show="tab === 'penugasan'" x-cloak>
-            <livewire:penugasan-iku lazy />
+            <livewire:penugasan-iku />
         </div>
 
         <div x-show="tab === 'storage'" x-cloak>
-            <livewire:storage-accounts lazy />
+            <livewire:storage-accounts />
         </div>
     </div>
 @endsection
