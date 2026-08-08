@@ -645,9 +645,9 @@ function batasWaktuRtl(){
 }
 function updPeriode(){var sel=document.getElementById("isiBulan");if(!sel)return;var b=sel.value;var yl=document.getElementById("isiTahun");var y=yl?parseInt(yl.value,10):TAHUN_AKTIF;var tw=twDari(b);var ke=BULAN_TW[tw].indexOf(b)+1;var meta=document.getElementById("isiPeriodeMeta");if(meta)meta.innerHTML="&middot; Triwulan "+tw+" &middot; Bulan ke-"+ke+" triwulan &middot; Tahun "+y;var tag=document.getElementById("isiPeriodeTag");var note=document.getElementById("backfillNote");var aktif=(b===BULAN_AKTIF&&y===TAHUN_AKTIF);if(aktif){if(tag){tag.textContent="Periode aktif";tag.className="pb-tag";}if(note)note.style.display="none";}else{if(tag){tag.textContent="Periode terlewat";tag.className="pb-tag pb-tag-warn";}if(note)note.style.display="flex";}var dl=document.getElementById("rtlDeadline");if(dl)dl.value=batasWaktuRtl();}
 const ROLES={
- ketua:{name:"Ketua Tim Statistik Sosial",av:"KT",nav:[["dasbor","Dasbor","grid"],["isi","Isian Kegiatan","edit"],["notula","Notula","file-text"],["akun","Pengaturan Akun","settings"]]},
- sakip:{name:"Tim SAKIP",av:"TS",nav:[["dasbor","Dasbor","grid"],["verifikasi","Verifikasi & Notula","check-shield"],["iku","Master IKU","database"],["pengguna","Kelola Pengguna","users"],["akun","Pengaturan Akun","settings"]]},
- kepala:{name:"Kepala BPS",av:"KP",nav:[["dasbor","Dasbor","grid"],["approval","Persetujuan","check-shield"],["dasborkinerja","Dasbor Kinerja","chart"],["rekapitulasi","Rekapitulasi","list"],["notula","Notula","file-text"],["akun","Pengaturan Akun","settings"]]},
+ ketua:{name:"Ketua Tim Statistik Sosial",av:"KT",nav:[["dasbor","Dasbor","grid"],["isi","Isian Kegiatan","edit"],["notula","Notula","file-text"],["lakin","LAKIN","chart"],["akun","Pengaturan Akun","settings"]]},
+ sakip:{name:"Tim SAKIP",av:"TS",nav:[["dasbor","Dasbor","grid"],["verifikasi","Verifikasi & Notula","check-shield"],["iku","Master IKU","database"],["pengguna","Kelola Pengguna","users"],["lakin","LAKIN","chart"],["akun","Pengaturan Akun","settings"]]},
+ kepala:{name:"Kepala BPS",av:"KP",nav:[["dasbor","Dasbor","grid"],["approval","Persetujuan","check-shield"],["dasborkinerja","Dasbor Kinerja","chart"],["rekapitulasi","Rekapitulasi","list"],["notula","Notula","file-text"],["lakin","LAKIN","chart"],["akun","Pengaturan Akun","settings"]]},
 };
 let curRole="ketua",curPage="dasbor",notulaApproved=false,notulaEditing=false,curFileFlag=null;
 const NOTULA_VERSIONS=[]; // riwayat versi ttd
@@ -755,7 +755,7 @@ function overrideMatch(sel,i){
  else{var sc=parseInt(box.querySelector(".score").textContent);var v=verdict(sc);box.className="match "+v[0];lbl.textContent=v[1];}
  toast("Penilaian RTL diperbarui manual");
 }
-function pageTitle(p){return {dasbor:"Dasbor",isi:"Isian Kegiatan",notula:"Notula",verifikasi:"Verifikasi & Notula",approval:"Persetujuan",iku:"Master IKU",dasborkinerja:"Dasbor Kinerja",rekapitulasi:"Rekapitulasi",detail:"Detail Verifikasi",review:"Review Notula",pengguna:"Kelola Pengguna",akun:"Pengaturan Akun"}[p]||"Dasbor";}
+function pageTitle(p){return {dasbor:"Dasbor",isi:"Isian Kegiatan",notula:"Notula",verifikasi:"Verifikasi & Notula",approval:"Persetujuan",iku:"Master IKU",dasborkinerja:"Dasbor Kinerja",rekapitulasi:"Rekapitulasi",detail:"Detail Verifikasi",review:"Review Notula",pengguna:"Kelola Pengguna",lakin:"LAKIN",akun:"Pengaturan Akun"}[p]||"Dasbor";}
 function toast(m){var t=document.getElementById("toast");document.getElementById("toastMsg").textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2200);}
 function badge(s){var m={draft:['b-draft','Draft','file'],ajukan:['b-ajukan','Diajukan','send'],verif:['b-verif','Diverifikasi','check'],kembali:['b-kembali','Dikembalikan','arrow-left'],approve:['b-approve','Disetujui','check-circle'],tunggu:['b-tunggu','Menunggu approval','clock']};var x=m[s]||m.draft;return '<span class="badge '+x[0]+'">'+ic(x[2])+x[1]+'</span>';}
 function badgeRole(r){var m={ketua:['b-ajukan','Ketua Tim'],sakip:['b-verif','Tim SAKIP'],kepala:['b-tunggu','Kepala']};var x=m[r]||m.ketua;return '<span class="badge '+x[0]+'">'+x[1]+'</span>';}
@@ -918,6 +918,17 @@ PAGES.isi=function(){return ''+
 '<button class="btn btn-ghost btn-sm" onclick="addRtl()">'+ic("plus")+'Tambah poin rencana kegiatan</button>'+
 '<div class="row2" style="margin-top:16px"><div class="field"><label>PIC rencana kegiatan</label><select><option>Tim Statistik Sosial</option><option>Tim Statistik Produksi</option></select></div>'+
 '<div class="field"><label>Batas waktu <span class="muted" style="font-weight:400">(otomatis: akhir triwulan berikutnya)</span></label><input id="rtlDeadline" value="'+batasWaktuRtl()+'" readonly style="background:#f4f6fa"></div></div>'+
+
+'<div class="sec"><span class="n">🧩</span><span>Manajemen Risiko</span></div>'+
+'<div class="info warn">'+ic("alert")+'Minimal satu poin wajib diisi sebelum diajukan pada bulan terakhir triwulan ini. Tiap poin wajib dilampiri bukti dukung (PDF).</div>'+
+'<div class="poin-single"><span class="k-num" style="position:static;display:inline-block;margin-bottom:8px">Poin 1</span>'+
+'<div class="field"><label>Uraian <span class="req">*</span></label><textarea>Identifikasi risiko keterlambatan pengumpulan dokumen dari mitra pada kegiatan Sakernas Mei 2026 beserta rencana mitigasinya.</textarea></div>'+
+'<label style="font-size:13px;font-weight:600;margin-bottom:7px;display:block">Bukti dukung <span class="req">*wajib</span></label>'+
+'<div class="upload" onclick="simUpload(&quot;mrBukti1&quot;,&quot;Bukti Manajemen Risiko&quot;)"><div class="big">'+ic("upload")+'</div><div style="margin-top:6px;font-weight:600">Unggah bukti dukung (PDF)</div><div class="hint">Wajib tiap poin &middot; boleh lebih dari satu berkas</div></div>'+
+'<div id="mrBukti1">'+fileItem("Bukti_Manajemen_Risiko_01.pdf","mr","")+'</div>'+
+'</div>'+
+'<button class="btn btn-ghost btn-sm" onclick="toast(&quot;Fitur demo&quot;)">'+ic("plus")+'Tambah Poin Manajemen Risiko</button>'+
+
 '<div class="info teal">'+ic("shield-check")+'Analisis capaian &amp; angka akan diisi oleh Tim SAKIP saat verifikasi.</div>'+
 '<div id="validMsg" class="info red">Lengkapi dulu: pilih IKU, isi tiap kegiatan + bukti capaian, bukti solusi (bila ada solusi), dan minimal satu poin RTL.</div>'+
 '<div class="btn-row" style="margin-top:12px">'+
@@ -1255,9 +1266,50 @@ FOLDER_LEVELS.map(function(l,i){return folderRow(l,i);}).join("")+
 '<div class="card" style="margin-top:18px"><div class="sec" style="margin-top:0"><span>Buat Folder Tahun</span></div>'+
 '<div class="info">'+ic("info")+'Folder Drive umumnya dibuat otomatis saat berkas pertama diunggah. Gunakan ini untuk menyiapkan folder tahun lebih awal, mis. menyiapkan '+((new Date().getFullYear())+1)+' sebelum tahun berjalan berakhir.</div>'+
 '<div class="fl-add" style="max-width:420px"><input id="newYear" type="number" min="2024" max="2100" value="'+((new Date().getFullYear())+1)+'" placeholder="mis. 2027"><button class="btn btn-primary btn-sm" onclick="buatFolderTahun()">'+ic("folder")+'Buat folder tahun</button></div>'+
-'<div id="yearList" class="yearlist">'+YEAR_FOLDERS.map(function(y){return yearRow(y);}).join("")+'</div></div>';}
+'<div id="yearList" class="yearlist">'+YEAR_FOLDERS.map(function(y){return yearRow(y);}).join("")+'</div></div>'+
+'<div class="card" style="margin-top:18px"><div class="sec" style="margin-top:0"><span>Pola Khusus per IKU</span></div>'+
+'<div class="info">'+ic("info")+'Sebagian besar IKU cukup memakai pola folder global di atas. Bila ada IKU tertentu yang butuh susunan folder berbeda (mis. tambahan tingkat &quot;Bulan&quot; di dalam kategori tertentu), pilih IKU-nya di sini lalu atur pola sendiri untuk IKU itu saja &mdash; IKU lain tidak terpengaruh.</div>'+
+'<div class="field"><label>Pilih IKU</label><select id="polaIkuSel" onchange="togglePolaIku(this)"><option value="">&mdash; Pilih IKU &mdash;</option>'+
+IKU.map(function(i,ix){return '<option value="'+ix+'">'+i.kode+' &mdash; '+i.nama+(ix===0?' (pola khusus)':'')+'</option>';}).join("")+
+'</select></div>'+
+'<div id="polaIkuBlok" class="hide">'+polaIkuBlokHtml()+'</div>'+
+'</div>'+
+'<div class="card" style="margin-top:18px"><div class="sec" style="margin-top:0"><span>Tambah Folder Manual</span></div>'+
+'<div class="info">'+ic("info")+'Untuk kebutuhan khusus di tengah tahun berjalan &mdash; buat satu folder tambahan langsung di lokasi Drive yang dipilih, tanpa mengubah pola folder otomatis untuk unggahan berikutnya. Kosongkan tingkat yang tidak relevan.</div>'+
+'<div class="grid grid-2">'+
+'<div class="field"><label>Tahun <span class="req">*</span></label><input type="number" id="manTahun" value="'+TAHUN_AKTIF+'"></div>'+
+'<div class="field"><label>Triwulan (opsional)</label><select id="manTw"><option value="">&mdash; Tidak dipakai &mdash;</option>'+TW_URUT.map(function(t){return '<option value="'+t+'">Triwulan '+t+'</option>';}).join("")+'</select></div>'+
+'<div class="field"><label>Bulan (opsional)</label><select id="manBulan"><option value="">&mdash; Tidak dipakai &mdash;</option>'+BULAN_URUT.map(function(b){return '<option>'+b+'</option>';}).join("")+'</select></div>'+
+'<div class="field"><label>IKU (opsional)</label><select id="manIku"><option value="">&mdash; Tidak dipakai &mdash;</option>'+IKU.map(function(i){return '<option>'+i.kode+' &mdash; '+i.nama+'</option>';}).join("")+'</select></div>'+
+'<div class="field"><label>Folder Kategori Tujuan (opsional)</label><input id="manKat" placeholder="mis. Capaian"></div>'+
+'<div class="field"><label>Nama Folder Baru <span class="req">*</span></label><input id="manNama" placeholder="mis. Dokumen Tambahan 2026"></div>'+
+'</div>'+
+'<div class="btn-row"><button class="btn btn-navy" onclick="toast(&quot;Fitur demo&quot;)">'+ic("folder")+'Buat Folder</button></div></div>';}
 function yearRow(y){return '<div class="year-item" data-year="'+y+'">'+ic("folder")+'<span class="yi-name">'+y+'</span><span class="yi-sub">folder tahun siap</span></div>';}
 function buatFolderTahun(){var v=(document.getElementById("newYear").value||"").trim();if(!v||isNaN(v)){toast("Masukkan tahun yang valid");return;}if(YEAR_FOLDERS.indexOf(+v)>-1){toast("Folder tahun "+v+" sudah ada");return;}YEAR_FOLDERS.push(+v);YEAR_FOLDERS.sort(function(a,b){return a-b;});document.getElementById("yearList").innerHTML=YEAR_FOLDERS.map(function(y){return yearRow(y);}).join("");toast('Folder tahun '+v+' dibuat di Drive');}
+function togglePolaIku(sel){var el=document.getElementById("polaIkuBlok");if(el)el.classList.toggle("hide",!sel.value);}
+function polaIkuRow(l,i,custom){return '<div class="flevel"><span class="fl-order">'+(i+1)+'</span><span class="fl-ic">'+ic("folder")+'</span><span class="fl-name">'+l+(custom?' <span class="fl-tag">kustom</span>':'')+'</span>'+
+'<span class="fl-move"><button disabled title="Naik">'+ic("arrow-up")+'</button><button disabled title="Turun">'+ic("arrow-down")+'</button>'+(custom?'<button class="fl-del" disabled title="Hapus">'+ic("trash")+'</button>':'')+'</span></div>';}
+function polaIkuCatChip(c,fixed){return '<span class="catchip">'+ic("folder")+'<span class="cc-name">'+c+'</span>'+(fixed?'<span class="cc-lock">wajib</span>':'<span class="cc-x" style="opacity:.35">'+ic("x")+'</span>')+'</span>';}
+function polaIkuBlokHtml(){
+ var lv=["Tahun","Triwulan","Bulan","IKU","Kategori Survei"];
+ var cat=["Capaian","Bukti-Dukung-SAKIP","Dokumentasi Lapangan"];
+ return ''+
+ '<div class="badge b-verif" style="display:inline-block;margin-bottom:14px">'+ic("check")+'IKU ini memakai pola khusus</div>'+
+ '<div class="grid grid-2">'+
+ '<div><div class="sec" style="margin-top:0"><span>Tingkat Folder (khusus IKU ini)</span></div>'+
+ lv.map(function(l,i){return polaIkuRow(l,i,FIXED_LEVELS.indexOf(l)<0);}).join("")+
+ '<div class="fl-add"><input placeholder="mis. Kategori Survei" disabled><button class="btn btn-ghost btn-sm" disabled>'+ic("plus")+'Tambah</button></div>'+
+ '<div class="sec" style="margin-top:20px"><span>Folder Kategori (khusus IKU ini)</span></div>'+
+ '<div class="catwrap">'+cat.map(function(c){return polaIkuCatChip(c,CAT_FIXED.indexOf(c)>-1);}).join("")+'</div>'+
+ '<div class="btn-row" style="margin-top:16px"><button class="btn btn-primary" onclick="toast(&quot;Pola folder IKU tersimpan&quot;)">'+ic("check")+'Simpan Pola IKU Ini</button>'+
+ '<button class="btn btn-red" onclick="toast(&quot;Pola khusus dihapus, kembali ke pola global&quot;)">'+ic("trash")+'Hapus Pola Khusus</button></div></div>'+
+ '<div class="card"><div class="sec" style="margin-top:0"><span>Pratinjau Jalur Folder &mdash; IKU Ini</span></div>'+
+ '<div class="foldertree">'+lv.map(function(n,i){return '<div class="ft-row" style="padding-left:'+(i*22)+'px">'+ic("folder")+'<span>'+sampleFolder(n)+'</span></div>';}).join("")+
+ cat.map(function(c){return '<div class="ft-row ft-cat" style="padding-left:'+(lv.length*22)+'px">'+ic("folder")+'<span>'+c+'</span></div>';}).join("")+
+ '</div></div>'+
+ '</div>';
+}
 
 PAGES.akun=function(){return ''+
 '<div class="page-head"><h2>Pengaturan Akun</h2><p>Kelola profil dan kata sandi Anda</p></div>'+
@@ -1274,15 +1326,83 @@ PAGES.akun=function(){return ''+
 '<div class="btn-row"><button class="btn btn-primary" onclick="simpanSandi()">'+ic("check")+'Perbarui sandi</button></div></div>'+
 '</div>';};
 
+const LAKIN_ROWS=[
+ {sasaran:"Terwujudnya Penyediaan Data dan Insight Statistik yang Berkualitas",indikator:"Persentase Publikasi/Laporan Statistik Kesejahteraan Rakyat",target:100,real:100,pct:100},
+ {sasaran:"Terwujudnya Penyediaan Data dan Insight Statistik yang Berkualitas",indikator:"Persentase Publikasi/Laporan Statistik Ketahanan Sosial",target:100,real:92,pct:92},
+ {sasaran:"Terwujudnya Birokrasi BPS yang Akuntabel dan Berkualitas",indikator:"Tingkat Penyelenggaraan Pembinaan Statistik Sektoral sesuai standar",target:100,real:78,pct:78},
+ {sasaran:"Terwujudnya Birokrasi BPS yang Akuntabel dan Berkualitas",indikator:"Persentase Publikasi/Laporan Statistik Kependudukan dan Ketenagakerjaan",target:100,real:65,pct:65},
+];
+const LAKIN_CANDIDATES=[
+ {kode:"1151",nama:"Persentase Publikasi/Laporan Statistik Ketahanan Sosial",target:100,real:88,pct:88},
+ {kode:"2511",nama:"Tingkat Penyelenggaraan Pembinaan Statistik Sektoral sesuai standar",target:100,real:100,pct:100},
+];
+function lakinStats(){var pcts=LAKIN_ROWS.map(function(r){return r.pct;});var avg=Math.round(pcts.reduce(function(a,b){return a+b;},0)/pcts.length*10)/10;var seen={};LAKIN_ROWS.forEach(function(r){seen[r.sasaran]=1;});return{jumlah:LAKIN_ROWS.length,avg:avg,sasaran:Object.keys(seen).length};}
+function lakinBadge(pct){return pct>=90?"b-approve":pct>=70?"b-tunggu":"b-kembali";}
+function lakinRows(isSakip){
+ var groups=[],seen={};
+ LAKIN_ROWS.forEach(function(r){if(!seen[r.sasaran]){seen[r.sasaran]=[];groups.push(r.sasaran);}seen[r.sasaran].push(r);});
+ return groups.map(function(s){
+  var rows=seen[s].map(function(r){
+   if(isSakip){
+    return '<tr><td><input value="'+r.indikator+'" style="width:100%;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;font-size:13px;font-family:inherit"></td>'+
+    '<td style="text-align:right"><input type="number" value="'+r.target+'" style="width:80px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;font-size:13px;text-align:right;font-family:inherit"></td>'+
+    '<td style="text-align:right"><input type="number" value="'+r.real+'" style="width:80px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;font-size:13px;text-align:right;font-family:inherit"></td>'+
+    '<td style="text-align:right"><span class="badge '+lakinBadge(r.pct)+'">'+r.pct+'%</span></td>'+
+    '<td style="text-align:right;white-space:nowrap"><button class="btn btn-ghost btn-sm" title="Simpan" onclick="toast(&quot;Baris LAKIN tersimpan&quot;)">'+ic("check")+'</button> <button class="btn btn-red btn-sm" title="Hapus" onclick="toast(&quot;Baris LAKIN dihapus&quot;)">'+ic("trash")+'</button></td></tr>';
+   }
+   return '<tr><td>'+r.indikator+'</td><td style="text-align:right">'+r.target+'</td><td style="text-align:right">'+r.real+'</td><td style="text-align:right"><span class="badge '+lakinBadge(r.pct)+'">'+r.pct+'%</span></td></tr>';
+  }).join("");
+  return '<tr><td colspan="'+(isSakip?5:4)+'" style="background:var(--bg);font-size:11px;font-weight:700;color:var(--blue-600);text-transform:uppercase;letter-spacing:.5px;padding:8px 12px">'+s+'</td></tr>'+rows;
+ }).join("");
+}
+PAGES.lakin=function(){
+ var isSakip=curRole==='sakip';
+ var st=lakinStats();
+ return ''+
+ '<div class="page-head"><h2>LAKIN</h2><p>Laporan Kinerja tahunan &mdash; dibentuk Tim SAKIP dari data capaian yang sudah terverifikasi</p></div>'+
+ '<div class="card" style="margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">'+
+ '<div style="display:flex;align-items:center;gap:14px"><div class="ico ico-blue" style="margin:0">'+ic("chart")+'</div>'+
+ '<div><div style="font-weight:700;color:var(--ink);font-size:16px">Tahun Laporan: '+TAHUN_AKTIF+'</div><div class="hint" style="margin-top:2px">Sasaran, indikator, target, realisasi, dan capaian % tahun berjalan</div></div></div>'+
+ '<div class="btn-row" style="margin:0"><button class="btn btn-teal btn-sm" onclick="toast(&quot;Excel LAKIN diunduh&quot;)">'+ic("download")+'Unduh Excel</button>'+
+ (isSakip?'<button class="btn btn-ghost btn-sm" onclick="toast(&quot;Angka baris LAKIN disegarkan dari data capaian terbaru&quot;)">'+ic("refresh")+'Segarkan Angka</button>':'')+
+ '</div></div>'+
+ '<div class="grid grid-3" style="margin-bottom:20px">'+
+ '<div class="card stat"><div class="ico ico-blue">'+ic("target")+'</div><span class="num">'+st.jumlah+'</span><span class="lbl">Jumlah Indikator</span></div>'+
+ '<div class="card stat"><div class="ico ico-teal">'+ic("chart")+'</div><span class="num">'+st.avg+'%</span><span class="lbl">Rata-rata Capaian</span></div>'+
+ '<div class="card stat"><div class="ico ico-amber">'+ic("layers")+'</div><span class="num">'+st.sasaran+'</span><span class="lbl">Sasaran Strategis</span></div></div>'+
+ '<div class="card"><div class="sec" style="margin-top:0"><span>Tabel LAKIN</span></div>'+
+ '<table><thead><tr><th>Indikator</th><th style="text-align:right">Target</th><th style="text-align:right">Realisasi</th><th style="text-align:right">Capaian %</th>'+(isSakip?'<th style="width:70px"></th>':'')+'</tr></thead><tbody>'+
+ lakinRows(isSakip)+
+ '</tbody></table></div>'+
+ (isSakip?''+
+ '<div class="card" style="margin-top:18px"><div class="sec" style="margin-top:0"><span>📥 Tambah dari Data Capaian</span></div>'+
+ '<div class="info">'+ic("info")+'Centang IKU yang mau dimasukkan ke LAKIN ini &mdash; hanya yang dicentang yang ditambahkan, sisanya tetap tidak ikut sampai Anda pilih sendiri.</div>'+
+ '<ul class="checklist">'+
+ LAKIN_CANDIDATES.map(function(c){return '<li><input type="checkbox"><span><b>'+c.kode+'</b> &mdash; '+c.nama+'<span class="muted" style="display:block;font-size:11.5px;margin-top:2px">Target '+c.target+' &middot; Realisasi '+c.real+' &middot; Capaian '+c.pct+'%</span></span></li>';}).join("")+
+ '</ul>'+
+ '<div class="btn-row"><button class="btn btn-primary" onclick="toast(&quot;IKU terpilih ditambahkan ke LAKIN&quot;)">'+ic("download")+'Tambahkan Terpilih</button></div></div>'+
+ '<div class="card" style="margin-top:18px"><div class="sec" style="margin-top:0"><span>✏️ Tambah Baris Custom</span></div>'+
+ '<div class="info">'+ic("info")+'Untuk indikator yang tidak mengacu ke Master IKU manapun, atau format LAKIN yang berbeda dari bawaan sistem.</div>'+
+ '<div class="row2"><div class="field"><label>Sasaran (opsional)</label><input placeholder="mis. Terwujudnya Birokrasi BPS yang Akuntabel"></div>'+
+ '<div class="field"><label>Indikator <span class="req">*</span></label><input placeholder="Nama indikator"></div></div>'+
+ '<div class="row2"><div class="field"><label>Target (opsional)</label><input type="number"></div>'+
+ '<div class="field"><label>Realisasi (opsional)</label><input type="number"></div></div>'+
+ '<div class="btn-row"><button class="btn btn-ghost" onclick="toast(&quot;Baris custom ditambahkan&quot;)">'+ic("plus")+'Tambah Baris</button></div></div>'
+ :'');
+};
+
+var IKU_PANES=['iku','folder','template','bagian'];
 PAGES.iku=function(){return ''+
 '<div class="subtabs">'+
-'<button class="subtab on" data-pane="iku" onclick="subTab(this,\'iku\',[\'iku\',\'folder\',\'template\'])">📊 Master IKU</button>'+
-'<button class="subtab" data-pane="folder" onclick="subTab(this,\'folder\',[\'iku\',\'folder\',\'template\'])">📁 Struktur Folder</button>'+
-'<button class="subtab" data-pane="template" onclick="subTab(this,\'template\',[\'iku\',\'folder\',\'template\'])">🗎 Template Notula</button>'+
+'<button class="subtab on" data-pane="iku" onclick="subTab(this,\'iku\',IKU_PANES)">📊 Master IKU</button>'+
+'<button class="subtab" data-pane="folder" onclick="subTab(this,\'folder\',IKU_PANES)">📁 Struktur Folder</button>'+
+'<button class="subtab" data-pane="template" onclick="subTab(this,\'template\',IKU_PANES)">🗎 Template Notula</button>'+
+'<button class="subtab" data-pane="bagian" onclick="subTab(this,\'bagian\',IKU_PANES)">🧩 Bagian Kustom</button>'+
 '</div>'+
 '<div class="subpane on" id="pane-iku">'+paneMasterIku()+'</div>'+
 '<div class="subpane" id="pane-folder">'+paneFolder()+'</div>'+
-'<div class="subpane" id="pane-template">'+paneTemplate()+'</div>';};
+'<div class="subpane" id="pane-template">'+paneTemplate()+'</div>'+
+'<div class="subpane" id="pane-bagian">'+paneBagianKustom()+'</div>';};
 function paneMasterIku(){return ''+
 '<div class="page-head"><h2>Master IKU</h2><p>Unduh template, isi sesuai format, lalu unggah kembali</p></div>'+
 '<div class="card" style="margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">'+
@@ -1306,6 +1426,30 @@ function delIku(ix){IKU.splice(ix,1);go('iku');toast("IKU dihapus");}
 function paneTemplate(){return ''+
 '<div class="page-head"><h2>Template Notula</h2><p>Unggah template dengan penanda otomatis</p></div>'+
 '<div class="card"><div class="upload" onclick="toast(&quot;Template tersimpan&quot;)"><div class="big">'+ic("upload")+'</div><div style="margin-top:8px;font-weight:600">Unggah template (.docx)</div><div class="hint">Penanda: {{iku}}, {{analisis_capaian}}, {{kendala_solusi_kumulatif}}, {{rtl}}, {{ttd_kepala}}</div></div></div>';}
+
+function paneBagianKustom(){return ''+
+'<div class="page-head"><h2>Bagian Kustom</h2><p>Tambahkan bagian baru di Isian Kegiatan Ketua Tim (mis. Manajemen Risiko) tanpa perlu mengubah kode</p></div>'+
+'<div class="info">'+ic("info")+'Bagian yang <b>aktif</b> otomatis muncul di Isian Kegiatan &mdash; diisi Ketua Tim per POIN, dan tiap poin WAJIB dilampiri bukti dukung (PDF). Aktifkan &quot;Wajib di akhir triwulan&quot; agar minimal satu poin wajib diisi sebelum isian diajukan pada bulan terakhir tiap triwulan; biarkan nonaktif supaya bagian ini selalu opsional. Data yang sudah tersimpan tetap tampil di notula meski bagiannya kemudian dinonaktifkan.</div>'+
+'<div class="card"><div class="sec" style="margin-top:0"><span>Tambah Bagian Baru</span></div>'+
+'<div class="field"><label>Nama Bagian <span class="req">*</span></label><input placeholder="mis. Manajemen Risiko"></div>'+
+'<div class="field"><label>Deskripsi (opsional)</label><textarea placeholder="Petunjuk singkat untuk Ketua Tim saat mengisi bagian ini"></textarea></div>'+
+'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;margin-bottom:14px"><input type="checkbox"> Wajib diisi minimal satu poin di bulan terakhir tiap triwulan</label>'+
+'<div class="btn-row"><button class="btn btn-primary" onclick="toast(&quot;Bagian kustom ditambahkan&quot;)">'+ic("plus")+'Tambah Bagian</button></div></div>'+
+'<div class="card" style="margin-top:18px"><div class="sec" style="margin-top:0"><span>Daftar Bagian Kustom</span></div>'+
+'<div style="border:1.5px solid var(--line);border-radius:12px;padding:16px">'+
+'<div style="font-weight:700;color:var(--ink);font-size:14px;margin-bottom:4px">Manajemen Risiko</div>'+
+'<div class="hint" style="margin-bottom:10px">Identifikasi risiko strategis dan mitigasi triwulanan untuk mendukung capaian kinerja.</div>'+
+'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">'+
+'<span class="badge b-approve">'+ic("check")+'Aktif</span>'+
+'<span class="badge b-ajukan">Wajib akhir triwulan</span>'+
+'<span class="badge b-draft">3 poin tersimpan</span>'+
+'</div>'+
+'<div class="btn-row" style="margin-top:0">'+
+'<button class="btn btn-ghost btn-sm" onclick="toast(&quot;Bagian kustom tersimpan&quot;)">'+ic("check")+'Simpan</button>'+
+'<button class="btn btn-ghost btn-sm" onclick="toast(&quot;Bagian dinonaktifkan&quot;)">Nonaktifkan</button>'+
+'<button class="btn btn-ghost btn-sm" onclick="toast(&quot;Bagian dijadikan opsional&quot;)">Jadikan Opsional</button>'+
+'<button class="btn btn-red btn-sm" onclick="toast(&quot;Fitur demo&quot;)">'+ic("trash")+'Hapus</button>'+
+'</div></div></div>';}
 
 // interactions
 function pickJenis(el,survei,n){el.parentElement.querySelectorAll(".pill").forEach(p=>p.classList.remove("on"));el.classList.add("on");document.getElementById("stageField"+n).classList.toggle("hide",!survei);if(!survei){var f=document.getElementById("folder"+n);f.classList.add("hide");}updFolder(n);}
