@@ -129,10 +129,35 @@
         </div>
     @endif
 
+    @if ($bagianKustomList->isNotEmpty())
+        <div class="card">
+            <div class="sec"><span>Bagian Kustom</span></div>
+            @foreach ($bagianKustomList->groupBy('bagian_kustom_id') as $poinPerBagian)
+                @php $namaBagian = $poinPerBagian->first()->bagianKustom->nama; @endphp
+                <div style="font-size:12px;font-weight:700;color:var(--blue-600);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">{{ $namaBagian }}</div>
+                @foreach ($poinPerBagian as $poin)
+                    @php $berkasPoin = $berkasPerBagianKustom[$poin->id] ?? collect(); @endphp
+                    <div class="keg" wire:key="bagian-kustom-{{ $poin->id }}">
+                        <p style="font-size:13px;margin-bottom:8px">{{ $poin->teks }}</p>
+                        @forelse ($berkasPoin as $file)
+                            <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}" wire:key="berkas-{{ $file->id }}">
+                                <span class="nm">📄 {{ $file->nama_file }} <span class="sub">Bukti dukung</span></span>
+                                <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file->id }}">🔍 Periksa</button>
+                            </div>
+                        @empty
+                            <p style="color:var(--muted);font-size:12.5px">Belum ada bukti diunggah.</p>
+                        @endforelse
+                    </div>
+                @endforeach
+            @endforeach
+        </div>
+    @endif
+
     @php
         $semuaBerkas = collect($berkasPerKegiatan)->flatten(1)
             ->concat(collect($berkasPerKendala)->flatten(1))
-            ->concat($rtlSebelumnya->flatMap->berkas);
+            ->concat($rtlSebelumnya->flatMap->berkas)
+            ->concat(collect($berkasPerBagianKustom)->flatten(1));
     @endphp
 
     @foreach ($semuaBerkas as $file)

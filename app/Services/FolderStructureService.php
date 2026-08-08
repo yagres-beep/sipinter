@@ -207,11 +207,16 @@ class FolderStructureService
      *              kategori dengan subfolder_per_kegiatan default, RF-13). Kategori lain
      *              seperti Solusi (RF-27) & Evaluasi-RTL (RF-30) tidak terikat ke satu
      *              kegiatan tertentu, jadi cukup kirim null di sini.
+     * @param  string|null  $namaFolderOverride  nama folder Drive tujuan, MENGGANTI hasil
+     *              lookup KATEGORI_KE_FOLDER[$kategoriEnum] — dipakai bagian kustom (RF baru)
+     *              yang namanya dinamis (mis. "Manajemen Risiko"), bukan salah satu dari 4
+     *              kategori baku, tapi berkas.kategori di DB tetap nilai enum tetap ('bagian_kustom').
      * @return array{drive_file_id: string, storage_account_id: ?int, nama_file: string}
      */
-    public function unggahBerkas(Periode $periode, MasterIku $iku, string $kategoriEnum, string $localPath, ?Kegiatan $kegiatan = null, string $ekstensi = '.pdf', string $mimeType = 'application/pdf'): array
+    public function unggahBerkas(Periode $periode, MasterIku $iku, string $kategoriEnum, string $localPath, ?Kegiatan $kegiatan = null, string $ekstensi = '.pdf', string $mimeType = 'application/pdf', ?string $namaFolderOverride = null): array
     {
-        $namaKategori = self::KATEGORI_KE_FOLDER[$kategoriEnum]
+        $namaKategori = $namaFolderOverride
+            ?? self::KATEGORI_KE_FOLDER[$kategoriEnum]
             ?? throw new RuntimeException("Kategori berkas tidak dikenal: {$kategoriEnum}");
 
         $kategoriFolderId = $this->resolveKategoriFolder($periode, $iku, $namaKategori);

@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use App\Exceptions\InvalidStatusTransitionException;
+use App\Models\BagianKustomPoin;
 use App\Models\Berkas;
 use App\Models\Capaian;
 use App\Models\Kegiatan;
@@ -80,6 +81,10 @@ class VerifikasiCapaian extends Component
 
     protected ?\Illuminate\Support\Collection $cacheBerkasKendala = null;
 
+    protected ?\Illuminate\Support\Collection $cacheBagianKustomList = null;
+
+    protected ?\Illuminate\Support\Collection $cacheBerkasBagianKustom = null;
+
     public function mount(Capaian $capaian): void
     {
         $this->capaian = $capaian->load(['masterIku', 'periode']);
@@ -122,6 +127,19 @@ class VerifikasiCapaian extends Component
     public function kendalaSolusiList()
     {
         return $this->cacheKendalaSolusiList ??= KendalaSolusi::where('iku_id', $this->capaian->iku_id)
+            ->where('periode_id', $this->capaian->periode_id)
+            ->orderBy('id')
+            ->get();
+    }
+
+    /**
+     * Poin bagian kustom (mis. Manajemen Risiko) milik IKU+periode ini — ditarik
+     * otomatis dari isian ketua tim, sama seperti kegiatan & kendala-solusi.
+     */
+    public function bagianKustomList()
+    {
+        return $this->cacheBagianKustomList ??= BagianKustomPoin::with('bagianKustom')
+            ->where('iku_id', $this->capaian->iku_id)
             ->where('periode_id', $this->capaian->periode_id)
             ->orderBy('id')
             ->get();
@@ -179,6 +197,26 @@ class VerifikasiCapaian extends Component
             ->groupBy('ref_id');
     }
 
+    protected function berkasBagianKustomTerkelompok(): \Illuminate\Support\Collection
+    {
+        if ($this->cacheBerkasBagianKustom !== null) {
+            return $this->cacheBerkasBagianKustom;
+        }
+
+        return $this->cacheBerkasBagianKustom = Berkas::where('ref_type', BagianKustomPoin::class)
+            ->whereIn('ref_id', $this->bagianKustomList()->pluck('id'))
+            ->get()
+            ->groupBy('ref_id');
+    }
+
+    /**
+     * Bukti dukung milik satu poin bagian kustom tertentu.
+     */
+    public function berkasUntukBagianKustom(int $poinId)
+    {
+        return $this->berkasBagianKustomTerkelompok()->get($poinId, collect());
+    }
+
     /**
      * Bukti capaian milik satu kegiatan tertentu — dipakai untuk mengelompokkan
      * berkas per kegiatan pada tampilan (RF-39).
@@ -206,8 +244,9 @@ class VerifikasiCapaian extends Component
         $berkasCapaian = $this->berkasKegiatanTerkelompok()->flatten();
         $berkasSolusi = $this->berkasKendalaTerkelompok()->flatten();
         $berkasRtl = $this->rtlEvaluasiSebelumnya()->flatMap->berkas;
+        $berkasBagianKustom = $this->berkasBagianKustomTerkelompok()->flatten();
 
-        return $berkasCapaian->concat($berkasSolusi)->concat($berkasRtl)->sortBy('created_at')->values();
+        return $berkasCapaian->concat($berkasSolusi)->concat($berkasRtl)->concat($berkasBagianKustom)->sortBy('created_at')->values();
     }
 
     public function updatedRealisasi(): void
@@ -375,12 +414,16 @@ class VerifikasiCapaian extends Component
         $kegiatanList = $this->kegiatanList();
         $kendalaSolusiList = $this->kendalaSolusiList();
 
+        $bagianKustomList = $this->bagianKustomList();
+
         return view('livewire.verifikasi-capaian', [
             'kegiatanList' => $kegiatanList,
             'kendalaSolusiList' => $kendalaSolusiList,
             'rtlSebelumnya' => $this->rtlEvaluasiSebelumnya(),
             'berkasPerKegiatan' => $kegiatanList->mapWithKeys(fn ($k) => [$k->id => $this->berkasUntukKegiatan($k->id)]),
             'berkasPerKendala' => $kendalaSolusiList->mapWithKeys(fn ($ks) => [$ks->id => $this->berkasUntukKendala($ks->id)]),
+            'bagianKustomList' => $bagianKustomList,
+            'berkasPerBagianKustom' => $bagianKustomList->mapWithKeys(fn ($p) => [$p->id => $this->berkasUntukBagianKustom($p->id)]),
         ]);
     }
 }

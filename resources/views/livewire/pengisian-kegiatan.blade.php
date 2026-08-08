@@ -511,6 +511,71 @@
                 </div>
             @endif
 
+            @foreach ($bagianKustomAktif as $bagian)
+                <div class="sec" style="margin-top:20px"><span class="n">🧩</span><span>{{ $bagian->nama }}</span></div>
+                @if ($bagian->deskripsi)
+                    <div class="info">ℹ️ {{ $bagian->deskripsi }}</div>
+                @endif
+                @if ($bagian->wajib_akhir_triwulan)
+                    <div class="info warn">⚠️ Minimal satu poin wajib diisi sebelum diajukan pada bulan terakhir triwulan ini ({{ $bulanKe === 3 ? 'berlaku sekarang' : 'berlaku mulai bulan ke-3 triwulan' }}). Tiap poin wajib dilampiri bukti dukung (PDF).</div>
+                @else
+                    <div class="info">ℹ️ Bagian ini opsional. Tiap poin yang diisi wajib dilampiri bukti dukung (PDF).</div>
+                @endif
+
+                @error("bagianKustomBlocks.{$bagian->id}")
+                    <div style="color:var(--red);font-size:11.5px;margin-bottom:10px">{{ $message }}</div>
+                @enderror
+
+                @foreach ($bagianKustomBlocks[$bagian->id] ?? [] as $i => $blok)
+                    <div class="poin-single" wire:key="bagian-{{ $bagian->id }}-{{ $i }}">
+                        <span class="k-num stat-in">Poin {{ $i + 1 }}</span>
+                        @if (count($bagianKustomBlocks[$bagian->id]) > 1)
+                            <button type="button" class="btn btn-red btn-sm" style="position:absolute;top:8px;right:8px" wire:click="removeBagianKustomBlock({{ $bagian->id }}, {{ $i }})">🗑</button>
+                        @endif
+
+                        <div class="field">
+                            <label>Uraian <span class="req">*</span></label>
+                            <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model="bagianKustomBlocks.{{ $bagian->id }}.{{ $i }}.teks"
+                                placeholder="Uraikan poin {{ $bagian->nama }} ini..."></textarea>
+                            @error("bagianKustomBlocks.{$bagian->id}.{$i}.teks")
+                                <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                            @enderror
+                        </div>
+
+                        <div class="field" style="margin-bottom:0">
+                            <label>Bukti Dukung (PDF) <span class="req">wajib bila poin diisi</span></label>
+                            @if (empty($blok['bukti']))
+                                <label class="upload" style="cursor:pointer;display:block">
+                                    <div class="big">📤</div>
+                                    Klik untuk unggah bukti dukung (PDF) — boleh lebih dari satu berkas
+                                    <input type="file" wire:model="bagianKustomBlocks.{{ $bagian->id }}.{{ $i }}.bukti" multiple accept="application/pdf" style="display:none">
+                                </label>
+                            @else
+                                @foreach ($blok['bukti'] as $fi => $file)
+                                    <div class="filechip ok">
+                                        <span class="nm">📄 {{ $file->getClientOriginalName() }}</span>
+                                        <span class="x" style="cursor:pointer" wire:click="removeBuktiBagianKustom({{ $bagian->id }}, {{ $i }}, {{ $fi }})">✕</span>
+                                    </div>
+                                @endforeach
+                                <label class="btn btn-ghost btn-sm" style="margin-top:8px;cursor:pointer">
+                                    ⟲ Ganti Berkas
+                                    <input type="file" wire:model="bagianKustomBlocks.{{ $bagian->id }}.{{ $i }}.bukti" multiple accept="application/pdf" style="display:none">
+                                </label>
+                            @endif
+                            <div wire:loading wire:target="bagianKustomBlocks.{{ $bagian->id }}.{{ $i }}.bukti" style="font-size:11.5px;color:var(--muted);margin-top:6px">Mengunggah berkas…</div>
+                            @error("bagianKustomBlocks.{$bagian->id}.{$i}.bukti")
+                                <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                            @enderror
+                            @error("bagianKustomBlocks.{$bagian->id}.{$i}.bukti.*")
+                                <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                            @enderror
+                        </div>
+                    </div>
+                @endforeach
+
+                <button type="button" class="btn btn-ghost btn-sm" wire:click="addBagianKustomBlock({{ $bagian->id }})">＋ Tambah Poin {{ $bagian->nama }}</button>
+            @endforeach
+
             <div class="info teal" style="margin-top:12px">✅ Analisis capaian &amp; angka akan diisi oleh Tim SAKIP saat verifikasi.</div>
         @endif
     </div>

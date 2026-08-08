@@ -2,6 +2,8 @@
 
 namespace App\Livewire;
 
+use App\Models\BagianKustom;
+use App\Models\BagianKustomPoin;
 use App\Models\Berkas;
 use App\Models\Capaian;
 use App\Models\Kegiatan;
@@ -45,6 +47,14 @@ class PengisianKegiatan extends Component
      * @var array<int, array{kendala: string, solusi: string, bukti_solusi: array}>
      */
     public array $kendalaBlocks = [];
+
+    /**
+     * Poin isian untuk tiap bagian kustom aktif (mis. Manajemen Risiko), dikunci pada
+     * id bagian_kustom — satu bagian bisa punya banyak poin, sama seperti kendalaBlocks.
+     *
+     * @var array<int, array<int, array{teks: string, bukti: array}>>
+     */
+    public array $bagianKustomBlocks = [];
 
     /**
      * Form realisasi per poin RTL triwulan sebelumnya yang belum dievaluasi, dikunci pada id baris rtl_evaluasi.
@@ -98,6 +108,10 @@ class PengisianKegiatan extends Component
         $this->kendalaBlocks = [$this->emptyKendalaBlock()];
         $this->rtlBaru = [$this->emptyRtlBlock()];
         $this->rtlBaruBatasWaktu = $this->akhirTriwulanBerikutnya()->toDateString();
+
+        foreach ($this->bagianKustomAktif() as $bagian) {
+            $this->bagianKustomBlocks[$bagian->id] = [$this->emptyBagianKustomBlock()];
+        }
     }
 
     protected function emptyBlock(): array
@@ -124,6 +138,25 @@ class PengisianKegiatan extends Component
         return [
             'rtl_teks' => '',
         ];
+    }
+
+    protected function emptyBagianKustomBlock(): array
+    {
+        return [
+            'teks' => '',
+            'bukti' => [],
+        ];
+    }
+
+    /**
+     * Daftar bagian kustom aktif — dipakai untuk merender bagian tambahan di form
+     * (mis. Manajemen Risiko) dan untuk validasi/penyimpanannya.
+     *
+     * @return \Illuminate\Support\Collection<int, BagianKustom>
+     */
+    protected function bagianKustomAktif()
+    {
+        return BagianKustom::daftarAktif();
     }
 
     /**
@@ -213,6 +246,23 @@ class PengisianKegiatan extends Component
     {
         unset($this->kendalaBlocks[$blockIndex]['bukti_solusi'][$fileIndex]);
         $this->kendalaBlocks[$blockIndex]['bukti_solusi'] = array_values($this->kendalaBlocks[$blockIndex]['bukti_solusi']);
+    }
+
+    public function addBagianKustomBlock(int $bagianId): void
+    {
+        $this->bagianKustomBlocks[$bagianId][] = $this->emptyBagianKustomBlock();
+    }
+
+    public function removeBagianKustomBlock(int $bagianId, int $index): void
+    {
+        unset($this->bagianKustomBlocks[$bagianId][$index]);
+        $this->bagianKustomBlocks[$bagianId] = array_values($this->bagianKustomBlocks[$bagianId]);
+    }
+
+    public function removeBuktiBagianKustom(int $bagianId, int $blockIndex, int $fileIndex): void
+    {
+        unset($this->bagianKustomBlocks[$bagianId][$blockIndex]['bukti'][$fileIndex]);
+        $this->bagianKustomBlocks[$bagianId][$blockIndex]['bukti'] = array_values($this->bagianKustomBlocks[$bagianId][$blockIndex]['bukti']);
     }
 
     public function addRtlBlock(): void
@@ -663,6 +713,14 @@ class PengisianKegiatan extends Component
             'kendalaBlocks.*.bukti_solusi.*' => ['file', 'mimes:pdf', 'max:10240'],
         ];
 
+        // Bagian kustom (mis. Manajemen Risiko): poin kosong dilewati saat disimpan
+        // (sama seperti kendalaBlocks), tapi poin yang TERISI wajib punya bukti dukung.
+        foreach ($this->bagianKustomAktif() as $bagian) {
+            $rules["bagianKustomBlocks.{$bagian->id}.*.teks"] = ['nullable', 'string'];
+            $rules["bagianKustomBlocks.{$bagian->id}.*.bukti"] = ['required_with:bagianKustomBlocks.'.$bagian->id.'.*.teks', 'array'];
+            $rules["bagianKustomBlocks.{$bagian->id}.*.bukti.*"] = ['file', 'mimes:pdf', 'max:10240'];
+        }
+
         // RF-29/31: minimal SATU poin RTL triwulan sebelumnya yang belum dievaluasi wajib
         // dilaporkan realisasinya (dicek lewat after() di buatValidator()) — status_cocok
         // hanya wajib untuk baris yang realisasinya memang diisi.
@@ -687,7 +745,7 @@ class PengisianKegiatan extends Component
 
     protected function validationAttributes(): array
     {
-        return [
+        $attrs = [
             'iku_id' => 'IKU',
             'blocks.*.uraian_kegiatan' => 'uraian kegiatan',
             'blocks.*.jenis' => 'jenis kegiatan',
@@ -701,17 +759,30 @@ class PengisianKegiatan extends Component
             'rtlBaruPicManual' => 'PIC (manual)',
             'rtlBaruBatasWaktu' => 'batas waktu',
         ];
+
+        foreach ($this->bagianKustomAktif() as $bagian) {
+            $attrs["bagianKustomBlocks.{$bagian->id}.*.teks"] = 'poin '.$bagian->nama;
+            $attrs["bagianKustomBlocks.{$bagian->id}.*.bukti"] = 'bukti dukung '.$bagian->nama;
+        }
+
+        return $attrs;
     }
 
     protected function messages(): array
     {
-        return [
+        $messages = [
             'blocks.*.tahapan_survei.required_if' => 'Tahapan survei wajib dipilih untuk kegiatan Survei/Sensus.',
             'blocks.*.bukti.required' => 'Bukti capaian (PDF) wajib diunggah untuk tiap kegiatan.',
             'kendalaBlocks.*.bukti_solusi.required_with' => 'Bukti dukung solusi (PDF) wajib diunggah bila kolom solusi diisi.',
             'evaluasi.*.status_cocok.required_with' => 'Status kecocokan wajib dipilih bila realisasi sudah diisi.',
             'rtlBaruPicManual.required_if' => 'Ketik nama PIC karena memilih "Lainnya".',
         ];
+
+        foreach ($this->bagianKustomAktif() as $bagian) {
+            $messages["bagianKustomBlocks.{$bagian->id}.*.bukti.required_with"] = 'Bukti dukung wajib diunggah untuk tiap poin '.$bagian->nama.' yang diisi.';
+        }
+
+        return $messages;
     }
 
     /**
@@ -732,6 +803,7 @@ class PengisianKegiatan extends Component
             'rtlBaruPic' => $this->rtlBaruPic,
             'rtlBaruPicManual' => $this->rtlBaruPicManual,
             'rtlBaruBatasWaktu' => $this->rtlBaruBatasWaktu,
+            'bagianKustomBlocks' => $this->bagianKustomBlocks,
         ];
 
         $validator = \Illuminate\Support\Facades\Validator::make(
@@ -754,6 +826,26 @@ class PengisianKegiatan extends Component
                     'blocks',
                     "Masih ada {$belumTerlaksana->count()} poin RTL triwulan berjalan yang belum dilaksanakan sebagai kegiatan: {$daftar}."
                 );
+            }
+
+            // Bagian kustom "wajib akhir triwulan": minimal satu poin wajib terisi bila
+            // sedang mengajukan pada bulan TERAKHIR triwulan (sama seperti syarat RTL baru).
+            if ($this->bulanKeDari($this->bulan) === 3) {
+                foreach ($this->bagianKustomAktif() as $bagian) {
+                    if (! $bagian->wajib_akhir_triwulan) {
+                        continue;
+                    }
+
+                    $adaTerisi = collect($this->bagianKustomBlocks[$bagian->id] ?? [])
+                        ->contains(fn ($blok) => filled($blok['teks'] ?? null));
+
+                    if (! $adaTerisi) {
+                        $validator->errors()->add(
+                            "bagianKustomBlocks.{$bagian->id}",
+                            "Minimal satu poin \"{$bagian->nama}\" wajib diisi sebelum diajukan pada bulan terakhir triwulan ini."
+                        );
+                    }
+                }
             }
         });
 
@@ -1016,6 +1108,46 @@ class PengisianKegiatan extends Component
                     ]);
                 }
             }
+
+            // 5) Bagian kustom (mis. Manajemen Risiko) — poin kosong dilewati, sama
+            // seperti Kendala & Solusi; bukti sudah dipastikan wajib lewat validasi di atas.
+            foreach ($this->bagianKustomAktif() as $bagian) {
+                foreach ($this->bagianKustomBlocks[$bagian->id] ?? [] as $blok) {
+                    if (trim($blok['teks'] ?? '') === '') {
+                        continue;
+                    }
+
+                    $poin = BagianKustomPoin::create([
+                        'bagian_kustom_id' => $bagian->id,
+                        'iku_id' => $this->iku_id,
+                        'periode_id' => $periode->id,
+                        'teks' => $blok['teks'],
+                    ]);
+
+                    foreach ($blok['bukti'] as $file) {
+                        $path = $file->store('bukti-bagian-kustom', 'local');
+
+                        $berkas = Berkas::create([
+                            'ref_id' => $poin->id,
+                            'ref_type' => BagianKustomPoin::class,
+                            'kategori' => 'bagian_kustom',
+                            'nama_file' => $file->getClientOriginalName(),
+                            'path' => $path,
+                            'status_verifikasi' => 'menunggu',
+                        ]);
+
+                        try {
+                            $localFullPath = Storage::disk('local')->path($path);
+                            $hasilDrive = $folderService->unggahBerkas(
+                                $periode, $iku, 'bagian_kustom', $localFullPath, namaFolderOverride: $bagian->nama
+                            );
+                            $berkas->update($hasilDrive);
+                        } catch (RuntimeException $e) {
+                            Log::warning("Gagal mengunggah bukti {$bagian->nama} ke Google Drive, disimpan lokal saja: ".$e->getMessage());
+                        }
+                    }
+                }
+            }
         });
 
         session()->flash('status', 'Isian kegiatan, kendala & solusi, dan evaluasi RTL berhasil diajukan ke Tim SAKIP.');
@@ -1030,6 +1162,11 @@ class PengisianKegiatan extends Component
         $this->rtlBaruPic = '';
         $this->rtlBaruPicManual = '';
         $this->rtlBaruBatasWaktu = $this->akhirTriwulanBerikutnya()->toDateString();
+
+        $this->bagianKustomBlocks = [];
+        foreach ($this->bagianKustomAktif() as $bagian) {
+            $this->bagianKustomBlocks[$bagian->id] = [$this->emptyBagianKustomBlock()];
+        }
     }
 
     public function render()
@@ -1052,6 +1189,7 @@ class PengisianKegiatan extends Component
             'rtlBerjalanBelumTerlaksana' => $this->poinRtlBerjalanBelumTerlaksana(),
             'picOptions' => $this->picOptions(),
             'namaTimIku' => $this->ikuTerpilih()?->tim,
+            'bagianKustomAktif' => $this->bagianKustomAktif(),
         ]);
     }
 }

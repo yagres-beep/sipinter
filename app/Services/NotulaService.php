@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\BagianKustom;
 use App\Models\Berkas;
 use App\Models\Kegiatan;
 use App\Models\KendalaSolusi;
@@ -76,10 +77,27 @@ class NotulaService
             ->whereHas('periode', fn ($q) => $q->where('tahun', $periode->tahun)->where('triwulan', $periode->triwulan))
             ->get();
 
+        // Bagian kustom (mis. Manajemen Risiko) — SEMUA bagian yang punya poin di
+        // triwulan ini ikut ditampilkan, termasuk yang sudah dinonaktifkan Tim SAKIP
+        // setelahnya, supaya data historis notula tidak pernah hilang dari catatan.
+        $bagianKustomPerBagian = BagianKustom::query()
+            ->whereHas('poin', fn ($q) => $q->whereHas(
+                'periode',
+                fn ($q2) => $q2->where('tahun', $periode->tahun)->where('triwulan', $periode->triwulan)
+            ))
+            ->with(['poin' => function ($q) use ($periode) {
+                $q->with('masterIku')->whereHas(
+                    'periode',
+                    fn ($q2) => $q2->where('tahun', $periode->tahun)->where('triwulan', $periode->triwulan)
+                );
+            }])
+            ->get();
+
         $html = view('pdf.notula-bagian1-konten', [
             'kegiatanPerIku' => $kegiatanPerIku,
             'kendalaSolusiPerTriwulan' => $kendalaSolusiPerTriwulan,
             'rtlBerjalan' => $rtlBerjalan,
+            'bagianKustomPerBagian' => $bagianKustomPerBagian,
         ])->render();
 
         $notula->update(['bagian1_html' => $html]);

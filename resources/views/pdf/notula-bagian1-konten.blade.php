@@ -48,3 +48,12 @@
         <li><em>Belum ada RTL ditetapkan untuk triwulan ini.</em></li>
     @endforelse
 </ul>
+
+@foreach ($bagianKustomPerBagian as $bagian)
+    <h3>{{ $bagian->nama }}</h3>
+    <ul>
+        @foreach ($bagian->poin as $poin)
+            <li>{{ $poin->masterIku->kode }}: {{ $poin->teks }}</li>
+        @endforeach
+    </ul>
+@endforeach
