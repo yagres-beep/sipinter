@@ -35,9 +35,10 @@ class LakinTest extends TestCase
 
     protected function buatCapaian(MasterIku $iku, int $tahun, int $bulan, int $triwulan, float $targetPk, float $realisasi): Capaian
     {
-        $periode = Periode::create([
-            'tahun' => $tahun, 'bulan' => $bulan, 'triwulan' => $triwulan, 'bulan_ke' => 1, 'flag_bulan_terlewat' => true,
-        ]);
+        $periode = Periode::firstOrCreate(
+            ['tahun' => $tahun, 'bulan' => $bulan],
+            ['triwulan' => $triwulan, 'bulan_ke' => 1, 'flag_bulan_terlewat' => true]
+        );
 
         return Capaian::create([
             'iku_id' => $iku->id, 'periode_id' => $periode->id,
@@ -46,37 +47,51 @@ class LakinTest extends TestCase
         ]);
     }
 
-    public function test_builder_menyusun_baris_dari_capaian_kumulatif_setahun(): void
+    public function test_iku_tersedia_untuk_tahun_menghitung_kumulatif_dari_capaian(): void
     {
         $iku = MasterIku::create(['kode' => '1131', 'indikator' => 'Uji', 'tim' => 'Sosial', 'penanggung_jawab' => 'A', 'sasaran' => 'Sasaran Uji']);
 
         $this->buatCapaian($iku, 2026, 3, 1, 100, 25);
         $this->buatCapaian($iku, 2026, 6, 2, 100, 25);
 
-        $lakin = app(LakinBuilderService::class)->bentuk(2026);
+        $tersedia = app(LakinBuilderService::class)->ikuTersediaUntukTahun(2026);
 
-        $this->assertSame(2026, $lakin->tahun);
-        $this->assertCount(1, $lakin->baris);
-
-        $baris = $lakin->baris->first();
-        $this->assertSame('Sasaran Uji', $baris->sasaran);
-        $this->assertEquals(100, $baris->target);
-        $this->assertEquals(50, $baris->realisasi); // 25 + 25 dari dua triwulan.
-        $this->assertEquals(50, $baris->capaian_persen);
+        $this->assertCount(1, $tersedia);
+        $data = $tersedia->get($iku->id);
+        $this->assertEquals(100, $data->target);
+        $this->assertEquals(50, $data->realisasi); // 25 + 25 dari dua triwulan.
+        $this->assertEquals(50, $data->capaian_persen);
     }
 
-    public function test_susun_ulang_tidak_menimpa_baris_custom(): void
+    public function test_tambah_dari_iku_hanya_memasukkan_yang_dipilih(): void
+    {
+        $ikuDipilih = MasterIku::create(['kode' => '1131', 'indikator' => 'Uji A', 'tim' => 'Sosial', 'penanggung_jawab' => 'A', 'sasaran' => 'Sasaran Uji']);
+        $ikuTidakDipilih = MasterIku::create(['kode' => '1132', 'indikator' => 'Uji B', 'tim' => 'Sosial', 'penanggung_jawab' => 'A']);
+
+        $this->buatCapaian($ikuDipilih, 2026, 3, 1, 100, 25);
+        $this->buatCapaian($ikuTidakDipilih, 2026, 3, 1, 100, 40);
+
+        $lakin = Lakin::create(['tahun' => 2026]);
+        app(LakinBuilderService::class)->tambahDariIku($lakin, [$ikuDipilih->id]);
+
+        $lakin->load('baris');
+        $this->assertCount(1, $lakin->baris);
+        $this->assertSame($ikuDipilih->id, $lakin->baris->first()->iku_id);
+    }
+
+    public function test_segarkan_angka_tidak_menimpa_baris_custom(): void
     {
         $iku = MasterIku::create(['kode' => '1131', 'indikator' => 'Uji', 'tim' => 'Sosial', 'penanggung_jawab' => 'A']);
         $this->buatCapaian($iku, 2026, 3, 1, 100, 25);
 
-        $lakin = app(LakinBuilderService::class)->bentuk(2026);
+        $lakin = Lakin::create(['tahun' => 2026]);
+        app(LakinBuilderService::class)->tambahDariIku($lakin, [$iku->id]);
 
         LakinBaris::create([
             'lakin_id' => $lakin->id, 'iku_id' => null, 'indikator' => 'Baris custom', 'urutan' => 99,
         ]);
 
-        app(LakinBuilderService::class)->bentuk(2026);
+        app(LakinBuilderService::class)->segarkanBaris($lakin);
 
         $this->assertDatabaseHas('lakin_baris', ['lakin_id' => $lakin->id, 'indikator' => 'Baris custom']);
         $this->assertDatabaseCount('lakin_baris', 2);
@@ -128,6 +143,37 @@ class LakinTest extends TestCase
             $this->loginSebagai($peran);
             $this->get(route('lakin.index'))->assertOk();
         }
+    }
+
+    public function test_tim_sakip_bisa_menambahkan_iku_terpilih_lewat_checklist(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+        $ikuDipilih = MasterIku::create(['kode' => '1131', 'indikator' => 'Uji A', 'tim' => 'Sosial', 'penanggung_jawab' => 'A']);
+        $ikuTidakDipilih = MasterIku::create(['kode' => '1132', 'indikator' => 'Uji B', 'tim' => 'Sosial', 'penanggung_jawab' => 'A']);
+        $this->buatCapaian($ikuDipilih, 2026, 3, 1, 100, 25);
+        $this->buatCapaian($ikuTidakDipilih, 2026, 3, 1, 100, 40);
+
+        $lakin = Lakin::create(['tahun' => 2026]);
+
+        Livewire::test(LakinDetail::class, ['lakin' => $lakin])
+            ->set('ikuTerpilihUntukTambah', [$ikuDipilih->id])
+            ->call('tambahDariCapaian')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseCount('lakin_baris', 1);
+        $this->assertDatabaseHas('lakin_baris', ['lakin_id' => $lakin->id, 'iku_id' => $ikuDipilih->id]);
+    }
+
+    public function test_tambah_dari_capaian_menolak_bila_tidak_ada_yang_dicentang(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+        $lakin = Lakin::create(['tahun' => 2026]);
+
+        Livewire::test(LakinDetail::class, ['lakin' => $lakin])
+            ->call('tambahDariCapaian')
+            ->assertHasErrors(['ikuTerpilihUntukTambah']);
+
+        $this->assertDatabaseCount('lakin_baris', 0);
     }
 
     public function test_tim_sakip_bisa_menambah_dan_menghapus_baris_custom(): void

@@ -3,12 +3,13 @@
 namespace App\Livewire;
 
 use App\Models\Lakin;
-use App\Services\LakinBuilderService;
 use Livewire\Component;
 
 /**
  * Daftar dokumen LAKIN per tahun — semua peran bisa melihat daftar & membuka detail,
- * tapi hanya Tim SAKIP yang bisa membentuk dokumen baru (lihat pastikanSakip()).
+ * tapi hanya Tim SAKIP yang bisa membuat dokumen baru (lihat pastikanSakip()). Membuat
+ * dokumen di sini TIDAK langsung mengisi baris apa pun — Tim SAKIP memilih sendiri
+ * IKU mana yang mau dimasukkan lewat checklist di halaman detail (LakinDetail).
  */
 class LakinList extends Component
 {
@@ -32,7 +33,7 @@ class LakinList extends Component
             'tahunBaru' => ['required', 'integer', 'min:2020', 'max:2100'],
         ], [], ['tahunBaru' => 'tahun']);
 
-        $lakin = app(LakinBuilderService::class)->bentuk((int) $this->tahunBaru);
+        $lakin = Lakin::firstOrCreate(['tahun' => (int) $this->tahunBaru]);
 
         $this->redirectRoute('lakin.show', $lakin, navigate: false);
     }

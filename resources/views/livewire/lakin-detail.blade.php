@@ -1,3 +1,17 @@
+@php
+    $badgeCapaian = function (?float $persen) {
+        if ($persen === null) {
+            return 'b-draft';
+        }
+
+        return $persen >= 90 ? 'b-approve' : ($persen >= 70 ? 'b-tunggu' : 'b-tolak');
+    };
+
+    $rataRata = $lakin->baris->pluck('capaian_persen')->filter(fn ($p) => $p !== null);
+    $jumlahSasaran = $lakin->baris->pluck('sasaran')->filter()->unique()->count();
+    $barisPerSasaran = $lakin->baris->groupBy(fn ($b) => $b->sasaran ?: 'Tanpa Sasaran');
+@endphp
+
 <div>
     <div class="page-title">LAKIN {{ $lakin->tahun }}</div>
     <div class="page-sub">Laporan Kinerja tahunan — sasaran, indikator, target, realisasi, dan capaian %.</div>
@@ -6,74 +20,133 @@
         <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>
     @endif
 
-    <div class="btn-row" style="margin-bottom:16px">
-        <a href="{{ route('lakin.index') }}" class="btn btn-ghost btn-sm">← Daftar LAKIN</a>
-        <button type="button" class="btn btn-teal btn-sm" wire:click="unduhExcel">⬇ Unduh Excel</button>
-        @if ($this->isTimSakip())
-            <button type="button" class="btn btn-ghost btn-sm" wire:click="susunUlangOtomatis" wire:confirm="Susun ulang dari data capaian terbaru? Baris otomatis (bukan custom) akan ditimpa.">↻ Susun Ulang Otomatis</button>
-        @endif
+    <div class="period-banner">
+        <span class="pb-ico">📈</span>
+        <div>
+            <div class="pb-lbl">Tahun Laporan</div>
+            <div class="pb-val"><b>{{ $lakin->tahun }}</b></div>
+        </div>
+        <div class="btn-row" style="margin:0 0 0 auto">
+            <a href="{{ route('lakin.index') }}" class="btn btn-ghost btn-sm">← Daftar LAKIN</a>
+            <button type="button" class="btn btn-teal btn-sm" wire:click="unduhExcel">⬇ Unduh Excel</button>
+            @if ($this->isTimSakip())
+                <button type="button" class="btn btn-ghost btn-sm" wire:click="segarkanAngka" wire:confirm="Segarkan angka baris yang sudah ada dari data capaian terbaru? Baris custom tidak berubah, dan ini tidak menambah baris baru.">↻ Segarkan Angka</button>
+            @endif
+        </div>
+    </div>
+
+    <div class="stat-grid" style="margin-bottom:16px">
+        <div class="stat-tile">
+            <div class="si">🧾</div>
+            <div class="sv">{{ $lakin->baris->count() }}</div>
+            <div class="sl">Jumlah Indikator</div>
+        </div>
+        <div class="stat-tile">
+            <div class="si">🎯</div>
+            <div class="sv">{{ $rataRata->isNotEmpty() ? round($rataRata->avg(), 1) : '-' }}%</div>
+            <div class="sl">Rata-rata Capaian</div>
+        </div>
+        <div class="stat-tile">
+            <div class="si">🗂️</div>
+            <div class="sv">{{ $jumlahSasaran }}</div>
+            <div class="sl">Sasaran Strategis</div>
+        </div>
     </div>
 
     <div class="card">
-        <div class="sec"><span>Tabel LAKIN</span></div>
+        <div class="card-h">📋 Tabel LAKIN</div>
 
         @if ($lakin->baris->isEmpty())
-            <p style="color:var(--muted);font-size:13px">Belum ada baris. {{ $this->isTimSakip() ? 'Tambahkan lewat form di bawah, atau klik "Susun Ulang Otomatis" untuk mengisi dari data capaian.' : '' }}</p>
+            <p style="color:var(--muted);font-size:13px">Belum ada baris. {{ $this->isTimSakip() ? 'Pilih dari data capaian atau tambahkan baris custom lewat form di bawah.' : '' }}</p>
         @else
-            <table>
-                <thead>
-                    <tr>
-                        <th>Sasaran</th>
-                        <th>Indikator</th>
-                        <th style="text-align:right">Target</th>
-                        <th style="text-align:right">Realisasi</th>
-                        <th style="text-align:right">Capaian %</th>
-                        @if ($this->isTimSakip())
-                            <th></th>
-                        @endif
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach ($lakin->baris as $baris)
-                        <tr wire:key="baris-{{ $baris->id }}">
+            <div style="overflow-x:auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="min-width:220px">Indikator</th>
+                            <th style="text-align:right;width:110px">Target</th>
+                            <th style="text-align:right;width:110px">Realisasi</th>
+                            <th style="text-align:right;width:90px">Capaian %</th>
                             @if ($this->isTimSakip())
-                                <td><input type="text" class="inp filled" style="min-width:140px" wire:model="edit.{{ $baris->id }}.sasaran"></td>
-                                <td><textarea class="inp filled" style="height:auto;min-width:260px" rows="1" wire:model="edit.{{ $baris->id }}.indikator"></textarea></td>
-                                <td style="text-align:right"><input type="number" step="0.01" class="inp filled" style="width:110px;text-align:right" wire:model="edit.{{ $baris->id }}.target"></td>
-                                <td style="text-align:right"><input type="number" step="0.01" class="inp filled" style="width:110px;text-align:right" wire:model="edit.{{ $baris->id }}.realisasi"></td>
-                                <td style="text-align:right">
-                                    <span class="badge {{ $baris->capaian_persen === null ? 'b-draft' : ($baris->capaian_persen >= 100 ? 'b-approve' : ($baris->capaian_persen >= 80 ? 'b-tunggu' : 'b-tolak')) }}">
-                                        {{ $baris->capaian_persen !== null ? $baris->capaian_persen.'%' : '-' }}
-                                    </span>
-                                </td>
-                                <td style="white-space:nowrap">
-                                    <button type="button" class="btn btn-ghost btn-sm" wire:click="simpanBaris({{ $baris->id }})">💾</button>
-                                    <button type="button" class="btn btn-red btn-sm" wire:click="hapusBaris({{ $baris->id }})" wire:confirm="Hapus baris ini?">🗑</button>
-                                </td>
-                            @else
-                                <td class="muted">{{ $baris->sasaran ?: '-' }}</td>
-                                <td>{{ $baris->indikator }}</td>
-                                <td style="text-align:right">{{ $baris->target ?? '-' }}</td>
-                                <td style="text-align:right">{{ $baris->realisasi ?? '-' }}</td>
-                                <td style="text-align:right">
-                                    <span class="badge {{ $baris->capaian_persen === null ? 'b-draft' : ($baris->capaian_persen >= 100 ? 'b-approve' : ($baris->capaian_persen >= 80 ? 'b-tunggu' : 'b-tolak')) }}">
-                                        {{ $baris->capaian_persen !== null ? $baris->capaian_persen.'%' : '-' }}
-                                    </span>
-                                </td>
+                                <th style="width:70px"></th>
                             @endif
                         </tr>
-                        @error("edit.{$baris->id}.indikator")
-                            <tr><td colspan="6" style="color:var(--red);font-size:11.5px">{{ $message }}</td></tr>
-                        @enderror
-                    @endforeach
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @foreach ($barisPerSasaran as $sasaran => $daftarBaris)
+                            <tr>
+                                <td colspan="{{ $this->isTimSakip() ? 5 : 4 }}" style="background:var(--bg);font-size:11px;font-weight:700;color:var(--blue-600);text-transform:uppercase;letter-spacing:.5px;padding:8px 12px">
+                                    {{ $sasaran }}
+                                </td>
+                            </tr>
+                            @foreach ($daftarBaris as $baris)
+                                <tr wire:key="baris-{{ $baris->id }}">
+                                    @if ($this->isTimSakip())
+                                        <td>
+                                            <textarea class="inp filled" style="height:auto;font-size:12.5px" rows="1" wire:model="edit.{{ $baris->id }}.indikator"></textarea>
+                                            <input type="text" class="inp filled" style="margin-top:4px;font-size:11px;color:var(--muted)" placeholder="Sasaran (opsional)" wire:model="edit.{{ $baris->id }}.sasaran">
+                                            @error("edit.{$baris->id}.indikator")
+                                                <div style="color:var(--red);font-size:11px;margin-top:4px">{{ $message }}</div>
+                                            @enderror
+                                        </td>
+                                        <td style="text-align:right"><input type="number" step="0.01" class="inp filled" style="text-align:right" wire:model="edit.{{ $baris->id }}.target"></td>
+                                        <td style="text-align:right"><input type="number" step="0.01" class="inp filled" style="text-align:right" wire:model="edit.{{ $baris->id }}.realisasi"></td>
+                                        <td style="text-align:right">
+                                            <span class="badge {{ $badgeCapaian($baris->capaian_persen) }}">{{ $baris->capaian_persen !== null ? $baris->capaian_persen.'%' : '-' }}</span>
+                                        </td>
+                                        <td style="text-align:right;white-space:nowrap">
+                                            <button type="button" class="btn btn-ghost btn-sm" title="Simpan" wire:click="simpanBaris({{ $baris->id }})">💾</button>
+                                            <button type="button" class="btn btn-red btn-sm" title="Hapus" wire:click="hapusBaris({{ $baris->id }})" wire:confirm="Hapus baris ini?">🗑</button>
+                                        </td>
+                                    @else
+                                        <td>{{ $baris->indikator }}</td>
+                                        <td style="text-align:right">{{ $baris->target ?? '-' }}</td>
+                                        <td style="text-align:right">{{ $baris->realisasi ?? '-' }}</td>
+                                        <td style="text-align:right">
+                                            <span class="badge {{ $badgeCapaian($baris->capaian_persen) }}">{{ $baris->capaian_persen !== null ? $baris->capaian_persen.'%' : '-' }}</span>
+                                        </td>
+                                    @endif
+                                </tr>
+                            @endforeach
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
         @endif
     </div>
 
     @if ($this->isTimSakip())
         <div class="card" style="margin-top:16px">
-            <div class="sec"><span>Tambah Baris Custom</span></div>
+            <div class="card-h">📥 Tambah dari Data Capaian</div>
+            <div class="info">ℹ️ Centang IKU yang mau dimasukkan ke LAKIN ini — hanya yang dicentang yang ditambahkan, sisanya tetap tidak ikut sampai Anda pilih sendiri.</div>
+
+            @error('ikuTerpilihUntukTambah')
+                <div style="color:var(--red);font-size:11.5px;margin-bottom:10px">{{ $message }}</div>
+            @enderror
+
+            @if ($ikuBelumDitambahkan->isEmpty())
+                <p style="color:var(--muted);font-size:13px">Semua IKU yang punya data capaian tahun {{ $lakin->tahun }} sudah ditambahkan.</p>
+            @else
+                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;margin-bottom:14px">
+                    @foreach ($ikuBelumDitambahkan as $data)
+                        <label class="fl-row" style="cursor:pointer;align-items:flex-start;gap:10px">
+                            <input type="checkbox" value="{{ $data->iku->id }}" wire:model="ikuTerpilihUntukTambah" style="margin-top:3px">
+                            <span>
+                                <b style="font-size:12.5px">{{ $data->iku->kode }}</b>
+                                <span style="display:block;font-size:12px;color:var(--muted)">{{ $data->iku->indikator }}</span>
+                                <span style="display:block;font-size:11px;color:var(--faint);margin-top:2px">Target {{ $data->target ?? '-' }} · Realisasi {{ $data->realisasi ?? '-' }} · Capaian {{ $data->capaian_persen !== null ? $data->capaian_persen.'%' : '-' }}</span>
+                            </span>
+                        </label>
+                    @endforeach
+                </div>
+                <div class="btn-row">
+                    <button type="button" class="btn btn-primary" wire:click="tambahDariCapaian">📥 Tambahkan Terpilih</button>
+                </div>
+            @endif
+        </div>
+
+        <div class="card" style="margin-top:16px">
+            <div class="card-h">✏️ Tambah Baris Custom</div>
             <div class="info">ℹ️ Untuk indikator yang tidak mengacu ke Master IKU manapun, atau format LAKIN yang berbeda dari bawaan sistem.</div>
             <div class="grid grid-2">
                 <div class="field">
@@ -97,7 +170,7 @@
                 </div>
             </div>
             <div class="btn-row">
-                <button type="button" class="btn btn-primary" wire:click="tambahBaris">＋ Tambah Baris</button>
+                <button type="button" class="btn btn-ghost" wire:click="tambahBaris">＋ Tambah Baris</button>
             </div>
         </div>
     @endif

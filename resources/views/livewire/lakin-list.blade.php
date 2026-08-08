@@ -9,7 +9,7 @@
     @if (auth()->user()->namaRole() === 'Tim SAKIP')
         <div class="card">
             <div class="sec"><span>Bentuk LAKIN</span></div>
-            <div class="info">ℹ️ Sistem akan mengambil data capaian yang sudah terverifikasi sepanjang tahun yang dipilih, satu baris per IKU. Bila LAKIN untuk tahun itu sudah pernah dibentuk, angka baris otomatis akan diperbarui (baris custom yang ditambah manual tidak berubah).</div>
+            <div class="info">ℹ️ Buat dokumen LAKIN untuk tahun ini, lalu pilih sendiri IKU mana saja yang mau dimasukkan lewat checklist di halaman berikutnya — tidak otomatis semua. Bila LAKIN untuk tahun itu sudah pernah dibuat, Anda akan diarahkan ke dokumen yang sama.</div>
             <div class="field" style="max-width:200px">
                 <label>Tahun</label>
                 <input type="number" class="inp filled" wire:model="tahunBaru">

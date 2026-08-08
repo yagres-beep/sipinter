@@ -32,10 +32,32 @@ class LakinDetail extends Component
 
     public string $realisasiBaru = '';
 
+    /**
+     * IKU yang dicentang Tim SAKIP di checklist "Tambah dari Data Capaian" — id
+     * MasterIku, bukan id LakinBaris (belum tentu ada barisnya).
+     *
+     * @var list<int>
+     */
+    public array $ikuTerpilihUntukTambah = [];
+
     public function mount(Lakin $lakin): void
     {
         $this->lakin = $lakin->load('baris');
         $this->muatEdit();
+    }
+
+    /**
+     * IKU yang punya data capaian pada tahun LAKIN ini tapi BELUM jadi baris —
+     * inilah yang ditawarkan di checklist, supaya Tim SAKIP tidak mencentang IKU
+     * yang sudah ada di tabel.
+     */
+    public function ikuBelumDitambahkan()
+    {
+        $sudahAda = $this->lakin->baris->pluck('iku_id')->filter()->all();
+
+        return app(LakinBuilderService::class)
+            ->ikuTersediaUntukTahun($this->lakin->tahun)
+            ->reject(fn ($data) => in_array($data->iku->id, $sudahAda, true));
     }
 
     protected function muatEdit(): void
@@ -139,14 +161,44 @@ class LakinDetail extends Component
         session()->flash('status', 'Baris dihapus.');
     }
 
-    public function susunUlangOtomatis(): void
+    /**
+     * Tambahkan HANYA IKU yang dicentang Tim SAKIP di checklist — inilah satu-satunya
+     * jalan baris berbasis IKU masuk ke LAKIN, tidak pernah otomatis-semua.
+     */
+    public function tambahDariCapaian(): void
     {
         $this->pastikanSakip();
 
-        $this->lakin = app(LakinBuilderService::class)->bentuk($this->lakin->tahun);
+        if (empty($this->ikuTerpilihUntukTambah)) {
+            $this->addError('ikuTerpilihUntukTambah', 'Pilih minimal satu IKU untuk ditambahkan.');
+
+            return;
+        }
+
+        app(LakinBuilderService::class)->tambahDariIku($this->lakin, $this->ikuTerpilihUntukTambah);
+
+        $this->ikuTerpilihUntukTambah = [];
+        $this->lakin->load('baris');
         $this->muatEdit();
 
-        session()->flash('status', 'LAKIN disusun ulang dari data capaian terbaru. Baris custom (bukan dari IKU) tidak berubah.');
+        session()->flash('status', 'IKU terpilih berhasil ditambahkan ke LAKIN.');
+    }
+
+    /**
+     * Segarkan ANGKA baris yang sudah ada (target/realisasi/capaian %) dari data
+     * capaian terbaru — TIDAK menambah baris baru (itu lewat tambahDariCapaian())
+     * dan tidak menyentuh baris custom.
+     */
+    public function segarkanAngka(): void
+    {
+        $this->pastikanSakip();
+
+        app(LakinBuilderService::class)->segarkanBaris($this->lakin);
+
+        $this->lakin->load('baris');
+        $this->muatEdit();
+
+        session()->flash('status', 'Angka baris yang sudah ada disegarkan dari data capaian terbaru. Baris custom tidak berubah.');
     }
 
     public function unduhExcel()
@@ -158,6 +210,7 @@ class LakinDetail extends Component
     {
         return view('livewire.lakin-detail', [
             'ikuList' => MasterIku::daftarUrutKode(),
+            'ikuBelumDitambahkan' => $this->ikuBelumDitambahkan(),
         ]);
     }
 }
