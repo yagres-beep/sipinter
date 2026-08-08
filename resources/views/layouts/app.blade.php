@@ -58,6 +58,7 @@
                         <a href="{{ route('notula-riwayat.index') }}" class="{{ request()->routeIs('notula-riwayat.*') ? 'active' : '' }}"><span class="ic">📄</span> Notula</a>
                     @endif
 
+                    <a href="{{ route('lakin.index') }}" class="{{ request()->routeIs('lakin.*') ? 'active' : '' }}"><span class="ic">📈</span> LAKIN</a>
                     <a href="{{ route('profile.edit') }}" class="{{ request()->routeIs('profile.*') ? 'active' : '' }}"><span class="ic">⚙️</span> Pengaturan Akun</a>
                 </nav>
 

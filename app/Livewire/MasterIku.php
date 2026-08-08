@@ -5,7 +5,7 @@ namespace App\Livewire;
 use App\Exports\MasterIkuTemplateExport;
 use App\Imports\MasterIkuImport;
 use App\Models\MasterIku as MasterIkuModel;
-use Illuminate\Support\Facades\Excel as ExcelFacade;
+use Maatwebsite\Excel\Facades\Excel as ExcelFacade;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 

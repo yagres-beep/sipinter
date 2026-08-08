@@ -73,6 +73,15 @@ Route::middleware('auth')->group(function () {
         Route::view('/rekapitulasi', 'rekapitulasi.index')->name('rekapitulasi.index');
         Route::view('/dasbor-kinerja', 'dasbor-kinerja.index')->name('dasbor-kinerja.index');
     });
+
+    // LAKIN — semua peran bisa melihat; hanya Tim SAKIP yang bisa membentuk/mengubah
+    // (digerbang lagi di dalam LakinList/LakinDetail karena satu rute dipakai 3 peran sekaligus).
+    Route::middleware('role:Ketua Tim,Tim SAKIP,Kepala')->prefix('lakin')->name('lakin.')->group(function () {
+        Route::view('/', 'lakin.index')->name('index');
+        Route::get('/{lakin}', function (\App\Models\Lakin $lakin) {
+            return view('lakin.show', ['lakin' => $lakin]);
+        })->name('show');
+    });
 });
 
 require __DIR__.'/auth.php';
