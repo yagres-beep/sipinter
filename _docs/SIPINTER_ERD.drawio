@@ -1,6 +1,6 @@
 <mxfile host="app.diagrams.net" agent="SIPINTER" version="24.0.0" type="device">
   <diagram id="erd-sipinter" name="ERD SIPINTER">
-    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1450" pageHeight="1400" math="0" shadow="0">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1450" pageHeight="1650" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -228,6 +228,71 @@
         <mxCell id="not_r9" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="notula"><mxGeometry y="270" width="280" height="30" as="geometry" /></mxCell>
         <mxCell id="not_c9" value="catatan_pengembalian  text (nullable)" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;align=left;spacingLeft=6;" vertex="1" parent="not_r9"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
 
+        <!-- ================= iku_folder_config ================= -->
+        <mxCell id="ifc" value="iku_folder_config  (override per-IKU)" style="shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fillColor=#f5f3ff;strokeColor=#7c3aed;fontColor=#152449;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="370" y="950" width="280" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="ifc_r1" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="ifc"><mxGeometry y="30" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="ifc_c1" value="PK  id  bigint" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;fontStyle=1;align=left;spacingLeft=6;" vertex="1" parent="ifc_r1"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="ifc_r2" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="ifc"><mxGeometry y="60" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="ifc_c2" value="FK  iku_id → master_iku (unique)" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;fontStyle=2;align=left;spacingLeft=6;" vertex="1" parent="ifc_r2"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="ifc_r3" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="ifc"><mxGeometry y="90" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="ifc_c3" value="pola_json  jsonb  (bentuk sama seperti folder_config)" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;align=left;spacingLeft=6;" vertex="1" parent="ifc_r3"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+
+        <!-- ================= lakin ================= -->
+        <mxCell id="lak" value="lakin  (1 per tahun)" style="shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fillColor=#fdf2f8;strokeColor=#db2777;fontColor=#152449;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="950" width="280" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="lak_r1" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="lak"><mxGeometry y="30" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lak_c1" value="PK  id  bigint" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;fontStyle=1;align=left;spacingLeft=6;" vertex="1" parent="lak_r1"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lak_r2" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="lak"><mxGeometry y="60" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lak_c2" value="tahun  smallint (unique)" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;align=left;spacingLeft=6;" vertex="1" parent="lak_r2"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+
+        <!-- ================= bagian_kustom ================= -->
+        <mxCell id="bk" value="bagian_kustom  (mis. Manajemen Risiko)" style="shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fillColor=#eef2ff;strokeColor=#4f46e5;fontColor=#152449;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1310" width="280" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="bk_r1" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="bk"><mxGeometry y="30" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bk_c1" value="PK  id  bigint" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;fontStyle=1;align=left;spacingLeft=6;" vertex="1" parent="bk_r1"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bk_r2" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="bk"><mxGeometry y="60" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bk_c2" value="nama  varchar" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;align=left;spacingLeft=6;" vertex="1" parent="bk_r2"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bk_r3" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="bk"><mxGeometry y="90" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bk_c3" value="deskripsi  text (nullable)" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;align=left;spacingLeft=6;" vertex="1" parent="bk_r3"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bk_r4" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="bk"><mxGeometry y="120" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bk_c4" value="wajib_akhir_triwulan bool · aktif bool" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;align=left;spacingLeft=6;" vertex="1" parent="bk_r4"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+
+        <!-- ================= bagian_kustom_poin ================= -->
+        <mxCell id="bkp" value="bagian_kustom_poin" style="shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fillColor=#eef2ff;strokeColor=#4f46e5;fontColor=#152449;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="370" y="1310" width="280" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="bkp_r1" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="bkp"><mxGeometry y="30" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bkp_c1" value="PK  id  bigint" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;fontStyle=1;align=left;spacingLeft=6;" vertex="1" parent="bkp_r1"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bkp_r2" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="bkp"><mxGeometry y="60" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bkp_c2" value="FK  bagian_kustom_id → bagian_kustom" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;fontStyle=2;align=left;spacingLeft=6;" vertex="1" parent="bkp_r2"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bkp_r3" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="bkp"><mxGeometry y="90" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bkp_c3" value="FK  iku_id → master_iku" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;fontStyle=2;align=left;spacingLeft=6;" vertex="1" parent="bkp_r3"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bkp_r4" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="bkp"><mxGeometry y="120" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bkp_c4" value="FK  periode_id → periode" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;fontStyle=2;align=left;spacingLeft=6;" vertex="1" parent="bkp_r4"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bkp_r5" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="bkp"><mxGeometry y="150" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bkp_c5" value="teks  text" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;align=left;spacingLeft=6;" vertex="1" parent="bkp_r5"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+
+        <!-- ================= lakin_baris ================= -->
+        <mxCell id="lakb" value="lakin_baris" style="shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fillColor=#fdf2f8;strokeColor=#db2777;fontColor=#152449;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="700" y="1310" width="280" height="210" as="geometry" />
+        </mxCell>
+        <mxCell id="lakb_r1" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="lakb"><mxGeometry y="30" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lakb_c1" value="PK  id  bigint" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;fontStyle=1;align=left;spacingLeft=6;" vertex="1" parent="lakb_r1"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lakb_r2" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="lakb"><mxGeometry y="60" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lakb_c2" value="FK  lakin_id → lakin" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;fontStyle=2;align=left;spacingLeft=6;" vertex="1" parent="lakb_r2"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lakb_r3" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="lakb"><mxGeometry y="90" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lakb_c3" value="FK  iku_id → master_iku (nullable — baris custom)" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;fontStyle=2;align=left;spacingLeft=6;" vertex="1" parent="lakb_r3"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lakb_r4" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="lakb"><mxGeometry y="120" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lakb_c4" value="sasaran varchar (nullable) · indikator text" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;align=left;spacingLeft=6;" vertex="1" parent="lakb_r4"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lakb_r5" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="lakb"><mxGeometry y="150" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lakb_c5" value="target numeric · realisasi numeric" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;align=left;spacingLeft=6;" vertex="1" parent="lakb_r5"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lakb_r6" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="lakb"><mxGeometry y="180" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lakb_c6" value="capaian_persen numeric · urutan int" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;align=left;spacingLeft=6;" vertex="1" parent="lakb_r6"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+
         <!-- ================= RELATIONS ================= -->
         <mxCell id="e1" value="1 : N" style="edgeStyle=entityRelationEdgeStyle;fontSize=11;html=1;endArrow=ERmany;startArrow=ERone;rounded=0;strokeColor=#64748b;" edge="1" parent="1" source="roles" target="users"><mxGeometry relative="1" as="geometry" /></mxCell>
         <mxCell id="e2" value="1 : N" style="edgeStyle=entityRelationEdgeStyle;fontSize=11;html=1;endArrow=ERmany;startArrow=ERone;rounded=0;strokeColor=#7c3aed;" edge="1" parent="1" source="users" target="utim"><mxGeometry relative="1" as="geometry" /></mxCell>
@@ -249,9 +314,16 @@
         <mxCell id="e18" value="1 : N (polymorphic)" style="edgeStyle=entityRelationEdgeStyle;fontSize=11;html=1;endArrow=ERmany;startArrow=ERone;rounded=0;strokeColor=#16a34a;dashed=1;" edge="1" parent="1" source="ks" target="brk"><mxGeometry relative="1" as="geometry" /></mxCell>
         <mxCell id="e19" value="1 : N (polymorphic)" style="edgeStyle=entityRelationEdgeStyle;fontSize=11;html=1;endArrow=ERmany;startArrow=ERone;rounded=0;strokeColor=#16a34a;dashed=1;" edge="1" parent="1" source="rtl" target="brk"><mxGeometry relative="1" as="geometry" /></mxCell>
         <mxCell id="e20" value="1 : N (polymorphic)" style="edgeStyle=entityRelationEdgeStyle;fontSize=11;html=1;endArrow=ERmany;startArrow=ERone;rounded=0;strokeColor=#16a34a;dashed=1;" edge="1" parent="1" source="notula" target="brk"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e21" value="1 : 1 (opsional)" style="edgeStyle=entityRelationEdgeStyle;fontSize=11;html=1;endArrow=ERone;startArrow=ERone;rounded=0;strokeColor=#7c3aed;dashed=1;" edge="1" parent="1" source="iku" target="ifc"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e22" value="1 : N" style="edgeStyle=entityRelationEdgeStyle;fontSize=11;html=1;endArrow=ERmany;startArrow=ERone;rounded=0;strokeColor=#4f46e5;" edge="1" parent="1" source="bk" target="bkp"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e23" value="1 : N" style="edgeStyle=entityRelationEdgeStyle;fontSize=11;html=1;endArrow=ERmany;startArrow=ERone;rounded=0;strokeColor=#0d9488;" edge="1" parent="1" source="iku" target="bkp"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e24" value="1 : N" style="edgeStyle=entityRelationEdgeStyle;fontSize=11;html=1;endArrow=ERmany;startArrow=ERone;rounded=0;strokeColor=#2563eb;" edge="1" parent="1" source="periode" target="bkp"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e25" value="1 : N (polymorphic)" style="edgeStyle=entityRelationEdgeStyle;fontSize=11;html=1;endArrow=ERmany;startArrow=ERone;rounded=0;strokeColor=#16a34a;dashed=1;" edge="1" parent="1" source="bkp" target="brk"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e26" value="1 : N" style="edgeStyle=entityRelationEdgeStyle;fontSize=11;html=1;endArrow=ERmany;startArrow=ERone;rounded=0;strokeColor=#db2777;" edge="1" parent="1" source="lak" target="lakb"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e27" value="1 : N (opsional)" style="edgeStyle=entityRelationEdgeStyle;fontSize=11;html=1;endArrow=ERmany;startArrow=ERone;rounded=0;strokeColor=#0d9488;dashed=1;" edge="1" parent="1" source="iku" target="lakb"><mxGeometry relative="1" as="geometry" /></mxCell>
 
-        <mxCell id="legend" value="Legenda:  Biru = pengguna/periode/notula · Teal = IKU/kegiatan/capaian · Amber = kendala-solusi &amp; RTL · Hijau = penyimpanan Drive/berkas · Ungu = keanggotaan tim &amp; konfigurasi.  PK = Primary Key, FK = Foreign Key.  Garis putus-putus = relasi opsional (nullable) atau relasi polimorfik (ref_id + ref_type pada tabel berkas, tanpa constraint FK sungguhan di database). Tabel infrastruktur Laravel (sessions, cache, jobs, password_reset_tokens) tidak digambar karena bukan entitas domain aplikasi." style="text;html=1;fontSize=11;fontColor=#334155;align=left;verticalAlign=middle;spacingLeft=6;" vertex="1" parent="1">
-          <mxGeometry x="40" y="1270" width="1370" height="60" as="geometry" />
+        <mxCell id="legend" value="Legenda:  Biru = pengguna/periode/notula · Teal = IKU/kegiatan/capaian · Amber = kendala-solusi &amp; RTL · Hijau = penyimpanan Drive/berkas · Ungu = keanggotaan tim &amp; konfigurasi · Indigo = Bagian Kustom (mis. Manajemen Risiko) · Pink = LAKIN.  PK = Primary Key, FK = Foreign Key.  Garis putus-putus = relasi opsional (nullable) atau relasi polimorfik (ref_id + ref_type pada tabel berkas, tanpa constraint FK sungguhan di database). Tabel infrastruktur Laravel (sessions, cache, jobs, password_reset_tokens) tidak digambar karena bukan entitas domain aplikasi." style="text;html=1;fontSize=11;fontColor=#334155;align=left;verticalAlign=middle;spacingLeft=6;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1560" width="1370" height="60" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>

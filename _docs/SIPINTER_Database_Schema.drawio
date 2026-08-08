@@ -1,6 +1,6 @@
 <mxfile host="app.diagrams.net" agent="SIPINTER" version="24.0.0" type="device">
   <diagram id="db-sipinter" name="Skema Database SIPINTER">
-    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1450" pageHeight="1560" math="0" shadow="0">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1450" pageHeight="1950" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -252,16 +252,91 @@
         <mxCell id="not_r10" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="notula"><mxGeometry y="300" width="280" height="30" as="geometry" /></mxCell>
         <mxCell id="not_c10" value="catatan_pengembalian  text  NULL" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;align=left;spacingLeft=6;" vertex="1" parent="not_r10"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
 
-        <!-- ================= reference blocks ================= -->
-        <mxCell id="fkref" value="Ringkasan Foreign Key: users.role_id→roles · user_tim.user_id→users · iku_penugasan.{iku_id→master_iku, user_id→users} · kegiatan.{iku_id→master_iku, periode_id→periode, rtl_evaluasi_id→rtl_evaluasi} · capaian.{iku_id→master_iku, periode_id→periode} · kendala_solusi.{iku_id→master_iku, periode_id→periode} · rtl_evaluasi.{iku_id→master_iku, periode_id→periode} · berkas.storage_account_id→storage_account · notula.{periode_id→periode, disetujui_oleh_user_id→users}. Semua FK ON UPDATE CASCADE; ON DELETE bervariasi per tabel (restrict/cascade/null) — lihat migrasi untuk detail per kolom." style="text;html=1;fontSize=11;fontColor=#334155;align=left;verticalAlign=middle;spacingLeft=6;whiteSpace=wrap;" vertex="1" parent="1">
-          <mxGeometry x="700" y="950" width="610" height="130" as="geometry" />
+        <!-- ================= iku_folder_config ================= -->
+        <mxCell id="ifc" value="iku_folder_config" style="shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fillColor=#f5f3ff;strokeColor=#7c3aed;fontColor=#152449;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1340" width="280" height="150" as="geometry" />
         </mxCell>
-        <mxCell id="polyref" value="Relasi polimorfik (bukan FK constraint sungguhan): berkas.ref_id + berkas.ref_type menunjuk ke salah satu dari capaian / kendala_solusi / rtl_evaluasi / notula, tergantung nilai berkas.kategori. Tabel infrastruktur Laravel (sessions, cache, jobs, password_reset_tokens) sengaja tidak dicantumkan karena bukan entitas domain aplikasi." style="text;html=1;fontSize=11;fontColor=#334155;align=left;verticalAlign=middle;spacingLeft=6;whiteSpace=wrap;" vertex="1" parent="1">
-          <mxGeometry x="700" y="1090" width="610" height="80" as="geometry" />
+        <mxCell id="ifc_r1" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="ifc"><mxGeometry y="30" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="ifc_c1" value="id  bigint  PK  auto-increment" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;fontStyle=1;align=left;spacingLeft=6;" vertex="1" parent="ifc_r1"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="ifc_r2" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="ifc"><mxGeometry y="60" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="ifc_c2" value="iku_id  bigint  FK → master_iku.id  NOT NULL" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;fontStyle=2;align=left;spacingLeft=6;" vertex="1" parent="ifc_r2"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="ifc_r3" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="ifc"><mxGeometry y="90" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="ifc_c3" value="UNIQUE (iku_id)" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;fontStyle=3;fontColor=#b45309;align=left;spacingLeft=6;" vertex="1" parent="ifc_r3"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="ifc_r4" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="ifc"><mxGeometry y="120" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="ifc_c4" value="pola_json  jsonb  NOT NULL  (bentuk sama seperti folder_config)" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;align=left;spacingLeft=6;" vertex="1" parent="ifc_r4"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+
+        <!-- ================= bagian_kustom ================= -->
+        <mxCell id="bk" value="bagian_kustom" style="shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fillColor=#eef2ff;strokeColor=#4f46e5;fontColor=#152449;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="370" y="1340" width="280" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="bk_r1" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="bk"><mxGeometry y="30" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bk_c1" value="id  bigint  PK  auto-increment" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;fontStyle=1;align=left;spacingLeft=6;" vertex="1" parent="bk_r1"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bk_r2" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="bk"><mxGeometry y="60" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bk_c2" value="nama  varchar(255)  NOT NULL" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;align=left;spacingLeft=6;" vertex="1" parent="bk_r2"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bk_r3" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="bk"><mxGeometry y="90" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bk_c3" value="deskripsi  text  NULL" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;align=left;spacingLeft=6;" vertex="1" parent="bk_r3"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bk_r4" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="bk"><mxGeometry y="120" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bk_c4" value="wajib_akhir_triwulan  boolean  DEFAULT false" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;align=left;spacingLeft=6;" vertex="1" parent="bk_r4"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bk_r5" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="bk"><mxGeometry y="150" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bk_c5" value="aktif  boolean  DEFAULT true" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;align=left;spacingLeft=6;" vertex="1" parent="bk_r5"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+
+        <!-- ================= bagian_kustom_poin ================= -->
+        <mxCell id="bkp" value="bagian_kustom_poin" style="shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fillColor=#eef2ff;strokeColor=#4f46e5;fontColor=#152449;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="700" y="1340" width="280" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="bkp_r1" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="bkp"><mxGeometry y="30" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bkp_c1" value="id  bigint  PK  auto-increment" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;fontStyle=1;align=left;spacingLeft=6;" vertex="1" parent="bkp_r1"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bkp_r2" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="bkp"><mxGeometry y="60" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bkp_c2" value="bagian_kustom_id  bigint  FK → bagian_kustom.id  NOT NULL" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;fontStyle=2;align=left;spacingLeft=6;" vertex="1" parent="bkp_r2"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bkp_r3" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="bkp"><mxGeometry y="90" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bkp_c3" value="iku_id  bigint  FK → master_iku.id  NOT NULL" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;fontStyle=2;align=left;spacingLeft=6;" vertex="1" parent="bkp_r3"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bkp_r4" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="bkp"><mxGeometry y="120" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bkp_c4" value="periode_id  bigint  FK → periode.id  NOT NULL" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;fontStyle=2;align=left;spacingLeft=6;" vertex="1" parent="bkp_r4"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bkp_r5" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="bkp"><mxGeometry y="150" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="bkp_c5" value="teks  text  NOT NULL" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;align=left;spacingLeft=6;" vertex="1" parent="bkp_r5"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+
+        <!-- ================= lakin ================= -->
+        <mxCell id="lak" value="lakin" style="shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fillColor=#fdf2f8;strokeColor=#db2777;fontColor=#152449;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="1340" width="280" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="lak_r1" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="lak"><mxGeometry y="30" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lak_c1" value="id  bigint  PK  auto-increment" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;fontStyle=1;align=left;spacingLeft=6;" vertex="1" parent="lak_r1"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lak_r2" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="lak"><mxGeometry y="60" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lak_c2" value="tahun  smallint  NOT NULL" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;align=left;spacingLeft=6;" vertex="1" parent="lak_r2"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lak_r3" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="lak"><mxGeometry y="90" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lak_c3" value="UNIQUE (tahun)" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;fontStyle=3;fontColor=#b45309;align=left;spacingLeft=6;" vertex="1" parent="lak_r3"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+
+        <!-- ================= lakin_baris ================= -->
+        <mxCell id="lakb" value="lakin_baris" style="shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fillColor=#fdf2f8;strokeColor=#db2777;fontColor=#152449;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1570" width="280" height="270" as="geometry" />
+        </mxCell>
+        <mxCell id="lakb_r1" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="lakb"><mxGeometry y="30" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lakb_c1" value="id  bigint  PK  auto-increment" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;fontStyle=1;align=left;spacingLeft=6;" vertex="1" parent="lakb_r1"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lakb_r2" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="lakb"><mxGeometry y="60" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lakb_c2" value="lakin_id  bigint  FK → lakin.id  NOT NULL" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;fontStyle=2;align=left;spacingLeft=6;" vertex="1" parent="lakb_r2"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lakb_r3" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="lakb"><mxGeometry y="90" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lakb_c3" value="iku_id  bigint  FK → master_iku.id  NULL  (kosong = baris custom)" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;fontStyle=2;align=left;spacingLeft=6;" vertex="1" parent="lakb_r3"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lakb_r4" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="lakb"><mxGeometry y="120" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lakb_c4" value="sasaran  varchar(255)  NULL" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;align=left;spacingLeft=6;" vertex="1" parent="lakb_r4"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lakb_r5" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="lakb"><mxGeometry y="150" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lakb_c5" value="indikator  text  NOT NULL" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;align=left;spacingLeft=6;" vertex="1" parent="lakb_r5"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lakb_r6" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="lakb"><mxGeometry y="180" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lakb_c6" value="target decimal(15,2) NULL · realisasi decimal(15,2) NULL" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;align=left;spacingLeft=6;" vertex="1" parent="lakb_r6"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lakb_r7" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="lakb"><mxGeometry y="210" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lakb_c7" value="capaian_persen decimal(6,2) NULL" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;align=left;spacingLeft=6;" vertex="1" parent="lakb_r7"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lakb_r8" value="" style="shape=tableRow;horizontal=0;startSize=0;strokeColor=inherit;fillColor=none;portConstraint=eastwest;" vertex="1" parent="lakb"><mxGeometry y="240" width="280" height="30" as="geometry" /></mxCell>
+        <mxCell id="lakb_c8" value="urutan  int unsigned  DEFAULT 0" style="shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;overflow=hidden;fillColor=none;align=left;spacingLeft=6;" vertex="1" parent="lakb_r8"><mxGeometry width="280" height="30" as="geometry" /></mxCell>
+
+        <!-- ================= reference blocks ================= -->
+        <mxCell id="fkref" value="Ringkasan Foreign Key: users.role_id→roles · user_tim.user_id→users · iku_penugasan.{iku_id→master_iku, user_id→users} · kegiatan.{iku_id→master_iku, periode_id→periode, rtl_evaluasi_id→rtl_evaluasi} · capaian.{iku_id→master_iku, periode_id→periode} · kendala_solusi.{iku_id→master_iku, periode_id→periode} · rtl_evaluasi.{iku_id→master_iku, periode_id→periode} · berkas.storage_account_id→storage_account · notula.{periode_id→periode, disetujui_oleh_user_id→users} · iku_folder_config.iku_id→master_iku · bagian_kustom_poin.{bagian_kustom_id→bagian_kustom, iku_id→master_iku, periode_id→periode} · lakin_baris.{lakin_id→lakin, iku_id→master_iku (nullable)}. Semua FK ON UPDATE CASCADE; ON DELETE bervariasi per tabel (restrict/cascade/null) — lihat migrasi untuk detail per kolom." style="text;html=1;fontSize=11;fontColor=#334155;align=left;verticalAlign=middle;spacingLeft=6;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="700" y="950" width="610" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="polyref" value="Relasi polimorfik (bukan FK constraint sungguhan): berkas.ref_id + berkas.ref_type menunjuk ke salah satu dari capaian / kendala_solusi / rtl_evaluasi / notula / bagian_kustom_poin, tergantung nilai berkas.kategori (kolom ini adalah CHECK constraint dengan 6 nilai: capaian, solusi, evaluasi_rtl, bukti_dukung_sakip, notula, bagian_kustom — nilai terakhir ditambahkan lewat migrasi terpisah setelah tabel berkas dibuat). Tabel infrastruktur Laravel (sessions, cache, jobs, password_reset_tokens) sengaja tidak dicantumkan karena bukan entitas domain aplikasi." style="text;html=1;fontSize=11;fontColor=#334155;align=left;verticalAlign=middle;spacingLeft=6;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="700" y="1140" width="610" height="110" as="geometry" />
         </mxCell>
 
-        <mxCell id="legend" value="Legenda warna: Biru = pengguna/periode/notula · Teal = IKU/kegiatan/capaian · Amber = kendala-solusi &amp; RTL (kolom bergaris kuning tua = UNIQUE/INDEX) · Hijau = penyimpanan Drive/berkas · Ungu = keanggotaan tim &amp; konfigurasi. Teks miring = Foreign Key." style="text;html=1;fontSize=11;fontColor=#334155;align=left;verticalAlign=middle;spacingLeft=6;" vertex="1" parent="1">
-          <mxGeometry x="40" y="1300" width="1370" height="40" as="geometry" />
+        <mxCell id="legend" value="Legenda warna: Biru = pengguna/periode/notula · Teal = IKU/kegiatan/capaian · Amber = kendala-solusi &amp; RTL (kolom bergaris kuning tua = UNIQUE/INDEX) · Hijau = penyimpanan Drive/berkas · Ungu = keanggotaan tim &amp; konfigurasi (termasuk iku_folder_config, override pola folder per-IKU) · Indigo = Bagian Kustom · Pink = LAKIN. Teks miring = Foreign Key." style="text;html=1;fontSize=11;fontColor=#334155;align=left;verticalAlign=middle;spacingLeft=6;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1860" width="1370" height="50" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>
