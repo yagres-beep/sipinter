@@ -53,6 +53,18 @@ class KompilasiNotulaTest extends TestCase
         );
     }
 
+    public function test_bagian_2_menolak_berkas_selain_docx(): void
+    {
+        $this->loginSebagaiTimSakip();
+
+        Livewire::test(KompilasiNotula::class)
+            ->set('tahun', 2026)
+            ->set('triwulan', 3)
+            ->set('bagian2File', \Illuminate\Http\UploadedFile::fake()->create('bagian2.pdf', 100, 'application/pdf'))
+            ->call('unggahBagian', 2)
+            ->assertHasErrors('bagian2File');
+    }
+
     public function test_ganti_triwulan_mengirim_event_untuk_memuat_ulang_editor(): void
     {
         $this->loginSebagaiTimSakip();

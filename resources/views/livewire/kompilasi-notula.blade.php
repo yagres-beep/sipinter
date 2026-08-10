@@ -85,22 +85,31 @@
                 this.aktifBold = document.queryCommandState('bold');
                 this.aktifItalic = document.queryCommandState('italic');
                 this.aktifUnderline = document.queryCommandState('underline');
+            },
+            jalankan(perintah, nilai = null) {
+                // Pastikan area edit BENAR-BENAR fokus dulu (bukan cuma 'tidak kehilangan
+                // fokus' lewat @mousedown.prevent) — formatBlock/insertList butuh selection
+                // aktif di dalam elemen, tidak seperti bold/italic yang tetap jalan tanpa itu.
+                this.$refs.editor.focus();
+                document.execCommand(perintah, false, nilai);
+                this.perbaruiStatus();
+                this.$wire.set('bagian1EditText', this.$refs.editor.innerHTML);
             }
         }" x-init="document.addEventListener('selectionchange', () => perbaruiStatus())">
             <div class="doc-toolbar">
-                <button type="button" :class="{ active: aktifBold }" @mousedown.prevent @click="document.execCommand('bold'); perbaruiStatus()" title="Tebal"><b>B</b></button>
-                <button type="button" :class="{ active: aktifItalic }" @mousedown.prevent @click="document.execCommand('italic'); perbaruiStatus()" title="Miring"><i>I</i></button>
-                <button type="button" :class="{ active: aktifUnderline }" @mousedown.prevent @click="document.execCommand('underline'); perbaruiStatus()" title="Garis bawah"><u>U</u></button>
+                <button type="button" :class="{ active: aktifBold }" @mousedown.prevent @click="jalankan('bold')" title="Tebal"><b>B</b></button>
+                <button type="button" :class="{ active: aktifItalic }" @mousedown.prevent @click="jalankan('italic')" title="Miring"><i>I</i></button>
+                <button type="button" :class="{ active: aktifUnderline }" @mousedown.prevent @click="jalankan('underline')" title="Garis bawah"><u>U</u></button>
                 <span class="doc-toolbar-sep"></span>
-                <button type="button" @mousedown.prevent @click="document.execCommand('formatBlock', false, 'h3')" title="Judul bagian">H3</button>
-                <button type="button" @mousedown.prevent @click="document.execCommand('formatBlock', false, 'p')" title="Paragraf biasa">¶</button>
+                <button type="button" @mousedown.prevent @click="jalankan('formatBlock', '<h3>')" title="Judul bagian">H3</button>
+                <button type="button" @mousedown.prevent @click="jalankan('formatBlock', '<p>')" title="Paragraf biasa">¶</button>
                 <span class="doc-toolbar-sep"></span>
-                <button type="button" @mousedown.prevent @click="document.execCommand('insertUnorderedList')" title="Daftar bertitik">• Daftar</button>
-                <button type="button" @mousedown.prevent @click="document.execCommand('insertOrderedList')" title="Daftar bernomor">1. Daftar</button>
+                <button type="button" @mousedown.prevent @click="jalankan('insertUnorderedList')" title="Daftar bertitik">• Daftar</button>
+                <button type="button" @mousedown.prevent @click="jalankan('insertOrderedList')" title="Daftar bernomor">1. Daftar</button>
             </div>
 
             <div class="word-canvas">
-            <div class="notula" contenteditable="true" wire:ignore spellcheck="false"
+            <div class="notula" contenteditable="true" wire:ignore spellcheck="false" x-ref="editor"
                 style="min-height:520px;max-height:680px;overflow-y:auto"
                 x-on:bagian1-diperbarui.window="$el.innerHTML = $event.detail.html"
                 @keyup="perbaruiStatus()" @mouseup="perbaruiStatus()"
@@ -132,13 +141,13 @@
             <div class="btn-row" style="margin-top:8px">
                 <label class="btn btn-ghost btn-sm" style="cursor:pointer">
                     ⟲ Ganti Berkas
-                    <input type="file" wire:model="bagian2File" accept=".docx,.xlsx,.pdf,.jpg,.jpeg,.png" style="display:none">
+                    <input type="file" wire:model="bagian2File" accept=".docx" style="display:none">
                 </label>
             </div>
         @else
             <label class="upload upload-tinggi need" style="cursor:pointer;display:flex">
-                <div><div class="big">📤</div>Klik untuk unggah Bagian II (docx, xlsx, pdf, atau gambar)</div>
-                <input type="file" wire:model="bagian2File" accept=".docx,.xlsx,.pdf,.jpg,.jpeg,.png" style="display:none">
+                <div><div class="big">📤</div>Klik untuk unggah Bagian II (.docx saja)</div>
+                <input type="file" wire:model="bagian2File" accept=".docx" style="display:none">
             </label>
         @endif
         <div wire:loading wire:target="bagian2File" style="font-size:11.5px;color:var(--muted);margin-top:6px">Mengunggah…</div>
@@ -164,13 +173,13 @@
             <div class="btn-row" style="margin-top:8px">
                 <label class="btn btn-ghost btn-sm" style="cursor:pointer">
                     ⟲ Ganti Berkas
-                    <input type="file" wire:model="bagian3File" accept=".docx,.xlsx,.pdf,.jpg,.jpeg,.png" style="display:none">
+                    <input type="file" wire:model="bagian3File" accept=".docx" style="display:none">
                 </label>
             </div>
         @else
             <label class="upload upload-tinggi need" style="cursor:pointer;display:flex">
-                <div><div class="big">📤</div>Klik untuk unggah Bagian III (docx, xlsx, pdf, atau gambar)</div>
-                <input type="file" wire:model="bagian3File" accept=".docx,.xlsx,.pdf,.jpg,.jpeg,.png" style="display:none">
+                <div><div class="big">📤</div>Klik untuk unggah Bagian III (.docx saja)</div>
+                <input type="file" wire:model="bagian3File" accept=".docx" style="display:none">
             </label>
         @endif
         <div wire:loading wire:target="bagian3File" style="font-size:11.5px;color:var(--muted);margin-top:6px">Mengunggah…</div>
