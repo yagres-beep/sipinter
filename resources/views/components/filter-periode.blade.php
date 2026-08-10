@@ -49,7 +49,7 @@
             </select>
 
             @if ($mode === 'lengkap')
-                <select wire:model.live="bulan" style="border:none;background:transparent;font-weight:700;color:var(--navy);font-size:14px">
+                <select wire:model.live="bulan" wire:key="filter-bulan-tw-{{ $triwulan }}" style="border:none;background:transparent;font-weight:700;color:var(--navy);font-size:14px">
                     <option value="">{{ $labelBulanKosong }}</option>
                     @foreach ($bulanDalamTriwulan as $bulanOpsi)
                         <option value="{{ $bulanOpsi }}">{{ $namaBulan[$bulanOpsi - 1] }}</option>

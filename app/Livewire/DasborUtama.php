@@ -62,6 +62,26 @@ class DasborUtama extends Component
         $this->urutanArah = 'desc';
     }
 
+    /**
+     * IKU yang SAMA SEKALI belum punya kegiatan pada triwulan berjalan (tahun & triwulan
+     * saat ini) — bukan pemblokiran (satu IKU boleh saja tidak diisi tiap bulan), hanya
+     * pengingat visual karena tiap IKU tetap diharapkan terisi minimal sekali per triwulan.
+     *
+     * @return \Illuminate\Support\Collection<int, MasterIku>
+     */
+    protected function ikuBelumTerisiTriwulanIni()
+    {
+        $triwulanIni = (int) ceil(now()->month / 3);
+        $tahunIni = now()->year;
+
+        $ikuSudahTerisi = Kegiatan::whereHas(
+            'periode',
+            fn ($q) => $q->where('tahun', $tahunIni)->where('triwulan', $triwulanIni)
+        )->pluck('iku_id')->unique();
+
+        return MasterIku::whereNotIn('id', $ikuSudahTerisi)->orderBy('kode')->get();
+    }
+
     protected function ringkasan(): array
     {
         $lewatTenggat = RtlEvaluasi::whereNotNull('batas_waktu')
@@ -169,6 +189,8 @@ class DasborUtama extends Component
             'ringkasan' => $this->ringkasan(),
             'daftarKegiatan' => $daftarKegiatan,
             'tautanBaris' => $this->tautanSemuaBaris($daftarKegiatan, $role),
+            'ikuBelumTerisiTriwulanIni' => $this->ikuBelumTerisiTriwulanIni(),
+            'triwulanBerjalan' => (int) ceil(now()->month / 3),
         ]);
     }
 }

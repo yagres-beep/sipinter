@@ -10,6 +10,7 @@ use App\Models\Periode;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -73,6 +74,23 @@ class DasborUtamaTest extends TestCase
             ->set('filterBulan', '4'); // April -> Triwulan II, tanpa memilih triwulan dulu.
 
         $this->assertSame('2', $component->get('filterTriwulan'));
+    }
+
+    public function test_peringatan_iku_belum_terisi_triwulan_berjalan(): void
+    {
+        Carbon::setTestNow('2026-08-15'); // Triwulan III 2026 — sama seperti fixture siapkanData().
+
+        $this->loginSebagai('Tim SAKIP');
+        $this->siapkanData();
+
+        // IKU ketiga ini sengaja TIDAK diberi kegiatan sama sekali — harus muncul di peringatan.
+        MasterIku::create(['kode' => 'GAMMA-3', 'indikator' => 'Indikator Gamma', 'tim' => 'Tim C', 'penanggung_jawab' => 'PJ C']);
+
+        Livewire::test(DasborUtama::class)
+            ->assertSee('1 IKU belum ada isian')
+            ->assertSee('GAMMA-3');
+
+        Carbon::setTestNow();
     }
 
     public function test_baris_tim_sakip_tertaut_ke_verifikasi_show(): void

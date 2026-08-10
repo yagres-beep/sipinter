@@ -15,6 +15,14 @@
         <x-stat-card icon="⚠️" icon-class="ico-red" :value="$ringkasan['lewat_tenggat']" label="Lewat tenggat" />
     </div>
 
+    @if ($ikuBelumTerisiTriwulanIni->isNotEmpty())
+        <div class="info warn" style="margin-bottom:16px">
+            ⚠️ <b>{{ $ikuBelumTerisiTriwulanIni->count() }} IKU belum ada isian sama sekali di Triwulan {{ ['I', 'II', 'III', 'IV'][$triwulanBerjalan - 1] }} ini</b>
+            — tidak wajib diisi tiap bulan, tapi disarankan minimal satu kegiatan per triwulan:
+            {{ $ikuBelumTerisiTriwulanIni->pluck('kode')->join(', ', ', dan ') }}.
+        </div>
+    @endif
+
     <div class="card">
         <div class="sec"><span>Status Pengisian per IKU</span></div>
 
@@ -30,7 +38,7 @@
                 <option value="3">Triwulan III</option>
                 <option value="4">Triwulan IV</option>
             </select>
-            <select class="filter-sel" wire:model.live="filterBulan">
+            <select class="filter-sel" wire:model.live="filterBulan" wire:key="filter-bulan-tw-{{ $filterTriwulan }}">
                 <option value="">Semua bulan</option>
                 @foreach ($bulanUntukTriwulan as $b)
                     <option value="{{ $b }}">{{ $namaBulan[$b] }}</option>
