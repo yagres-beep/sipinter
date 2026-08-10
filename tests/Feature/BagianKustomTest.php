@@ -65,6 +65,34 @@ class BagianKustomTest extends TestCase
         ]);
     }
 
+    public function test_menambah_bagian_kustom_otomatis_menambah_kategori_di_struktur_folder(): void
+    {
+        $this->actingAsSakip();
+
+        Livewire::test(BagianKustomManager::class)
+            ->set('namaBaru', 'Manajemen Risiko')
+            ->call('tambah')
+            ->assertHasNoErrors();
+
+        $kategori = \App\Models\FolderConfig::current()->pola_json['kategori'];
+        $namaKategori = array_column($kategori, 'nama');
+
+        $this->assertContains('Manajemen Risiko', $namaKategori);
+    }
+
+    public function test_kategori_folder_tidak_dobel_bila_bagian_kustom_ditambah_dua_kali(): void
+    {
+        $this->actingAsSakip();
+
+        \App\Models\FolderConfig::tambahKategoriDariBagianKustom('Manajemen Risiko');
+        \App\Models\FolderConfig::tambahKategoriDariBagianKustom('Manajemen Risiko');
+
+        $kategori = \App\Models\FolderConfig::current()->pola_json['kategori'];
+        $jumlah = collect($kategori)->where('nama', 'Manajemen Risiko')->count();
+
+        $this->assertSame(1, $jumlah);
+    }
+
     public function test_urutan_bagian_kustom_bisa_ditukar_naik_turun(): void
     {
         $this->actingAsSakip();

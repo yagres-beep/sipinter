@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use App\Models\BagianKustom;
+use App\Models\FolderConfig;
 use Livewire\Component;
 
 /**
@@ -126,8 +127,10 @@ class BagianKustomManager extends Component
 
         $this->reset(['namaBaru', 'deskripsiBaru', 'wajibAkhirTriwulanBaru']);
 
+        FolderConfig::tambahKategoriDariBagianKustom($bagian->nama);
+
         BagianKustom::lupakanCache();
-        session()->flash('status', 'Bagian kustom "'.$bagian->nama.'" berhasil ditambahkan.');
+        session()->flash('status', 'Bagian kustom "'.$bagian->nama.'" berhasil ditambahkan, dan folder kategorinya otomatis ditambahkan ke Struktur Folder.');
     }
 
     public function simpanEdit(int $id): void

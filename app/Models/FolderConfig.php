@@ -103,4 +103,30 @@ class FolderConfig extends Model
 
     // hierarkiAktif(), kategoriList(), kategoriDenganSubfolderKegiatan() ada di trait
     // PolaFolderHierarki — dipakai bersama dengan IkuFolderConfig (pola override per-IKU).
+
+    /**
+     * Dipanggil BagianKustomManager saat bagian kustom baru dibuat (mis. "Manajemen
+     * Risiko") — otomatis menambahkan kategori folder dengan nama yang sama ke pola
+     * GLOBAL, supaya bukti dukung bagian itu punya folder kategori yang terlihat &
+     * bisa diatur (urutan, subfolder per kegiatan) di menu Struktur Folder, bukan
+     * cuma dibuat "diam-diam" di Drive saat unggahan pertama. Tidak menyentuh pola
+     * per-IKU (IkuFolderConfig) yang sudah ada — Tim SAKIP menambahkannya manual di
+     * situ kalau memang IKU tertentu perlu pola berbeda.
+     */
+    public static function tambahKategoriDariBagianKustom(string $namaBagian): void
+    {
+        $config = static::current();
+        $pola = $config->pola_json;
+
+        $sudahAda = collect($pola['kategori'] ?? [])
+            ->contains(fn ($k) => mb_strtolower($k['nama']) === mb_strtolower($namaBagian));
+
+        if ($sudahAda) {
+            return;
+        }
+
+        $pola['kategori'][] = ['nama' => $namaBagian, 'wajib' => false, 'subfolder_per_kegiatan' => false];
+
+        $config->update(['pola_json' => $pola]);
+    }
 }
