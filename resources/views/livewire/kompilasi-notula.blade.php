@@ -99,8 +99,9 @@
                 <button type="button" @mousedown.prevent @click="document.execCommand('insertOrderedList')" title="Daftar bernomor">1. Daftar</button>
             </div>
 
+            <div class="word-canvas">
             <div class="notula" contenteditable="true" wire:ignore spellcheck="false"
-                style="min-height:420px;max-height:600px;overflow-y:auto;border-radius:0 0 14px 14px"
+                style="min-height:520px;max-height:680px;overflow-y:auto"
                 x-on:bagian1-diperbarui.window="$el.innerHTML = $event.detail.html"
                 @keyup="perbaruiStatus()" @mouseup="perbaruiStatus()"
                 @blur="$wire.set('bagian1EditText', $el.innerHTML)">
@@ -109,6 +110,7 @@
                 @else
                     {!! $bagian1EditText !!}
                 @endif
+            </div>
             </div>
         </div>
 

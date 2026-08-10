@@ -264,15 +264,17 @@ th.th-sort.active .th-arrow{opacity:1;color:var(--blue-600)}
 .yi-sub{font-size:10.5px;color:var(--muted)}
 
 /* dokumen notula (S16 — font serif seperti dokumen resmi) */
-.notula{background:var(--white);border:1px solid var(--line);border-radius:14px;padding:32px 38px;box-shadow:var(--sh);font-family:'Georgia',serif;line-height:1.7}
-.notula h3{text-align:center;font-size:16px;color:var(--navy);margin-bottom:4px}
+/* ---- pratinjau notula bergaya Word: kanvas abu-abu + "kertas" putih terpisah ---- */
+.word-canvas{background:#e4e7ee;border:1px solid var(--line);border-radius:10px;padding:36px 24px;display:flex;justify-content:center;overflow-x:auto}
+.notula{background:var(--white);border:1px solid #d5d9e2;border-radius:2px;padding:96px 90px;box-shadow:0 1px 3px rgba(16,32,70,.08),0 12px 32px rgba(16,32,70,.14);font-family:'Times New Roman',Times,serif;line-height:1.9;font-size:14px;max-width:816px;width:100%;min-width:0}
+.notula h3{text-align:center;font-size:16px;color:#111;margin-bottom:4px;font-weight:700}
 .notula .nsub{text-align:center;color:var(--muted);font-size:11.5px;margin-bottom:18px;font-family:'Inter',sans-serif}
 .notula .nrow{margin-bottom:12px}
-.notula .nlabel{font-weight:700;color:var(--navy);font-size:12.5px;margin-bottom:3px;font-family:'Inter',sans-serif}
-.notula .ntxt{font-size:12.5px}
-.notula table{margin:10px 0;font-size:11.5px}
-.notula td,.notula th{border:1px solid var(--line);padding:7px 9px}
-.notula th{text-transform:none;letter-spacing:0;color:var(--navy);font-family:'Inter',sans-serif}
+.notula .nlabel{font-weight:700;color:#111;font-size:13px;margin-bottom:3px}
+.notula .ntxt{font-size:13px}
+.notula table{margin:10px 0;font-size:12.5px;border-collapse:collapse}
+.notula td,.notula th{border:1px solid #999;padding:7px 9px}
+.notula th{text-transform:none;letter-spacing:0;color:#111;font-weight:700;background:#f2f2f2}
 .notula p{margin:0 0 12px}
 .notula ul{margin:0 0 12px 20px;padding:0}
 .notula li{margin-bottom:5px}
@@ -281,13 +283,13 @@ th.th-sort.active .th-arrow{opacity:1;color:var(--blue-600)}
 .doc-preview-frame{border:1px solid var(--line);border-radius:12px;box-shadow:var(--sh);overflow:hidden;background:var(--white)}
 .doc-preview-frame iframe{display:block;width:100%;border:none}
 .notula[contenteditable]{cursor:text}
-.notula[contenteditable]:focus{outline:2px solid var(--blue);outline-offset:2px}
-.doc-toolbar{display:flex;align-items:center;gap:4px;flex-wrap:wrap;background:var(--bg);border:1px solid var(--line);border-radius:10px 10px 0 0;border-bottom:none;padding:6px}
-.doc-toolbar button{background:none;border:1.5px solid transparent;border-radius:6px;min-width:28px;height:28px;padding:0 8px;font-size:12.5px;font-weight:700;color:var(--ink);cursor:pointer;font-family:'Georgia',serif;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;line-height:1}
-.doc-toolbar button:hover{background:var(--line)}
+.notula[contenteditable]:focus{outline:none;box-shadow:0 1px 3px rgba(16,32,70,.08),0 12px 32px rgba(16,32,70,.14),0 0 0 2px var(--blue)}
+.doc-toolbar{display:flex;align-items:center;gap:3px;flex-wrap:wrap;background:linear-gradient(#fbfcfe,#eef1f6);border:1px solid #d5d9e2;border-radius:10px 10px 0 0;border-bottom:1px solid #d5d9e2;padding:8px 10px;box-shadow:inset 0 -1px 0 rgba(16,32,70,.04)}
+.doc-toolbar button{background:none;border:1.5px solid transparent;border-radius:6px;min-width:30px;height:30px;padding:0 9px;font-size:13px;font-weight:700;color:#333;cursor:pointer;font-family:'Times New Roman',Times,serif;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;line-height:1;transition:.1s}
+.doc-toolbar button:hover{background:#e0e6f0;border-color:#d5d9e2}
 .doc-toolbar button.active{background:var(--blue-soft);border-color:var(--blue);color:var(--blue-600)}
-.doc-toolbar-sep{width:1px;height:18px;background:var(--line);margin:0 4px;flex:none}
-.doc-toolbar+.notula{border-radius:0 0 14px 14px}
+.doc-toolbar-sep{width:1px;height:20px;background:#d5d9e2;margin:0 5px;flex:none}
+.doc-toolbar+.word-canvas{border-radius:0 0 10px 10px;border-top:none;margin-top:0;padding-top:24px}
 .doc-bagian-head{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:700;color:var(--navy);font-family:'Georgia',serif;padding-bottom:10px;border-bottom:2px solid var(--line2);margin-bottom:14px}
 .doc-bagian-badge{display:inline-flex;align-items:center;font-family:'Inter',sans-serif;font-size:10.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--white);background:var(--navy);border-radius:6px;padding:3px 9px}
 .doc-bagian-head .st{font-family:'Inter',sans-serif;font-size:11px;font-weight:700}
