@@ -1021,6 +1021,11 @@ class PengisianKegiatan extends Component
                     'solusi' => $block['solusi'] ?: null,
                 ]);
 
+                // RF baru: nama berkas di Drive dibentuk dari teks kendala+solusinya sendiri
+                // (bukan "bukti-solusi.pdf" generik) supaya langsung dikenali dari daftar
+                // berkas tanpa perlu dibuka satu-satu — lihat FolderStructureService::unggahBerkas().
+                $namaBerkasDariTeks = "kendala {$block['kendala']} solusi {$block['solusi']}";
+
                 foreach ($block['bukti_solusi'] as $file) {
                     $path = $file->store('bukti-solusi', 'local');
 
@@ -1035,7 +1040,7 @@ class PengisianKegiatan extends Component
 
                     try {
                         $localFullPath = Storage::disk('local')->path($path);
-                        $hasilDrive = $folderService->unggahBerkas($periode, $iku, 'solusi', $localFullPath);
+                        $hasilDrive = $folderService->unggahBerkas($periode, $iku, 'solusi', $localFullPath, namaBerkasOverride: $namaBerkasDariTeks);
                         $berkas->update($hasilDrive);
                     } catch (RuntimeException $e) {
                         Log::warning('Gagal mengunggah bukti solusi ke Google Drive, disimpan lokal saja: '.$e->getMessage());

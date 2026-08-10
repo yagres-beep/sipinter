@@ -213,7 +213,7 @@ class FolderStructureService
      *              kategori baku, tapi berkas.kategori di DB tetap nilai enum tetap ('bagian_kustom').
      * @return array{drive_file_id: string, storage_account_id: ?int, nama_file: string}
      */
-    public function unggahBerkas(Periode $periode, MasterIku $iku, string $kategoriEnum, string $localPath, ?Kegiatan $kegiatan = null, string $ekstensi = '.pdf', string $mimeType = 'application/pdf', ?string $namaFolderOverride = null): array
+    public function unggahBerkas(Periode $periode, MasterIku $iku, string $kategoriEnum, string $localPath, ?Kegiatan $kegiatan = null, string $ekstensi = '.pdf', string $mimeType = 'application/pdf', ?string $namaFolderOverride = null, ?string $namaBerkasOverride = null): array
     {
         $namaKategori = $namaFolderOverride
             ?? self::KATEGORI_KE_FOLDER[$kategoriEnum]
@@ -230,8 +230,13 @@ class FolderStructureService
         // kegiatan sudah terwakili oleh folder di atas (lihat resolveKegiatanFolder),
         // jadi nama BERKAS itu sendiri cukup mengikuti kategorinya, bukan nama asli
         // file dari komputer pengguna. Cocok dengan contoh jalur di SRS: ".../bukti-capaian.pdf".
+        // $namaBerkasOverride dipakai untuk kategori yang lebih informatif diberi nama dari
+        // ISI teksnya sendiri (mis. bukti solusi diberi nama dari teks kendala-solusinya),
+        // supaya mudah dikenali langsung dari daftar berkas di Drive tanpa harus dibuka satu-satu.
         $kategoriSlug = Str::slug($namaKategori);
-        $namaDasar = str_starts_with($kategoriSlug, 'bukti') ? $kategoriSlug : "bukti-{$kategoriSlug}";
+        $namaDasar = $namaBerkasOverride !== null && trim($namaBerkasOverride) !== ''
+            ? Str::slug(self::namaOtomatis($namaBerkasOverride, 80))
+            : (str_starts_with($kategoriSlug, 'bukti') ? $kategoriSlug : "bukti-{$kategoriSlug}");
 
         $namaSudahAda = $this->drive->namesInFolder($tujuanFolderId);
         $namaBerkas = self::namaUnik($namaDasar, $namaSudahAda, $ekstensi);
