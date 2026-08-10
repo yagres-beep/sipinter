@@ -8,8 +8,8 @@
     @livewireStyles
 </head>
 <body>
-    <div class="app">
-        <aside class="sidebar">
+    <div class="app" x-data="{ sidebarOpen: false }">
+        <aside class="sidebar" :class="{ open: sidebarOpen }">
             <div class="brand">
                 <div class="logo">📊</div>
                 <div>
@@ -41,7 +41,7 @@
                     };
                 @endphp
 
-                <nav class="nav">
+                <nav class="nav" @click="sidebarOpen = false">
                     <a href="{{ route('dashboard') }}" class="{{ request()->routeIs('dashboard') ? 'active' : '' }}"><span class="ic">🏠</span> Dasbor</a>
 
                     @if ($role === 'Ketua Tim')
@@ -72,10 +72,13 @@
             @endauth
         </aside>
 
+        <div class="sidebar-backdrop" :class="{ show: sidebarOpen }" x-show="sidebarOpen" x-cloak @click="sidebarOpen = false"></div>
+
         <div class="main">
             <div class="topbar">
                 <div class="crumb">
                     @auth
+                        <button type="button" class="menu-toggle" @click="sidebarOpen = !sidebarOpen" aria-label="Buka menu">☰</button>
                         {{ $roleCrumb }} ›
                     @endauth
                     <b>@yield('breadcrumb')</b>
