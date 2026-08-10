@@ -95,6 +95,19 @@ class KeanggotaanDanPenugasanTest extends TestCase
         $this->assertDatabaseMissing('iku_penugasan', ['id' => $penugasan->id]);
     }
 
+    public function test_pencarian_menyaring_daftar_iku_penugasan(): void
+    {
+        $this->loginSebagaiSakip();
+
+        MasterIku::create(['kode' => 'ALPHA-1', 'indikator' => 'Indikator Alpha', 'tim' => 'Tim A', 'penanggung_jawab' => 'PJ A']);
+        MasterIku::create(['kode' => 'BETA-2', 'indikator' => 'Indikator Beta', 'tim' => 'Tim B', 'penanggung_jawab' => 'PJ B']);
+
+        Livewire::test(PenugasanIku::class)
+            ->set('cari', 'ALPHA')
+            ->assertSee('ALPHA-1')
+            ->assertDontSee('BETA-2');
+    }
+
     public function test_semua_penanggung_jawab_menggabungkan_otomatis_dan_manual_tanpa_duplikat(): void
     {
         $this->loginSebagaiSakip();

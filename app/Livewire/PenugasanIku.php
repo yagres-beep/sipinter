@@ -15,6 +15,8 @@ use Livewire\Component;
  */
 class PenugasanIku extends Component
 {
+    public string $cari = '';
+
     /**
      * Pilihan "tambah manual" per IKU, dikunci pada id IKU.
      *
@@ -48,6 +50,14 @@ class PenugasanIku extends Component
     {
         $ikuList = MasterIku::with(['penugasanManual.user'])->orderBy('kode')->get();
 
+        if (filled($this->cari)) {
+            $kataKunci = mb_strtolower($this->cari);
+            $ikuList = $ikuList->filter(fn ($iku) => str_contains(mb_strtolower($iku->kode), $kataKunci)
+                || str_contains(mb_strtolower($iku->indikator), $kataKunci)
+                || str_contains(mb_strtolower($iku->tim), $kataKunci)
+            )->values();
+        }
+
         $ketuaTimList = User::whereHas('role', fn ($q) => $q->where('nama', 'Ketua Tim'))
             ->where('status_verifikasi', 'terverifikasi')
             ->orderBy('nama')
@@ -62,10 +72,20 @@ class PenugasanIku extends Component
             ->groupBy('tim')
             ->map(fn ($baris) => $baris->pluck('user')->filter()->unique('id')->values());
 
+        $ikuPerTim = $ikuList->groupBy('tim');
+
+        $totalTanpaPenanggungJawab = $ikuList->filter(function ($iku) use ($otomatisPerTim) {
+            $otomatis = $otomatisPerTim->get($iku->tim, collect());
+
+            return $otomatis->isEmpty() && $iku->penugasanManual->isEmpty();
+        })->count();
+
         return view('livewire.penugasan-iku', [
             'ikuList' => $ikuList,
+            'ikuPerTim' => $ikuPerTim,
             'ketuaTimList' => $ketuaTimList,
             'otomatisPerTim' => $otomatisPerTim,
+            'totalTanpaPenanggungJawab' => $totalTanpaPenanggungJawab,
         ]);
     }
 }
