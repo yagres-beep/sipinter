@@ -481,6 +481,33 @@ class PengisianKegiatanTest extends TestCase
         $this->assertSame($ketua->nama, $component->get('rtlBaruPic'));
     }
 
+    public function test_riwayat_kendala_solusi_kumulatif_dari_triwulan_1_sampai_berjalan(): void
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $ketua = User::create([
+            'nama' => 'Ketua Uji', 'email' => 'ketua-uji-kumulatif@example.test',
+            'password' => 'password', 'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+        $iku = MasterIku::create(['kode' => 'UJI-KUM', 'indikator' => 'Indikator kumulatif', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji']);
+
+        $periodeTw1 = Periode::create(['tahun' => 2026, 'bulan' => 2, 'triwulan' => 1, 'bulan_ke' => 2, 'flag_bulan_terlewat' => true]);
+        $periodeTw2 = Periode::create(['tahun' => 2026, 'bulan' => 5, 'triwulan' => 2, 'bulan_ke' => 2, 'flag_bulan_terlewat' => true]);
+
+        KendalaSolusi::create(['iku_id' => $iku->id, 'periode_id' => $periodeTw1->id, 'kendala' => 'Kendala triwulan pertama']);
+        KendalaSolusi::create(['iku_id' => $iku->id, 'periode_id' => $periodeTw2->id, 'kendala' => 'Kendala triwulan kedua']);
+
+        $this->actingAs($ketua);
+
+        // Sedang mengisi bulan 8 (Agustus) = Triwulan III — riwayat kumulatif harus
+        // tetap menampilkan kendala dari TW I dan TW II, bukan cuma TW III.
+        Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $iku->id)
+            ->assertSee('Kendala triwulan pertama')
+            ->assertSee('Kendala triwulan kedua');
+    }
+
     public function test_cache_lintas_request_tidak_menampilkan_data_basi_setelah_ajukan(): void
     {
         $peranKetua = Role::create(['nama' => 'Ketua Tim']);
