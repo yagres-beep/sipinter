@@ -23,6 +23,7 @@ class BagianKustom extends Model
         'deskripsi',
         'wajib_akhir_triwulan',
         'aktif',
+        'urutan',
     ];
 
     protected function casts(): array
@@ -51,7 +52,7 @@ class BagianKustom extends Model
         return \Illuminate\Support\Facades\Cache::remember(
             'bagian-kustom.aktif',
             3600,
-            fn () => static::where('aktif', true)->orderBy('id')->get()
+            fn () => static::where('aktif', true)->orderBy('urutan')->orderBy('id')->get()
         );
     }
 

@@ -65,6 +65,25 @@ class BagianKustomTest extends TestCase
         ]);
     }
 
+    public function test_urutan_bagian_kustom_bisa_ditukar_naik_turun(): void
+    {
+        $this->actingAsSakip();
+
+        $pertama = BagianKustom::create(['nama' => 'Bagian A', 'aktif' => true, 'urutan' => 0]);
+        $kedua = BagianKustom::create(['nama' => 'Bagian B', 'aktif' => true, 'urutan' => 1]);
+
+        // Urutan awal: A, B. Naikkan B -> harus jadi B, A.
+        Livewire::test(BagianKustomManager::class)
+            ->call('naikkan', $kedua->id);
+
+        $urutanSekarang = BagianKustom::orderBy('urutan')->orderBy('id')->pluck('nama')->all();
+        $this->assertSame(['Bagian B', 'Bagian A'], $urutanSekarang);
+
+        // Daftar aktif yang dipakai Isian Kegiatan juga harus ikut urutan baru ini.
+        BagianKustom::lupakanCache();
+        $this->assertSame(['Bagian B', 'Bagian A'], BagianKustom::daftarAktif()->pluck('nama')->all());
+    }
+
     public function test_nama_bagian_kustom_duplikat_ditolak(): void
     {
         $this->actingAsSakip();
