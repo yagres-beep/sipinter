@@ -14,8 +14,7 @@
 
     <div x-data="{ tab: 'verifikasi' }">
         <div class="subtabs">
-            <button type="button" class="subtab" :class="tab === 'verifikasi' ? 'on' : ''" @click="tab = 'verifikasi'">✅ Verifikasi Akun</button>
-            <button type="button" class="subtab" :class="tab === 'tim' ? 'on' : ''" @click="tab = 'tim'">👥 Keanggotaan Tim</button>
+            <button type="button" class="subtab" :class="tab === 'verifikasi' ? 'on' : ''" @click="tab = 'verifikasi'">✅ Verifikasi &amp; Keanggotaan Tim</button>
             <button type="button" class="subtab" :class="tab === 'penugasan' ? 'on' : ''" @click="tab = 'penugasan'">📋 Penugasan IKU</button>
             <button type="button" class="subtab" :class="tab === 'storage' ? 'on' : ''" @click="tab = 'storage'">☁️ Akun &amp; Storage</button>
         </div>
@@ -103,10 +102,12 @@
                 </table>
             </div>
 
-        </div>
+            <div class="card" style="margin-top:16px">
+                <div class="sec"><span>Keanggotaan Tim</span></div>
+                <div class="info">ℹ️ Atur tim tiap Ketua Tim di sini — langsung sesudah menyetujui akunnya di atas, tanpa pindah menu. Dipakai sebagai dasar "penugasan otomatis via tim" di tab Penugasan IKU.</div>
+                <livewire:keanggotaan-tim />
+            </div>
 
-        <div x-show="tab === 'tim'" x-cloak>
-            <livewire:keanggotaan-tim />
         </div>
 
         <div x-show="tab === 'penugasan'" x-cloak>
