@@ -296,24 +296,6 @@ class PengisianKegiatan extends Component
         $this->rtlBaruBatasWaktu = $this->akhirTriwulanBerikutnya()->toDateString();
     }
 
-    /**
-     * RF-35: saat ketua tim mengetik realisasi, sarankan status_cocok otomatis dari
-     * kemiripan teks terhadap rtl_teks aslinya. Tetap bisa ditimpa manual lewat dropdown.
-     */
-    public function updatedEvaluasi($value, $key): void
-    {
-        if (! str_ends_with($key, '.realisasi')) {
-            return;
-        }
-
-        $rtlId = (int) explode('.', $key)[0];
-        $poin = RtlEvaluasiModel::find($rtlId);
-
-        if ($poin && filled($value)) {
-            $this->evaluasi[$rtlId]['status_cocok'] = $poin->sarankanStatusCocok($value);
-        }
-    }
-
     protected function triwulanDari(int $bulan): int
     {
         return (int) ceil($bulan / 3);
@@ -385,15 +367,24 @@ class PengisianKegiatan extends Component
     /**
      * Siapkan form evaluasi kosong untuk tiap poin RTL triwulan sebelumnya yang belum dievaluasi.
      */
+    /**
+     * Siapkan form bukti realisasi untuk SEMUA poin RTL triwulan sebelumnya (bukan hanya
+     * yang belum ada buktinya) — poin yang sudah punya bukti tetap boleh ditambahkan lagi,
+     * tidak dikunci hanya-baca seperti alur lama berbasis teks realisasi.
+     */
     protected function muatFormEvaluasi(): void
     {
         $this->evaluasi = [];
 
         foreach ($this->rtlTriwulanSebelumnya() as $poin) {
-            if (! $poin->sudahDievaluasi()) {
-                $this->evaluasi[$poin->id] = ['realisasi' => '', 'status_cocok' => '', 'bukti' => []];
-            }
+            $this->evaluasi[$poin->id] = ['bukti' => []];
         }
+    }
+
+    public function removeBuktiEvaluasi(int $rtlId, int $fileIndex): void
+    {
+        unset($this->evaluasi[$rtlId]['bukti'][$fileIndex]);
+        $this->evaluasi[$rtlId]['bukti'] = array_values($this->evaluasi[$rtlId]['bukti']);
     }
 
     protected function rtlTriwulanSebelumnya()
@@ -721,12 +712,10 @@ class PengisianKegiatan extends Component
             $rules["bagianKustomBlocks.{$bagian->id}.*.bukti.*"] = ['file', 'mimes:pdf', 'max:10240'];
         }
 
-        // RF-29/31: minimal SATU poin RTL triwulan sebelumnya yang belum dievaluasi wajib
-        // dilaporkan realisasinya (dicek lewat after() di buatValidator()) — status_cocok
-        // hanya wajib untuk baris yang realisasinya memang diisi.
+        // RF-29/31: poin RTL triwulan sebelumnya cukup ditampilkan + tempat unggah bukti —
+        // WAJIB SEMUA (bukan cuma satu) sudah punya bukti sebelum bisa diajukan, tapi
+        // aturan itu hanya digerbang pada bulan TERAKHIR triwulan (dicek di buatValidator()).
         foreach ($this->evaluasi as $rtlId => $data) {
-            $rules["evaluasi.{$rtlId}.realisasi"] = ['nullable', 'string'];
-            $rules["evaluasi.{$rtlId}.status_cocok"] = ['required_with:evaluasi.'.$rtlId.'.realisasi', 'nullable', 'in:cocok,perlu_ditinjau,tidak_cocok'];
             $rules["evaluasi.{$rtlId}.bukti.*"] = ['file', 'mimes:pdf', 'max:10240'];
         }
 
@@ -774,7 +763,6 @@ class PengisianKegiatan extends Component
             'blocks.*.tahapan_survei.required_if' => 'Tahapan survei wajib dipilih untuk kegiatan Survei/Sensus.',
             'blocks.*.bukti.required' => 'Bukti capaian (PDF) wajib diunggah untuk tiap kegiatan.',
             'kendalaBlocks.*.bukti_solusi.required_with' => 'Bukti dukung solusi (PDF) wajib diunggah bila kolom solusi diisi.',
-            'evaluasi.*.status_cocok.required_with' => 'Status kecocokan wajib dipilih bila realisasi sudah diisi.',
             'rtlBaruPicManual.required_if' => 'Ketik nama PIC karena memilih "Lainnya".',
         ];
 
@@ -814,8 +802,22 @@ class PengisianKegiatan extends Component
         );
 
         $validator->after(function ($validator) {
-            if (! empty($this->evaluasi) && ! collect($this->evaluasi)->contains(fn ($d) => filled($d['realisasi'] ?? null))) {
-                $validator->errors()->add('evaluasi', 'Minimal satu poin evaluasi RTL triwulan sebelumnya wajib diisi sebelum dapat diajukan.');
+            // RF-29/31: SEMUA poin RTL triwulan sebelumnya wajib punya bukti realisasi
+            // (sudah tersimpan ATAU baru dipilih di form ini) — tapi HANYA digerbang pada
+            // bulan TERAKHIR triwulan berjalan, sama seperti aturan bagian kustom di bawah.
+            if ($this->bulanKeDari($this->bulan) === 3) {
+                $poinTanpaBukti = $this->rtlTriwulanSebelumnya()->reject(function ($poin) {
+                    $buktiBaru = $this->evaluasi[$poin->id]['bukti'] ?? [];
+
+                    return $poin->sudahDievaluasi() || ! empty($buktiBaru);
+                });
+
+                if ($poinTanpaBukti->isNotEmpty()) {
+                    $validator->errors()->add(
+                        'evaluasi',
+                        "Masih ada {$poinTanpaBukti->count()} poin evaluasi RTL triwulan sebelumnya yang belum diberi bukti realisasi — wajib diunggah semua sebelum diajukan pada bulan terakhir triwulan ini."
+                    );
+                }
             }
 
             $belumTerlaksana = $this->poinRtlBerjalanBelumTerlaksana();
@@ -1048,19 +1050,15 @@ class PengisianKegiatan extends Component
                 }
             }
 
-            // 3) Evaluasi RTL triwulan sebelumnya — minimal satu wajib diisi (dicek di
-            // buatValidator()), baris yang masih kosong dilewati begitu saja.
+            // 3) Evaluasi RTL triwulan sebelumnya — cukup bukti realisasi (SEMUA poin wajib
+            // punya bukti bila sedang mengajukan pada bulan terakhir triwulan, dicek di
+            // buatValidator()); baris tanpa bukti baru dilewati begitu saja di sini.
             foreach ($this->evaluasi as $rtlId => $data) {
-                if (blank($data['realisasi'])) {
+                if (empty($data['bukti'])) {
                     continue;
                 }
 
                 $poin = RtlEvaluasiModel::with(['periode', 'masterIku'])->findOrFail($rtlId);
-
-                $poin->update([
-                    'realisasi' => $data['realisasi'],
-                    'status_cocok' => $data['status_cocok'],
-                ]);
 
                 foreach ($data['bukti'] as $file) {
                     $path = $file->store('bukti-evaluasi-rtl', 'local');

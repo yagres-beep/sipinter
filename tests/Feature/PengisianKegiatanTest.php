@@ -399,22 +399,16 @@ class PengisianKegiatanTest extends TestCase
         $this->assertSame($poinRtl->id, $kegiatan->rtl_evaluasi_id);
     }
 
-    public function test_evaluasi_rtl_sebelumnya_minimal_satu_boleh_sebagian(): void
+    protected function siapkanIkuDanRtlSebelumnya(string $emailKetua): array
     {
-        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $peranKetua = Role::firstOrCreate(['nama' => 'Ketua Tim']);
         $ketua = User::create([
-            'nama' => 'Ketua Uji',
-            'email' => 'ketua-uji11@example.test',
-            'password' => 'password',
-            'role_id' => $peranKetua->id,
-            'status_verifikasi' => 'terverifikasi',
+            'nama' => 'Ketua Uji', 'email' => $emailKetua, 'password' => 'password',
+            'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
         ]);
 
         $iku = MasterIku::create([
-            'kode' => 'UJI-011',
-            'indikator' => 'Indikator uji coba 11',
-            'tim' => 'Uji',
-            'penanggung_jawab' => 'Ketua Uji',
+            'kode' => 'UJI-'.uniqid(), 'indikator' => 'Indikator uji evaluasi', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji',
         ]);
 
         $periodeSebelumnya = Periode::create([
@@ -433,15 +427,23 @@ class PengisianKegiatanTest extends TestCase
 
         $this->actingAs($ketua);
 
+        return [$iku, $poin1, $poin2];
+    }
+
+    public function test_bukti_evaluasi_rtl_opsional_di_bulan_biasa(): void
+    {
+        [$iku, $poin1, $poin2] = $this->siapkanIkuDanRtlSebelumnya('ketua-uji11@example.test');
+
+        // Bulan pertama TW III (bukan bulan terakhir) — bukti evaluasi belum wajib sama
+        // sekali, termasuk boleh SEMUA poin tanpa bukti.
         Livewire::test(PengisianKegiatan::class)
             ->set('tahun', 2026)
-            ->set('bulan', 7) // bulan pertama TW III — RTL Baru belum wajib diisi di sini.
+            ->set('bulan', 7)
             ->set('iku_id', $iku->id)
             ->set('blocks.0.uraian_kegiatan', 'Kegiatan uji evaluasi')
             ->set('blocks.0.jenis', 'bukan_survei_sensus')
             ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
-            ->set("evaluasi.{$poin1->id}.realisasi", 'Sudah dilaksanakan sebagian')
-            ->set("evaluasi.{$poin1->id}.status_cocok", 'cocok')
+            ->set("evaluasi.{$poin1->id}.bukti", [UploadedFile::fake()->create('realisasi1.pdf', 100, 'application/pdf')])
             ->call('ajukanIsian')
             ->assertHasNoErrors();
 
@@ -450,7 +452,52 @@ class PengisianKegiatanTest extends TestCase
         $poin1->refresh();
         $poin2->refresh();
         $this->assertTrue($poin1->sudahDievaluasi());
-        $this->assertFalse($poin2->sudahDievaluasi());
+        $this->assertFalse($poin2->sudahDievaluasi()); // tidak diberi bukti, tapi tetap boleh diajukan.
+    }
+
+    public function test_bukti_evaluasi_rtl_wajib_semua_di_bulan_terakhir_triwulan(): void
+    {
+        [$iku, $poin1, $poin2] = $this->siapkanIkuDanRtlSebelumnya('ketua-uji11b@example.test');
+
+        // Bulan terakhir TW III — SEMUA poin evaluasi wajib punya bukti; poin2 sengaja
+        // tidak diberi bukti sama sekali, jadi pengajuan harus ditolak.
+        Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 9)
+            ->set('iku_id', $iku->id)
+            ->set('blocks.0.uraian_kegiatan', 'Kegiatan uji evaluasi')
+            ->set('blocks.0.jenis', 'bukan_survei_sensus')
+            ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
+            ->set("evaluasi.{$poin1->id}.bukti", [UploadedFile::fake()->create('realisasi1.pdf', 100, 'application/pdf')])
+            ->set('rtlBaru.0.rtl_teks', 'RTL uji coba triwulan berikutnya')
+            ->set('rtlBaruPic', 'PIC Uji')
+            ->call('ajukanIsian')
+            ->assertHasErrors('evaluasi');
+
+        $this->assertDatabaseCount('kegiatan', 0);
+    }
+
+    public function test_bukti_evaluasi_rtl_lengkap_semua_boleh_diajukan_bulan_terakhir(): void
+    {
+        [$iku, $poin1, $poin2] = $this->siapkanIkuDanRtlSebelumnya('ketua-uji11c@example.test');
+
+        Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 9)
+            ->set('iku_id', $iku->id)
+            ->set('blocks.0.uraian_kegiatan', 'Kegiatan uji evaluasi')
+            ->set('blocks.0.jenis', 'bukan_survei_sensus')
+            ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
+            ->set("evaluasi.{$poin1->id}.bukti", [UploadedFile::fake()->create('realisasi1.pdf', 100, 'application/pdf')])
+            ->set("evaluasi.{$poin2->id}.bukti", [UploadedFile::fake()->create('realisasi2.pdf', 100, 'application/pdf')])
+            ->set('rtlBaru.0.rtl_teks', 'RTL uji coba triwulan berikutnya')
+            ->set('rtlBaruPic', 'PIC Uji')
+            ->call('ajukanIsian')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseCount('kegiatan', 1);
+        $this->assertTrue($poin1->refresh()->sudahDievaluasi());
+        $this->assertTrue($poin2->refresh()->sudahDievaluasi());
     }
 
     public function test_pic_tindak_lanjut_terisi_otomatis_dari_penanggung_jawab_iku(): void

@@ -67,9 +67,14 @@ class RtlEvaluasi extends Model
         return $this->morphMany(Berkas::class, 'ref', 'ref_type', 'ref_id');
     }
 
+    /**
+     * "Dievaluasi" sekarang berarti minimal satu bukti realisasi sudah diunggah —
+     * tidak lagi berdasarkan teks realisasi/status kecocokan (dihapus dari alur
+     * pengisian, poin cukup ditampilkan + tempat unggah bukti saja).
+     */
     public function sudahDievaluasi(): bool
     {
-        return ! empty($this->realisasi);
+        return $this->relationLoaded('berkas') ? $this->berkas->isNotEmpty() : $this->berkas()->exists();
     }
 
     /**

@@ -322,7 +322,7 @@
         @if ($iku_id)
             <div class="sec" style="margin-top:20px"><span class="n">4</span><span>Evaluasi RTL Triwulan Sebelumnya</span></div>
             <div wire:loading wire:target="iku_id" class="info">⏳ Memuat data RTL &amp; evaluasi untuk IKU ini…</div>
-            <div class="info teal">✅ Poin di bawah otomatis diambil dari RTL triwulan sebelumnya. Laporkan realisasinya dan lampirkan bukti bila ada.</div>
+            <div class="info teal">✅ Poin di bawah otomatis diambil dari RTL triwulan sebelumnya. Lampirkan bukti realisasinya (boleh lebih dari satu berkas) — {{ $bulanKe === 3 ? 'WAJIB semua poin sudah punya bukti sebelum bisa diajukan pada bulan terakhir triwulan ini.' : 'opsional untuk bulan ini, tapi wajib sudah lengkap semua sebelum bulan terakhir triwulan.' }}</div>
 
             @if ($rtlSebelumnya->isEmpty())
                 <p style="color:var(--muted);font-size:13px">Tidak ada poin RTL triwulan sebelumnya untuk IKU ini.</p>
@@ -339,71 +339,44 @@
                         </div>
                     </div>
 
-                    @if ($poin->sudahDievaluasi())
-                        <div style="font-size:13px;margin-top:10px">
-                            <b>Realisasi:</b> {{ $poin->realisasi }}
-                            <x-badge-status :status="$poin->status_cocok" />
-                        </div>
+                    <div class="field" style="margin:12px 0 0">
+                        <label>Bukti Realisasi (PDF)
+                            @if ($bulanKe === 3)
+                                <span class="req">wajib minimal 1 berkas</span>
+                            @else
+                                <span style="color:var(--muted);font-weight:500">opsional bulan ini</span>
+                            @endif
+                        </label>
+
                         @foreach ($poin->berkas as $file)
-                            <div class="filechip" style="max-width:320px;margin-top:6px">
+                            <div class="filechip ok" style="max-width:320px;margin-top:6px">
                                 <span class="nm">📄 {{ $file->nama_file }}</span>
                             </div>
                         @endforeach
-                    @else
-                        <div class="field" style="margin:12px 0 10px">
-                            <label>Realisasi <span class="req">*</span></label>
-                            <textarea class="inp filled" style="height:auto;display:block" rows="2"
-                                wire:model.live="evaluasi.{{ $poin->id }}.realisasi"
-                                placeholder="Uraikan realisasi tindak lanjut untuk poin RTL ini..."></textarea>
-                            @error("evaluasi.{$poin->id}.realisasi")
-                                <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-                            @enderror
-                        </div>
 
-                        <div class="field">
-                            <label>Status Kecocokan <span class="req">*</span></label>
-                            <select class="inp filled" wire:model.live="evaluasi.{{ $poin->id }}.status_cocok">
-                                <option value="">— Pilih Status —</option>
-                                <option value="cocok">Cocok</option>
-                                <option value="perlu_ditinjau">Perlu Ditinjau</option>
-                                <option value="tidak_cocok">Tidak Cocok</option>
-                            </select>
-                            <div style="color:var(--muted);font-size:11.5px;margin-top:5px">
-                                Disarankan otomatis dari kemiripan teks dengan RTL asli — dapat disesuaikan manual.
+                        @foreach ($evaluasi[$poin->id]['bukti'] ?? [] as $fi => $file)
+                            <div class="filechip" style="max-width:320px;margin-top:6px">
+                                <span class="nm">📄 {{ $file->getClientOriginalName() }}</span>
+                                <span class="x" style="cursor:pointer" wire:click="removeBuktiEvaluasi({{ $poin->id }}, {{ $fi }})">✕</span>
                             </div>
-                            @error("evaluasi.{$poin->id}.status_cocok")
-                                <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-                            @enderror
+                        @endforeach
+
+                        <label class="upload" style="cursor:pointer;display:block;padding:10px;margin-top:8px">
+                            <div style="font-weight:600;font-size:11.5px;color:var(--blue-600)">📤 Tambah bukti realisasi (PDF) — boleh lebih dari satu</div>
+                            <input type="file" wire:model="evaluasi.{{ $poin->id }}.bukti" multiple accept="application/pdf" style="display:none"
+                                @change="pendingBuktiRealisasiNames = Array.from($event.target.files).map(f => f.name)">
+                        </label>
+
+                        <div wire:loading wire:target="evaluasi.{{ $poin->id }}.bukti" style="font-size:11.5px;color:var(--muted);margin-top:6px">
+                            <template x-for="nama in pendingBuktiRealisasiNames" :key="nama">
+                                <div>📄 <span x-text="nama"></span> — mengunggah…</div>
+                            </template>
                         </div>
 
-                        <div class="field" style="margin-bottom:0">
-                            <label>Bukti Realisasi (PDF, opsional)</label>
-
-                            @if (empty($evaluasi[$poin->id]['bukti']))
-                                <label class="upload" style="cursor:pointer;display:block;padding:10px">
-                                    <div style="font-weight:600;font-size:11.5px;color:var(--blue-600)">📤 Bukti realisasi (PDF) · opsional</div>
-                                    <input type="file" wire:model="evaluasi.{{ $poin->id }}.bukti" multiple accept="application/pdf" style="display:none"
-                                        @change="pendingBuktiRealisasiNames = Array.from($event.target.files).map(f => f.name)">
-                                </label>
-                            @else
-                                @foreach ($evaluasi[$poin->id]['bukti'] as $fi => $file)
-                                    <div class="filechip">
-                                        <span class="nm">📄 {{ $file->getClientOriginalName() }}</span>
-                                    </div>
-                                @endforeach
-                            @endif
-
-                            <div wire:loading wire:target="evaluasi.{{ $poin->id }}.bukti" style="font-size:11.5px;color:var(--muted);margin-top:6px">
-                                <template x-for="nama in pendingBuktiRealisasiNames" :key="nama">
-                                    <div>📄 <span x-text="nama"></span> — mengunggah…</div>
-                                </template>
-                            </div>
-
-                            @error("evaluasi.{$poin->id}.bukti.*")
-                                <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-                            @enderror
-                        </div>
-                    @endif
+                        @error("evaluasi.{$poin->id}.bukti.*")
+                            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                        @enderror
+                    </div>
                 </div>
             @endforeach
 
