@@ -133,6 +133,27 @@ class FolderStructureService
      */
     public function resolveKategoriFolder(Periode $periode, MasterIku $iku, string $namaKategori): string
     {
+        $config = $this->configUntukIku($iku);
+        $folderId = $this->resolveIkuFolder($periode, $iku);
+
+        $folderId = $this->drive->findOrCreateFolder($namaKategori, $folderId);
+
+        if (in_array($namaKategori, $config->kategoriDenganSubfolderBulan(), true)) {
+            $namaBulan = Carbon::create($periode->tahun, $periode->bulan, 1)->locale('id')->translatedFormat('F');
+            $folderId = $this->drive->findOrCreateFolder($namaBulan, $folderId);
+        }
+
+        return $folderId;
+    }
+
+    /**
+     * Susun/temukan folder induk sampai ke folder IKU itu sendiri (mis. ".../2026/
+     * Triwulan II/IKU 1131"), SEBELUM masuk ke kategori mana pun — dipakai
+     * resolveKategoriFolder() di atas, dan juga linkBuktiDukungIku() untuk
+     * menautkan Notula langsung ke folder IKU (bukan ke satu kategori tertentu).
+     */
+    public function resolveIkuFolder(Periode $periode, MasterIku $iku): string
+    {
         $akun = $this->akunAktifAtauGagal();
         $config = $this->configUntukIku($iku);
 
@@ -158,14 +179,25 @@ class FolderStructureService
             }
         }
 
-        $folderId = $this->drive->findOrCreateFolder($namaKategori, $folderId);
-
-        if (in_array($namaKategori, $config->kategoriDenganSubfolderBulan(), true)) {
-            $namaBulan = Carbon::create($periode->tahun, $periode->bulan, 1)->locale('id')->translatedFormat('F');
-            $folderId = $this->drive->findOrCreateFolder($namaBulan, $folderId);
-        }
-
         return $folderId;
+    }
+
+    /**
+     * Tautan Drive langsung ke folder IKU ini untuk periode tsb (RF baru) — dipakai
+     * Notula supaya Tim SAKIP/Kepala bisa langsung buka bukti dukung dari dalam
+     * dokumen notula, tanpa menelusuri Drive manual. Mengembalikan null (bukan
+     * melempar) bila storage belum aktif/terkonfigurasi, supaya notula tetap bisa
+     * disusun walau Drive belum siap — sama seperti pola try/catch di tempat lain.
+     */
+    public function linkBuktiDukungIku(Periode $periode, MasterIku $iku): ?string
+    {
+        try {
+            $folderId = $this->resolveIkuFolder($periode, $iku);
+
+            return $this->drive->folderLink($folderId);
+        } catch (RuntimeException $e) {
+            return null;
+        }
     }
 
     // ================================================================

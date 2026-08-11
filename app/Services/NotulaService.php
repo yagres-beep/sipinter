@@ -93,11 +93,20 @@ class NotulaService
             }])
             ->get();
 
+        // RF baru: link bukti dukung per IKU (folder Drive IKU tsb), supaya Tim SAKIP/
+        // Kepala bisa langsung buka bukti dari dalam dokumen notula. Dihitung sekali per
+        // IKU yang benar-benar tampil di sini (bukan seluruh Master IKU) — gagal Drive
+        // pada satu IKU (mis. storage belum aktif) tidak menggagalkan penyusunan notula.
+        $linkFolderPerIku = $kegiatanPerIku->mapWithKeys(function ($daftarKegiatan, $ikuId) use ($periode) {
+            return [$ikuId => $this->folder->linkBuktiDukungIku($periode, $daftarKegiatan->first()->masterIku)];
+        });
+
         $html = view('pdf.notula-bagian1-konten', [
             'kegiatanPerIku' => $kegiatanPerIku,
             'kendalaSolusiPerTriwulan' => $kendalaSolusiPerTriwulan,
             'rtlBerjalan' => $rtlBerjalan,
             'bagianKustomPerBagian' => $bagianKustomPerBagian,
+            'linkFolderPerIku' => $linkFolderPerIku,
         ])->render();
 
         $notula->update(['bagian1_html' => $html]);

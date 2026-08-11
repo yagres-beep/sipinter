@@ -5,9 +5,12 @@
     ini hanya dipakai SEKALI saat "Susun Ulang Otomatis" ditekan, bukan dirender
     ulang tiap kali PDF dibuat (yang dipakai saat itu adalah bagian1_html tersimpan).
 --}}
-@forelse ($kegiatanPerIku as $daftarKegiatan)
-    @php $iku = $daftarKegiatan->first()->masterIku; @endphp
+@forelse ($kegiatanPerIku as $ikuId => $daftarKegiatan)
+    @php $iku = $daftarKegiatan->first()->masterIku; $linkFolder = $linkFolderPerIku[$ikuId] ?? null; @endphp
     <h3>{{ $iku->kode }} — {{ $iku->indikator }}</h3>
+    @if ($linkFolder)
+        <p><em><a href="{{ $linkFolder }}">📁 Buka folder bukti dukung {{ $iku->kode }} di Drive</a></em></p>
+    @endif
     @foreach ($daftarKegiatan as $kegiatan)
         @php $capaian = $kegiatan->capaian(); @endphp
         <p>

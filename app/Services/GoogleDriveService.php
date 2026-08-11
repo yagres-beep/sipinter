@@ -163,6 +163,17 @@ class GoogleDriveService
     }
 
     /**
+     * Tautan Drive ke sebuah FOLDER berdasarkan ID-nya — berbeda dari getFileLink(),
+     * ini TIDAK perlu memanggil Drive API sama sekali (URL folder Drive selalu
+     * mengikuti pola tetap ini), jadi aman & murah dipanggil berkali-kali (mis. satu
+     * kali per IKU saat menyusun Notula) tanpa menambah kuota API.
+     */
+    public function folderLink(string $folderId): string
+    {
+        return "https://drive.google.com/drive/folders/{$folderId}";
+    }
+
+    /**
      * Siapkan Google\Client sekali saja (lazy), memakai kredensial JSON Service
      * Account dari config/services.php (google_drive.service_account_path).
      */
