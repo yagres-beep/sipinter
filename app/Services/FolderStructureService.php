@@ -123,8 +123,13 @@ class FolderStructureService
 
     /**
      * Susun/temukan seluruh folder induk sampai ke folder KATEGORI (mis. ".../2026/
-     * Triwulan II/Juni/IKU 1131/Capaian"). Level triwulan/bulan/IKU mengikuti urutan
-     * & status aktif di FolderConfig (RF-15); "tahun" selalu diproses lebih dulu.
+     * Triwulan II/IKU 1131/Capaian[/Juni]"). Level triwulan/IKU mengikuti urutan &
+     * status aktif di FolderConfig (RF-15); "tahun" selalu diproses lebih dulu.
+     *
+     * Folder Bulan BUKAN lagi tingkat hierarki yang berlaku sama rata untuk semua
+     * kategori — ia jadi SUBFOLDER di dalam kategori tertentu saja, tergantung
+     * apakah kategori itu dikonfigurasi "subfolder per bulan" (mis. Capaian &
+     * Bukti-Dukung-SAKIP biasanya iya, Evaluasi-RTL biasanya tidak).
      */
     public function resolveKategoriFolder(Periode $periode, MasterIku $iku, string $namaKategori): string
     {
@@ -140,7 +145,6 @@ class FolderStructureService
 
             $namaLevel = match ($level) {
                 FolderConfig::LEVEL_TRIWULAN => 'Triwulan '.(['I', 'II', 'III', 'IV'][$periode->triwulan - 1] ?? $periode->triwulan),
-                FolderConfig::LEVEL_BULAN => Carbon::create($periode->tahun, $periode->bulan, 1)->locale('id')->translatedFormat('F'),
                 // Nama folder IKU mengikuti apa adanya nilai kolom "Kode" yang diisi Tim
                 // SAKIP di Master IKU (RF-08) — sistem tidak memformat ulang nilainya.
                 FolderConfig::LEVEL_IKU => $iku->kode,
@@ -154,7 +158,14 @@ class FolderStructureService
             }
         }
 
-        return $this->drive->findOrCreateFolder($namaKategori, $folderId);
+        $folderId = $this->drive->findOrCreateFolder($namaKategori, $folderId);
+
+        if (in_array($namaKategori, $config->kategoriDenganSubfolderBulan(), true)) {
+            $namaBulan = Carbon::create($periode->tahun, $periode->bulan, 1)->locale('id')->translatedFormat('F');
+            $folderId = $this->drive->findOrCreateFolder($namaBulan, $folderId);
+        }
+
+        return $folderId;
     }
 
     // ================================================================

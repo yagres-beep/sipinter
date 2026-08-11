@@ -18,10 +18,17 @@ class BagianKustom extends Model
 
     protected $table = 'bagian_kustom';
 
+    public const FREKUENSI_OPSIONAL = 'opsional';
+
+    public const FREKUENSI_SETIAP_BULAN = 'setiap_bulan';
+
+    public const FREKUENSI_AKHIR_TRIWULAN = 'akhir_triwulan';
+
     protected $fillable = [
         'nama',
         'deskripsi',
-        'wajib_akhir_triwulan',
+        'frekuensi_wajib',
+        'bukti_wajib',
         'aktif',
         'urutan',
     ];
@@ -29,7 +36,7 @@ class BagianKustom extends Model
     protected function casts(): array
     {
         return [
-            'wajib_akhir_triwulan' => 'boolean',
+            'bukti_wajib' => 'boolean',
             'aktif' => 'boolean',
         ];
     }
@@ -37,6 +44,30 @@ class BagianKustom extends Model
     public function poin(): HasMany
     {
         return $this->hasMany(BagianKustomPoin::class);
+    }
+
+    /**
+     * Minimal satu poin bagian ini wajib diisi pada bulan-ke ($bulanKe, 1-3 dalam
+     * triwulan) yang sedang diajukan — 'setiap_bulan' selalu wajib, 'akhir_triwulan'
+     * hanya wajib di bulan terakhir (sama seperti pola RTL baru), 'opsional' tidak
+     * pernah wajib.
+     */
+    public function wajibDiisiPada(int $bulanKe): bool
+    {
+        return match ($this->frekuensi_wajib) {
+            self::FREKUENSI_SETIAP_BULAN => true,
+            self::FREKUENSI_AKHIR_TRIWULAN => $bulanKe === 3,
+            default => false,
+        };
+    }
+
+    public function labelFrekuensi(): string
+    {
+        return match ($this->frekuensi_wajib) {
+            self::FREKUENSI_SETIAP_BULAN => 'Wajib setiap bulan',
+            self::FREKUENSI_AKHIR_TRIWULAN => 'Wajib akhir triwulan',
+            default => 'Selalu opsional',
+        };
     }
 
     /**

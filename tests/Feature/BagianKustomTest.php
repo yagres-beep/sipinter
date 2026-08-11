@@ -54,13 +54,13 @@ class BagianKustomTest extends TestCase
         Livewire::test(BagianKustomManager::class)
             ->set('namaBaru', 'Manajemen Risiko')
             ->set('deskripsiBaru', 'Catat risiko dan mitigasi tiap triwulan')
-            ->set('wajibAkhirTriwulanBaru', true)
+            ->set('frekuensiWajibBaru', 'akhir_triwulan')
             ->call('tambah')
             ->assertHasNoErrors();
 
         $this->assertDatabaseHas('bagian_kustom', [
             'nama' => 'Manajemen Risiko',
-            'wajib_akhir_triwulan' => true,
+            'frekuensi_wajib' => 'akhir_triwulan',
             'aktif' => true,
         ]);
     }
@@ -201,7 +201,7 @@ class BagianKustomTest extends TestCase
     {
         $this->actingAsKetuaTim();
         $iku = MasterIku::create(['kode' => 'UJI-004', 'indikator' => 'Uji', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji']);
-        BagianKustom::create(['nama' => 'Manajemen Risiko', 'wajib_akhir_triwulan' => true, 'aktif' => true]);
+        BagianKustom::create(['nama' => 'Manajemen Risiko', 'frekuensi_wajib' => 'akhir_triwulan', 'aktif' => true]);
 
         Livewire::test(PengisianKegiatan::class)
             ->set('tahun', 2026)
@@ -223,7 +223,7 @@ class BagianKustomTest extends TestCase
     {
         $this->actingAsKetuaTim();
         $iku = MasterIku::create(['kode' => 'UJI-005', 'indikator' => 'Uji', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji']);
-        BagianKustom::create(['nama' => 'Manajemen Risiko', 'wajib_akhir_triwulan' => true, 'aktif' => true]);
+        BagianKustom::create(['nama' => 'Manajemen Risiko', 'frekuensi_wajib' => 'akhir_triwulan', 'aktif' => true]);
 
         Livewire::test(PengisianKegiatan::class)
             ->set('tahun', 2026)
@@ -237,6 +237,47 @@ class BagianKustomTest extends TestCase
             ->assertHasNoErrors();
 
         $this->assertDatabaseCount('bagian_kustom_poin', 0);
+    }
+
+    public function test_bagian_wajib_setiap_bulan_menghalangi_pengajuan_di_bulan_biasa(): void
+    {
+        $this->actingAsKetuaTim();
+        $iku = MasterIku::create(['kode' => 'UJI-007', 'indikator' => 'Uji', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji']);
+        BagianKustom::create(['nama' => 'Manajemen Risiko', 'frekuensi_wajib' => 'setiap_bulan', 'aktif' => true]);
+
+        // Bulan PERTAMA triwulan (bukan bulan terakhir) — 'setiap_bulan' tetap wajib,
+        // berbeda dengan 'akhir_triwulan' yang hanya menggerbang di bulan terakhir.
+        Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 4)
+            ->set('iku_id', $iku->id)
+            ->set('blocks.0.uraian_kegiatan', 'Kegiatan uji')
+            ->set('blocks.0.jenis', 'bukan_survei_sensus')
+            ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
+            ->call('ajukanIsian')
+            ->assertHasErrors();
+
+        $this->assertDatabaseCount('bagian_kustom_poin', 0);
+    }
+
+    public function test_bagian_bukti_opsional_boleh_diisi_tanpa_berkas(): void
+    {
+        $this->actingAsKetuaTim();
+        $iku = MasterIku::create(['kode' => 'UJI-008', 'indikator' => 'Uji', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji']);
+        $bagian = BagianKustom::create(['nama' => 'Catatan Bebas', 'bukti_wajib' => false, 'aktif' => true]);
+
+        Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 4)
+            ->set('iku_id', $iku->id)
+            ->set('blocks.0.uraian_kegiatan', 'Kegiatan uji')
+            ->set('blocks.0.jenis', 'bukan_survei_sensus')
+            ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
+            ->set("bagianKustomBlocks.{$bagian->id}.0.teks", 'Catatan tanpa berkas pendukung')
+            ->call('ajukanIsian')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseCount('bagian_kustom_poin', 1);
     }
 
     public function test_notula_bagian_satu_menyertakan_poin_bagian_kustom(): void

@@ -73,17 +73,20 @@ class FolderConfig extends Model
     public static function polaDefault(): array
     {
         return [
+            // "bulan" SENGAJA tidak lagi jadi tingkat hierarki sendiri — folder Bulan
+            // sekarang jadi subfolder DI DALAM kategori tertentu saja (lihat kategori
+            // di bawah, subfolder_per_bulan), karena tidak semua kategori butuh
+            // dipecah per bulan (mis. Evaluasi-RTL cukup satu folder per triwulan).
             'hierarki' => [
                 ['level' => self::LEVEL_TAHUN, 'aktif' => true],
                 ['level' => self::LEVEL_TRIWULAN, 'aktif' => true],
-                ['level' => self::LEVEL_BULAN, 'aktif' => true],
                 ['level' => self::LEVEL_IKU, 'aktif' => true],
             ],
             'kategori' => [
-                ['nama' => 'Capaian', 'wajib' => true, 'subfolder_per_kegiatan' => true],
-                ['nama' => 'Solusi', 'wajib' => false, 'subfolder_per_kegiatan' => false],
-                ['nama' => 'Evaluasi-RTL', 'wajib' => false, 'subfolder_per_kegiatan' => false],
-                ['nama' => 'Bukti-Dukung-SAKIP', 'wajib' => true, 'subfolder_per_kegiatan' => false],
+                ['nama' => 'Capaian', 'wajib' => true, 'subfolder_per_kegiatan' => true, 'subfolder_per_bulan' => true],
+                ['nama' => 'Solusi', 'wajib' => false, 'subfolder_per_kegiatan' => false, 'subfolder_per_bulan' => false],
+                ['nama' => 'Evaluasi-RTL', 'wajib' => false, 'subfolder_per_kegiatan' => false, 'subfolder_per_bulan' => false],
+                ['nama' => 'Bukti-Dukung-SAKIP', 'wajib' => true, 'subfolder_per_kegiatan' => false, 'subfolder_per_bulan' => true],
             ],
         ];
     }

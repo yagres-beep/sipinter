@@ -16,7 +16,9 @@ class BagianKustomManager extends Component
 
     public string $deskripsiBaru = '';
 
-    public bool $wajibAkhirTriwulanBaru = false;
+    public string $frekuensiWajibBaru = BagianKustom::FREKUENSI_OPSIONAL;
+
+    public bool $buktiWajibBaru = true;
 
     /**
      * Koreksi nama/deskripsi bagian yang sudah ada, dikunci pada id — supaya Tim SAKIP
@@ -95,6 +97,7 @@ class BagianKustomManager extends Component
         return [
             'namaBaru' => ['required', 'string', 'max:255'],
             'deskripsiBaru' => ['nullable', 'string'],
+            'frekuensiWajibBaru' => ['required', 'in:opsional,setiap_bulan,akhir_triwulan'],
         ];
     }
 
@@ -118,14 +121,16 @@ class BagianKustomManager extends Component
         $bagian = BagianKustom::create([
             'nama' => trim($this->namaBaru),
             'deskripsi' => trim($this->deskripsiBaru) ?: null,
-            'wajib_akhir_triwulan' => $this->wajibAkhirTriwulanBaru,
+            'frekuensi_wajib' => $this->frekuensiWajibBaru,
+            'bukti_wajib' => $this->buktiWajibBaru,
             'aktif' => true,
             'urutan' => ((int) BagianKustom::max('urutan')) + 1,
         ]);
 
         $this->edit[$bagian->id] = ['nama' => $bagian->nama, 'deskripsi' => $bagian->deskripsi];
 
-        $this->reset(['namaBaru', 'deskripsiBaru', 'wajibAkhirTriwulanBaru']);
+        $this->reset(['namaBaru', 'deskripsiBaru', 'buktiWajibBaru']);
+        $this->frekuensiWajibBaru = BagianKustom::FREKUENSI_OPSIONAL;
 
         FolderConfig::tambahKategoriDariBagianKustom($bagian->nama);
 
@@ -160,10 +165,21 @@ class BagianKustomManager extends Component
         BagianKustom::lupakanCache();
     }
 
-    public function toggleWajib(int $id): void
+    public function setFrekuensi(int $id, string $frekuensi): void
+    {
+        if (! in_array($frekuensi, ['opsional', 'setiap_bulan', 'akhir_triwulan'], true)) {
+            return;
+        }
+
+        BagianKustom::whereKey($id)->update(['frekuensi_wajib' => $frekuensi]);
+
+        BagianKustom::lupakanCache();
+    }
+
+    public function toggleBuktiWajib(int $id): void
     {
         $bagian = BagianKustom::findOrFail($id);
-        $bagian->update(['wajib_akhir_triwulan' => ! $bagian->wajib_akhir_triwulan]);
+        $bagian->update(['bukti_wajib' => ! $bagian->bukti_wajib]);
 
         BagianKustom::lupakanCache();
     }

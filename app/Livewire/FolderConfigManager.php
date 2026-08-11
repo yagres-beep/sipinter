@@ -6,6 +6,7 @@ use App\Models\FolderConfig;
 use App\Models\IkuFolderConfig;
 use App\Models\MasterIku;
 use App\Services\FolderStructureService;
+use Illuminate\Support\Str;
 use Livewire\Component;
 use RuntimeException;
 
@@ -165,6 +166,15 @@ class FolderConfigManager extends Component
         $this->kategori[$index]['subfolder_per_kegiatan'] = ! $this->kategori[$index]['subfolder_per_kegiatan'];
     }
 
+    /**
+     * Kategori mana yang punya subfolder Bulan di dalamnya (mis. Capaian, Bukti-
+     * Dukung-SAKIP) — kategori lain langsung menampung berkas tanpa dipecah bulan.
+     */
+    public function toggleSubfolderBulan(int $index): void
+    {
+        $this->kategori[$index]['subfolder_per_bulan'] = ! ($this->kategori[$index]['subfolder_per_bulan'] ?? false);
+    }
+
     public function tambahKategori(): void
     {
         $nama = trim($this->kategoriBaru);
@@ -183,7 +193,7 @@ class FolderConfigManager extends Component
             return;
         }
 
-        $this->kategori[] = ['nama' => $nama, 'wajib' => false, 'subfolder_per_kegiatan' => false];
+        $this->kategori[] = ['nama' => $nama, 'wajib' => false, 'subfolder_per_kegiatan' => false, 'subfolder_per_bulan' => false];
         $this->kategoriBaru = '';
     }
 
@@ -318,6 +328,11 @@ class FolderConfigManager extends Component
         $this->kategoriIku[$index]['subfolder_per_kegiatan'] = ! $this->kategoriIku[$index]['subfolder_per_kegiatan'];
     }
 
+    public function toggleSubfolderBulanIku(int $index): void
+    {
+        $this->kategoriIku[$index]['subfolder_per_bulan'] = ! ($this->kategoriIku[$index]['subfolder_per_bulan'] ?? false);
+    }
+
     public function tambahKategoriIku(): void
     {
         $nama = trim($this->kategoriBaruIku);
@@ -336,7 +351,7 @@ class FolderConfigManager extends Component
             return;
         }
 
-        $this->kategoriIku[] = ['nama' => $nama, 'wajib' => false, 'subfolder_per_kegiatan' => false];
+        $this->kategoriIku[] = ['nama' => $nama, 'wajib' => false, 'subfolder_per_kegiatan' => false, 'subfolder_per_bulan' => false];
         $this->kategoriBaruIku = '';
     }
 
@@ -478,7 +493,6 @@ class FolderConfigManager extends Component
 
             $label = match ($h['level']) {
                 'triwulan' => 'Triwulan III',
-                'bulan' => 'Agustus',
                 'iku' => 'IKU 1131',
                 // Tingkat kustom (RF-15) memakai namanya sendiri apa adanya sebagai folder tetap.
                 default => $h['level'],
@@ -499,15 +513,31 @@ class FolderConfigManager extends Component
                 'tipe' => 'kategori',
             ];
 
+            $indentDalamKategori = $indentKategori + 1;
+
+            // Folder Bulan (bila kategori ini dikonfigurasi subfolder_per_bulan) selalu
+            // membungkus subfolder-per-kegiatan, sesuai urutan nyata di Drive:
+            // Kategori/Agustus/[Kegiatan]/berkas.
+            if ($k['subfolder_per_bulan'] ?? false) {
+                $baris[] = ['teks' => '📁 Agustus', 'indent' => $indentDalamKategori, 'tipe' => 'folder'];
+                $indentDalamKategori++;
+            }
+
             if ($k['subfolder_per_kegiatan']) {
                 $baris[] = [
                     'teks' => '📁 [Pelaksanaan] pencacahan Sakernas Agustus 2026',
-                    'indent' => $indentKategori + 1,
+                    'indent' => $indentDalamKategori,
                     'tipe' => 'folder',
                 ];
                 $baris[] = [
                     'teks' => '📄 bukti-capaian.pdf',
-                    'indent' => $indentKategori + 2,
+                    'indent' => $indentDalamKategori + 1,
+                    'tipe' => 'file',
+                ];
+            } else {
+                $baris[] = [
+                    'teks' => '📄 bukti-'.Str::slug($k['nama']).'.pdf',
+                    'indent' => $indentDalamKategori,
                     'tipe' => 'file',
                 ];
             }

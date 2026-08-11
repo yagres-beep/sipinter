@@ -492,10 +492,13 @@
                 @if ($bagian->deskripsi)
                     <div class="info">ℹ️ {{ $bagian->deskripsi }}</div>
                 @endif
-                @if ($bagian->wajib_akhir_triwulan)
-                    <div class="info warn">⚠️ Minimal satu poin wajib diisi sebelum diajukan pada bulan terakhir triwulan ini ({{ $bulanKe === 3 ? 'berlaku sekarang' : 'berlaku mulai bulan ke-3 triwulan' }}). Tiap poin wajib dilampiri bukti dukung (PDF).</div>
+                @php $labelBukti = $bagian->bukti_wajib ? 'Tiap poin yang diisi wajib dilampiri bukti dukung (PDF).' : 'Bukti dukung (PDF) opsional untuk bagian ini.'; @endphp
+                @if ($bagian->frekuensi_wajib === 'setiap_bulan')
+                    <div class="info warn">⚠️ Minimal satu poin wajib diisi setiap bulan. {{ $labelBukti }}</div>
+                @elseif ($bagian->frekuensi_wajib === 'akhir_triwulan')
+                    <div class="info warn">⚠️ Minimal satu poin wajib diisi sebelum diajukan pada bulan terakhir triwulan ini ({{ $bulanKe === 3 ? 'berlaku sekarang' : 'berlaku mulai bulan ke-3 triwulan' }}). {{ $labelBukti }}</div>
                 @else
-                    <div class="info">ℹ️ Bagian ini opsional. Tiap poin yang diisi wajib dilampiri bukti dukung (PDF).</div>
+                    <div class="info">ℹ️ Bagian ini opsional. {{ $labelBukti }}</div>
                 @endif
 
                 @error("bagianKustomBlocks.{$bagian->id}")
@@ -519,7 +522,13 @@
                         </div>
 
                         <div class="field" style="margin-bottom:0">
-                            <label>Bukti Dukung (PDF) <span class="req">wajib bila poin diisi</span></label>
+                            <label>Bukti Dukung (PDF)
+                                @if ($bagian->bukti_wajib)
+                                    <span class="req">wajib bila poin diisi</span>
+                                @else
+                                    <span style="color:var(--muted);font-weight:500">opsional</span>
+                                @endif
+                            </label>
                             @if (empty($blok['bukti']))
                                 <label class="upload" style="cursor:pointer;display:block">
                                     <div class="big">📤</div>

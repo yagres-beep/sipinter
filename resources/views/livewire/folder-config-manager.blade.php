@@ -6,7 +6,7 @@
         <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>
     @endif
 
-    <div class="info">ℹ️ Dua bagian: <b>Tingkat folder</b> (hierarki induk → subfolder, "Tahun" selalu di posisi pertama &amp; tidak dapat dinonaktifkan) dan <b>Folder kategori</b> (folder sejajar di dalam folder terdalam — Capaian &amp; Bukti-Dukung-SAKIP wajib ada).</div>
+    <div class="info">ℹ️ Dua bagian: <b>Tingkat folder</b> (hierarki induk → subfolder, "Tahun" selalu di posisi pertama &amp; tidak dapat dinonaktifkan) dan <b>Folder kategori</b> (folder sejajar di dalam folder terdalam — Capaian &amp; Bukti-Dukung-SAKIP wajib ada). Folder <b>Bulan</b> bukan lagi tingkat hierarki tersendiri — aktifkan "subfolder per bulan" pada kategori yang perlu dipecah per bulan (mis. Capaian), kategori lain boleh dibiarkan tidak.</div>
 
     <div class="grid grid-2" style="align-items:start">
         <div class="card">
@@ -50,7 +50,8 @@
             <div class="sec" style="margin-top:20px"><span>Folder Kategori (di folder terdalam)</span></div>
             <p style="color:var(--muted);font-size:12px;margin-bottom:10px">
                 Kategori <b>Capaian</b> dan <b>Bukti-Dukung-SAKIP</b> wajib ada (RF-12) dan tidak bisa dihapus.
-                Centang "subfolder per kegiatan" agar tiap kegiatan dapat folder sendiri di dalam kategori tsb (RF-13).
+                "Subfolder per bulan" memecah kategori ini jadi per-bulan (folder Bulan ada DI DALAM kategori, bukan di atasnya).
+                "Subfolder per kegiatan" membuat tiap kegiatan dapat folder sendiri di dalamnya (RF-13) — bila keduanya aktif, urutannya Kategori/Bulan/Kegiatan.
             </p>
 
             @error('kategori')
@@ -73,6 +74,10 @@
                         @endunless
                     </span>
                     <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);width:100%;margin-top:6px">
+                        <input type="checkbox" wire:click="toggleSubfolderBulan({{ $i }})" @checked($k['subfolder_per_bulan'] ?? false)>
+                        Subfolder per bulan
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);width:100%;margin-top:2px">
                         <input type="checkbox" wire:click="toggleSubfolderKegiatan({{ $i }})" @checked($k['subfolder_per_kegiatan'])>
                         Subfolder per kegiatan
                     </label>
@@ -130,7 +135,7 @@
 
 <div class="card" style="margin-top:16px">
     <div class="sec"><span>Pola Khusus per IKU</span></div>
-    <div class="info">ℹ️ Sebagian besar IKU cukup memakai pola folder global di atas. Bila ada IKU tertentu yang butuh susunan folder berbeda (mis. tambahan tingkat "Bulan" di dalam kategori tertentu), pilih IKU-nya di sini lalu atur pola sendiri untuk IKU itu saja — IKU lain tidak terpengaruh.</div>
+    <div class="info">ℹ️ Sebagian besar IKU cukup memakai pola folder global di atas. Bila ada IKU tertentu yang butuh susunan folder berbeda (mis. kategori yang berbeda subfolder per bulan/kegiatannya, atau tingkat tambahan), pilih IKU-nya di sini lalu atur pola sendiri untuk IKU itu saja — IKU lain tidak terpengaruh.</div>
 
     <div class="field">
         <label>Pilih IKU</label>
@@ -180,7 +185,7 @@
                 <div class="field" style="margin-top:10px;margin-bottom:0">
                     <label style="font-size:11.5px">Tambah Tingkat Baru</label>
                     <div style="display:flex;gap:8px">
-                        <input type="text" class="inp filled" wire:model="levelBaruIku" placeholder="mis. Bulan">
+                        <input type="text" class="inp filled" wire:model="levelBaruIku" placeholder="mis. Kategori Survei">
                         <button type="button" class="btn btn-ghost btn-sm" wire:click="tambahLevelIku">＋ Tambah</button>
                     </div>
                     @error('levelBaruIku')
@@ -210,6 +215,10 @@
                             @endunless
                         </span>
                         <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);width:100%;margin-top:6px">
+                            <input type="checkbox" wire:click="toggleSubfolderBulanIku({{ $i }})" @checked($k['subfolder_per_bulan'] ?? false)>
+                            Subfolder per bulan
+                        </label>
+                        <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);width:100%;margin-top:2px">
                             <input type="checkbox" wire:click="toggleSubfolderKegiatanIku({{ $i }})" @checked($k['subfolder_per_kegiatan'])>
                             Subfolder per kegiatan
                         </label>

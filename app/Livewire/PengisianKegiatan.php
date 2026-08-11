@@ -685,10 +685,13 @@ class PengisianKegiatan extends Component
         ];
 
         // Bagian kustom (mis. Manajemen Risiko): poin kosong dilewati saat disimpan
-        // (sama seperti kendalaBlocks), tapi poin yang TERISI wajib punya bukti dukung.
+        // (sama seperti kendalaBlocks); poin yang TERISI wajib punya bukti dukung HANYA
+        // bila bagiannya dikonfigurasi bukti_wajib (bisa dimatikan Tim SAKIP per bagian).
         foreach ($this->bagianKustomAktif() as $bagian) {
             $rules["bagianKustomBlocks.{$bagian->id}.*.teks"] = ['nullable', 'string'];
-            $rules["bagianKustomBlocks.{$bagian->id}.*.bukti"] = ['required_with:bagianKustomBlocks.'.$bagian->id.'.*.teks', 'array'];
+            $rules["bagianKustomBlocks.{$bagian->id}.*.bukti"] = $bagian->bukti_wajib
+                ? ['required_with:bagianKustomBlocks.'.$bagian->id.'.*.teks', 'array']
+                : ['nullable', 'array'];
             $rules["bagianKustomBlocks.{$bagian->id}.*.bukti.*"] = ['file', 'mimes:pdf', 'max:10240'];
         }
 
@@ -810,23 +813,28 @@ class PengisianKegiatan extends Component
                 );
             }
 
-            // Bagian kustom "wajib akhir triwulan": minimal satu poin wajib terisi bila
-            // sedang mengajukan pada bulan TERAKHIR triwulan (sama seperti syarat RTL baru).
-            if ($this->bulanKeDari($this->bulan) === 3) {
-                foreach ($this->bagianKustomAktif() as $bagian) {
-                    if (! $bagian->wajib_akhir_triwulan) {
-                        continue;
-                    }
+            // Bagian kustom: minimal satu poin wajib terisi sesuai frekuensi yang
+            // dikonfigurasi Tim SAKIP (setiap bulan, atau hanya bulan TERAKHIR triwulan
+            // seperti syarat RTL baru) — 'opsional' tidak pernah menggerbang apa pun.
+            $bulanKeSekarang = $this->bulanKeDari($this->bulan);
 
-                    $adaTerisi = collect($this->bagianKustomBlocks[$bagian->id] ?? [])
-                        ->contains(fn ($blok) => filled($blok['teks'] ?? null));
+            foreach ($this->bagianKustomAktif() as $bagian) {
+                if (! $bagian->wajibDiisiPada($bulanKeSekarang)) {
+                    continue;
+                }
 
-                    if (! $adaTerisi) {
-                        $validator->errors()->add(
-                            "bagianKustomBlocks.{$bagian->id}",
-                            "Minimal satu poin \"{$bagian->nama}\" wajib diisi sebelum diajukan pada bulan terakhir triwulan ini."
-                        );
-                    }
+                $adaTerisi = collect($this->bagianKustomBlocks[$bagian->id] ?? [])
+                    ->contains(fn ($blok) => filled($blok['teks'] ?? null));
+
+                if (! $adaTerisi) {
+                    $pesanWaktu = $bagian->frekuensi_wajib === 'setiap_bulan'
+                        ? 'bulan ini'
+                        : 'sebelum diajukan pada bulan terakhir triwulan ini';
+
+                    $validator->errors()->add(
+                        "bagianKustomBlocks.{$bagian->id}",
+                        "Minimal satu poin \"{$bagian->nama}\" wajib diisi {$pesanWaktu}."
+                    );
                 }
             }
         });
