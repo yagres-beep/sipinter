@@ -390,6 +390,7 @@ class PengisianKegiatanTest extends TestCase
             ->set('blocks.0.uraian_kegiatan', 'Rencana yang belum dilaksanakan')
             ->set('blocks.0.jenis', 'bukan_survei_sensus')
             ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
+            ->set("evaluasi.{$poinRtl->id}.bukti", [UploadedFile::fake()->create('realisasi.pdf', 100, 'application/pdf')])
             ->set('rtlBaru.0.rtl_teks', 'RTL baru')
             ->set('rtlBaruPic', 'PIC Uji 10')
             ->call('ajukanIsian')
@@ -411,18 +412,20 @@ class PengisianKegiatanTest extends TestCase
             'kode' => 'UJI-'.uniqid(), 'indikator' => 'Indikator uji evaluasi', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji',
         ]);
 
-        $periodeSebelumnya = Periode::create([
-            'tahun' => 2026, 'bulan' => 4, 'triwulan' => 2, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false,
+        // RTL disimpan dengan periode TARGET-nya (triwulan III, ditetapkan saat mengisi
+        // triwulan II) — sama seperti alur nyata "RTL Baru" di PengisianKegiatan::ajukanIsian().
+        $periodeBerjalan = Periode::create([
+            'tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false,
         ]);
 
         $poin1 = RtlEvaluasi::create([
-            'iku_id' => $iku->id, 'periode_id' => $periodeSebelumnya->id,
-            'rtl_teks' => 'Poin 1', 'berlaku_bulan' => 'April, Mei, dan Juni', 'pic' => 'PIC', 'batas_waktu' => '2026-06-30',
+            'iku_id' => $iku->id, 'periode_id' => $periodeBerjalan->id,
+            'rtl_teks' => 'Poin 1', 'berlaku_bulan' => 'Juli, Agustus, dan September', 'pic' => 'PIC', 'batas_waktu' => '2026-09-30',
         ]);
 
         $poin2 = RtlEvaluasi::create([
-            'iku_id' => $iku->id, 'periode_id' => $periodeSebelumnya->id,
-            'rtl_teks' => 'Poin 2', 'berlaku_bulan' => 'April, Mei, dan Juni', 'pic' => 'PIC', 'batas_waktu' => '2026-06-30',
+            'iku_id' => $iku->id, 'periode_id' => $periodeBerjalan->id,
+            'rtl_teks' => 'Poin 2', 'berlaku_bulan' => 'Juli, Agustus, dan September', 'pic' => 'PIC', 'batas_waktu' => '2026-09-30',
         ]);
 
         $this->actingAs($ketua);
@@ -485,9 +488,21 @@ class PengisianKegiatanTest extends TestCase
             ->set('tahun', 2026)
             ->set('bulan', 9)
             ->set('iku_id', $iku->id)
+            // addBlock() dulu supaya blocks.1/.2 punya struktur emptyBlock() lengkap
+            // (jenis, tahapan_survei, bukti) sebelum di-set sebagian lewat dot-notation.
+            ->call('addBlock')
+            ->call('addBlock')
             ->set('blocks.0.uraian_kegiatan', 'Kegiatan uji evaluasi')
             ->set('blocks.0.jenis', 'bukan_survei_sensus')
             ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
+            // Kedua poin RTL berjalan juga wajib sudah terlaksana sebagai kegiatan (bukan
+            // hanya diberi bukti realisasi) sebelum bisa diajukan di bulan terakhir triwulan.
+            ->set('blocks.1.uraian_kegiatan', $poin1->rtl_teks)
+            ->set('blocks.1.jenis', 'bukan_survei_sensus')
+            ->set('blocks.1.bukti', [UploadedFile::fake()->create('bukti1.pdf', 100, 'application/pdf')])
+            ->set('blocks.2.uraian_kegiatan', $poin2->rtl_teks)
+            ->set('blocks.2.jenis', 'bukan_survei_sensus')
+            ->set('blocks.2.bukti', [UploadedFile::fake()->create('bukti2.pdf', 100, 'application/pdf')])
             ->set("evaluasi.{$poin1->id}.bukti", [UploadedFile::fake()->create('realisasi1.pdf', 100, 'application/pdf')])
             ->set("evaluasi.{$poin2->id}.bukti", [UploadedFile::fake()->create('realisasi2.pdf', 100, 'application/pdf')])
             ->set('rtlBaru.0.rtl_teks', 'RTL uji coba triwulan berikutnya')
@@ -495,7 +510,7 @@ class PengisianKegiatanTest extends TestCase
             ->call('ajukanIsian')
             ->assertHasNoErrors();
 
-        $this->assertDatabaseCount('kegiatan', 1);
+        $this->assertDatabaseCount('kegiatan', 3);
         $this->assertTrue($poin1->refresh()->sudahDievaluasi());
         $this->assertTrue($poin2->refresh()->sudahDievaluasi());
     }

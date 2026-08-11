@@ -208,7 +208,10 @@
             </div>
         @endforeach
 
-        <button type="button" class="btn btn-ghost btn-sm" wire:click="addBlock">＋ Tambah Kegiatan</button>
+        <button type="button" class="btn btn-ghost btn-sm" wire:click="addBlock" wire:loading.attr="disabled" wire:target="addBlock">
+            <span wire:loading.remove wire:target="addBlock">＋ Tambah Kegiatan</span>
+            <span wire:loading wire:target="addBlock">Menambahkan…</span>
+        </button>
         </div>
 
         <div class="sec" style="margin-top:20px"><span class="n">3</span><span>Kendala &amp; Solusi</span></div>
@@ -316,16 +319,31 @@
             </div>
         @endforeach
 
-        <button type="button" class="btn btn-ghost btn-sm" wire:click="addKendalaBlock">＋ Tambah Pasangan Kendala &amp; Solusi</button>
+        <button type="button" class="btn btn-ghost btn-sm" wire:click="addKendalaBlock" wire:loading.attr="disabled" wire:target="addKendalaBlock">
+            <span wire:loading.remove wire:target="addKendalaBlock">＋ Tambah Pasangan Kendala &amp; Solusi</span>
+            <span wire:loading wire:target="addKendalaBlock">Menambahkan…</span>
+        </button>
         </div>
 
-        @if ($iku_id)
-            <div class="sec" style="margin-top:20px"><span class="n">4</span><span>Evaluasi RTL Triwulan Sebelumnya</span></div>
+        <div class="sec" style="margin-top:20px"><span class="n">4</span><span>Evaluasi RTL Triwulan Sebelumnya</span></div>
+
+        <div x-show="!ikuDipilih" class="info warn">🔒 Pilih IKU terlebih dahulu (Bagian 1) untuk melihat evaluasi RTL.</div>
+
+        <div x-show="ikuDipilih" x-cloak>
             <div wire:loading wire:target="iku_id" class="info">⏳ Memuat data RTL &amp; evaluasi untuk IKU ini…</div>
-            <div class="info teal">✅ Poin di bawah otomatis diambil dari RTL triwulan sebelumnya. Lampirkan bukti realisasinya (boleh lebih dari satu berkas) — {{ $bulanKe === 3 ? 'WAJIB semua poin sudah punya bukti sebelum bisa diajukan pada bulan terakhir triwulan ini.' : 'opsional untuk bulan ini, tapi wajib sudah lengkap semua sebelum bulan terakhir triwulan.' }}</div>
+
+            <div wire:loading.remove wire:target="iku_id">
+            <div class="info teal">✅ Poin di bawah adalah RTL yang ditetapkan pada triwulan sebelumnya untuk dilaksanakan triwulan ini — sama dengan yang muncul sebagai saran uraian kegiatan di Bagian 2. Lampirkan bukti realisasinya (boleh lebih dari satu berkas) — {{ $bulanKe === 3 ? 'WAJIB semua poin sudah punya bukti sebelum bisa diajukan pada bulan terakhir triwulan ini.' : 'opsional untuk bulan ini, tapi wajib sudah lengkap semua sebelum bulan terakhir triwulan.' }}</div>
 
             @if ($rtlSebelumnya->isEmpty())
                 <p style="color:var(--muted);font-size:13px">Tidak ada poin RTL triwulan sebelumnya untuk IKU ini.</p>
+            @endif
+
+            @if ($rtlBerjalanBelumTerlaksana->isNotEmpty())
+                <div class="info red" style="margin-bottom:8px">
+                    ⚠️ {{ $rtlBerjalanBelumTerlaksana->count() }} poin RTL di bawah belum pernah dipilih sebagai uraian kegiatan pada triwulan ini.
+                    Semua wajib terlaksana sebelum bisa diajukan ke Tim SAKIP di bulan terakhir triwulan ({{ $this->labelBulanTerakhirTriwulanIni() }}).
+                </div>
             @endif
 
             @foreach ($rtlSebelumnya as $poin)
@@ -335,6 +353,11 @@
                         <div>
                             <span class="pl-lbl">Direncanakan ({{ $poin->berlaku_bulan }})</span>
                             {{ $poin->rtl_teks }}
+                            @if ($rtlBerjalanBelumTerlaksana->contains('id', $poin->id))
+                                <span class="badge b-tunggu" style="margin-left:6px">Belum terlaksana sbg kegiatan</span>
+                            @else
+                                <span class="badge b-approve" style="margin-left:6px">Terlaksana sbg kegiatan</span>
+                            @endif
                             <div style="color:var(--muted);font-size:11px;margin-top:4px">PIC: {{ $poin->pic }} · Batas waktu: {{ $poin->batas_waktu?->translatedFormat('d F Y') }}</div>
                         </div>
                     </div>
@@ -379,37 +402,14 @@
                     </div>
                 </div>
             @endforeach
+            </div>
+        </div>
 
-            @if ($rtlBerjalan->isNotEmpty())
-                <div style="margin:14px 0">
-                    <div style="font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">RTL Triwulan Berjalan — hanya-baca</div>
+        <div class="sec" style="margin-top:20px"><span class="n">5</span><span>Rencana Tindak Lanjut ({{ $labelBerikutnya }})</span></div>
 
-                    @if ($rtlBerjalanBelumTerlaksana->isNotEmpty())
-                        <div class="info red" style="margin-bottom:8px">
-                            ⚠️ {{ $rtlBerjalanBelumTerlaksana->count() }} poin RTL di bawah belum pernah dipilih sebagai uraian kegiatan pada triwulan ini.
-                            Semua wajib terlaksana sebelum bisa diajukan ke Tim SAKIP di bulan terakhir triwulan ({{ $this->labelBulanTerakhirTriwulanIni() }}).
-                        </div>
-                    @endif
+        <div x-show="!ikuDipilih" class="info warn">🔒 Pilih IKU terlebih dahulu (Bagian 1) untuk mengisi RTL.</div>
 
-                    @foreach ($rtlBerjalan as $poin)
-                        <div style="padding:8px 0;border-bottom:1px solid var(--line2);font-size:13px">
-                            <div>
-                                {{ $poin->rtl_teks }}
-                                @if ($rtlBerjalanBelumTerlaksana->contains('id', $poin->id))
-                                    <span class="badge b-tunggu" style="margin-left:6px">Belum terlaksana</span>
-                                @else
-                                    <span class="badge b-approve" style="margin-left:6px">Terlaksana</span>
-                                @endif
-                            </div>
-                            <div style="color:var(--muted);font-size:12px;margin-top:4px">
-                                {{ $poin->berlaku_bulan }} · PIC: {{ $poin->pic }} · Batas waktu: {{ $poin->batas_waktu?->translatedFormat('d F Y') }}
-                            </div>
-                        </div>
-                    @endforeach
-                </div>
-            @endif
-
-            <div class="sec" style="margin-top:20px"><span class="n">5</span><span>Rencana Tindak Lanjut ({{ $labelBerikutnya }})</span></div>
+        <div x-show="ikuDipilih" x-cloak>
             <div style="font-size:11.5px;color:var(--muted);margin:-8px 0 12px">
                 {{ $labelBerikutnya }} berarti ({{ $bulanTargetBerikutnya->values()->join(', ', ', dan ') }}).
             </div>
@@ -449,7 +449,10 @@
                     </div>
                 @endforeach
 
-                <button type="button" class="btn btn-ghost btn-sm" wire:click="addRtlBlock">＋ Tambah Poin RTL</button>
+                <button type="button" class="btn btn-ghost btn-sm" wire:click="addRtlBlock" wire:loading.attr="disabled" wire:target="addRtlBlock">
+                    <span wire:loading.remove wire:target="addRtlBlock">＋ Tambah Poin RTL</span>
+                    <span wire:loading wire:target="addRtlBlock">Menambahkan…</span>
+                </button>
 
                 <div class="row2" style="margin-top:14px">
                     <div class="field"><label>PIC Tindak Lanjut <span class="req">*</span></label>
@@ -546,11 +549,14 @@
                     </div>
                 @endforeach
 
-                <button type="button" class="btn btn-ghost btn-sm" wire:click="addBagianKustomBlock({{ $bagian->id }})">＋ Tambah Poin {{ $bagian->nama }}</button>
+                <button type="button" class="btn btn-ghost btn-sm" wire:click="addBagianKustomBlock({{ $bagian->id }})" wire:loading.attr="disabled" wire:target="addBagianKustomBlock({{ $bagian->id }})">
+                    <span wire:loading.remove wire:target="addBagianKustomBlock({{ $bagian->id }})">＋ Tambah Poin {{ $bagian->nama }}</span>
+                    <span wire:loading wire:target="addBagianKustomBlock({{ $bagian->id }})">Menambahkan…</span>
+                </button>
             @endforeach
 
             <div class="info teal" style="margin-top:12px">✅ Analisis capaian &amp; angka akan diisi oleh Tim SAKIP saat verifikasi.</div>
-        @endif
+        </div>
     </div>
 
     <div class="btn-row">

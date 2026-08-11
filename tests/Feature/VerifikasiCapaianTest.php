@@ -184,17 +184,20 @@ class VerifikasiCapaianTest extends TestCase
             'status_verifikasi' => 'menunggu',
         ]);
 
-        $periodeSebelumnya = Periode::create([
+        // RTL disimpan dengan periode TARGET-nya (sama triwulan dengan capaian ini,
+        // triwulan III) — sama seperti alur nyata "RTL Baru" yang ditetapkan saat
+        // mengisi triwulan sebelumnya untuk dilaksanakan triwulan berjalan ini.
+        $periodeRtl = Periode::create([
             'tahun' => 2026,
-            'bulan' => 5,
-            'triwulan' => 2,
-            'bulan_ke' => 2,
-            'flag_bulan_terlewat' => true,
+            'bulan' => 7,
+            'triwulan' => 3,
+            'bulan_ke' => 1,
+            'flag_bulan_terlewat' => false,
         ]);
 
         $rtl = RtlEvaluasi::create([
             'iku_id' => $data['iku']->id,
-            'periode_id' => $periodeSebelumnya->id,
+            'periode_id' => $periodeRtl->id,
             'rtl_teks' => 'RTL triwulan sebelumnya',
             'berlaku_bulan' => 'RTL untuk April, Mei, Juni',
             'pic' => 'PIC Uji',

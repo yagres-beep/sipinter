@@ -146,8 +146,11 @@ class VerifikasiCapaian extends Component
     }
 
     /**
-     * Poin RTL yang ditetapkan pada triwulan SEBELUMNYA periode capaian ini, untuk
-     * dicek kesesuaian realisasinya — tanpa skor persentase (cukup periksa sesuai/tidak).
+     * Poin RTL yang ditetapkan pada triwulan SEBELUMNYA untuk dilaksanakan pada
+     * triwulan periode capaian ini (sama persis dengan sumber yang dipakai Ketua Tim
+     * di Bagian 4 "Evaluasi RTL Triwulan Sebelumnya" — lihat PengisianKegiatan::
+     * rtlTriwulanBerjalan()), untuk dicek kesesuaian realisasinya — tanpa skor
+     * persentase (cukup periksa sesuai/tidak).
      */
     public function rtlEvaluasiSebelumnya()
     {
@@ -156,15 +159,10 @@ class VerifikasiCapaian extends Component
         }
 
         $periode = $this->capaian->periode;
-        $triwulanSekarang = $periode->triwulan;
-
-        [$tahunTarget, $triwulanTarget] = $triwulanSekarang === 1
-            ? [$periode->tahun - 1, 4]
-            : [$periode->tahun, $triwulanSekarang - 1];
 
         return $this->cacheRtlSebelumnya = RtlEvaluasi::with('berkas')
             ->where('iku_id', $this->capaian->iku_id)
-            ->whereHas('periode', fn ($q) => $q->where('tahun', $tahunTarget)->where('triwulan', $triwulanTarget))
+            ->whereHas('periode', fn ($q) => $q->where('tahun', $periode->tahun)->where('triwulan', $periode->triwulan))
             ->get();
     }
 

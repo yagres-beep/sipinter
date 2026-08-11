@@ -90,8 +90,6 @@ class PengisianKegiatan extends Component
      */
     protected ?\Illuminate\Support\Collection $cacheRtlBerjalan = null;
 
-    protected ?\Illuminate\Support\Collection $cacheRtlSebelumnyaList = null;
-
     protected ?bool $cacheRtlBerikutnyaSudahAda = null;
 
     protected ?MasterIku $cacheIkuTerpilih = null;
@@ -333,7 +331,7 @@ class PengisianKegiatan extends Component
      */
     protected function lupakanCachePeriodeIku(): void
     {
-        foreach (['riwayat', 'rtl-sebelumnya', 'rtl-berjalan', 'rtl-berikutnya-ada', 'rtl-berjalan-terpakai'] as $bagian) {
+        foreach (['riwayat', 'rtl-berjalan', 'rtl-berikutnya-ada', 'rtl-berjalan-terpakai'] as $bagian) {
             Cache::forget($this->cacheKeyPeriodeIku($bagian));
         }
     }
@@ -365,18 +363,21 @@ class PengisianKegiatan extends Component
     }
 
     /**
-     * Siapkan form evaluasi kosong untuk tiap poin RTL triwulan sebelumnya yang belum dievaluasi.
-     */
-    /**
-     * Siapkan form bukti realisasi untuk SEMUA poin RTL triwulan sebelumnya (bukan hanya
-     * yang belum ada buktinya) — poin yang sudah punya bukti tetap boleh ditambahkan lagi,
+     * Siapkan form bukti realisasi untuk SEMUA poin RTL triwulan ini (bukan hanya yang
+     * belum ada buktinya) — poin yang sudah punya bukti tetap boleh ditambahkan lagi,
      * tidak dikunci hanya-baca seperti alur lama berbasis teks realisasi.
+     *
+     * RTL yang dievaluasi di sini adalah RTL YANG SAMA dengan sumber dropdown uraian
+     * kegiatan (rtlTriwulanBerjalan()) — yaitu poin yang DITETAPKAN pada triwulan
+     * sebelumnya untuk DILAKSANAKAN pada triwulan berjalan ini. Sebelumnya bagian ini
+     * keliru mengambil dari periode triwulan-1 (satu triwulan terlalu jauh ke belakang,
+     * poin yang seharusnya sudah dievaluasi saat mengisi triwulan itu sendiri).
      */
     protected function muatFormEvaluasi(): void
     {
         $this->evaluasi = [];
 
-        foreach ($this->rtlTriwulanSebelumnya() as $poin) {
+        foreach ($this->rtlTriwulanBerjalan() as $poin) {
             $this->evaluasi[$poin->id] = ['bukti' => []];
         }
     }
@@ -387,33 +388,12 @@ class PengisianKegiatan extends Component
         $this->evaluasi[$rtlId]['bukti'] = array_values($this->evaluasi[$rtlId]['bukti']);
     }
 
-    protected function rtlTriwulanSebelumnya()
-    {
-        if ($this->cacheRtlSebelumnyaList !== null) {
-            return $this->cacheRtlSebelumnyaList;
-        }
-
-        if (! $this->iku_id) {
-            return $this->cacheRtlSebelumnyaList = collect();
-        }
-
-        return $this->cacheRtlSebelumnyaList = Cache::remember(
-            $this->cacheKeyPeriodeIku('rtl-sebelumnya'),
-            self::CACHE_TTL_DETIK,
-            function () {
-                $triwulanSekarang = $this->triwulanDari($this->bulan);
-                [$tahunTarget, $triwulanTarget] = $triwulanSekarang === 1
-                    ? [$this->tahun - 1, 4]
-                    : [$this->tahun, $triwulanSekarang - 1];
-
-                return RtlEvaluasiModel::with(['periode', 'berkas'])
-                    ->where('iku_id', $this->iku_id)
-                    ->whereHas('periode', fn ($q) => $q->where('tahun', $tahunTarget)->where('triwulan', $triwulanTarget))
-                    ->get();
-            }
-        );
-    }
-
+    /**
+     * RTL yang ditetapkan pada triwulan SEBELUMNYA untuk dilaksanakan pada triwulan
+     * BERJALAN ini — satu-satunya sumber untuk: (1) dropdown/saran uraian kegiatan,
+     * (2) bagian Evaluasi RTL (bukti realisasi), dan (3) validasi "wajib terlaksana
+     * semua" di akhir triwulan. Ketiganya sengaja memakai koleksi yang sama persis.
+     */
     protected function rtlTriwulanBerjalan()
     {
         if ($this->cacheRtlBerjalan !== null) {
@@ -430,7 +410,7 @@ class PengisianKegiatan extends Component
             function () {
                 $triwulanSekarang = $this->triwulanDari($this->bulan);
 
-                return RtlEvaluasiModel::with('periode')
+                return RtlEvaluasiModel::with(['periode', 'berkas'])
                     ->where('iku_id', $this->iku_id)
                     ->whereHas('periode', fn ($q) => $q->where('tahun', $this->tahun)->where('triwulan', $triwulanSekarang))
                     ->get();
@@ -806,7 +786,7 @@ class PengisianKegiatan extends Component
             // (sudah tersimpan ATAU baru dipilih di form ini) — tapi HANYA digerbang pada
             // bulan TERAKHIR triwulan berjalan, sama seperti aturan bagian kustom di bawah.
             if ($this->bulanKeDari($this->bulan) === 3) {
-                $poinTanpaBukti = $this->rtlTriwulanSebelumnya()->reject(function ($poin) {
+                $poinTanpaBukti = $this->rtlTriwulanBerjalan()->reject(function ($poin) {
                     $buktiBaru = $this->evaluasi[$poin->id]['bukti'] ?? [];
 
                     return $poin->sudahDievaluasi() || ! empty($buktiBaru);
@@ -1183,8 +1163,7 @@ class PengisianKegiatan extends Component
             'flagTerlewat' => $this->isBulanTerlewat(),
             'periodeLabel' => Carbon::create($this->tahun, $this->bulan, 1)->locale('id')->translatedFormat('F Y'),
             'riwayatKendala' => $this->riwayatKendalaSolusi(),
-            'rtlSebelumnya' => $this->rtlTriwulanSebelumnya(),
-            'rtlBerjalan' => $this->rtlTriwulanBerjalan(),
+            'rtlSebelumnya' => $this->rtlTriwulanBerjalan(),
             'sudahAdaRtlBerikutnya' => $this->rtlTriwulanBerikutnyaSudahAda(),
             'labelBerikutnya' => $this->labelTriwulanBerikutnya(),
             'bulanTargetBerikutnya' => collect($this->bulanBulanTarget())->mapWithKeys(fn ($b) => [$b => $this->namaBulanIndo($b)]),
