@@ -4,6 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>@yield('title', 'SIPINTER')</title>
+    <script>
+        // Terapkan pilihan tema sebelum CSS dirender supaya tidak "kedip" balik ke
+        // terang sesaat sebelum berpindah ke gelap (FOUC) — @see sidebar-foot untuk tombolnya.
+        (function () {
+            var tema = localStorage.getItem('sipinter-tema');
+            if (tema === 'light' || tema === 'dark') {
+                document.documentElement.setAttribute('data-theme', tema);
+            }
+        })();
+    </script>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
 </head>
@@ -42,27 +52,44 @@
                 @endphp
 
                 <nav class="nav" @click="sidebarOpen = false">
-                    <a href="{{ route('dashboard') }}" class="{{ request()->routeIs('dashboard') ? 'active' : '' }}"><span class="ic">🏠</span> Dasbor</a>
+                    <a wire:navigate href="{{ route('dashboard') }}" class="{{ request()->routeIs('dashboard') ? 'active' : '' }}"><span class="ic">🏠</span> Dasbor</a>
 
                     @if ($role === 'Ketua Tim')
-                        <a href="{{ route('pengisian.index') }}" class="{{ request()->routeIs('pengisian.*') ? 'active' : '' }}"><span class="ic">📝</span> Isian Kegiatan</a>
-                        <a href="{{ route('notula-riwayat.index') }}" class="{{ request()->routeIs('notula-riwayat.*') ? 'active' : '' }}"><span class="ic">📄</span> Notula</a>
+                        <a wire:navigate href="{{ route('pengisian.index') }}" class="{{ request()->routeIs('pengisian.*') ? 'active' : '' }}"><span class="ic">📝</span> Isian Kegiatan</a>
+                        <a wire:navigate href="{{ route('notula-riwayat.index') }}" class="{{ request()->routeIs('notula-riwayat.*') ? 'active' : '' }}"><span class="ic">📄</span> Notula</a>
                     @elseif ($role === 'Tim SAKIP')
-                        <a href="{{ route('verifikasi.index') }}" class="{{ request()->routeIs('verifikasi.*', 'notula.*', 'template-notula.*') ? 'active' : '' }}"><span class="ic">✅</span> Verifikasi &amp; Notula</a>
-                        <a href="{{ route('master-iku.index') }}" class="{{ request()->routeIs('master-iku.*', 'folder-config.*') ? 'active' : '' }}"><span class="ic">📊</span> Master IKU</a>
-                        <a href="{{ route('verifikasi-akun.index') }}" class="{{ request()->routeIs('verifikasi-akun.*', 'storage-accounts.*') ? 'active' : '' }}"><span class="ic">👥</span> Kelola Pengguna</a>
+                        <a wire:navigate href="{{ route('verifikasi.index') }}" class="{{ request()->routeIs('verifikasi.*', 'notula.*', 'template-notula.*') ? 'active' : '' }}"><span class="ic">✅</span> Verifikasi &amp; Notula</a>
+                        <a wire:navigate href="{{ route('master-iku.index') }}" class="{{ request()->routeIs('master-iku.*', 'folder-config.*') ? 'active' : '' }}"><span class="ic">📊</span> Master IKU</a>
+                        <a wire:navigate href="{{ route('verifikasi-akun.index') }}" class="{{ request()->routeIs('verifikasi-akun.*', 'storage-accounts.*') ? 'active' : '' }}"><span class="ic">👥</span> Kelola Pengguna</a>
                     @elseif ($role === 'Kepala')
-                        <a href="{{ route('persetujuan.index') }}" class="{{ request()->routeIs('persetujuan.*') ? 'active' : '' }}"><span class="ic">✍️</span> Persetujuan</a>
-                        <a href="{{ route('dasbor-kinerja.index') }}" class="{{ request()->routeIs('dasbor-kinerja.*') ? 'active' : '' }}"><span class="ic">📊</span> Dasbor Kinerja</a>
-                        <a href="{{ route('rekapitulasi.index') }}" class="{{ request()->routeIs('rekapitulasi.*') ? 'active' : '' }}"><span class="ic">📈</span> Rekapitulasi</a>
-                        <a href="{{ route('notula-riwayat.index') }}" class="{{ request()->routeIs('notula-riwayat.*') ? 'active' : '' }}"><span class="ic">📄</span> Notula</a>
+                        <a wire:navigate href="{{ route('persetujuan.index') }}" class="{{ request()->routeIs('persetujuan.*') ? 'active' : '' }}"><span class="ic">✍️</span> Persetujuan</a>
+                        <a wire:navigate href="{{ route('dasbor-kinerja.index') }}" class="{{ request()->routeIs('dasbor-kinerja.*') ? 'active' : '' }}"><span class="ic">📊</span> Dasbor Kinerja</a>
+                        <a wire:navigate href="{{ route('rekapitulasi.index') }}" class="{{ request()->routeIs('rekapitulasi.*') ? 'active' : '' }}"><span class="ic">📈</span> Rekapitulasi</a>
+                        <a wire:navigate href="{{ route('notula-riwayat.index') }}" class="{{ request()->routeIs('notula-riwayat.*') ? 'active' : '' }}"><span class="ic">📄</span> Notula</a>
                     @endif
 
-                    <a href="{{ route('lakin.index') }}" class="{{ request()->routeIs('lakin.*') ? 'active' : '' }}"><span class="ic">📈</span> LAKIN</a>
-                    <a href="{{ route('profile.edit') }}" class="{{ request()->routeIs('profile.*') ? 'active' : '' }}"><span class="ic">⚙️</span> Pengaturan Akun</a>
+                    <a wire:navigate href="{{ route('lakin.index') }}" class="{{ request()->routeIs('lakin.*') ? 'active' : '' }}"><span class="ic">📈</span> LAKIN</a>
+                    <a wire:navigate href="{{ route('profile.edit') }}" class="{{ request()->routeIs('profile.*') ? 'active' : '' }}"><span class="ic">⚙️</span> Pengaturan Akun</a>
                 </nav>
 
-                <div class="sidebar-foot">
+                <div class="sidebar-foot" x-data="{
+                    tema: localStorage.getItem('sipinter-tema') || 'system',
+                    aturTema(t) {
+                        this.tema = t;
+                        if (t === 'system') {
+                            localStorage.removeItem('sipinter-tema');
+                            document.documentElement.removeAttribute('data-theme');
+                        } else {
+                            localStorage.setItem('sipinter-tema', t);
+                            document.documentElement.setAttribute('data-theme', t);
+                        }
+                    }
+                }">
+                    <div class="theme-switch" role="group" aria-label="Pilih tema tampilan">
+                        <button type="button" :class="{ on: tema === 'system' }" @click="aturTema('system')" title="Ikut tema perangkat">🖥️</button>
+                        <button type="button" :class="{ on: tema === 'light' }" @click="aturTema('light')" title="Mode terang">☀️</button>
+                        <button type="button" :class="{ on: tema === 'dark' }" @click="aturTema('dark')" title="Mode gelap">🌙</button>
+                    </div>
                     <span class="sf-version">v1.0 · Aktualisasi 2026</span>
                     <form method="POST" action="{{ route('logout') }}">
                         @csrf
@@ -87,7 +114,7 @@
                 @auth
                     <div class="user">
                         <span>{{ $role }}</span>
-                        <a href="{{ route('profile.edit') }}"><div class="avatar {{ $avatarKelas }}">{{ $avatarSingkatan }}</div></a>
+                        <a wire:navigate href="{{ route('profile.edit') }}"><div class="avatar {{ $avatarKelas }}">{{ $avatarSingkatan }}</div></a>
                     </div>
                 @endauth
             </div>

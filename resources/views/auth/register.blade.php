@@ -61,7 +61,7 @@
                 <button type="submit" class="btn btn-primary auth-btn">Daftar →</button>
             </form>
 
-            <div class="auth-alt">Sudah punya akun? <a href="{{ route('login') }}">Masuk di sini</a></div>
+            <div class="auth-alt">Sudah punya akun? <a wire:navigate href="{{ route('login') }}">Masuk di sini</a></div>
         </div>
     </div>
 @endsection

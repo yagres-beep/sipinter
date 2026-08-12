@@ -141,7 +141,7 @@
                             </div>
 
                             <div>
-                                <div style="font-size:11px;font-weight:700;color:var(--navy);margin-bottom:6px">📄 NOTULA — dibaca Tim SAKIP &amp; Kepala</div>
+                                <div style="font-size:11px;font-weight:700;color:var(--ink);margin-bottom:6px">📄 NOTULA — dibaca Tim SAKIP &amp; Kepala</div>
                                 <div class="notula" style="margin:0;padding:20px;min-height:0;box-shadow:none;font-size:12px;border-radius:8px">
                                     <h3 style="font-size:13px">{{ $bagian->nama ?: 'Nama Bagian' }}</h3>
                                     <ul style="font-size:12px">

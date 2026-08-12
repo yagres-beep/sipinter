@@ -48,7 +48,7 @@
                 <button type="submit" class="btn btn-primary auth-btn">Masuk →</button>
             </form>
 
-            <div class="auth-alt">Belum punya akun? <a href="{{ route('register') }}">Daftar di sini</a></div>
+            <div class="auth-alt">Belum punya akun? <a wire:navigate href="{{ route('register') }}">Daftar di sini</a></div>
         </div>
     </div>
 @endsection

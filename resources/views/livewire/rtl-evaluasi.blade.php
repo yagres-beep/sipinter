@@ -11,12 +11,12 @@
         <div>
             <div class="pb-lbl">Periode Berjalan</div>
             <div class="pb-val">
-                <select wire:model.live="bulan" style="border:none;background:transparent;font-weight:700;color:var(--navy);font-size:14px">
+                <select wire:model.live="bulan" style="border:none;background:transparent;font-weight:700;color:var(--ink);font-size:14px">
                     @foreach (['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'] as $idx => $namaBulan)
                         <option value="{{ $idx + 1 }}">{{ $namaBulan }}</option>
                     @endforeach
                 </select>
-                <select wire:model.live="tahun" style="border:none;background:transparent;font-weight:700;color:var(--navy);font-size:14px">
+                <select wire:model.live="tahun" style="border:none;background:transparent;font-weight:700;color:var(--ink);font-size:14px">
                     @foreach (range(now()->year - 1, now()->year + 1) as $tahunOpsi)
                         <option value="{{ $tahunOpsi }}">{{ $tahunOpsi }}</option>
                     @endforeach

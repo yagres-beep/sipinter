@@ -21,6 +21,7 @@
         <div class="search-box">
             🔍
             <input type="text" wire:model.live.debounce.300ms="cari" placeholder="Cari kode, indikator, atau tim…">
+            <span wire:loading wire:target="cari" class="muted" style="font-size:11px">mencari…</span>
         </div>
     </div>
 

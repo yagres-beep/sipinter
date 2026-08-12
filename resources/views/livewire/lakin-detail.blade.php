@@ -27,7 +27,7 @@
             <div class="pb-val"><b>{{ $lakin->tahun }}</b></div>
         </div>
         <div class="btn-row" style="margin:0 0 0 auto">
-            <a href="{{ route('lakin.index') }}" class="btn btn-ghost btn-sm">← Daftar LAKIN</a>
+            <a wire:navigate href="{{ route('lakin.index') }}" class="btn btn-ghost btn-sm">← Daftar LAKIN</a>
             <button type="button" class="btn btn-teal btn-sm" wire:click="unduhExcel">⬇ Unduh Excel</button>
             @if ($this->isTimSakip())
                 <button type="button" class="btn btn-ghost btn-sm" wire:click="segarkanAngka" wire:confirm="Segarkan angka baris yang sudah ada dari data capaian terbaru? Baris custom tidak berubah, dan ini tidak menambah baris baru.">↻ Segarkan Angka</button>

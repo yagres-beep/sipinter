@@ -19,6 +19,7 @@
             <div class="search-box">
                 🔍
                 <input type="text" wire:model.live.debounce.300ms="cari" placeholder="Cari kode, indikator, atau tim…">
+                <span wire:loading wire:target="cari" class="muted" style="font-size:11px">mencari…</span>
             </div>
             <button type="button" class="btn btn-ghost btn-sm" wire:click="resetFilter">↺ Reset</button>
         </div>
@@ -49,7 +50,7 @@
                         <td>{{ $jumlahKegiatan->get($capaian->id, 0) }} kegiatan</td>
                         <td><x-badge-status status="diajukan" /></td>
                         <td style="text-align:right">
-                            <a href="{{ route('verifikasi.show', $capaian) }}" class="btn btn-primary btn-sm">Periksa →</a>
+                            <a wire:navigate href="{{ route('verifikasi.show', $capaian) }}" class="btn btn-primary btn-sm">Periksa →</a>
                         </td>
                     </tr>
                 @empty

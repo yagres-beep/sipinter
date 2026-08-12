@@ -1,4 +1,4 @@
-<div>
+<div x-data="{ bisaDiisiTw: {{ $bulan % 3 === 0 ? 'true' : 'false' }} }">
     <div class="page-title">Isian Kegiatan</div>
     <div class="page-sub">Kegiatan, kendala &amp; solusi, evaluasi RTL, dan rencana tindak lanjut — diajukan sekaligus ke Tim SAKIP.</div>
 
@@ -22,12 +22,12 @@
         <div>
             <div class="pb-lbl">Periode Pengisian</div>
             <div class="pb-val">
-                <select wire:model.live="bulan" style="border:none;background:transparent;font-weight:700;color:var(--navy);font-size:14px">
+                <select wire:model.live="bulan" @change="bisaDiisiTw = (Number($event.target.value) % 3 === 0)" style="border:none;background:transparent;font-weight:700;color:var(--ink);font-size:14px">
                     @foreach (['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'] as $idx => $namaBulan)
                         <option value="{{ $idx + 1 }}">{{ $namaBulan }}</option>
                     @endforeach
                 </select>
-                <select wire:model.live="tahun" style="border:none;background:transparent;font-weight:700;color:var(--navy);font-size:14px">
+                <select wire:model.live="tahun" style="border:none;background:transparent;font-weight:700;color:var(--ink);font-size:14px">
                     @foreach (range(now()->year - 1, now()->year + 1) as $tahunOpsi)
                         <option value="{{ $tahunOpsi }}">{{ $tahunOpsi }}</option>
                     @endforeach
@@ -97,7 +97,7 @@
 
                 <div class="field">
                     <label>Uraian Kegiatan <span class="req">*</span></label>
-                    <input type="text" class="inp filled" list="dl-uraian-{{ $i }}" wire:model.blur="blocks.{{ $i }}.uraian_kegiatan"
+                    <input type="text" class="inp filled" list="dl-uraian-{{ $i }}" wire:model.live.blur="blocks.{{ $i }}.uraian_kegiatan"
                         @input="uraianTerisi = ($event.target.value.trim() !== ''); uraianTeks = $event.target.value"
                         placeholder="mis. Pencacahan rumah tangga Sakernas {{ $periodeLabel }}">
                     @if ($rtlBerjalanOptions->isNotEmpty())
@@ -419,12 +419,16 @@
                 <p style="color:var(--muted);font-size:12.5px">
                     RTL untuk {{ $labelBerikutnya }} sudah ditetapkan dan tampil hanya-baca sampai triwulan tersebut berjalan.
                 </p>
-            @elseif (! $this->rtlBaruBisaDiisi())
-                <div class="info warn">
+            @else
+                {{-- Sisi klien menghitung sendiri "bulan terakhir triwulan?" (murni dari
+                     $bulan, tidak butuh query) lewat bisaDiisiTw — jadi bagian ini langsung
+                     berubah begitu bulan dipilih, tidak menunggu balasan server. --}}
+                <div x-show="!bisaDiisiTw" x-cloak class="info warn">
                     ⏳ RTL untuk {{ $labelBerikutnya }} baru bisa diisi pada bulan terakhir triwulan berjalan
                     (<b>{{ $this->labelBulanTerakhirTriwulanIni() }}</b>).
                 </div>
-            @else
+
+                <div x-show="bisaDiisiTw" x-cloak>
                 <div class="info warn">⚠️ Tulis RTL per poin untuk {{ $labelBerikutnya }} secara keseluruhan. Poin ini dicek realisasinya pada triwulan berikutnya.</div>
 
                 @error('rtlBaru')
@@ -440,7 +444,7 @@
 
                         <div class="field" style="margin-bottom:0">
                             <label>Rencana kegiatan <span class="req">*</span></label>
-                            <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model.blur="rtlBaru.{{ $i }}.rtl_teks"
+                            <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model.live.blur="rtlBaru.{{ $i }}.rtl_teks"
                                 placeholder="mis. Pelatihan innas dan persiapan Susenas September 2026"></textarea>
                             @error("rtlBaru.{$i}.rtl_teks")
                                 <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
@@ -467,7 +471,7 @@
                             <option value="__lainnya__">Lainnya (ketik manual)</option>
                         </select>
                         @if ($rtlBaruPic === '__lainnya__')
-                            <input type="text" class="inp filled" style="margin-top:8px" wire:model.blur="rtlBaruPicManual" placeholder="Ketik nama PIC">
+                            <input type="text" class="inp filled" style="margin-top:8px" wire:model.live.blur="rtlBaruPicManual" placeholder="Ketik nama PIC">
                             @error('rtlBaruPicManual')
                                 <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                             @enderror
@@ -478,12 +482,13 @@
                         @enderror
                     </div>
                     <div class="field"><label>Batas Waktu <span class="req">*</span></label>
-                        <input type="date" class="inp filled" wire:model.blur="rtlBaruBatasWaktu">
+                        <input type="date" class="inp filled" wire:model.live.blur="rtlBaruBatasWaktu">
                         <div class="fhint">Bawaan: akhir {{ $labelBerikutnya }}.</div>
                         @error('rtlBaruBatasWaktu')
                             <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                         @enderror
                     </div>
+                </div>
                 </div>
             @endif
 
