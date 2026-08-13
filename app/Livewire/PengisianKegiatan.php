@@ -98,6 +98,42 @@ class PengisianKegiatan extends Component
 
     protected ?\Illuminate\Support\Collection $cacheRtlBerjalanTerpakaiIds = null;
 
+    /**
+     * Livewire mengirim SETIAP aksi (blur, klik pill, unggah berkas, dst.) sebagai
+     * request AJAX terpisah yang membawa "snapshot" kondisi form versi client saat
+     * itu. Kalau pengguna memicu beberapa aksi hampir bersamaan — paling sering
+     * kejadian saat mengunggah lebih dari satu berkas bukti berurutan sambil masih
+     * mengetik kolom lain — lebih dari satu request bisa diproses dari snapshot yang
+     * SUDAH SALING BASI: unggahan berkas Livewire mengirim data mentahnya lewat jalur
+     * terpisah dari commit properti biasa, jadi selama transfer berkas berlangsung
+     * (bisa beberapa detik), Livewire menganggap TIDAK ADA request aktif untuk
+     * komponen ini dan aksi lain bebas jalan duluan. Begitu unggahan itu akhirnya
+     * "menyimpan" hasilnya, ia bisa memakai snapshot yang sudah ketinggalan
+     * dibanding aksi-aksi lain yang keburu selesai duluan — hasilnya salah satu
+     * perubahan tertimpa/hilang begitu balasannya datang belakangan. Ini akar
+     * penyebab bug "berkas kedua hilang setelah diunggah" dan "uraian kegiatan
+     * hilang saat klik Tambah Kegiatan" yang pernah dilaporkan.
+     *
+     * Guna mengunci supaya SEMUA request Livewire untuk komponen ini, per sesi
+     * pengguna, benar-benar diproses satu per satu di server — request kedua
+     * menunggu request pertama selesai (dan snapshot-nya sudah mutakhir) sebelum
+     * mulai diproses, bukan langsung jalan dari snapshot yang sudah basi.
+     */
+    protected ?\Illuminate\Contracts\Cache\Lock $requestLock = null;
+
+    public function boot(): void
+    {
+        // TTL kunci (40 detik) sengaja lebih panjang dari batas tunggu block() (25 detik)
+        // supaya kunci tidak pernah kedaluwarsa sendiri sementara masih benar-benar dipegang.
+        $this->requestLock = Cache::lock('pengisian-kegiatan-lock:'.session()->getId(), 40);
+        $this->requestLock->block(25);
+    }
+
+    public function dehydrate(): void
+    {
+        $this->requestLock?->release();
+    }
+
     public function mount(): void
     {
         $this->tahun = (int) now()->year;

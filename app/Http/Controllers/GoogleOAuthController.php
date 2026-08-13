@@ -19,12 +19,15 @@ use RuntimeException;
  * sekali ke akun Gmail institusi lewat alur ini supaya unggahan berikutnya jalan
  * SEBAGAI akun itu sendiri (pakai kuota pribadinya), bukan sebagai robot tanpa kuota.
  *
- * Scope yang diminta sengaja HANYA drive.file (bukan drive penuh) — scope ini
- * diklasifikasikan Google sebagai "non-sensitif" sehingga tidak perlu proses
- * verifikasi aplikasi dan tidak kena batas refresh-token 7 hari yang berlaku untuk
- * app belum-terverifikasi dengan scope sensitif. Konsekuensinya: token ini hanya
- * bisa mengakses berkas/folder yang DIBUAT lewat aplikasi ini sendiri — karena itu
- * begitu berhasil terhubung, langsung dibuatkan folder root baru (lihat callback()).
+ * Scope yang diminta sengaja drive.file + drive.metadata.readonly (BUKAN drive
+ * penuh) — keduanya tidak tergolong "restricted scope" Google, jadi cukup status
+ * Testing + Test user (lihat Audience di Google Auth Platform), tidak perlu proses
+ * verifikasi aplikasi yang panjang. drive.file membatasi tulis/baca isi berkas HANYA
+ * ke yang dibuat aplikasi ini sendiri — karena itu begitu berhasil terhubung,
+ * langsung dibuatkan folder root baru (lihat callback()). metadata.readonly
+ * ditambahkan supaya FolderStructureService boleh MENCARI (files.list) folder yang
+ * sudah dibuat sebelumnya — drive.file sendiri menolak operasi pencarian sama
+ * sekali (403 ACCESS_TOKEN_SCOPE_INSUFFICIENT), hanya boleh operasi per-berkas.
  */
 class GoogleOAuthController extends Controller
 {
@@ -50,7 +53,12 @@ class GoogleOAuthController extends Controller
         // 'consent' dipaksa supaya Google SELALU mengirim ulang refresh_token — tanpa ini,
         // login kedua+ ke akun yang sama tidak akan menyertakan refresh_token sama sekali.
         $client->setPrompt('consent');
-        $client->addScope([Drive::DRIVE_FILE, 'openid', 'email']);
+        // drive.file sendiri hanya boleh MEMBUAT/MENULIS berkas milik aplikasi — Drive API
+        // menolak files.list ("mencari folder yang sudah ada") dengan 403 ACCESS_TOKEN_
+        // SCOPE_INSUFFICIENT tanpa metadata.readonly, dipakai FolderStructureService untuk
+        // findOrCreateFolder() & pengecekan nama berkas ganda. Masih tergolong scope
+        // non-sensitif juga (bukan restricted) — status Testing tetap cukup.
+        $client->addScope([Drive::DRIVE_FILE, Drive::DRIVE_METADATA_READONLY, 'openid', 'email']);
 
         return redirect()->away($client->createAuthUrl());
     }
