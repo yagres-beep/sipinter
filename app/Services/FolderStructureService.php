@@ -36,6 +36,51 @@ class FolderStructureService
 
     public function __construct(protected GoogleDriveService $drive) {}
 
+    /**
+     * Memoisasi ID folder & daftar nama-anak PER REQUEST (instance ini dibuat baru
+     * tiap request lewat app(), lihat PengisianKegiatan::ajukanIsian — bukan
+     * singleton, jadi aman tidak pernah basi lintas-request).
+     *
+     * Tanpa ini, mengajukan isian dengan beberapa berkas bukti membuat SETIAP
+     * berkas mengulang seluruh perjalanan folder Tahun→Triwulan→IKU→Kategori→Bulan
+     * dari nol (masing-masing satu panggilan Drive API), padahal untuk berkas-berkas
+     * dalam kategori/kegiatan yang sama hasilnya pasti identik. Pada pengajuan dengan
+     * banyak berkas, ini menumpuk jadi puluhan panggilan Drive API berurutan dalam
+     * SATU request — di server gratisan/lambat cukup untuk melewati batas waktu
+     * proxy (Cloudflare 524) sebelum Laravel sempat merespons sama sekali.
+     *
+     * @var array<string, string>
+     */
+    protected array $cacheFolderId = [];
+
+    /**
+     * @var array<string, list<string>>
+     */
+    protected array $cacheNamesInFolder = [];
+
+    protected function findOrCreateFolderCached(string $name, string $parentFolderId): string
+    {
+        $key = "{$parentFolderId}|{$name}";
+
+        return $this->cacheFolderId[$key] ??= $this->drive->findOrCreateFolder($name, $parentFolderId);
+    }
+
+    /**
+     * Sama seperti GoogleDriveService::namesInFolder(), tapi hanya query Drive sekali
+     * per folder per request — pemanggil WAJIB mendaftarkan nama baru yang baru saja
+     * dipakai lewat tandaiNamaDipakai() supaya berkas berikutnya ke folder yang sama
+     * dalam request ini tetap tidak tabrakan nama walau belum benar-benar diquery ulang ke Drive.
+     */
+    protected function namesInFolderCached(string $folderId): array
+    {
+        return $this->cacheNamesInFolder[$folderId] ??= $this->drive->namesInFolder($folderId);
+    }
+
+    protected function tandaiNamaDipakai(string $folderId, string $nama): void
+    {
+        $this->cacheNamesInFolder[$folderId][] = $nama;
+    }
+
     // ================================================================
     // RF-17 — penamaan otomatis. Method STATIS & murni (tidak menyentuh
     // Drive/DB) supaya mudah diuji dan dipakai ulang di tempat lain.
@@ -104,7 +149,7 @@ class FolderStructureService
             );
         }
 
-        return $this->drive->findOrCreateFolder((string) $tahun, $akun->drive_folder_id);
+        return $this->findOrCreateFolderCached((string) $tahun, $akun->drive_folder_id);
     }
 
     /**
@@ -136,11 +181,11 @@ class FolderStructureService
         $config = $this->configUntukIku($iku);
         $folderId = $this->resolveIkuFolder($periode, $iku);
 
-        $folderId = $this->drive->findOrCreateFolder($namaKategori, $folderId);
+        $folderId = $this->findOrCreateFolderCached($namaKategori, $folderId);
 
         if (in_array($namaKategori, $config->kategoriDenganSubfolderBulan(), true)) {
             $namaBulan = Carbon::create($periode->tahun, $periode->bulan, 1)->locale('id')->translatedFormat('F');
-            $folderId = $this->drive->findOrCreateFolder($namaBulan, $folderId);
+            $folderId = $this->findOrCreateFolderCached($namaBulan, $folderId);
         }
 
         return $folderId;
@@ -175,7 +220,7 @@ class FolderStructureService
             };
 
             if ($namaLevel !== null) {
-                $folderId = $this->drive->findOrCreateFolder($namaLevel, $folderId);
+                $folderId = $this->findOrCreateFolderCached($namaLevel, $folderId);
             }
         }
 
@@ -224,10 +269,11 @@ class FolderStructureService
         }
 
         $namaDasar = self::namaOtomatis($kegiatan->nama_folder_auto ?: $kegiatan->uraian_kegiatan);
-        $namaSudahAda = $this->drive->namesInFolder($kategoriFolderId);
+        $namaSudahAda = $this->namesInFolderCached($kategoriFolderId);
         $namaUnik = self::namaUnik($namaDasar, $namaSudahAda);
 
         $folderId = $this->drive->createFolder($namaUnik, $kategoriFolderId);
+        $this->tandaiNamaDipakai($kategoriFolderId, $namaUnik);
 
         $kegiatan->update(['drive_folder_id' => $folderId]);
 
@@ -281,8 +327,9 @@ class FolderStructureService
             ? Str::slug(self::namaOtomatis($namaBerkasOverride, 80))
             : (str_starts_with($kategoriSlug, 'bukti') ? $kategoriSlug : "bukti-{$kategoriSlug}");
 
-        $namaSudahAda = $this->drive->namesInFolder($tujuanFolderId);
+        $namaSudahAda = $this->namesInFolderCached($tujuanFolderId);
         $namaBerkas = self::namaUnik($namaDasar, $namaSudahAda, $ekstensi);
+        $this->tandaiNamaDipakai($tujuanFolderId, $namaBerkas);
 
         $hasil = $this->drive->uploadFile($localPath, $namaBerkas, $tujuanFolderId, $mimeType);
 
