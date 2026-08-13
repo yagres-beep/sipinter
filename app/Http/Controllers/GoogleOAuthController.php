@@ -112,7 +112,10 @@ class GoogleOAuthController extends Controller
         }
 
         $storageAccount->google_access_token = $token['access_token'];
-        $storageAccount->google_refresh_token = $token['refresh_token'] ?? $storageAccount->google_refresh_token;
+        // googleRefreshToken() (bukan properti langsung) karena token LAMA bisa saja tidak
+        // bisa didekripsi — justru itu alasan paling sering orang menghubungkan ulang di
+        // sini, jadi jangan sampai jalur pemulihannya ikut melempar DecryptException.
+        $storageAccount->google_refresh_token = $token['refresh_token'] ?? $storageAccount->googleRefreshToken();
         $storageAccount->google_token_expires_at = now()->addSeconds($token['expires_in']);
         $storageAccount->save();
 

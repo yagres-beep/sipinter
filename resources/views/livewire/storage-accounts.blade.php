@@ -84,6 +84,13 @@
                             @if ($akun->googleTerhubung())
                                 <span class="badge b-approve">✅ Terhubung</span>
                                 <a href="{{ route('storage-accounts.google-redirect', $akun) }}" style="display:block;font-size:11px;color:var(--muted);margin-top:4px">Sambungkan ulang</a>
+                            @elseif ($akun->googlePerluHubungUlang())
+                                <span class="badge b-tolak">⚠️ Sesi Drive rusak</span>
+                                <div style="font-size:11px;color:var(--muted);margin-top:4px">
+                                    Token tersimpan tidak bisa dibaca lagi (APP_KEY berubah). Unggahan ke Drive sedang MATI —
+                                    berkas baru hanya tersimpan lokal sampai akun ini dihubungkan ulang.
+                                </div>
+                                <a href="{{ route('storage-accounts.google-redirect', $akun) }}" class="btn btn-ghost btn-sm" style="margin-top:6px">🔗 Hubungkan ulang sekarang</a>
                             @else
                                 <a href="{{ route('storage-accounts.google-redirect', $akun) }}" class="btn btn-ghost btn-sm">🔗 Hubungkan ke Google Drive</a>
                             @endif

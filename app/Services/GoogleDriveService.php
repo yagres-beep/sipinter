@@ -229,12 +229,18 @@ class GoogleDriveService
      */
     protected function clientOAuthUntukAkun(StorageAccount $akun): GoogleClient
     {
+        $refreshToken = $akun->googleRefreshToken() ?? throw new RuntimeException(
+            "Token Google Drive akun {$akun->email_gmail_institusi} tidak bisa dibaca lagi ".
+            '(biasanya karena APP_KEY di .env sempat diganti setelah akun terhubung). '.
+            'Hubungkan ulang akun lewat menu Akun & Storage.'
+        );
+
         $client = new GoogleClient;
         $client->setClientId(config('services.google_drive.oauth_client_id'));
         $client->setClientSecret(config('services.google_drive.oauth_client_secret'));
         $client->setAccessToken([
             'access_token' => $akun->google_access_token,
-            'refresh_token' => $akun->google_refresh_token,
+            'refresh_token' => $refreshToken,
         ]);
 
         $kedaluwarsa = ! $akun->google_token_expires_at || now()->gte($akun->google_token_expires_at);
@@ -243,7 +249,7 @@ class GoogleDriveService
             return $client;
         }
 
-        $baru = $client->fetchAccessTokenWithRefreshToken($akun->google_refresh_token);
+        $baru = $client->fetchAccessTokenWithRefreshToken($refreshToken);
 
         if (isset($baru['error'])) {
             throw new RuntimeException(
@@ -254,7 +260,7 @@ class GoogleDriveService
 
         $akun->forceFill([
             'google_access_token' => $baru['access_token'],
-            'google_refresh_token' => $baru['refresh_token'] ?? $akun->google_refresh_token,
+            'google_refresh_token' => $baru['refresh_token'] ?? $refreshToken,
             'google_token_expires_at' => now()->addSeconds($baru['expires_in']),
         ])->save();
 

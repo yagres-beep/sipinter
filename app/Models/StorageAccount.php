@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -57,13 +58,46 @@ class StorageAccount extends Model
     }
 
     /**
+     * Refresh token dalam bentuk terbaca, atau null bila belum pernah login OAuth
+     * ATAU token tersimpan tidak bisa lagi didekripsi.
+     *
+     * Kasus "tidak bisa didekripsi" nyata terjadi bila APP_KEY di .env diganti
+     * (mis. `php artisan key:generate` dijalankan ulang setelah akun terhubung):
+     * cast 'encrypted' memakai APP_KEY, jadi token lama jadi sampah dan Laravel
+     * melempar DecryptException "The MAC is invalid". Ditelan jadi null di sini —
+     * BUKAN dibiarkan melempar — karena satu-satunya jalan pulih adalah membuka
+     * halaman Akun & Storage lalu menekan "Hubungkan ulang", padahal halaman itu
+     * sendiri memanggil googleTerhubung() untuk menggambar tombolnya. Kalau
+     * melempar, halaman pemulihannya ikut mati dan tidak ada jalan keluar sama sekali.
+     */
+    public function googleRefreshToken(): ?string
+    {
+        try {
+            return $this->google_refresh_token;
+        } catch (DecryptException $e) {
+            return null;
+        }
+    }
+
+    /**
      * True bila akun ini sudah login lewat OAuth (RF baru — lihat GoogleOAuthController)
      * dan bisa dipakai GoogleDriveService untuk mengunggah SEBAGAI akun ini sendiri,
      * bukan lewat Service Account yang tidak lagi bisa menulis ke Gmail biasa.
      */
     public function googleTerhubung(): bool
     {
-        return filled($this->google_refresh_token);
+        return filled($this->googleRefreshToken());
+    }
+
+    /**
+     * True bila akun ini PERNAH terhubung (ada token tersimpan di kolomnya) tapi
+     * tokennya sudah tidak bisa dipakai lagi — lihat googleRefreshToken(). Dibedakan
+     * dari "belum pernah terhubung" supaya tampilan bisa memberi tahu bahwa unggahan
+     * ke Drive sedang MATI dan perlu dihubungkan ulang, bukan sekadar belum disiapkan.
+     */
+    public function googlePerluHubungUlang(): bool
+    {
+        return filled($this->getRawOriginal('google_refresh_token')) && ! $this->googleTerhubung();
     }
 
     public function berkas(): HasMany
