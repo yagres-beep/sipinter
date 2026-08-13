@@ -5,6 +5,9 @@
     @if (session('status'))
         <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>
     @endif
+    @if (session('error'))
+        <div class="info red" style="margin-bottom:14px">⚠️ {{ session('error') }}</div>
+    @endif
 
     {{-- RF-10c: peringatan saat storage aktif mendekati penuh --}}
     @if ($akunAktif && $akunAktif->mendekatiPenuh())
@@ -39,11 +42,12 @@
         </div>
 
         <div class="field">
-            <label>ID Folder Induk Drive</label>
-            <input type="text" class="inp filled" wire:model="driveFolderId" placeholder="ID folder yang sudah dibagikan ke Service Account">
+            <label>ID Folder Induk Drive <span class="fhint" style="margin:0">(opsional)</span></label>
+            <input type="text" class="inp filled" wire:model="driveFolderId" placeholder="Kosongkan saja — akan dibuat otomatis saat akun dihubungkan ke Google Drive">
             <div style="color:var(--muted);font-size:11.5px;margin-top:5px">
-                Folder ini harus sudah dibagikan (share, peran Editor) ke email Service Account —
-                lihat <code>storage/app/google/README.md</code>.
+                Tidak perlu diisi manual lagi — klik <b>🔗 Hubungkan ke Google Drive</b> pada akun ini setelah
+                ditambahkan, folder akan dibuat otomatis di akun tersebut. Isian ini hanya untuk kasus lama:
+                folder yang sudah dibagikan (share) ke Service Account (Google Workspace/Shared Drive saja).
             </div>
             @error('driveFolderId')
                 <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
@@ -62,6 +66,7 @@
                 <tr>
                     <th>Email</th>
                     <th>Status</th>
+                    <th>Google Drive</th>
                     <th style="width:220px">Kuota Terpakai</th>
                     <th style="text-align:right">Tindakan</th>
                 </tr>
@@ -74,6 +79,14 @@
                             <span class="badge {{ $akun->status === \App\Models\StorageAccount::STATUS_AKTIF ? 'b-approve' : 'b-draft' }}">
                                 {{ $akun->status === \App\Models\StorageAccount::STATUS_AKTIF ? 'Aktif' : 'Tidak Aktif' }}
                             </span>
+                        </td>
+                        <td>
+                            @if ($akun->googleTerhubung())
+                                <span class="badge b-approve">✅ Terhubung</span>
+                                <a href="{{ route('storage-accounts.google-redirect', $akun) }}" style="display:block;font-size:11px;color:var(--muted);margin-top:4px">Sambungkan ulang</a>
+                            @else
+                                <a href="{{ route('storage-accounts.google-redirect', $akun) }}" class="btn btn-ghost btn-sm">🔗 Hubungkan ke Google Drive</a>
+                            @endif
                         </td>
                         <td>
                             <div class="quota-bar">
@@ -94,7 +107,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="4" style="color:var(--muted)">Belum ada akun storage. Tambahkan akun pertama di atas.</td>
+                        <td colspan="5" style="color:var(--muted)">Belum ada akun storage. Tambahkan akun pertama di atas.</td>
                     </tr>
                 @endforelse
             </tbody>

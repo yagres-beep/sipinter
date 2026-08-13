@@ -44,6 +44,10 @@ services:
         value: sync
       - key: FILESYSTEM_DISK
         value: local
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
       - key: GOOGLE_SERVICE_ACCOUNT_PATH
         value: google/service-account.json
       - key: GOOGLE_DRIVE_FOLDER_ID

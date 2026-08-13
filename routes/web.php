@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\UserVerificationController;
 use App\Http\Controllers\BerkasDownloadController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\GoogleOAuthController;
 use App\Http\Controllers\NotulaDownloadController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\VerifikasiController;
@@ -38,6 +39,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/berkas/{berkas}/buka', [BerkasDownloadController::class, 'show'])->name('berkas.show');
         Route::view('/master-iku', 'master-iku.index')->name('master-iku.index');
         Route::view('/akun-storage', 'storage-accounts.index')->name('storage-accounts.index');
+        Route::get('/akun-storage/{storageAccount}/google/redirect', [GoogleOAuthController::class, 'redirect'])->name('storage-accounts.google-redirect');
+        Route::get('/akun-storage/google/callback', [GoogleOAuthController::class, 'callback'])->name('storage-accounts.google-callback');
         Route::view('/konfigurasi', 'folder-config.index')->name('folder-config.index');
         Route::view('/notula', 'notula.index')->name('notula.index');
         Route::view('/template-notula', 'template-notula.index')->name('template-notula.index');

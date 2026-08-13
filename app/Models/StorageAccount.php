@@ -38,6 +38,9 @@ class StorageAccount extends Model
         'kuota_terpakai',
         'kuota_total',
         'drive_folder_id',
+        'google_access_token',
+        'google_refresh_token',
+        'google_token_expires_at',
     ];
 
     protected function casts(): array
@@ -45,7 +48,22 @@ class StorageAccount extends Model
         return [
             'kuota_terpakai' => 'decimal:2',
             'kuota_total' => 'decimal:2',
+            // Refresh token adalah kredensial jangka panjang (tidak kedaluwarsa sampai
+            // dicabut) — dienkripsi saat disimpan (Laravel encrypted cast, pakai APP_KEY)
+            // supaya tidak tersimpan polos di database bila database bocor.
+            'google_refresh_token' => 'encrypted',
+            'google_token_expires_at' => 'datetime',
         ];
+    }
+
+    /**
+     * True bila akun ini sudah login lewat OAuth (RF baru — lihat GoogleOAuthController)
+     * dan bisa dipakai GoogleDriveService untuk mengunggah SEBAGAI akun ini sendiri,
+     * bukan lewat Service Account yang tidak lagi bisa menulis ke Gmail biasa.
+     */
+    public function googleTerhubung(): bool
+    {
+        return filled($this->google_refresh_token);
     }
 
     public function berkas(): HasMany

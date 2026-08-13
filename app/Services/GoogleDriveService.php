@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\StorageAccount;
 use Google\Client as GoogleClient;
 use Google\Service\Drive;
 use Google\Service\Drive\DriveFile;
@@ -174,8 +175,37 @@ class GoogleDriveService
     }
 
     /**
-     * Siapkan Google\Client sekali saja (lazy), memakai kredensial JSON Service
-     * Account dari config/services.php (google_drive.service_account_path).
+     * Buat SATU folder di root ("My Drive") akun yang baru saja login lewat OAuth,
+     * memakai client yang MASIH membawa access token segar hasil pertukaran kode
+     * otorisasi (belum tentu = StorageAccount::aktif(), dan belum tentu tersimpan
+     * lagi di DB saat method ini dipanggil) — dipakai HANYA oleh GoogleOAuthController
+     * tepat setelah sebuah akun berhasil terhubung (lihat callback()), untuk
+     * menyiapkan folder yang DIMILIKI aplikasi (wajib untuk scope drive.file, lihat
+     * catatan di GoogleOAuthController) sebelum drive_folder_id akun itu diisi.
+     */
+    public function buatFolderRoot(GoogleClient $client, string $namaFolder): string
+    {
+        $clientLama = $this->client;
+        $driveLama = $this->drive;
+
+        $this->client = $client;
+        $this->drive = null;
+
+        try {
+            return $this->createFolder($namaFolder, 'root');
+        } finally {
+            $this->client = $clientLama;
+            $this->drive = $driveLama;
+        }
+    }
+
+    /**
+     * Siapkan Google\Client sekali saja (lazy). Diprioritaskan dari token OAuth akun
+     * storage AKTIF (lihat catatan panjang di config/services.php: Google melarang
+     * Service Account menulis berkas baru ke folder yang di-share dari Gmail biasa),
+     * baru jatuh ke kredensial Service Account lama bila akun aktif belum pernah
+     * dihubungkan lewat OAuth (mis. instalasi lama yang belum sempat migrasi, atau
+     * memang memakai folder Shared Drive/Workspace yang masih boleh diakses Service Account).
      */
     protected function client(): GoogleClient
     {
@@ -183,6 +213,60 @@ class GoogleDriveService
             return $this->client;
         }
 
+        $akun = StorageAccount::aktif();
+
+        if ($akun && $akun->googleTerhubung()) {
+            return $this->client = $this->clientOAuthUntukAkun($akun);
+        }
+
+        return $this->client = $this->clientServiceAccount();
+    }
+
+    /**
+     * Bangun client dari token OAuth tersimpan milik SATU akun storage, me-refresh
+     * (dan menyimpan ulang) access token-nya lebih dulu bila sudah kedaluwarsa —
+     * refresh_token sendiri tidak pernah kedaluwarsa selama belum dicabut manual.
+     */
+    protected function clientOAuthUntukAkun(StorageAccount $akun): GoogleClient
+    {
+        $client = new GoogleClient;
+        $client->setClientId(config('services.google_drive.oauth_client_id'));
+        $client->setClientSecret(config('services.google_drive.oauth_client_secret'));
+        $client->setAccessToken([
+            'access_token' => $akun->google_access_token,
+            'refresh_token' => $akun->google_refresh_token,
+        ]);
+
+        $kedaluwarsa = ! $akun->google_token_expires_at || now()->gte($akun->google_token_expires_at);
+
+        if (! $kedaluwarsa) {
+            return $client;
+        }
+
+        $baru = $client->fetchAccessTokenWithRefreshToken($akun->google_refresh_token);
+
+        if (isset($baru['error'])) {
+            throw new RuntimeException(
+                "Sesi Google Drive akun {$akun->email_gmail_institusi} sudah tidak berlaku (".
+                ($baru['error_description'] ?? $baru['error']).'). Hubungkan ulang lewat menu Akun & Storage.'
+            );
+        }
+
+        $akun->forceFill([
+            'google_access_token' => $baru['access_token'],
+            'google_refresh_token' => $baru['refresh_token'] ?? $akun->google_refresh_token,
+            'google_token_expires_at' => now()->addSeconds($baru['expires_in']),
+        ])->save();
+
+        return $client;
+    }
+
+    /**
+     * Kredensial JSON Service Account dari config/services.php (google_drive.service_account_path)
+     * — jalur fallback lama, lihat catatan client() di atas.
+     */
+    protected function clientServiceAccount(): GoogleClient
+    {
         $path = config('services.google_drive.service_account_path');
 
         if (! is_string($path) || ! is_file($path)) {
@@ -199,7 +283,7 @@ class GoogleDriveService
         // berkas yang ia buat sendiri.
         $client->addScope(Drive::DRIVE);
 
-        return $this->client = $client;
+        return $client;
     }
 
     /**

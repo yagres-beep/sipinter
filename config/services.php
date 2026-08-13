@@ -37,13 +37,26 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Google Drive (Service Account) — RF-10, RF-10a, SRS §5.3
+    | Google Drive — OAuth (akun Gmail biasa) + Service Account (fallback lama)
     |--------------------------------------------------------------------------
     |
-    | SIPINTER tidak meminta pengguna login akun Google pribadi. Sebagai gantinya,
-    | satu Service Account (akun mesin Google) memakai kredensial JSON berikut
-    | untuk membaca/menulis berkas ke Drive akun Gmail institusi yang telah
-    | membagikan (share) sebuah folder ke alamat email Service Account tersebut.
+    | Google TIDAK MENGIZINKAN Service Account menulis berkas baru ke folder yang
+    | di-*share* dari akun Gmail BIASA (bukan Shared Drive Google Workspace) — akun
+    | robot itu tidak pernah punya kuota penyimpanan sendiri ("Service Accounts do
+    | not have storage quota"). Karena akun institusi SIPINTER adalah Gmail biasa,
+    | jalur utama unggah berkas WAJIB lewat OAuth: Tim SAKIP login sekali ke akun
+    | tsb (menu Akun & Storage → "Hubungkan ke Google Drive"), tokennya disimpan di
+    | storage_account.google_refresh_token, lalu GoogleDriveService mengunggah
+    | SEBAGAI akun itu sendiri (kuota 15GB pribadinya) — lihat GoogleOAuthController.
+    |
+    | - oauth_client_id / oauth_client_secret: dari Google Cloud Console > APIs &
+    |   Services > Credentials > OAuth client ID (tipe "Web application"). Redirect
+    |   URI yang didaftarkan di sana harus persis {APP_URL}/akun-storage/google/callback.
+    |
+    | Kredensial Service Account (service_account_path) TETAP dipertahankan sebagai
+    | fallback — dipakai GoogleDriveService HANYA bila storage aktif belum pernah
+    | dihubungkan lewat OAuth, dan tetap relevan bila suatu saat institusi memakai
+    | akun Google Workspace/Shared Drive (yang memang boleh diakses Service Account).
     |
     | - service_account_path: lokasi file kredensial JSON (unduh dari Google Cloud
     |   Console > IAM & Admin > Service Accounts > Keys). GOOGLE_SERVICE_ACCOUNT_PATH
@@ -58,6 +71,8 @@ return [
     |
     */
     'google_drive' => [
+        'oauth_client_id' => env('GOOGLE_OAUTH_CLIENT_ID'),
+        'oauth_client_secret' => env('GOOGLE_OAUTH_CLIENT_SECRET'),
         'service_account_path' => storage_path('app/'.env('GOOGLE_SERVICE_ACCOUNT_PATH', 'google/service-account.json')),
         'default_folder_id' => env('GOOGLE_DRIVE_FOLDER_ID'),
     ],
