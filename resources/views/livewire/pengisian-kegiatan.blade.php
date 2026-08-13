@@ -6,6 +6,17 @@
         <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>
     @endif
 
+    @if (session('driveGagal'))
+        <div class="info red" style="margin-bottom:14px">
+            ⚠️ {{ count(session('driveGagal')) }} berkas gagal disalin ke Google Drive (tetap tersimpan aman di server, tapi belum tersalin) — kemungkinan sambungan akun Google Drive sedang bermasalah. Cek menu <b>Akun &amp; Storage</b>, sambungkan ulang bila perlu, lalu hubungi Tim SAKIP untuk mengunggah ulang berkas berikut:
+            <ul style="margin:6px 0 0 18px;padding:0">
+                @foreach (session('driveGagal') as $namaBerkas)
+                    <li>{{ $namaBerkas }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
     @if ($errors->any())
         <div class="info red">
             ⚠️ Belum bisa diajukan — {{ $errors->count() }} hal perlu dilengkapi:
@@ -181,7 +192,7 @@
                                 </div>
                             @endforeach
                             <label class="btn btn-ghost btn-sm" style="margin-top:8px;cursor:pointer">
-                                ⟲ Ganti Berkas
+                                ＋ Tambah Bukti
                                 <input type="file" wire:model="blocks.{{ $i }}.bukti" multiple accept="application/pdf" style="display:none"
                                     @change="pendingBuktiNames = Array.from($event.target.files).map(f => f.name)">
                             </label>
@@ -295,7 +306,7 @@
                                 </div>
                             @endforeach
                             <label class="btn btn-ghost btn-sm" style="cursor:pointer">
-                                ⟲ Ganti Berkas
+                                ＋ Tambah Bukti
                                 <input type="file" wire:model="kendalaBlocks.{{ $i }}.bukti_solusi" multiple accept="application/pdf" style="display:none"
                                     @change="pendingBuktiSolusiNames = Array.from($event.target.files).map(f => f.name)">
                             </label>
@@ -548,7 +559,7 @@
                                     </div>
                                 @endforeach
                                 <label class="btn btn-ghost btn-sm" style="margin-top:8px;cursor:pointer">
-                                    ⟲ Ganti Berkas
+                                    ＋ Tambah Bukti
                                     <input type="file" wire:model="bagianKustomBlocks.{{ $bagian->id }}.{{ $i }}.bukti" multiple accept="application/pdf" style="display:none">
                                 </label>
                             @endif

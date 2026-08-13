@@ -979,7 +979,13 @@ class PengisianKegiatan extends Component
         $iku = MasterIku::findOrFail($this->iku_id);
         $folderService = app(FolderStructureService::class);
 
-        DB::transaction(function () use ($periode, $iku, $folderService) {
+        // Diisi setiap kali satu berkas GAGAL disinkron ke Drive (jaringan, kredensial
+        // Drive belum/tidak lagi valid, dst.) — berkasnya tetap aman tersimpan lokal dan
+        // isian TETAP berhasil diajukan, tapi Ketua Tim perlu tahu supaya tidak mengira
+        // semuanya sudah tersalin ke Drive padahal belum (lihat flash 'driveGagal' di bawah).
+        $driveGagal = [];
+
+        DB::transaction(function () use ($periode, $iku, $folderService, &$driveGagal) {
             // Angka capaian (RF-38) milik IKU+periode, dibagikan seluruh kegiatan di
             // bawahnya — cukup disiapkan kosong di sini, diisi Tim SAKIP saat verifikasi.
             Capaian::firstOrCreate([
@@ -1024,12 +1030,17 @@ class PengisianKegiatan extends Component
 
                     // Dibungkus try/catch supaya isian TETAP bisa diajukan walau Drive
                     // belum terkonfigurasi — berkas tetap aman di disk lokal sebagai cadangan.
+                    // \Throwable (bukan cuma RuntimeException) sengaja dipakai supaya galat
+                    // dari Google API sendiri (mis. Google\Service\Exception saat token/scope
+                    // bermasalah) juga tertangkap di sini, bukan membatalkan SELURUH transaksi
+                    // pengajuan hanya karena Drive sedang bermasalah.
                     try {
                         $localFullPath = Storage::disk('local')->path($path);
                         $hasilDrive = $folderService->unggahBerkasKegiatan($kegiatan, 'capaian', $localFullPath);
                         $berkas->update($hasilDrive);
-                    } catch (RuntimeException $e) {
+                    } catch (\Throwable $e) {
                         Log::warning('Gagal mengunggah berkas ke Google Drive, disimpan lokal saja: '.$e->getMessage());
+                        $driveGagal[] = "{$file->getClientOriginalName()} (bukti kegiatan: {$block['uraian_kegiatan']})";
                     }
                 }
             }
@@ -1068,8 +1079,9 @@ class PengisianKegiatan extends Component
                         $localFullPath = Storage::disk('local')->path($path);
                         $hasilDrive = $folderService->unggahBerkas($periode, $iku, 'solusi', $localFullPath, namaBerkasOverride: $namaBerkasDariTeks);
                         $berkas->update($hasilDrive);
-                    } catch (RuntimeException $e) {
+                    } catch (\Throwable $e) {
                         Log::warning('Gagal mengunggah bukti solusi ke Google Drive, disimpan lokal saja: '.$e->getMessage());
+                        $driveGagal[] = "{$file->getClientOriginalName()} (bukti solusi)";
                     }
                 }
             }
@@ -1100,8 +1112,9 @@ class PengisianKegiatan extends Component
                         $localFullPath = Storage::disk('local')->path($path);
                         $hasilDrive = $folderService->unggahBerkas($poin->periode, $poin->masterIku, 'evaluasi_rtl', $localFullPath);
                         $berkas->update($hasilDrive);
-                    } catch (RuntimeException $e) {
+                    } catch (\Throwable $e) {
                         Log::warning('Gagal mengunggah bukti evaluasi RTL ke Google Drive, disimpan lokal saja: '.$e->getMessage());
+                        $driveGagal[] = "{$file->getClientOriginalName()} (bukti evaluasi RTL)";
                     }
                 }
             }
@@ -1169,15 +1182,26 @@ class PengisianKegiatan extends Component
                                 $periode, $iku, 'bagian_kustom', $localFullPath, namaFolderOverride: $bagian->nama
                             );
                             $berkas->update($hasilDrive);
-                        } catch (RuntimeException $e) {
+                        } catch (\Throwable $e) {
                             Log::warning("Gagal mengunggah bukti {$bagian->nama} ke Google Drive, disimpan lokal saja: ".$e->getMessage());
+                            $driveGagal[] = "{$file->getClientOriginalName()} (bukti {$bagian->nama})";
                         }
                     }
                 }
             }
         });
 
-        session()->flash('status', 'Isian kegiatan, kendala & solusi, dan evaluasi RTL berhasil diajukan ke Tim SAKIP.');
+        session()->flash(
+            'status',
+            'Isian kegiatan, kendala & solusi, dan evaluasi RTL berhasil diajukan ke Tim SAKIP. '
+                .(empty($driveGagal)
+                    ? 'Semua berkas bukti berhasil disalin ke Google Drive.'
+                    : 'Sebagian berkas bukti BELUM tersalin ke Google Drive — lihat rincian di bawah.')
+        );
+
+        if (! empty($driveGagal)) {
+            session()->flash('driveGagal', $driveGagal);
+        }
 
         $this->lupakanCachePeriodeIku();
 
