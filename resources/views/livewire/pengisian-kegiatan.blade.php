@@ -10,6 +10,8 @@
         },
     }"
     x-on:notify.window="pushToast($event.detail.type, $event.detail.message)"
+    x-on:livewire-upload-start.window="pushToast('info', 'Mengunggah berkas ke server…')"
+    x-on:livewire-upload-finish.window="pushToast('success', 'Berkas dipilih & tersimpan sementara di server — akan disalin ke Google Drive saat diajukan.')"
     x-on:livewire-upload-error.window="pushToast('error', 'Gagal mengunggah berkas — periksa ukuran (maks 10MB) dan format (harus PDF), lalu coba lagi.')"
 >
     <div class="page-title">Isian Kegiatan</div>

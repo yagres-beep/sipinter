@@ -970,6 +970,23 @@ class PengisianKegiatan extends Component
         $this->dispatch('notify', type: 'success', message: 'Draf kegiatan berhasil disimpan.');
     }
 
+    /**
+     * Satu toast per berkas yang selesai diproses ke Google Drive (RF baru) — dipanggil
+     * langsung di dalam transaksi ajukanIsian() supaya Ketua Tim tahu PERSIS berkas mana
+     * yang berhasil/gagal saat itu juga, bukan cuma ringkasan jumlah di akhir (lihat
+     * $driveGagal, yang tetap dipertahankan untuk rincian di flash banner).
+     */
+    protected function notifikasiHasilUnggah(string $namaFile, string $konteks, bool $berhasil, ?string $alasan = null): void
+    {
+        $this->dispatch(
+            'notify',
+            type: $berhasil ? 'success' : 'error',
+            message: $berhasil
+                ? "✅ {$namaFile} ({$konteks}) tersalin ke Google Drive."
+                : "⚠️ {$namaFile} ({$konteks}) GAGAL tersalin ke Google Drive, disimpan lokal saja".($alasan ? ': '.Str::limit($alasan, 120) : '.')
+        );
+    }
+
     public function ajukanIsian(): void
     {
         try {
@@ -1051,9 +1068,11 @@ class PengisianKegiatan extends Component
                         $localFullPath = Storage::disk('local')->path($path);
                         $hasilDrive = $folderService->unggahBerkasKegiatan($kegiatan, 'capaian', $localFullPath);
                         $berkas->update($hasilDrive);
+                        $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti kegiatan', true);
                     } catch (\Throwable $e) {
                         Log::warning('Gagal mengunggah berkas ke Google Drive, disimpan lokal saja: '.$e->getMessage());
                         $driveGagal[] = "{$file->getClientOriginalName()} (bukti kegiatan: {$block['uraian_kegiatan']})";
+                        $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti kegiatan', false, $e->getMessage());
                     }
                 }
             }
@@ -1092,9 +1111,11 @@ class PengisianKegiatan extends Component
                         $localFullPath = Storage::disk('local')->path($path);
                         $hasilDrive = $folderService->unggahBerkas($periode, $iku, 'solusi', $localFullPath, namaBerkasOverride: $namaBerkasDariTeks);
                         $berkas->update($hasilDrive);
+                        $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti solusi', true);
                     } catch (\Throwable $e) {
                         Log::warning('Gagal mengunggah bukti solusi ke Google Drive, disimpan lokal saja: '.$e->getMessage());
                         $driveGagal[] = "{$file->getClientOriginalName()} (bukti solusi)";
+                        $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti solusi', false, $e->getMessage());
                     }
                 }
             }
@@ -1125,9 +1146,11 @@ class PengisianKegiatan extends Component
                         $localFullPath = Storage::disk('local')->path($path);
                         $hasilDrive = $folderService->unggahBerkas($poin->periode, $poin->masterIku, 'evaluasi_rtl', $localFullPath);
                         $berkas->update($hasilDrive);
+                        $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti evaluasi RTL', true);
                     } catch (\Throwable $e) {
                         Log::warning('Gagal mengunggah bukti evaluasi RTL ke Google Drive, disimpan lokal saja: '.$e->getMessage());
                         $driveGagal[] = "{$file->getClientOriginalName()} (bukti evaluasi RTL)";
+                        $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti evaluasi RTL', false, $e->getMessage());
                     }
                 }
             }
@@ -1195,9 +1218,11 @@ class PengisianKegiatan extends Component
                                 $periode, $iku, 'bagian_kustom', $localFullPath, namaFolderOverride: $bagian->nama
                             );
                             $berkas->update($hasilDrive);
+                            $this->notifikasiHasilUnggah($file->getClientOriginalName(), "bukti {$bagian->nama}", true);
                         } catch (\Throwable $e) {
                             Log::warning("Gagal mengunggah bukti {$bagian->nama} ke Google Drive, disimpan lokal saja: ".$e->getMessage());
                             $driveGagal[] = "{$file->getClientOriginalName()} (bukti {$bagian->nama})";
+                            $this->notifikasiHasilUnggah($file->getClientOriginalName(), "bukti {$bagian->nama}", false, $e->getMessage());
                         }
                     }
                 }
