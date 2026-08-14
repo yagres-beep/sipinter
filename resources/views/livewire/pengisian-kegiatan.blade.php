@@ -1,4 +1,17 @@
-<div x-data="{ bisaDiisiTw: {{ $bulan % 3 === 0 ? 'true' : 'false' }} }">
+<div
+    x-data="{
+        bisaDiisiTw: {{ $bulan % 3 === 0 ? 'true' : 'false' }},
+        toasts: [],
+        toastSeq: 0,
+        pushToast(type, message) {
+            const id = ++this.toastSeq;
+            this.toasts.push({ id, type, message });
+            setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, 6000);
+        },
+    }"
+    x-on:notify.window="pushToast($event.detail.type, $event.detail.message)"
+    x-on:livewire-upload-error.window="pushToast('error', 'Gagal mengunggah berkas — periksa ukuran (maks 10MB) dan format (harus PDF), lalu coba lagi.')"
+>
     <div class="page-title">Isian Kegiatan</div>
     <div class="page-sub">Kegiatan, kendala &amp; solusi, evaluasi RTL, dan rencana tindak lanjut — diajukan sekaligus ke Tim SAKIP.</div>
 
@@ -597,4 +610,14 @@
     @if (! $this->formLengkap())
         <div style="color:var(--muted);font-size:11.5px;margin-top:8px">🔒 Lengkapi seluruh isian wajib di atas untuk mengaktifkan tombol "Ajukan ke Tim SAKIP".</div>
     @endif
+
+    <div class="toast-stack">
+        <template x-for="toast in toasts" :key="toast.id">
+            <div class="toast" :class="toast.type">
+                <span class="ic" x-text="toast.type === 'success' ? '✅' : (toast.type === 'error' ? '⚠️' : (toast.type === 'warning' ? '⚠️' : 'ℹ️'))"></span>
+                <span class="msg" x-text="toast.message"></span>
+                <button type="button" class="x" @click="toasts = toasts.filter(t => t.id !== toast.id)">✕</button>
+            </div>
+        </template>
+    </div>
 </div>

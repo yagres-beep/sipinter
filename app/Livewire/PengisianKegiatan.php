@@ -914,18 +914,24 @@ class PengisianKegiatan extends Component
      */
     public function simpanDraft(): void
     {
-        $this->validate([
-            'tahun' => ['required', 'integer', 'min:2020', 'max:2100'],
-            'bulan' => ['required', 'integer', 'min:1', 'max:12'],
-            'iku_id' => ['required', $this->aturanIkuValid()],
-            'blocks.*.uraian_kegiatan' => ['required', 'string', 'max:1000'],
-            'blocks.*.jenis' => ['required', 'in:bukan_survei_sensus,survei_sensus'],
-            'blocks.*.tahapan_survei' => [
-                'nullable',
-                'required_if:blocks.*.jenis,survei_sensus',
-                'in:persiapan,pelaksanaan,pengolahan,diseminasi',
-            ],
-        ], [], $this->validationAttributes());
+        try {
+            $this->validate([
+                'tahun' => ['required', 'integer', 'min:2020', 'max:2100'],
+                'bulan' => ['required', 'integer', 'min:1', 'max:12'],
+                'iku_id' => ['required', $this->aturanIkuValid()],
+                'blocks.*.uraian_kegiatan' => ['required', 'string', 'max:1000'],
+                'blocks.*.jenis' => ['required', 'in:bukan_survei_sensus,survei_sensus'],
+                'blocks.*.tahapan_survei' => [
+                    'nullable',
+                    'required_if:blocks.*.jenis,survei_sensus',
+                    'in:persiapan,pelaksanaan,pengolahan,diseminasi',
+                ],
+            ], [], $this->validationAttributes());
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->dispatch('notify', type: 'error', message: 'Draf gagal disimpan — lengkapi data yang wajib diisi lebih dulu.');
+
+            throw $e;
+        }
 
         $periode = Periode::firstOrCreate(
             ['tahun' => $this->tahun, 'bulan' => $this->bulan],
@@ -961,11 +967,18 @@ class PengisianKegiatan extends Component
         });
 
         session()->flash('status', 'Draf kegiatan berhasil disimpan. Lengkapi bukti & bagian lain lalu ajukan ke Tim SAKIP saat siap.');
+        $this->dispatch('notify', type: 'success', message: 'Draf kegiatan berhasil disimpan.');
     }
 
     public function ajukanIsian(): void
     {
-        $this->buatValidator()->validate();
+        try {
+            $this->buatValidator()->validate();
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->dispatch('notify', type: 'error', message: 'Belum bisa diajukan — masih ada data wajib yang belum lengkap.');
+
+            throw $e;
+        }
 
         $periode = Periode::firstOrCreate(
             ['tahun' => $this->tahun, 'bulan' => $this->bulan],
@@ -1201,10 +1214,18 @@ class PengisianKegiatan extends Component
 
         if (! empty($driveGagal)) {
             session()->flash('driveGagal', $driveGagal);
+            $this->dispatch('notify', type: 'warning', message: 'Diajukan ke Tim SAKIP, tapi '.count($driveGagal).' berkas belum tersalin ke Google Drive — lihat rincian di bawah.');
+        } else {
+            $this->dispatch('notify', type: 'success', message: 'Berhasil diajukan ke Tim SAKIP. Semua berkas bukti tersalin ke Google Drive.');
         }
 
         $this->lupakanCachePeriodeIku();
 
+        // Kembalikan seluruh form persis seperti kondisi pertama kali dibuka (lihat mount()),
+        // termasuk periode — bukan cuma isian di dalamnya — supaya Ketua Tim tidak perlu
+        // membersihkan sisa pilihan periode sebelum mengisi periode berikutnya.
+        $this->tahun = (int) now()->year;
+        $this->bulan = (int) now()->month;
         $this->blocks = [$this->emptyBlock()];
         $this->kendalaBlocks = [$this->emptyKendalaBlock()];
         $this->iku_id = null;

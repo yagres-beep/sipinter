@@ -489,3 +489,15 @@ th.th-sort.active .th-arrow{opacity:1;color:var(--blue-600)}
 
 /* alias badge dikembalikan — nama kelas persis seperti mockup */
 .b-kembali{background:var(--red-soft);color:var(--red)}
+
+/* toast — notifikasi progres aksi (unggah/simpan/ajukan) mengambang, terpisah dari banner status */
+.toast-stack{position:fixed;right:22px;bottom:22px;z-index:60;display:flex;flex-direction:column-reverse;gap:10px;max-width:360px}
+.toast{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:var(--radius-sm);background:var(--white);border:1.5px solid var(--line);box-shadow:var(--sh-lg,0 10px 30px rgba(16,32,70,.18));font-size:12.5px;color:var(--ink);animation:toastIn .22s ease}
+.toast .ic{flex:none;font-size:15px;line-height:1}
+.toast .msg{flex:1;line-height:1.5}
+.toast .x{flex:none;color:var(--faint);cursor:pointer;font-size:13px;background:none;border:none;padding:0}
+.toast.success{border-color:#bbf7d0;background:var(--green-soft)}
+.toast.error{border-color:#fecaca;background:var(--red-soft)}
+.toast.warning{border-color:#fde68a;background:var(--amber-soft,#fffbeb)}
+.toast.info{border-color:var(--line);background:var(--blue-soft)}
+@keyframes toastIn{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
