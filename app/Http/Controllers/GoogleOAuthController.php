@@ -8,6 +8,7 @@ use Google\Client as GoogleClient;
 use Google\Service\Drive;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -82,6 +83,18 @@ class GoogleOAuthController extends Controller
 
         if ($request->query('error')) {
             return redirect()->route('storage-accounts.index')->with('error', 'Izin Google Drive dibatalkan.');
+        }
+
+        // Token lama yang sudah tidak bisa didekripsi (APP_KEY berubah) wajib dibersihkan
+        // LEWAT QUERY MENTAH di sini, SEBELUM Eloquent sempat menyentuhnya lagi. save() di
+        // bawah memanggil isDirty(), yang SELALU mendekripsi nilai ORIGINAL kolom encrypted
+        // untuk dibandingkan dengan nilai baru — jalur ini TIDAK lewat googleRefreshToken()
+        // yang sudah menangkap DecryptException, jadi tanpa pembersihan ini save() akan
+        // melempar "The MAC is invalid." dan mematikan satu-satunya jalur pemulihan
+        // (Hubungkan ulang) untuk akun yang justru sedang mencoba pulih.
+        if ($storageAccount->googlePerluHubungUlang()) {
+            DB::table('storage_account')->where('id', $storageAccount->id)->update(['google_refresh_token' => null]);
+            $storageAccount->refresh();
         }
 
         try {
