@@ -54,12 +54,15 @@ class GoogleOAuthController extends Controller
         // 'consent' dipaksa supaya Google SELALU mengirim ulang refresh_token — tanpa ini,
         // login kedua+ ke akun yang sama tidak akan menyertakan refresh_token sama sekali.
         $client->setPrompt('consent');
-        // drive.file sendiri hanya boleh MEMBUAT/MENULIS berkas milik aplikasi — Drive API
-        // menolak files.list ("mencari folder yang sudah ada") dengan 403 ACCESS_TOKEN_
-        // SCOPE_INSUFFICIENT tanpa metadata.readonly, dipakai FolderStructureService untuk
-        // findOrCreateFolder() & pengecekan nama berkas ganda. Masih tergolong scope
-        // non-sensitif juga (bukan restricted) — status Testing tetap cukup.
-        $client->addScope([Drive::DRIVE_FILE, Drive::DRIVE_METADATA_READONLY, 'openid', 'email']);
+        // Scope PENUH (Drive::DRIVE), bukan drive.file — drive.file hanya boleh menyentuh
+        // berkas/folder yang DIBUAT SENDIRI oleh akun yang login, jadi akun BUKAN-master
+        // tidak akan pernah bisa menulis ke folder MASTER yang dibagikan (share) kepadanya
+        // (lihat GoogleOAuthController::callback() & GoogleDriveService::bagikanFolder(),
+        // config('services.google_drive.master_account_email')). Scope ini tergolong
+        // "sensitive" (bukan "restricted") di Google — tetap boleh dipakai akun yang
+        // terdaftar sebagai Test user tanpa proses verifikasi aplikasi yang panjang,
+        // selama status OAuth consent screen masih Testing.
+        $client->addScope([Drive::DRIVE, 'openid', 'email']);
 
         return redirect()->away($client->createAuthUrl());
     }
@@ -139,14 +142,46 @@ class GoogleOAuthController extends Controller
             );
         }
 
+        $masterEmail = config('services.google_drive.master_account_email');
+        $akunIniMaster = $masterEmail && strcasecmp($storageAccount->email_gmail_institusi, $masterEmail) === 0;
+
         try {
-            $folderId = $this->driveService->buatFolderRoot($client, 'SIPINTER');
-            $storageAccount->update(['drive_folder_id' => $folderId]);
+            if ($masterEmail && ! $akunIniMaster) {
+                // Akun BUKAN-master: jangan buat folder root sendiri — pakai folder milik
+                // akun master supaya semua akun institusi tetap menulis ke SATU struktur
+                // folder yang sama (lihat catatan config('services.google_drive.master_account_email')).
+                $master = StorageAccount::where('email_gmail_institusi', $masterEmail)->first();
+
+                if (! $master || ! $master->drive_folder_id) {
+                    return redirect()->route('storage-accounts.index')->with('error', sprintf(
+                        'Akun master folder (%s) belum siap — hubungkan akun itu ke Google Drive terlebih dahulu, baru hubungkan akun ini.',
+                        $masterEmail
+                    ));
+                }
+
+                if (! $master->googleTerhubung()) {
+                    return redirect()->route('storage-accounts.index')->with('error', sprintf(
+                        'Akun master folder (%s) sesi Drive-nya belum/tidak aktif — hubungkan ulang akun itu dulu supaya bisa membagikan foldernya ke akun ini.',
+                        $masterEmail
+                    ));
+                }
+
+                $clientMaster = $this->driveService->clientOAuthUntukAkun($master);
+                $this->driveService->bagikanFolder($clientMaster, $master->drive_folder_id, $storageAccount->email_gmail_institusi);
+
+                $storageAccount->update(['drive_folder_id' => $master->drive_folder_id]);
+            } elseif (! $storageAccount->drive_folder_id) {
+                // Akun master (atau tidak ada master dikonfigurasi): buat folder root
+                // sendiri HANYA bila belum pernah punya (mis. drive_folder_id sudah diisi
+                // manual sebelumnya lewat menu Akun & Storage — dipertahankan apa adanya).
+                $folderId = $this->driveService->buatFolderRoot($client, 'SIPINTER');
+                $storageAccount->update(['drive_folder_id' => $folderId]);
+            }
         } catch (\Throwable $e) {
-            Log::error('Gagal membuat folder root Drive setelah OAuth: '.$e->getMessage());
+            Log::error('Gagal menyiapkan folder Drive setelah OAuth: '.$e->getMessage());
 
             return redirect()->route('storage-accounts.index')->with('error',
-                'Akun Google berhasil terhubung, tapi gagal menyiapkan folder awal di Drive: '.$e->getMessage()
+                'Akun Google berhasil terhubung, tapi gagal menyiapkan folder Drive: '.$e->getMessage()
             );
         }
 

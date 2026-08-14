@@ -6,6 +6,7 @@ use App\Models\StorageAccount;
 use Google\Client as GoogleClient;
 use Google\Service\Drive;
 use Google\Service\Drive\DriveFile;
+use Google\Service\Drive\Permission;
 use RuntimeException;
 
 /**
@@ -200,6 +201,47 @@ class GoogleDriveService
     }
 
     /**
+     * Bagikan (share) satu folder Drive ke alamat email lain, peran "writer" secara
+     * default — dipakai supaya akun storage BUKAN-master menulis ke folder MASTER yang
+     * sama (lihat config('services.google_drive.master_account_email') & catatan di
+     * GoogleOAuthController::callback()) alih-alih membuat folder root sendiri-sendiri.
+     *
+     * $ownerClient WAJIB client milik akun yang jadi PEMILIK folder (atau minimal sudah
+     * berperan Editor di folder itu) — Drive API hanya mengizinkan permission baru dibuat
+     * oleh yang sudah punya hak kelola atas folder tsb.
+     *
+     * Idempotent: dicek dulu apakah email itu sudah punya akses supaya reconnect
+     * berulang tidak menumpuk permission duplikat untuk email yang sama.
+     */
+    public function bagikanFolder(GoogleClient $ownerClient, string $folderId, string $email, string $role = 'writer'): void
+    {
+        $clientLama = $this->client;
+        $driveLama = $this->drive;
+
+        $this->client = $ownerClient;
+        $this->drive = null;
+
+        try {
+            $sudahDibagikan = collect(
+                $this->drive()->permissions->listPermissions($folderId, ['fields' => 'permissions(emailAddress)'])->getPermissions()
+            )->contains(fn (Permission $p) => strcasecmp((string) $p->getEmailAddress(), $email) === 0);
+
+            if ($sudahDibagikan) {
+                return;
+            }
+
+            $this->drive()->permissions->create($folderId, new Permission([
+                'type' => 'user',
+                'role' => $role,
+                'emailAddress' => $email,
+            ]), ['sendNotificationEmail' => false]);
+        } finally {
+            $this->client = $clientLama;
+            $this->drive = $driveLama;
+        }
+    }
+
+    /**
      * Siapkan Google\Client sekali saja (lazy). Diprioritaskan dari token OAuth akun
      * storage AKTIF (lihat catatan panjang di config/services.php: Google melarang
      * Service Account menulis berkas baru ke folder yang di-share dari Gmail biasa),
@@ -226,8 +268,12 @@ class GoogleDriveService
      * Bangun client dari token OAuth tersimpan milik SATU akun storage, me-refresh
      * (dan menyimpan ulang) access token-nya lebih dulu bila sudah kedaluwarsa —
      * refresh_token sendiri tidak pernah kedaluwarsa selama belum dicabut manual.
+     *
+     * Publik (bukan cuma dipakai client() di atas) — GoogleOAuthController::callback()
+     * juga memanggilnya langsung untuk membangun client MILIK AKUN MASTER saat
+     * membagikan folder master ke akun storage lain yang baru terhubung.
      */
-    protected function clientOAuthUntukAkun(StorageAccount $akun): GoogleClient
+    public function clientOAuthUntukAkun(StorageAccount $akun): GoogleClient
     {
         $refreshToken = $akun->googleRefreshToken() ?? throw new RuntimeException(
             "Token Google Drive akun {$akun->email_gmail_institusi} tidak bisa dibaca lagi ".

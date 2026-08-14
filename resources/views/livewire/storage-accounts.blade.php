@@ -74,7 +74,12 @@
             <tbody>
                 @forelse ($akunList as $akun)
                     <tr wire:key="akun-{{ $akun->id }}">
-                        <td>{{ $akun->email_gmail_institusi }}</td>
+                        <td>
+                            {{ $akun->email_gmail_institusi }}
+                            @if (strcasecmp($akun->email_gmail_institusi, (string) config('services.google_drive.master_account_email')) === 0)
+                                <span class="badge b-draft" title="Akun lain otomatis dibagikan (share) ke folder milik akun ini saat terhubung">🔑 Folder Master</span>
+                            @endif
+                        </td>
                         <td>
                             <span class="badge {{ $akun->status === \App\Models\StorageAccount::STATUS_AKTIF ? 'b-approve' : 'b-draft' }}">
                                 {{ $akun->status === \App\Models\StorageAccount::STATUS_AKTIF ? 'Aktif' : 'Tidak Aktif' }}

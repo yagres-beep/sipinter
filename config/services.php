@@ -68,6 +68,14 @@ return [
     |   Setiap storage_account punya kolom drive_folder_id sendiri di database,
     |   sehingga akun Gmail institusi berikutnya bisa memakai folder induk yang
     |   berbeda tanpa mengubah nilai .env ini.
+    | - master_account_email: bila diisi, SEMUA akun storage lain (selain email ini)
+    |   yang terhubung lewat OAuth TIDAK membuat folder root sendiri — GoogleOAuthController
+    |   otomatis membagikan (share, peran writer) default_folder_id milik akun ini ke
+    |   akun yang baru terhubung, lalu drive_folder_id-nya diarahkan ke folder yang sama.
+    |   Hasilnya satu struktur folder yang konsisten di Drive walau uploadnya datang dari
+    |   akun institusi yang berbeda-beda (kuota 15GB tiap akun tetap dihitung terpisah —
+    |   Drive membebankan kuota ke akun PENGUNGGAH, bukan ke pemilik folder). Kosongkan
+    |   untuk kembali ke perilaku lama (tiap akun punya folder root "SIPINTER" sendiri).
     |
     */
     'google_drive' => [
@@ -75,6 +83,7 @@ return [
         'oauth_client_secret' => env('GOOGLE_OAUTH_CLIENT_SECRET'),
         'service_account_path' => storage_path('app/'.env('GOOGLE_SERVICE_ACCOUNT_PATH', 'google/service-account.json')),
         'default_folder_id' => env('GOOGLE_DRIVE_FOLDER_ID'),
+        'master_account_email' => env('GOOGLE_DRIVE_MASTER_ACCOUNT_EMAIL'),
     ],
 
     /*
