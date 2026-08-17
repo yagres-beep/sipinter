@@ -20,7 +20,7 @@ class FolderConfigManagerTest extends TestCase
         $peran = Role::firstOrCreate(['nama' => 'Tim SAKIP']);
 
         $user = User::create([
-            'nama' => 'SAKIP Uji', 'email' => 'sakip-'.uniqid().'@example.test', 'password' => 'password',
+            'nama' => 'SAKIP Uji', 'username' => 'sakip-'.uniqid(), 'email' => 'sakip-'.uniqid().'@example.test', 'password' => 'password',
             'role_id' => $peran->id, 'status_verifikasi' => 'terverifikasi',
         ]);
 
@@ -33,7 +33,7 @@ class FolderConfigManagerTest extends TestCase
     {
         $peran = Role::create(['nama' => 'Tim SAKIP']);
         $this->actingAs(User::create([
-            'nama' => 'SAKIP Uji', 'email' => 'sakip@example.test', 'password' => 'password',
+            'nama' => 'SAKIP Uji', 'username' => 'sakip@example.test', 'email' => 'sakip@example.test', 'password' => 'password',
             'role_id' => $peran->id, 'status_verifikasi' => 'terverifikasi',
         ]));
 
@@ -56,7 +56,7 @@ class FolderConfigManagerTest extends TestCase
     {
         $peran = Role::create(['nama' => 'Tim SAKIP']);
         $this->actingAs(User::create([
-            'nama' => 'SAKIP Uji', 'email' => 'sakip2@example.test', 'password' => 'password',
+            'nama' => 'SAKIP Uji', 'username' => 'sakip2@example.test', 'email' => 'sakip2@example.test', 'password' => 'password',
             'role_id' => $peran->id, 'status_verifikasi' => 'terverifikasi',
         ]));
 
@@ -129,7 +129,7 @@ class FolderConfigManagerTest extends TestCase
     {
         $this->actingAsSakip();
 
-        // Tanpa StorageAccount aktif di database uji — harus gagal dengan pesan yang
+        // Tanpa StorageAccount aktif di database uji â€” harus gagal dengan pesan yang
         // jelas (RuntimeException dari FolderStructureService), BUKAN error tak tertangani.
         Livewire::test(FolderConfigManager::class)
             ->set('manualTahun', 2026)

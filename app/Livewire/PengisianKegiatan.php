@@ -136,8 +136,8 @@ class PengisianKegiatan extends Component
 
     public function mount(): void
     {
-        $this->tahun = (int) now()->year;
-        $this->bulan = (int) now()->month;
+        $this->tahun = request()->integer('tahun') ?: (int) now()->year;
+        $this->bulan = request()->integer('bulan') ?: (int) now()->month;
         $this->blocks = [$this->emptyBlock()];
         $this->kendalaBlocks = [$this->emptyKendalaBlock()];
         $this->rtlBaru = [$this->emptyRtlBlock()];
@@ -145,6 +145,17 @@ class PengisianKegiatan extends Component
 
         foreach ($this->bagianKustomAktif() as $bagian) {
             $this->bagianKustomBlocks[$bagian->id] = [$this->emptyBagianKustomBlock()];
+        }
+
+        // Deep-link dari baris tabel dasbor (App\Livewire\DasborUtama) — begitu IKU dipilih
+        // dari URL, langsung muat evaluasi & PIC otomatis seperti updatedIkuId() supaya
+        // pengguna tidak perlu memilih ulang IKU yang sudah jelas diklik.
+        $ikuId = request()->integer('iku_id') ?: null;
+
+        if ($ikuId && MasterIku::whereKey($ikuId)->exists()) {
+            $this->iku_id = $ikuId;
+            $this->muatFormEvaluasi();
+            $this->pilihPicOtomatis();
         }
     }
 
@@ -967,14 +978,41 @@ class PengisianKegiatan extends Component
         });
 
         session()->flash('status', 'Draf kegiatan berhasil disimpan. Lengkapi bukti & bagian lain lalu ajukan ke Tim SAKIP saat siap.');
-        $this->dispatch('notify', type: 'success', message: 'Draf kegiatan berhasil disimpan.');
+
+        // Reload halaman penuh — lihat catatan senada di akhir ajukanIsian().
+        $this->redirect(route('pengisian.index'));
+    }
+
+    /**
+     * Tampilkan "sedang mengunggah X…" SAAT ITU JUGA, sebelum panggilan ke Drive API
+     * (yang bisa memakan waktu beberapa detik per berkas) dimulai — dipakai supaya Ketua
+     * Tim tidak cuma melihat tombol "Mengirim…" polos selama proses lambat, tapi tahu
+     * persis berkas mana yang sedang diproses.
+     *
+     * Dikirim lewat $this->stream() (fitur bawaan Livewire untuk mendorong pembaruan
+     * HTML ke browser SEBELUM action selesai, lewat response HTTP yang di-flush
+     * bertahap) — BUKAN $this->dispatch(), karena event dispatch baru sampai ke
+     * browser bersama HTML/efek akhir setelah SELURUH ajukanIsian() selesai (termasuk
+     * seluruh sisa berkas & transaksi DB), jadi terasa seperti "diam saja" selama
+     * proses berjalan meski sebenarnya sedang bekerja.
+     */
+    protected function streamProgresUnggah(string $namaFile, string $konteks): void
+    {
+        $this->stream(
+            to: 'progres-unggah',
+            content: '<span class="progres-unggah-item">📤 Mengunggah ke Google Drive: <b>'.e($namaFile).'</b> ('.e($konteks).')…</span>',
+            replace: true,
+        );
     }
 
     /**
      * Satu toast per berkas yang selesai diproses ke Google Drive (RF baru) — dipanggil
      * langsung di dalam transaksi ajukanIsian() supaya Ketua Tim tahu PERSIS berkas mana
      * yang berhasil/gagal saat itu juga, bukan cuma ringkasan jumlah di akhir (lihat
-     * $driveGagal, yang tetap dipertahankan untuk rincian di flash banner).
+     * $driveGagal, yang tetap dipertahankan untuk rincian di flash banner). Beda dari
+     * streamProgresUnggah(): toast ini baru benar-benar tampil di browser di AKHIR
+     * request (lihat catatan di atas), jadi tetap berguna sebagai rekap, bukan sebagai
+     * indikator real-time.
      */
     protected function notifikasiHasilUnggah(string $namaFile, string $konteks, bool $berhasil, ?string $alasan = null): void
     {
@@ -1065,6 +1103,7 @@ class PengisianKegiatan extends Component
                     // bermasalah) juga tertangkap di sini, bukan membatalkan SELURUH transaksi
                     // pengajuan hanya karena Drive sedang bermasalah.
                     try {
+                        $this->streamProgresUnggah($file->getClientOriginalName(), 'bukti kegiatan');
                         $localFullPath = Storage::disk('local')->path($path);
                         $hasilDrive = $folderService->unggahBerkasKegiatan($kegiatan, 'capaian', $localFullPath);
                         $berkas->update($hasilDrive);
@@ -1108,6 +1147,7 @@ class PengisianKegiatan extends Component
                     ]);
 
                     try {
+                        $this->streamProgresUnggah($file->getClientOriginalName(), 'bukti solusi');
                         $localFullPath = Storage::disk('local')->path($path);
                         $hasilDrive = $folderService->unggahBerkas($periode, $iku, 'solusi', $localFullPath, namaBerkasOverride: $namaBerkasDariTeks);
                         $berkas->update($hasilDrive);
@@ -1143,6 +1183,7 @@ class PengisianKegiatan extends Component
                     ]);
 
                     try {
+                        $this->streamProgresUnggah($file->getClientOriginalName(), 'bukti evaluasi RTL');
                         $localFullPath = Storage::disk('local')->path($path);
                         $hasilDrive = $folderService->unggahBerkas($poin->periode, $poin->masterIku, 'evaluasi_rtl', $localFullPath);
                         $berkas->update($hasilDrive);
@@ -1213,6 +1254,7 @@ class PengisianKegiatan extends Component
                         ]);
 
                         try {
+                            $this->streamProgresUnggah($file->getClientOriginalName(), "bukti {$bagian->nama}");
                             $localFullPath = Storage::disk('local')->path($path);
                             $hasilDrive = $folderService->unggahBerkas(
                                 $periode, $iku, 'bagian_kustom', $localFullPath, namaFolderOverride: $bagian->nama
@@ -1228,6 +1270,8 @@ class PengisianKegiatan extends Component
                 }
             }
         });
+
+        $this->stream(to: 'progres-unggah', content: '', replace: true);
 
         session()->flash(
             'status',
@@ -1246,24 +1290,13 @@ class PengisianKegiatan extends Component
 
         $this->lupakanCachePeriodeIku();
 
-        // Kembalikan seluruh form persis seperti kondisi pertama kali dibuka (lihat mount()),
-        // termasuk periode — bukan cuma isian di dalamnya — supaya Ketua Tim tidak perlu
-        // membersihkan sisa pilihan periode sebelum mengisi periode berikutnya.
-        $this->tahun = (int) now()->year;
-        $this->bulan = (int) now()->month;
-        $this->blocks = [$this->emptyBlock()];
-        $this->kendalaBlocks = [$this->emptyKendalaBlock()];
-        $this->iku_id = null;
-        $this->evaluasi = [];
-        $this->rtlBaru = [$this->emptyRtlBlock()];
-        $this->rtlBaruPic = '';
-        $this->rtlBaruPicManual = '';
-        $this->rtlBaruBatasWaktu = $this->akhirTriwulanBerikutnya()->toDateString();
-
-        $this->bagianKustomBlocks = [];
-        foreach ($this->bagianKustomAktif() as $bagian) {
-            $this->bagianKustomBlocks[$bagian->id] = [$this->emptyBagianKustomBlock()];
-        }
+        // Muat ulang HALAMAN PENUH (bukan cuma me-reset properti komponen) supaya
+        // tampilan benar-benar persis seperti pertama kali menu ini dibuka (mount()
+        // jalan lagi dari nol) — termasuk state Alpine (toasts, x-data lain) dan
+        // input file HTML yang tidak selalu ikut ter-reset kalau cuma properti
+        // Livewire-nya yang dikosongkan. Flash 'status'/'driveGagal' di atas tetap
+        // tersimpan lewat session dan tampil di halaman baru setelah reload.
+        $this->redirect(route('pengisian.index'));
     }
 
     public function render()

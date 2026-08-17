@@ -21,7 +21,7 @@ class KeanggotaanDanPenugasanTest extends TestCase
     {
         $peran = Role::create(['nama' => 'Tim SAKIP']);
         $this->actingAs(User::create([
-            'nama' => 'SAKIP Uji', 'email' => 'sakip@example.test', 'password' => 'password',
+            'nama' => 'SAKIP Uji', 'username' => 'sakip@example.test', 'email' => 'sakip@example.test', 'password' => 'password',
             'role_id' => $peran->id, 'status_verifikasi' => 'terverifikasi',
         ]));
     }
@@ -31,7 +31,7 @@ class KeanggotaanDanPenugasanTest extends TestCase
         $peran = Role::firstOrCreate(['nama' => 'Ketua Tim']);
 
         return User::create([
-            'nama' => $nama, 'email' => $email, 'password' => 'password',
+            'nama' => $nama, 'username' => $email, 'email' => $email, 'password' => 'password',
             'role_id' => $peran->id, 'status_verifikasi' => 'terverifikasi',
         ]);
     }

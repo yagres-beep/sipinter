@@ -1,0 +1,15 @@
+Modul,Sub-item,Status,Bukti/Cara Verifikasi,Catatan
+Infrastruktur,Koneksi Database Supabase (PostgreSQL),OK,"php artisan migrate:status berhasil; query ke tabel periode/capaian/notula/storage_account berhasil",Host aws-0-ap-southeast-1.pooler.supabase.com; latensi ~300-400ms per query dari lokasi server saat ini
+Infrastruktur,Google Drive - OAuth per akun institusi,PERLU TINDAK LANJUT,Dicek lewat query storage_account: 0 dari 3 akun berstatus terhubung OAuth,"Hubungkan lewat menu Akun & Storage bila ingin memakai jalur utama; opsional untuk minggu ini karena fallback Service Account sudah berjalan"
+Infrastruktur,Google Drive - Service Account (fallback),OK (diperbaiki),"Live API call files.get ke folder root berhasil (folder \"SAKIP7409\" terbaca) setelah GOOGLE_SERVICE_ACCOUNT_PATH di .env diperbaiki",Sebelum diperbaiki: path env menunjuk ke file yang tidak ada sehingga upload akan gagal total
+Infrastruktur,LibreOffice headless (konversi docx->PDF notula),BELUM TERPASANG,"Test-Path ke LIBREOFFICE_PATH dan pencarian soffice.exe di seluruh Program Files: tidak ditemukan",Wajib dipasang agar tombol Gabungkan Bagian II/III notula berfungsi; unduh di libreoffice.org/download
+Pencatatan Capaian,Isian kegiatan per bulan (Ketua Tim),OK,"PengisianKegiatan.php menyimpan Periode::updateOrCreate per (tahun, bulan)",-
+Pencatatan Capaian,Triwulan dihitung otomatis dari bulan,OK,"PengisianKegiatan::triwulanDari() = ceil(bulan/3), disimpan ke kolom periode.triwulan setiap submit",Tidak ada input manual untuk triwulan - selalu diturunkan dari bulan
+Pencatatan Capaian,Angka capaian per IKU+periode (Capaian model),OK,"Model Capaian menyimpan target_pk/target_tw/realisasi/persentase_capaian per (iku_id, periode_id)",Dihitung ulang otomatis di VerifikasiCapaian::hitungPersentase() saat Tim SAKIP mengisi realisasi
+Verifikasi Bukti Dukung,Preview PDF inline (modal + iframe),OK,"resources/views/livewire/verifikasi-capaian.blade.php baris 180-183 (iframe) + route berkas.show",Iframe src diisi lazy via Alpine supaya tidak auto-download semua berkas sekaligus
+Verifikasi Bukti Dukung,Sumber file untuk preview,OK,"BerkasDownloadController::show() membaca dari disk lokal (storage/app/private), bukan dari Drive",Preview TIDAK bergantung status koneksi Google Drive - tetap jalan meski Drive offline
+Verifikasi Bukti Dukung,Tandai Sesuai / Tolak per berkas,OK,"VerifikasiCapaian::tandaiSesuai() / tandaiTolak()",-
+Kompilasi Notula,Bagian I - disusun otomatis dari data terverifikasi,OK,"NotulaService::susunBagianSatu(), dipanggil otomatis saat notula pertama kali dibuka",Bisa disunting manual lalu disimpan lagi
+Kompilasi Notula,Bagian II & III - upload + konversi ke PDF,TERTAHAN,"KompilasiNotula::unggahBagian() memanggil LibreOfficeConversionService",Gagal sampai LibreOffice terpasang (lihat baris Infrastruktur di atas)
+Kompilasi Notula,Gabungkan jadi satu PDF notula,TERTAHAN (tergantung di atas),"NotulaService::gabungkan()",Bagian I saja bisa diuji/screenshot; gabung penuh perlu LibreOffice dulu
+Kompilasi Notula,Kesiapan per Sasaran (ringkasan sebelum susun notula),OK,"KompilasiNotula::kesiapanPerSasaran()",-

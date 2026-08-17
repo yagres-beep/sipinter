@@ -8,7 +8,13 @@
   --sh-lg:0 12px 40px rgba(16,32,70,.12); --sh-nav:0 2px 8px rgba(59,130,246,.28);
   --topbar-bg:rgba(255,255,255,.9); --ro-bg:#f4f6fa; --soft-surface:rgba(255,255,255,.03);
   --dashed-line:#cbd5e1; --chip-auto-bg:#f1f5f9;
+  /* beri tahu browser tema mana yang aktif, supaya kontrol native (select, input,
+     scrollbar, checkbox) ikut gelap/terang alih-alih selalu memakai skema bawaan
+     browser — tanpa ini elemen form bisa tetap putih walau var CSS sudah gelap. */
+  color-scheme: light dark;
 }
+:root[data-theme="light"]{ color-scheme: light; }
+:root[data-theme="dark"]{ color-scheme: dark; }
 
 /* mode gelap/terang — ikut tema perangkat (prefers-color-scheme) secara bawaan,
    bisa dipaksa lewat atribut data-theme="light"/"dark" (lihat tombol di sidebar-foot
@@ -58,14 +64,7 @@ a{text-decoration:none;color:inherit}
 .nav a.active{background:linear-gradient(135deg,var(--blue),var(--blue-600));color:#fff;box-shadow:var(--sh-nav)}
 .nav a .ic,.nav a .ni{width:17px;text-align:center;font-size:16px;display:flex;justify-content:center}
 .sidebar-foot{padding:12px;border-top:1px solid rgba(255,255,255,.06);display:flex;flex-direction:column;gap:8px}
-.theme-switch{display:flex;gap:4px;background:rgba(255,255,255,.06);border-radius:10px;padding:3px}
-.theme-switch button{flex:1;display:flex;align-items:center;justify-content:center;padding:7px 0;border:none;border-radius:8px;background:none;color:#aeb9d4;font-size:13px;cursor:pointer;transition:.15s}
-.theme-switch button:hover{color:#fff;background:rgba(255,255,255,.08)}
-.theme-switch button.on{background:linear-gradient(135deg,var(--blue),var(--blue-600));color:#fff;box-shadow:var(--sh-nav)}
 .sidebar-foot .sf-version{font-size:10px;color:#5b6d99;padding:0 4px}
-.sidebar-foot form{width:100%}
-.sidebar-foot form button{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;background:rgba(220,38,38,.12);border:1px solid rgba(220,38,38,.25);color:#f7b6b6;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;padding:9px 11px;border-radius:10px;transition:.15s}
-.sidebar-foot form button:hover{background:rgba(220,38,38,.22);color:#fff;border-color:rgba(220,38,38,.4)}
 
 /* main + topbar — main digeser ke kanan sejauh lebar sidebar (yang sekarang fixed);
    topbar lengket (sticky) di atas layar saat halaman discroll */
@@ -74,8 +73,10 @@ a{text-decoration:none;color:inherit}
 .crumb{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:6px}
 .crumb b{color:var(--ink);font-weight:600}
 .muted{color:var(--muted)}
-.topbar .user{display:flex;align-items:center;gap:9px;font-size:12.5px}
-.avatar{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--blue),#60a5fa);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+.user-menu{position:relative}
+.topbar .user{display:flex;align-items:center;gap:9px;font-size:12.5px;background:none;border:none;padding:4px;border-radius:10px;cursor:pointer;font-family:inherit;color:inherit}
+.topbar .user:hover{background:var(--ro-bg)}
+.avatar{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--blue),#60a5fa);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:none}
 .av-k{background:linear-gradient(135deg,var(--blue),#60a5fa)}
 .av-s{background:linear-gradient(135deg,#14b8a6,var(--teal))}
 .av-p{background:linear-gradient(135deg,#f59e0b,var(--amber))}
@@ -137,8 +138,12 @@ a{text-decoration:none;color:inherit}
 .b-draft{background:var(--chip-auto-bg);color:var(--muted)}
 .b-tolak{background:var(--red-soft);color:var(--red)}
 
-/* table */
+/* table — .table-scroll dipakai saat tabel butuh area scroll sendiri (mis. dasbor)
+   supaya kartu ringkasan/toolbar di atasnya dan header kolom tetap di tempat */
+.table-scroll{max-height:60vh;overflow-y:auto;position:relative}
+.table-scroll.table-loading{opacity:.55;transition:opacity .1s}
 table{width:100%;border-collapse:collapse}
+.table-scroll thead th{position:sticky;top:0;background:var(--white);z-index:1}
 th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--faint);padding:10px 12px;border-bottom:1px solid var(--line);font-weight:600}
 .num-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
 .num-cell label{font-size:10.5px;color:var(--muted);display:block;margin-bottom:5px;font-weight:600}
@@ -259,8 +264,9 @@ tr.clickable:hover{background:var(--blue-soft)}
 /* header tabel yang bisa diurutkan */
 th.th-sort{cursor:pointer;user-select:none}
 th.th-sort:hover{color:var(--blue-600)}
-th.th-sort .th-arrow{display:inline-block;margin-left:4px;opacity:.35}
-th.th-sort.active .th-arrow{opacity:1;color:var(--blue-600)}
+th.th-sort .th-arrow{display:inline-block;margin-left:4px;font-size:11px;opacity:.55}
+th.th-sort:hover .th-arrow{opacity:.85}
+th.th-sort.active .th-arrow{opacity:1;color:var(--blue-600);font-weight:700}
 
 /* subtab (Kelola Pengguna) */
 .subtabs{display:flex;gap:7px;margin-bottom:16px;flex-wrap:wrap}
@@ -372,6 +378,24 @@ th.th-sort.active .th-arrow{opacity:1;color:var(--blue-600)}
 .pw-wrap .eye{position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--faint);display:flex;background:none;border:none;cursor:pointer;padding:0}
 .auth-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted);margin:4px 0 16px}
 
+/* dropdown akun — dibuka dari kotak nama/avatar di topbar (menggantikan tautan langsung) */
+.user-menu-panel{position:absolute;top:calc(100% + 8px);right:0;min-width:220px;background:var(--white);border:1px solid var(--line);border-radius:var(--radius-sm);box-shadow:var(--sh-lg);z-index:25;overflow:hidden;transform-origin:top right}
+.ump-head{display:flex;align-items:center;gap:10px;padding:14px;border-bottom:1px solid var(--line2)}
+.ump-name{font-weight:700;font-size:13px;color:var(--ink)}
+.ump-role{font-size:11.5px;color:var(--muted);margin-top:1px}
+.ump-item{display:flex;align-items:center;gap:9px;padding:11px 14px;font-size:12.5px;font-weight:600;color:var(--ink);cursor:pointer;width:100%;text-align:left}
+.ump-item:hover{background:var(--ro-bg)}
+.ump-item .ic{width:16px;text-align:center;font-size:14px}
+.ump-logout{padding:0;border-top:1px solid var(--line2)}
+.ump-logout button{display:flex;align-items:center;gap:9px;width:100%;padding:11px 14px;background:none;border:none;font:inherit;font-size:12.5px;font-weight:600;color:var(--red);cursor:pointer;text-align:left}
+.ump-logout button:hover{background:var(--red-soft)}
+
+/* toggle tema mengambang — di atas tombol kembali ke atas (RF: dipindah dari sidebar) */
+.theme-switch-float{position:fixed;right:26px;bottom:82px;display:flex;flex-direction:column;gap:4px;background:var(--white);border:1px solid var(--line);border-radius:14px;padding:4px;box-shadow:var(--sh-lg);z-index:30}
+.theme-switch-float button{width:36px;height:36px;display:flex;align-items:center;justify-content:center;border:none;border-radius:10px;background:none;color:var(--muted);font-size:15px;cursor:pointer;transition:.15s}
+.theme-switch-float button:hover{background:var(--ro-bg);color:var(--ink)}
+.theme-switch-float button.on{background:linear-gradient(135deg,var(--blue),var(--blue-600));color:#fff;box-shadow:var(--sh-nav)}
+
 /* tombol kembali ke atas — muncul setelah halaman discroll ke bawah */
 .back-to-top{position:fixed;right:26px;bottom:26px;width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--blue-600));color:#fff;border:none;box-shadow:var(--sh-lg);font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:30;transition:.2s;opacity:0;pointer-events:none;transform:translateY(10px)}
 .back-to-top.show{opacity:1;pointer-events:auto;transform:none}
@@ -459,25 +483,26 @@ th.th-sort.active .th-arrow{opacity:1;color:var(--blue-600)}
 .auth-alt a{color:var(--blue-600);font-weight:600;text-decoration:none}
 
 /* filechip — status sesuai/tidak sesuai */
-.filechip.ok{border-color:#bbf7d0;background:var(--green-soft)}
-.filechip.no{border-color:#fecaca;background:var(--red-soft)}
+.filechip.ok{border-color:color-mix(in srgb, var(--green) 35%, transparent);background:var(--green-soft)}
+.filechip.no{border-color:color-mix(in srgb, var(--red) 35%, transparent);background:var(--red-soft)}
 .filechip .nm .sub{display:block;font-weight:400;font-size:10.5px;color:var(--muted);margin-top:1px}
 
 /* modal periksa berkas (S10) */
-.modal-overlay{background:rgba(16,32,70,.35);position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:26px;z-index:50}
-.modal{background:var(--white);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.3);width:100%;max-width:760px;overflow:hidden;display:flex;flex-direction:column}
-.modal-top{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line)}
+.modal-overlay{background:rgba(16,32,70,.35);position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:14px;z-index:50}
+.modal{background:var(--white);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.3);width:100%;max-width:1280px;height:96vh;overflow:hidden;display:flex;flex-direction:column}
+.modal-top{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line);flex:none}
 .modal-top .mt-t{font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px}
 .modal-top .x{color:var(--faint);display:flex;background:none;border:none;cursor:pointer;font-size:16px}
-.modal-body{display:flex;flex-wrap:wrap}
-.pdf-view{flex:1;padding:24px;min-height:230px;background:var(--soft-surface)}
-.pdf-view h4{font-size:13px;color:var(--ink);font-weight:700;margin-bottom:5px}
-.pdf-view .pmeta{font-size:11px;color:var(--muted);font-family:'SF Mono',monospace;margin-bottom:12px}
-.verify-panel{width:250px;border-left:1px solid var(--line);padding:18px;flex:none}
+.modal-body{display:flex;flex-wrap:wrap;flex:1;min-height:0}
+.pdf-view{flex:1;padding:16px;min-height:230px;background:var(--soft-surface);display:flex;flex-direction:column;min-width:280px}
+.pdf-view h4{font-size:13px;color:var(--ink);font-weight:700;margin-bottom:5px;flex:none}
+.pdf-view .pmeta{font-size:11px;color:var(--muted);font-family:'SF Mono',monospace;margin-bottom:12px;flex:none}
+.pdf-frame{flex:1;width:100%;min-height:400px;border:1px solid var(--line);border-radius:10px;background:var(--white)}
+.verify-panel{width:250px;border-left:1px solid var(--line);padding:18px;flex:none;overflow-y:auto}
 .verify-panel .vp-t{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--faint);font-weight:700;margin-bottom:12px}
 .mark{display:flex;align-items:center;gap:9px;padding:11px 13px;border:1.5px solid var(--line);border-radius:10px;margin-bottom:9px;font-size:12.5px;font-weight:600;background:var(--white);cursor:pointer;width:100%;font-family:inherit}
-.mark.ok{border-color:#86efac;background:var(--green-soft);color:var(--green)}
-.mark.no{border-color:#fca5a5;background:var(--red-soft);color:var(--red)}
+.mark.ok{border-color:color-mix(in srgb, var(--green) 45%, transparent);background:var(--green-soft);color:var(--green)}
+.mark.no{border-color:color-mix(in srgb, var(--red) 45%, transparent);background:var(--red-soft);color:var(--red)}
 
 /* pencocokan realisasi RTL */
 .match-row{display:grid;grid-template-columns:1fr auto 1fr;gap:11px;align-items:center;padding:12px;background:var(--bg);border:1.5px solid var(--line);border-radius:11px;margin-bottom:10px}
@@ -501,3 +526,10 @@ th.th-sort.active .th-arrow{opacity:1;color:var(--blue-600)}
 .toast.warning{border-color:#fde68a;background:var(--amber-soft,#fffbeb)}
 .toast.info{border-color:var(--line);background:var(--blue-soft)}
 @keyframes toastIn{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+
+/* progres unggah — diisi live lewat $this->stream() selama berkas disalin ke Google Drive */
+.progres-unggah:empty{display:none}
+.progres-unggah{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:var(--radius-sm);background:var(--blue-soft);border:1.5px solid var(--line);color:var(--ink)}
+.progres-unggah .progres-unggah-item{display:flex;align-items:center;gap:8px}
+.progres-unggah .progres-unggah-item::before{content:"";width:13px;height:13px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--blue,#2563eb);flex:none;animation:progresSpin .7s linear infinite}
+@keyframes progresSpin{to{transform:rotate(360deg)}}

@@ -69,32 +69,10 @@
                     @endif
 
                     <a wire:navigate href="{{ route('lakin.index') }}" class="{{ request()->routeIs('lakin.*') ? 'active' : '' }}"><span class="ic">📈</span> LAKIN</a>
-                    <a wire:navigate href="{{ route('profile.edit') }}" class="{{ request()->routeIs('profile.*') ? 'active' : '' }}"><span class="ic">⚙️</span> Pengaturan Akun</a>
                 </nav>
 
-                <div class="sidebar-foot" x-data="{
-                    tema: localStorage.getItem('sipinter-tema') || 'system',
-                    aturTema(t) {
-                        this.tema = t;
-                        if (t === 'system') {
-                            localStorage.removeItem('sipinter-tema');
-                            document.documentElement.removeAttribute('data-theme');
-                        } else {
-                            localStorage.setItem('sipinter-tema', t);
-                            document.documentElement.setAttribute('data-theme', t);
-                        }
-                    }
-                }">
-                    <div class="theme-switch" role="group" aria-label="Pilih tema tampilan">
-                        <button type="button" :class="{ on: tema === 'system' }" @click="aturTema('system')" title="Ikut tema perangkat">🖥️</button>
-                        <button type="button" :class="{ on: tema === 'light' }" @click="aturTema('light')" title="Mode terang">☀️</button>
-                        <button type="button" :class="{ on: tema === 'dark' }" @click="aturTema('dark')" title="Mode gelap">🌙</button>
-                    </div>
+                <div class="sidebar-foot">
                     <span class="sf-version">v1.0 · Aktualisasi 2026</span>
-                    <form method="POST" action="{{ route('logout') }}">
-                        @csrf
-                        <button type="submit">↪ Keluar</button>
-                    </form>
                 </div>
             @endauth
         </aside>
@@ -112,9 +90,26 @@
                 </div>
 
                 @auth
-                    <div class="user">
-                        <span>{{ $role }}</span>
-                        <a wire:navigate href="{{ route('profile.edit') }}"><div class="avatar {{ $avatarKelas }}">{{ $avatarSingkatan }}</div></a>
+                    <div class="user-menu" x-data="{ open: false }" @click.outside="open = false" @keydown.escape.window="open = false">
+                        <button type="button" class="user" :aria-expanded="open" @click="open = !open">
+                            <span>{{ $role }}</span>
+                            <div class="avatar {{ $avatarKelas }}">{{ $avatarSingkatan }}</div>
+                        </button>
+
+                        <div class="user-menu-panel" x-show="open" x-cloak x-transition @click="open = false">
+                            <div class="ump-head">
+                                <div class="avatar {{ $avatarKelas }}">{{ $avatarSingkatan }}</div>
+                                <div>
+                                    <div class="ump-name">{{ auth()->user()->nama }}</div>
+                                    <div class="ump-role">{{ $role }}</div>
+                                </div>
+                            </div>
+                            <a wire:navigate href="{{ route('profile.edit') }}" class="ump-item"><span class="ic">⚙️</span> Pengaturan Akun</a>
+                            <form method="POST" action="{{ route('logout') }}" class="ump-item ump-logout">
+                                @csrf
+                                <button type="submit"><span class="ic">↪</span> Keluar</button>
+                            </form>
+                        </div>
                     </div>
                 @endauth
             </div>
@@ -124,6 +119,26 @@
             </div>
         </div>
     </div>
+
+    @auth
+        <div class="theme-switch-float" x-data="{
+            tema: localStorage.getItem('sipinter-tema') || 'system',
+            aturTema(t) {
+                this.tema = t;
+                if (t === 'system') {
+                    localStorage.removeItem('sipinter-tema');
+                    document.documentElement.removeAttribute('data-theme');
+                } else {
+                    localStorage.setItem('sipinter-tema', t);
+                    document.documentElement.setAttribute('data-theme', t);
+                }
+            }
+        }" role="group" aria-label="Pilih tema tampilan">
+            <button type="button" :class="{ on: tema === 'system' }" @click="aturTema('system')" title="Ikut tema perangkat">🖥️</button>
+            <button type="button" :class="{ on: tema === 'light' }" @click="aturTema('light')" title="Mode terang">☀️</button>
+            <button type="button" :class="{ on: tema === 'dark' }" @click="aturTema('dark')" title="Mode gelap">🌙</button>
+        </div>
+    @endauth
 
     <button type="button" class="back-to-top" x-data="{ show: false }" :class="{ show: show }"
         x-init="window.addEventListener('scroll', () => show = window.scrollY > 300)"

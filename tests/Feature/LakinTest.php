@@ -25,7 +25,7 @@ class LakinTest extends TestCase
     {
         $peran = Role::firstOrCreate(['nama' => $peranNama]);
         $user = User::create([
-            'nama' => "$peranNama Uji", 'email' => strtolower(str_replace(' ', '', $peranNama)).'-'.uniqid().'@example.test',
+            'nama' => "$peranNama Uji", 'username' => strtolower(str_replace(' ', '', $peranNama)).'-'.uniqid(), 'email' => strtolower(str_replace(' ', '', $peranNama)).'-'.uniqid().'@example.test',
             'password' => 'password', 'role_id' => $peran->id, 'status_verifikasi' => 'terverifikasi',
         ]);
         $this->actingAs($user);

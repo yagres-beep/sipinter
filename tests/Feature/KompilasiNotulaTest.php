@@ -17,7 +17,7 @@ class KompilasiNotulaTest extends TestCase
     {
         $peran = Role::create(['nama' => 'Tim SAKIP']);
         $user = User::create([
-            'nama' => 'SAKIP Uji', 'email' => 'sakip-notula@example.test', 'password' => 'password',
+            'nama' => 'SAKIP Uji', 'username' => 'sakip-notula@example.test', 'email' => 'sakip-notula@example.test', 'password' => 'password',
             'role_id' => $peran->id, 'status_verifikasi' => 'terverifikasi',
         ]);
         $this->actingAs($user);

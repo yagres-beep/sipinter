@@ -24,7 +24,7 @@ class BagianKustomTest extends TestCase
         $peran = Role::firstOrCreate(['nama' => 'Ketua Tim']);
 
         $user = User::create([
-            'nama' => 'Ketua Uji', 'email' => 'ketua-'.uniqid().'@example.test', 'password' => 'password',
+            'nama' => 'Ketua Uji', 'username' => 'ketua-'.uniqid(), 'email' => 'ketua-'.uniqid().'@example.test', 'password' => 'password',
             'role_id' => $peran->id, 'status_verifikasi' => 'terverifikasi',
         ]);
 
@@ -38,7 +38,7 @@ class BagianKustomTest extends TestCase
         $peran = Role::firstOrCreate(['nama' => 'Tim SAKIP']);
 
         $user = User::create([
-            'nama' => 'SAKIP Uji', 'email' => 'sakip-'.uniqid().'@example.test', 'password' => 'password',
+            'nama' => 'SAKIP Uji', 'username' => 'sakip-'.uniqid(), 'email' => 'sakip-'.uniqid().'@example.test', 'password' => 'password',
             'role_id' => $peran->id, 'status_verifikasi' => 'terverifikasi',
         ]);
 

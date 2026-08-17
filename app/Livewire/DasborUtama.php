@@ -105,42 +105,56 @@ class DasborUtama extends Component
     }
 
     /**
+     * Query + filter + sort didorong seluruhnya ke database (JOIN ke master_iku &amp; periode)
+     * alih-alih memuat semua baris ke memori lalu memfilter/mengurutkan lewat Collection —
+     * supaya pencarian dan sort tetap cepat walau jumlah kegiatan terus bertambah.
+     *
      * @return \Illuminate\Support\Collection<int, Kegiatan>
      */
     protected function daftarKegiatan()
     {
-        $query = Kegiatan::with(['masterIku', 'periode']);
+        $query = Kegiatan::query()
+            ->join('master_iku', 'kegiatan.iku_id', '=', 'master_iku.id')
+            ->join('periode', 'kegiatan.periode_id', '=', 'periode.id')
+            ->select('kegiatan.*')
+            ->with(['masterIku', 'periode']);
 
         if (filled($this->filterTriwulan)) {
-            $query->whereHas('periode', fn ($q) => $q->where('triwulan', $this->filterTriwulan));
+            $query->where('periode.triwulan', $this->filterTriwulan);
         }
 
         if (filled($this->filterBulan)) {
-            $query->whereHas('periode', fn ($q) => $q->where('bulan', $this->filterBulan));
+            $query->where('periode.bulan', $this->filterBulan);
         }
 
-        $daftar = $query->get();
-
         if (filled($this->cari)) {
-            $kataKunci = mb_strtolower($this->cari);
+            // LOWER()+LIKE (bukan ILIKE) supaya query yang sama jalan baik di Postgres
+            // (production) maupun SQLite (tests, lihat phpunit.xml).
+            $kataKunci = '%'.mb_strtolower($this->cari).'%';
 
-            $daftar = $daftar->filter(function ($kegiatan) use ($kataKunci) {
-                return str_contains(mb_strtolower($kegiatan->masterIku->kode ?? ''), $kataKunci)
-                    || str_contains(mb_strtolower($kegiatan->masterIku->indikator ?? ''), $kataKunci)
-                    || str_contains(mb_strtolower($kegiatan->masterIku->tim ?? ''), $kataKunci);
+            $query->where(function ($q) use ($kataKunci) {
+                $q->whereRaw('LOWER(master_iku.kode) LIKE ?', [$kataKunci])
+                    ->orWhereRaw('LOWER(master_iku.indikator) LIKE ?', [$kataKunci])
+                    ->orWhereRaw('LOWER(master_iku.tim) LIKE ?', [$kataKunci]);
             });
         }
 
-        $pengurut = match ($this->urutanKolom) {
-            'kode' => fn ($k) => $k->masterIku->kode ?? '',
-            'tim' => fn ($k) => $k->masterIku->tim ?? '',
-            'status' => fn ($k) => $k->status_dokumen,
-            default => fn ($k) => $k->periode_id,
+        $kolomUrut = match ($this->urutanKolom) {
+            'kode' => 'master_iku.kode',
+            'indikator' => 'master_iku.indikator',
+            'triwulan' => 'periode.triwulan',
+            'tim' => 'master_iku.tim',
+            'status' => 'kegiatan.status_dokumen',
+            default => 'periode.tahun',
         };
 
-        $daftar = $this->urutanArah === 'asc' ? $daftar->sortBy($pengurut) : $daftar->sortByDesc($pengurut);
+        $query->orderBy($kolomUrut, $this->urutanArah);
 
-        return $daftar->take(20)->values();
+        if ($kolomUrut === 'periode.tahun') {
+            $query->orderBy('periode.bulan', $this->urutanArah);
+        }
+
+        return $query->take(20)->get();
     }
 
     /**
@@ -157,7 +171,11 @@ class DasborUtama extends Component
     protected function tautanSemuaBaris($daftarKegiatan, string $role)
     {
         if ($role === 'Ketua Tim') {
-            return $daftarKegiatan->mapWithKeys(fn ($k) => [$k->id => route('pengisian.index')]);
+            return $daftarKegiatan->mapWithKeys(fn ($k) => [$k->id => route('pengisian.index', [
+                'iku_id' => $k->iku_id,
+                'tahun' => $k->periode->tahun,
+                'bulan' => $k->periode->bulan,
+            ])]);
         }
 
         if ($role === 'Kepala') {

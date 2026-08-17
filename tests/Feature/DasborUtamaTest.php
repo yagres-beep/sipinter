@@ -35,7 +35,7 @@ class DasborUtamaTest extends TestCase
     {
         $peran = Role::firstOrCreate(['nama' => $peranNama]);
         $user = User::create([
-            'nama' => "$peranNama Uji", 'email' => strtolower(str_replace(' ', '', $peranNama)).'@example.test',
+            'nama' => "$peranNama Uji", 'username' => strtolower(str_replace(' ', '', $peranNama)), 'email' => strtolower(str_replace(' ', '', $peranNama)).'@example.test',
             'password' => 'password', 'role_id' => $peran->id, 'status_verifikasi' => 'terverifikasi',
         ]);
         $this->actingAs($user);
@@ -101,5 +101,17 @@ class DasborUtamaTest extends TestCase
         $response = $this->get('/dashboard');
         $response->assertOk();
         $response->assertSee('verifikasi/', false);
+    }
+
+    public function test_baris_ketua_tim_tertaut_ke_pengisian_dengan_iku_terpilih(): void
+    {
+        $this->loginSebagai('Ketua Tim');
+        $this->siapkanData();
+
+        $ikuA = MasterIku::where('kode', 'ALPHA-1')->firstOrFail();
+
+        $response = $this->get('/dashboard');
+        $response->assertOk();
+        $response->assertSee('iku_id='.$ikuA->id, false);
     }
 }

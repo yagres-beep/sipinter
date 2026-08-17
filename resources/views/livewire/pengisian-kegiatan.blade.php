@@ -613,6 +613,15 @@
         <div style="color:var(--muted);font-size:11.5px;margin-top:8px">🔒 Lengkapi seluruh isian wajib di atas untuk mengaktifkan tombol "Ajukan ke Tim SAKIP".</div>
     @endif
 
+    {{--
+        Diisi live lewat $this->stream() SELAMA ajukanIsian() berjalan (lihat
+        PengisianKegiatan::streamProgresUnggah()) — beda dari toast di bawah yang baru
+        tampil setelah SELURUH proses (termasuk seluruh berkas & transaksi DB) selesai.
+        Dibungkus wire:loading supaya otomatis hilang lagi begitu request selesai walau
+        isinya sempat belum sempat dikosongkan oleh stream() terakhir.
+    --}}
+    <div wire:stream="progres-unggah" wire:loading wire:target="ajukanIsian" class="progres-unggah" style="margin-top:10px"></div>
+
     <div class="toast-stack">
         <template x-for="toast in toasts" :key="toast.id">
             <div class="toast" :class="toast.type">

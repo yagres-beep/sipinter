@@ -51,7 +51,7 @@ class DemoDataSeeder extends Seeder
 
     /**
      * Satu akun per peran (RoleSeeder sudah menjamin ketiga peran ada). Akun Tim
-     * SAKIP memakai email yang sama dengan bootstrap admin di DatabaseSeeder —
+     * SAKIP memakai username yang sama dengan bootstrap admin di DatabaseSeeder —
      * firstOrCreate menemukan baris yang sama, jadi tidak membuat akun ganda.
      */
     protected function buatAkunDemo(): void
@@ -59,9 +59,10 @@ class DemoDataSeeder extends Seeder
         $roles = Role::all()->keyBy('nama');
 
         User::firstOrCreate(
-            ['email' => 'ketuatim@sipinter.bps.go.id'],
+            ['username' => 'ketuatim'],
             [
                 'nama' => 'Yulinda Agrestina',
+                'email' => 'ketuatim@sipinter.bps.go.id',
                 'password' => 'password',
                 'role_id' => $roles['Ketua Tim']->id,
                 'status_verifikasi' => 'terverifikasi',
@@ -69,9 +70,10 @@ class DemoDataSeeder extends Seeder
         );
 
         User::firstOrCreate(
-            ['email' => 'admin@sipinter.bps.go.id'],
+            ['username' => 'admin'],
             [
                 'nama' => 'Admin Tim SAKIP',
+                'email' => 'admin@sipinter.bps.go.id',
                 'password' => 'password',
                 'role_id' => $roles['Tim SAKIP']->id,
                 'status_verifikasi' => 'terverifikasi',
@@ -79,9 +81,10 @@ class DemoDataSeeder extends Seeder
         );
 
         User::firstOrCreate(
-            ['email' => 'kepala@sipinter.bps.go.id'],
+            ['username' => 'kepala'],
             [
                 'nama' => 'Kepala BPS Buton Utara',
+                'email' => 'kepala@sipinter.bps.go.id',
                 'password' => 'password',
                 'role_id' => $roles['Kepala']->id,
                 'status_verifikasi' => 'terverifikasi',

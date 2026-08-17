@@ -1,0 +1,146 @@
+<mxfile host="app.diagrams.net" agent="claude-code" version="24.7.5">
+  <diagram id="erd-sipinter" name="ERD SIPINTER - Modul Capaian, Verifikasi, Notula">
+    <mxGraphModel dx="1400" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1650" pageHeight="1300" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="note" value="ERD SIPINTER — entitas inti untuk modul Pencatatan Capaian (bulanan/triwulanan), Verifikasi Bukti Dukung, dan Kompilasi Notula. Tabel konfigurasi (folder_config, iku_folder_config, bagian_kustom, bagian_kustom_poin, lakin, lakin_baris) sengaja tidak ditampilkan agar diagram tetap terbaca. Dibuat 2026-08-15 dari migrasi di database/migrations/." style="text;html=1;align=left;verticalAlign=top;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="0" width="900" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- roles -->
+        <mxCell id="roles" value="&lt;b&gt;roles&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;nama" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="60" width="180" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- users -->
+        <mxCell id="users" value="&lt;b&gt;users&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;nama&lt;br&gt;email&lt;br&gt;password&lt;br&gt;FK role_id&lt;br&gt;status" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="300" y="60" width="200" height="150" as="geometry" />
+        </mxCell>
+
+        <!-- storage_account -->
+        <mxCell id="storage_account" value="&lt;b&gt;storage_account&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;email_gmail_institusi&lt;br&gt;status (aktif/penuh)&lt;br&gt;kuota_terpakai&lt;br&gt;kuota_total&lt;br&gt;drive_folder_id&lt;br&gt;is_master&lt;br&gt;google_access_token&lt;br&gt;google_refresh_token (encrypted)&lt;br&gt;google_token_expires_at" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="580" y="60" width="260" height="230" as="geometry" />
+        </mxCell>
+
+        <!-- master_iku -->
+        <mxCell id="master_iku" value="&lt;b&gt;master_iku&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;kode (unique)&lt;br&gt;indikator&lt;br&gt;tim&lt;br&gt;penanggung_jawab&lt;br&gt;sasaran" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="320" width="220" height="150" as="geometry" />
+        </mxCell>
+
+        <!-- periode -->
+        <mxCell id="periode" value="&lt;b&gt;periode&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;tahun&lt;br&gt;triwulan (auto: ceil(bulan/3))&lt;br&gt;bulan&lt;br&gt;bulan_ke&lt;br&gt;flag_bulan_terlewat&lt;br&gt;unique(tahun, bulan)" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="320" y="320" width="230" height="150" as="geometry" />
+        </mxCell>
+
+        <!-- kegiatan -->
+        <mxCell id="kegiatan" value="&lt;b&gt;kegiatan&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;FK iku_id&lt;br&gt;FK periode_id&lt;br&gt;FK rtl_evaluasi_id (nullable)&lt;br&gt;uraian_kegiatan&lt;br&gt;jenis&lt;br&gt;tahapan_survei&lt;br&gt;nama_folder_auto&lt;br&gt;drive_folder_id&lt;br&gt;status_dokumen" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="600" width="240" height="230" as="geometry" />
+        </mxCell>
+
+        <!-- capaian -->
+        <mxCell id="capaian" value="&lt;b&gt;capaian&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;FK iku_id&lt;br&gt;FK periode_id&lt;br&gt;analisis_capaian&lt;br&gt;target_pk&lt;br&gt;target_tw&lt;br&gt;realisasi&lt;br&gt;persentase_capaian" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="320" y="600" width="220" height="190" as="geometry" />
+        </mxCell>
+
+        <!-- kendala_solusi -->
+        <mxCell id="kendala_solusi" value="&lt;b&gt;kendala_solusi&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;FK iku_id&lt;br&gt;FK periode_id&lt;br&gt;kendala&lt;br&gt;solusi" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="580" y="600" width="200" height="130" as="geometry" />
+        </mxCell>
+
+        <!-- rtl_evaluasi -->
+        <mxCell id="rtl_evaluasi" value="&lt;b&gt;rtl_evaluasi&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;FK iku_id&lt;br&gt;FK periode_id&lt;br&gt;rtl_teks&lt;br&gt;berlaku_bulan&lt;br&gt;pic&lt;br&gt;batas_waktu&lt;br&gt;realisasi&lt;br&gt;status_cocok" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="820" y="600" width="220" height="210" as="geometry" />
+        </mxCell>
+
+        <!-- berkas -->
+        <mxCell id="berkas" value="&lt;b&gt;berkas&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;ref_id / ref_type (polimorfik)&lt;br&gt;kategori&lt;br&gt;nama_file&lt;br&gt;path (disk lokal, utk preview)&lt;br&gt;drive_file_id&lt;br&gt;FK storage_account_id&lt;br&gt;status_verifikasi&lt;br&gt;catatan" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="900" width="260" height="210" as="geometry" />
+        </mxCell>
+
+        <!-- notula -->
+        <mxCell id="notula" value="&lt;b&gt;notula&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;FK periode_id (unique, triwulanan)&lt;br&gt;bagian1_html (auto-susun)&lt;br&gt;bagian2_pdf (hasil LibreOffice)&lt;br&gt;bagian3_pdf (hasil LibreOffice)&lt;br&gt;pdf_gabungan (draf)&lt;br&gt;pdf_final (ber-TTD)&lt;br&gt;status&lt;br&gt;FK disetujui_oleh_user_id&lt;br&gt;disetujui_pada&lt;br&gt;catatan_pengembalian" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="340" y="900" width="260" height="250" as="geometry" />
+        </mxCell>
+
+        <!-- user_tim -->
+        <mxCell id="user_tim" value="&lt;b&gt;user_tim&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;FK user_id&lt;br&gt;tim&lt;br&gt;unique(user_id, tim)" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="660" y="900" width="200" height="110" as="geometry" />
+        </mxCell>
+
+        <!-- iku_penugasan -->
+        <mxCell id="iku_penugasan" value="&lt;b&gt;iku_penugasan&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;FK iku_id&lt;br&gt;FK user_id&lt;br&gt;unique(iku_id, user_id)" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="900" y="900" width="200" height="110" as="geometry" />
+        </mxCell>
+
+        <!-- edges -->
+        <mxCell id="e1" value="role_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=ERone;startArrow=ERmany;fontSize=10;" edge="1" parent="1" source="users" target="roles">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e2" value="iku_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=ERone;startArrow=ERmany;fontSize=10;" edge="1" parent="1" source="kegiatan" target="master_iku">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="periode_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=ERone;startArrow=ERmany;fontSize=10;" edge="1" parent="1" source="kegiatan" target="periode">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3b" value="rtl_evaluasi_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;endArrow=ERzeroToOne;startArrow=ERmany;fontSize=10;" edge="1" parent="1" source="kegiatan" target="rtl_evaluasi">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e4" value="iku_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=ERone;startArrow=ERmany;fontSize=10;" edge="1" parent="1" source="capaian" target="master_iku">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" value="periode_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=ERone;startArrow=ERmany;fontSize=10;" edge="1" parent="1" source="capaian" target="periode">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e6" value="iku_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=ERone;startArrow=ERmany;fontSize=10;" edge="1" parent="1" source="kendala_solusi" target="master_iku">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" value="periode_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=ERone;startArrow=ERmany;fontSize=10;" edge="1" parent="1" source="kendala_solusi" target="periode">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e8" value="iku_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=ERone;startArrow=ERmany;fontSize=10;" edge="1" parent="1" source="rtl_evaluasi" target="master_iku">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" value="periode_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=ERone;startArrow=ERmany;fontSize=10;" edge="1" parent="1" source="rtl_evaluasi" target="periode">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e10" value="storage_account_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=ERzeroToOne;startArrow=ERmany;fontSize=10;" edge="1" parent="1" source="berkas" target="storage_account">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" value="ref (kegiatan)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;endArrow=ERmany;startArrow=ERmany;fontSize=10;" edge="1" parent="1" source="berkas" target="kegiatan">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e12" value="ref (kendala_solusi)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;endArrow=ERmany;startArrow=ERmany;fontSize=10;" edge="1" parent="1" source="berkas" target="kendala_solusi">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e13" value="ref (rtl_evaluasi)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;endArrow=ERmany;startArrow=ERmany;fontSize=10;" edge="1" parent="1" source="berkas" target="rtl_evaluasi">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e14" value="periode_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=ERone;startArrow=ERone;fontSize=10;" edge="1" parent="1" source="notula" target="periode">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e15" value="disetujui_oleh_user_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=ERzeroToOne;startArrow=ERmany;fontSize=10;" edge="1" parent="1" source="notula" target="users">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e16" value="user_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=ERone;startArrow=ERmany;fontSize=10;" edge="1" parent="1" source="user_tim" target="users">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e17" value="iku_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=ERone;startArrow=ERmany;fontSize=10;" edge="1" parent="1" source="iku_penugasan" target="master_iku">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e18" value="user_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=ERone;startArrow=ERmany;fontSize=10;" edge="1" parent="1" source="iku_penugasan" target="users">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

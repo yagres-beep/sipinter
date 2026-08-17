@@ -29,16 +29,19 @@
                 <div class="badge b-tunggu" style="display:block;margin-bottom:14px">{{ $errors->first() }}</div>
             @endif
 
-            <form method="POST" action="{{ route('login') }}">
+            <form method="POST" action="{{ route('login') }}" x-data="{ showPw: false }">
                 @csrf
                 <div class="field">
-                    <label>Email <span class="req">*</span></label>
-                    <input class="inp filled" type="email" name="email" value="{{ old('email') }}" placeholder="nama@bps.go.id" required autofocus>
+                    <label>Username <span class="req">*</span></label>
+                    <input class="inp filled" type="text" name="username" value="{{ old('username') }}" placeholder="username Anda" required autofocus>
                 </div>
                 <div class="field">
                     <label>Kata Sandi <span class="req">*</span></label>
                     <div class="pw-wrap">
-                        <input class="inp filled" type="password" name="password" placeholder="••••••••" required>
+                        <input class="inp filled" :type="showPw ? 'text' : 'password'" name="password" placeholder="••••••••" required>
+                        <button type="button" class="eye" @click="showPw = !showPw" tabindex="-1">
+                            <span x-text="showPw ? '🙈' : '👁'"></span>
+                        </button>
                     </div>
                 </div>
                 <div class="auth-row">

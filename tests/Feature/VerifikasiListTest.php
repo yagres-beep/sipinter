@@ -21,7 +21,7 @@ class VerifikasiListTest extends TestCase
     {
         $peran = Role::create(['nama' => 'Tim SAKIP']);
         $this->actingAs(User::create([
-            'nama' => 'SAKIP Uji', 'email' => 'sakip@example.test', 'password' => 'password',
+            'nama' => 'SAKIP Uji', 'username' => 'sakip@example.test', 'email' => 'sakip@example.test', 'password' => 'password',
             'role_id' => $peran->id, 'status_verifikasi' => 'terverifikasi',
         ]));
 
@@ -47,7 +47,7 @@ class VerifikasiListTest extends TestCase
     {
         $peran = Role::create(['nama' => 'Tim SAKIP']);
         $this->actingAs(User::create([
-            'nama' => 'SAKIP Uji', 'email' => 'sakip2@example.test', 'password' => 'password',
+            'nama' => 'SAKIP Uji', 'username' => 'sakip2@example.test', 'email' => 'sakip2@example.test', 'password' => 'password',
             'role_id' => $peran->id, 'status_verifikasi' => 'terverifikasi',
         ]));
 
@@ -61,7 +61,7 @@ class VerifikasiListTest extends TestCase
     {
         $peran = Role::create(['nama' => 'Tim SAKIP']);
         $this->actingAs(User::create([
-            'nama' => 'SAKIP Uji', 'email' => 'sakip3@example.test', 'password' => 'password',
+            'nama' => 'SAKIP Uji', 'username' => 'sakip3@example.test', 'email' => 'sakip3@example.test', 'password' => 'password',
             'role_id' => $peran->id, 'status_verifikasi' => 'terverifikasi',
         ]));
 
@@ -75,7 +75,7 @@ class VerifikasiListTest extends TestCase
     {
         $peran = Role::create(['nama' => 'Tim SAKIP']);
         $this->actingAs(User::create([
-            'nama' => 'SAKIP Uji', 'email' => 'sakip4@example.test', 'password' => 'password',
+            'nama' => 'SAKIP Uji', 'username' => 'sakip4@example.test', 'email' => 'sakip4@example.test', 'password' => 'password',
             'role_id' => $peran->id, 'status_verifikasi' => 'terverifikasi',
         ]));
 

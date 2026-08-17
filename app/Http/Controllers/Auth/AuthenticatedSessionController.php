@@ -19,13 +19,13 @@ class AuthenticatedSessionController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $credentials = $request->validate([
-            'email' => ['required', 'email'],
+            'username' => ['required', 'string'],
             'password' => ['required'],
         ]);
 
         if (! Auth::attempt($credentials, $request->boolean('remember'))) {
             throw ValidationException::withMessages([
-                'email' => 'Email atau kata sandi tidak sesuai.',
+                'username' => 'Username atau kata sandi tidak sesuai.',
             ]);
         }
 
@@ -38,7 +38,7 @@ class AuthenticatedSessionController extends Controller
                 ? 'Pendaftaran akun Anda ditolak oleh Tim SAKIP.'
                 : 'Akun Anda masih menunggu verifikasi Tim SAKIP.';
 
-            throw ValidationException::withMessages(['email' => $message]);
+            throw ValidationException::withMessages(['username' => $message]);
         }
 
         $request->session()->regenerate();

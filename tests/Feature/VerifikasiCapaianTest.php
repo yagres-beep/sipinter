@@ -26,7 +26,7 @@ class VerifikasiCapaianTest extends TestCase
 
         return User::create([
             'nama' => 'Tim SAKIP Uji',
-            'email' => 'sakip-uji@example.test',
+            'username' => 'sakip-uji@example.test', 'email' => 'sakip-uji@example.test',
             'password' => 'password',
             'role_id' => $peran->id,
             'status_verifikasi' => 'terverifikasi',
@@ -185,7 +185,7 @@ class VerifikasiCapaianTest extends TestCase
         ]);
 
         // RTL disimpan dengan periode TARGET-nya (sama triwulan dengan capaian ini,
-        // triwulan III) — sama seperti alur nyata "RTL Baru" yang ditetapkan saat
+        // triwulan III) â€” sama seperti alur nyata "RTL Baru" yang ditetapkan saat
         // mengisi triwulan sebelumnya untuk dilaksanakan triwulan berjalan ini.
         $periodeRtl = Periode::create([
             'tahun' => 2026,

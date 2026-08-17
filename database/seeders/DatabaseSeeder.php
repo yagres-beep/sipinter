@@ -22,9 +22,10 @@ class DatabaseSeeder extends Seeder
         $timSakip = Role::where('nama', 'Tim SAKIP')->firstOrFail();
 
         User::firstOrCreate(
-            ['email' => 'admin@sipinter.bps.go.id'],
+            ['username' => 'admin'],
             [
                 'nama' => 'Admin Tim SAKIP',
+                'email' => 'admin@sipinter.bps.go.id',
                 'password' => 'password',
                 'role_id' => $timSakip->id,
                 'status_verifikasi' => 'terverifikasi',

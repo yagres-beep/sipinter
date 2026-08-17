@@ -27,7 +27,7 @@ class PengisianKegiatanTest extends TestCase
 
         $ketua = User::create([
             'nama' => 'Ketua Uji',
-            'email' => 'ketua-uji@example.test',
+            'username' => 'ketua-uji@example.test', 'email' => 'ketua-uji@example.test',
             'password' => 'password',
             'role_id' => $peranKetua->id,
             'status_verifikasi' => 'terverifikasi',
@@ -44,7 +44,7 @@ class PengisianKegiatanTest extends TestCase
 
         Livewire::test(PengisianKegiatan::class)
             ->set('tahun', 2026)
-            ->set('bulan', 9) // bulan terakhir Triwulan III — satu-satunya bulan RTL Baru boleh diisi.
+            ->set('bulan', 9) // bulan terakhir Triwulan III â€” satu-satunya bulan RTL Baru boleh diisi.
             ->set('iku_id', $iku->id)
             ->set('blocks.0.uraian_kegiatan', 'Kegiatan uji coba')
             ->set('blocks.0.jenis', 'bukan_survei_sensus')
@@ -89,7 +89,7 @@ class PengisianKegiatanTest extends TestCase
 
         $ketua = User::create([
             'nama' => 'Ketua Uji',
-            'email' => 'ketua-uji2@example.test',
+            'username' => 'ketua-uji2@example.test', 'email' => 'ketua-uji2@example.test',
             'password' => 'password',
             'role_id' => $peranKetua->id,
             'status_verifikasi' => 'terverifikasi',
@@ -125,7 +125,7 @@ class PengisianKegiatanTest extends TestCase
 
         $ketua = User::create([
             'nama' => 'Ketua Uji',
-            'email' => 'ketua-uji3@example.test',
+            'username' => 'ketua-uji3@example.test', 'email' => 'ketua-uji3@example.test',
             'password' => 'password',
             'role_id' => $peranKetua->id,
             'status_verifikasi' => 'terverifikasi',
@@ -163,7 +163,7 @@ class PengisianKegiatanTest extends TestCase
 
         $ketua = User::create([
             'nama' => 'Ketua Uji',
-            'email' => 'ketua-uji4@example.test',
+            'username' => 'ketua-uji4@example.test', 'email' => 'ketua-uji4@example.test',
             'password' => 'password',
             'role_id' => $peranKetua->id,
             'status_verifikasi' => 'terverifikasi',
@@ -199,7 +199,7 @@ class PengisianKegiatanTest extends TestCase
 
         $ketua = User::create([
             'nama' => 'Ketua Uji',
-            'email' => 'ketua-uji5@example.test',
+            'username' => 'ketua-uji5@example.test', 'email' => 'ketua-uji5@example.test',
             'password' => 'password',
             'role_id' => $peranKetua->id,
             'status_verifikasi' => 'terverifikasi',
@@ -220,7 +220,7 @@ class PengisianKegiatanTest extends TestCase
         $peranKetua = Role::create(['nama' => 'Ketua Tim']);
         $ketua = User::create([
             'nama' => 'Ketua Uji',
-            'email' => 'ketua-uji6@example.test',
+            'username' => 'ketua-uji6@example.test', 'email' => 'ketua-uji6@example.test',
             'password' => 'password',
             'role_id' => $peranKetua->id,
             'status_verifikasi' => 'terverifikasi',
@@ -248,7 +248,7 @@ class PengisianKegiatanTest extends TestCase
         $peranKetua = Role::create(['nama' => 'Ketua Tim']);
         $ketua = User::create([
             'nama' => 'Ketua Uji',
-            'email' => 'ketua-uji7@example.test',
+            'username' => 'ketua-uji7@example.test', 'email' => 'ketua-uji7@example.test',
             'password' => 'password',
             'role_id' => $peranKetua->id,
             'status_verifikasi' => 'terverifikasi',
@@ -284,7 +284,7 @@ class PengisianKegiatanTest extends TestCase
         $peranKetua = Role::create(['nama' => 'Ketua Tim']);
         $ketua = User::create([
             'nama' => 'Ketua Uji',
-            'email' => 'ketua-uji8@example.test',
+            'username' => 'ketua-uji8@example.test', 'email' => 'ketua-uji8@example.test',
             'password' => 'password',
             'role_id' => $peranKetua->id,
             'status_verifikasi' => 'terverifikasi',
@@ -307,7 +307,7 @@ class PengisianKegiatanTest extends TestCase
         $peranKetua = Role::create(['nama' => 'Ketua Tim']);
         $ketua = User::create([
             'nama' => 'Ketua Uji',
-            'email' => 'ketua-uji9@example.test',
+            'username' => 'ketua-uji9@example.test', 'email' => 'ketua-uji9@example.test',
             'password' => 'password',
             'role_id' => $peranKetua->id,
             'status_verifikasi' => 'terverifikasi',
@@ -355,7 +355,7 @@ class PengisianKegiatanTest extends TestCase
         $peranKetua = Role::create(['nama' => 'Ketua Tim']);
         $ketua = User::create([
             'nama' => 'Ketua Uji',
-            'email' => 'ketua-uji10@example.test',
+            'username' => 'ketua-uji10@example.test', 'email' => 'ketua-uji10@example.test',
             'password' => 'password',
             'role_id' => $peranKetua->id,
             'status_verifikasi' => 'terverifikasi',
@@ -404,7 +404,7 @@ class PengisianKegiatanTest extends TestCase
     {
         $peranKetua = Role::firstOrCreate(['nama' => 'Ketua Tim']);
         $ketua = User::create([
-            'nama' => 'Ketua Uji', 'email' => $emailKetua, 'password' => 'password',
+            'nama' => 'Ketua Uji', 'username' => $emailKetua, 'email' => $emailKetua, 'password' => 'password',
             'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
         ]);
 
@@ -413,7 +413,7 @@ class PengisianKegiatanTest extends TestCase
         ]);
 
         // RTL disimpan dengan periode TARGET-nya (triwulan III, ditetapkan saat mengisi
-        // triwulan II) — sama seperti alur nyata "RTL Baru" di PengisianKegiatan::ajukanIsian().
+        // triwulan II) â€” sama seperti alur nyata "RTL Baru" di PengisianKegiatan::ajukanIsian().
         $periodeBerjalan = Periode::create([
             'tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false,
         ]);
@@ -437,7 +437,7 @@ class PengisianKegiatanTest extends TestCase
     {
         [$iku, $poin1, $poin2] = $this->siapkanIkuDanRtlSebelumnya('ketua-uji11@example.test');
 
-        // Bulan pertama TW III (bukan bulan terakhir) — bukti evaluasi belum wajib sama
+        // Bulan pertama TW III (bukan bulan terakhir) â€” bukti evaluasi belum wajib sama
         // sekali, termasuk boleh SEMUA poin tanpa bukti.
         Livewire::test(PengisianKegiatan::class)
             ->set('tahun', 2026)
@@ -462,7 +462,7 @@ class PengisianKegiatanTest extends TestCase
     {
         [$iku, $poin1, $poin2] = $this->siapkanIkuDanRtlSebelumnya('ketua-uji11b@example.test');
 
-        // Bulan terakhir TW III — SEMUA poin evaluasi wajib punya bukti; poin2 sengaja
+        // Bulan terakhir TW III â€” SEMUA poin evaluasi wajib punya bukti; poin2 sengaja
         // tidak diberi bukti sama sekali, jadi pengajuan harus ditolak.
         Livewire::test(PengisianKegiatan::class)
             ->set('tahun', 2026)
@@ -520,7 +520,7 @@ class PengisianKegiatanTest extends TestCase
         $peranKetua = Role::create(['nama' => 'Ketua Tim']);
         $ketua = User::create([
             'nama' => 'Ketua Uji',
-            'email' => 'ketua-uji12@example.test',
+            'username' => 'ketua-uji12@example.test', 'email' => 'ketua-uji12@example.test',
             'password' => 'password',
             'role_id' => $peranKetua->id,
             'status_verifikasi' => 'terverifikasi',
@@ -547,7 +547,7 @@ class PengisianKegiatanTest extends TestCase
     {
         $peranKetua = Role::create(['nama' => 'Ketua Tim']);
         $ketua = User::create([
-            'nama' => 'Ketua Uji', 'email' => 'ketua-uji-kumulatif@example.test',
+            'nama' => 'Ketua Uji', 'username' => 'ketua-uji-kumulatif@example.test', 'email' => 'ketua-uji-kumulatif@example.test',
             'password' => 'password', 'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
         ]);
         $iku = MasterIku::create(['kode' => 'UJI-KUM', 'indikator' => 'Indikator kumulatif', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji']);
@@ -560,7 +560,7 @@ class PengisianKegiatanTest extends TestCase
 
         $this->actingAs($ketua);
 
-        // Sedang mengisi bulan 8 (Agustus) = Triwulan III — riwayat kumulatif harus
+        // Sedang mengisi bulan 8 (Agustus) = Triwulan III â€” riwayat kumulatif harus
         // tetap menampilkan kendala dari TW I dan TW II, bukan cuma TW III.
         Livewire::test(PengisianKegiatan::class)
             ->set('tahun', 2026)
@@ -575,7 +575,7 @@ class PengisianKegiatanTest extends TestCase
         $peranKetua = Role::create(['nama' => 'Ketua Tim']);
         $ketua = User::create([
             'nama' => 'Ketua Uji',
-            'email' => 'ketua-uji13@example.test',
+            'username' => 'ketua-uji13@example.test', 'email' => 'ketua-uji13@example.test',
             'password' => 'password',
             'role_id' => $peranKetua->id,
             'status_verifikasi' => 'terverifikasi',
@@ -591,14 +591,14 @@ class PengisianKegiatanTest extends TestCase
         $this->actingAs($ketua);
 
         // Buka komponen sekali dulu di bulan terakhir TW III (2026-09) SEBELUM RTL
-        // berikutnya ditetapkan — supaya cache "rtl-berikutnya-ada" sempat terisi false.
+        // berikutnya ditetapkan â€” supaya cache "rtl-berikutnya-ada" sempat terisi false.
         Livewire::test(PengisianKegiatan::class)
             ->set('tahun', 2026)
             ->set('bulan', 9)
             ->set('iku_id', $iku->id)
             ->assertDontSee('Sudah ditetapkan');
 
-        // Ajukan sekaligus menetapkan RTL untuk TW IV — ini mengubah data yang tadi di-cache.
+        // Ajukan sekaligus menetapkan RTL untuk TW IV â€” ini mengubah data yang tadi di-cache.
         Livewire::test(PengisianKegiatan::class)
             ->set('tahun', 2026)
             ->set('bulan', 9)
@@ -612,7 +612,7 @@ class PengisianKegiatanTest extends TestCase
             ->assertHasNoErrors();
 
         // Komponen BARU (request "berikutnya") untuk IKU+periode yang sama harus melihat
-        // RTL berikutnya SUDAH ada — bukan cache basi dari sebelum submit.
+        // RTL berikutnya SUDAH ada â€” bukan cache basi dari sebelum submit.
         Livewire::test(PengisianKegiatan::class)
             ->set('tahun', 2026)
             ->set('bulan', 9)
@@ -624,7 +624,7 @@ class PengisianKegiatanTest extends TestCase
     {
         $peranKetua = Role::create(['nama' => 'Ketua Tim']);
         $this->actingAs(User::create([
-            'nama' => 'Ketua Uji', 'email' => 'ketua-uji14@example.test', 'password' => 'password',
+            'nama' => 'Ketua Uji', 'username' => 'ketua-uji14@example.test', 'email' => 'ketua-uji14@example.test', 'password' => 'password',
             'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
         ]));
 
@@ -643,7 +643,7 @@ class PengisianKegiatanTest extends TestCase
     {
         $peranKetua = Role::create(['nama' => 'Ketua Tim']);
         $this->actingAs(User::create([
-            'nama' => 'Ketua Uji', 'email' => 'ketua-uji15@example.test', 'password' => 'password',
+            'nama' => 'Ketua Uji', 'username' => 'ketua-uji15@example.test', 'email' => 'ketua-uji15@example.test', 'password' => 'password',
             'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
         ]));
 
@@ -661,5 +661,42 @@ class PengisianKegiatanTest extends TestCase
 
         $this->assertCount(0, \Illuminate\Support\Facades\DB::getQueryLog());
         $this->assertCount(2, $component->get('blocks'));
+    }
+
+    /**
+     * Deep-link dari baris tabel dasbor (App\Livewire\DasborUtama::tautanSemuaBaris) —
+     * iku_id/tahun/bulan di query string harus langsung mengisi properti komponen di mount(),
+     * sama seperti pemilihan manual lewat dropdown IKU (updatedIkuId()).
+     */
+    public function test_deep_link_iku_id_dari_dasbor_langsung_terisi_di_mount(): void
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $this->actingAs(User::create([
+            'nama' => 'Ketua Uji', 'username' => 'ketua-uji16@example.test', 'email' => 'ketua-uji16@example.test', 'password' => 'password',
+            'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
+        ]));
+
+        $iku = MasterIku::create([
+            'kode' => 'UJI-016', 'indikator' => 'Indikator uji coba 16', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji',
+        ]);
+
+        Livewire::withQueryParams(['iku_id' => $iku->id, 'tahun' => 2026, 'bulan' => 7])
+            ->test(PengisianKegiatan::class)
+            ->assertSet('iku_id', $iku->id)
+            ->assertSet('tahun', 2026)
+            ->assertSet('bulan', 7);
+    }
+
+    public function test_deep_link_iku_id_tidak_valid_diabaikan(): void
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $this->actingAs(User::create([
+            'nama' => 'Ketua Uji', 'username' => 'ketua-uji17@example.test', 'email' => 'ketua-uji17@example.test', 'password' => 'password',
+            'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
+        ]));
+
+        Livewire::withQueryParams(['iku_id' => 999999])
+            ->test(PengisianKegiatan::class)
+            ->assertSet('iku_id', null);
     }
 }

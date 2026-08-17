@@ -39,6 +39,7 @@ class StorageAccount extends Model
         'kuota_terpakai',
         'kuota_total',
         'drive_folder_id',
+        'is_master',
         'google_access_token',
         'google_refresh_token',
         'google_token_expires_at',
@@ -49,6 +50,7 @@ class StorageAccount extends Model
         return [
             'kuota_terpakai' => 'decimal:2',
             'kuota_total' => 'decimal:2',
+            'is_master' => 'boolean',
             // Refresh token adalah kredensial jangka panjang (tidak kedaluwarsa sampai
             // dicabut) — dienkripsi saat disimpan (Laravel encrypted cast, pakai APP_KEY)
             // supaya tidak tersimpan polos di database bila database bocor.
@@ -128,6 +130,46 @@ class StorageAccount extends Model
                 ->update(['status' => self::STATUS_PENUH]);
 
             $this->update(['status' => self::STATUS_AKTIF]);
+        });
+    }
+
+    /**
+     * Akun master folder saat ini (lihat GoogleOAuthController::callback() &
+     * GoogleDriveService::bagikanFolder()) — akun BUKAN-master yang terhubung lewat
+     * OAuth akan otomatis ditulisi drive_folder_id yang sama dengan akun ini alih-alih
+     * membuat folder root sendiri, supaya seluruh akun institusi menulis ke SATU
+     * struktur folder yang sama.
+     *
+     * Diutamakan dari kolom is_master (bisa diubah lewat menu Akun & Storage → "Jadikan
+     * Master"); jatuh ke GOOGLE_DRIVE_MASTER_ACCOUNT_EMAIL di .env HANYA selama belum
+     * ada satu pun baris is_master = true (mis. instalasi lama yang belum sempat pakai
+     * menu ini) supaya pengaturan .env lama tidak mendadak berhenti berlaku.
+     */
+    public static function master(): ?self
+    {
+        $eksplisit = static::where('is_master', true)->first();
+
+        if ($eksplisit) {
+            return $eksplisit;
+        }
+
+        $emailEnv = config('services.google_drive.master_account_email');
+
+        return $emailEnv ? static::whereRaw('LOWER(email_gmail_institusi) = ?', [strtolower($emailEnv)])->first() : null;
+    }
+
+    /**
+     * Jadikan akun ini SATU-satunya akun master folder (menonaktifkan is_master akun
+     * lain), sama seperti jadikanAktif() menjaga hanya ada satu storage aktif.
+     */
+    public function jadikanMaster(): void
+    {
+        DB::transaction(function () {
+            static::where('id', '!=', $this->id)
+                ->where('is_master', true)
+                ->update(['is_master' => false]);
+
+            $this->update(['is_master' => true]);
         });
     }
 

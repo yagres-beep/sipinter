@@ -17,13 +17,13 @@ class MasterIkuTest extends TestCase
     {
         $peran = Role::create(['nama' => 'Tim SAKIP']);
         $this->actingAs(User::create([
-            'nama' => 'SAKIP Uji', 'email' => 'sakip@example.test', 'password' => 'password',
+            'nama' => 'SAKIP Uji', 'username' => 'sakip@example.test', 'email' => 'sakip@example.test', 'password' => 'password',
             'role_id' => $peran->id, 'status_verifikasi' => 'terverifikasi',
         ]));
 
         // Regresi: import Excel facade sempat salah namespace (Illuminate\Support\Facades\Excel,
         // seharusnya Maatwebsite\Excel\Facades\Excel) sehingga tombol ini melempar
-        // "Class not found" alih-alih mengunduh berkas — lihat perbaikan di app/Livewire/MasterIku.php.
+        // "Class not found" alih-alih mengunduh berkas â€” lihat perbaikan di app/Livewire/MasterIku.php.
         Livewire::test(MasterIku::class)
             ->call('downloadTemplate')
             ->assertFileDownloaded('template-master-iku.xlsx');

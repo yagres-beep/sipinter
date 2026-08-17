@@ -28,7 +28,7 @@
                     <thead>
                         <tr>
                             <th>Nama</th>
-                            <th>Email</th>
+                            <th>Username</th>
                             <th>Peran Diajukan</th>
                             <th style="text-align:right">Tindakan</th>
                         </tr>
@@ -37,7 +37,7 @@
                         @forelse ($pending as $user)
                             <tr>
                                 <td><b>{{ $user->nama }}</b></td>
-                                <td class="muted">{{ $user->email }}</td>
+                                <td class="muted">{{ $user->username }}</td>
                                 <td><span class="badge b-ajukan">{{ $user->role->nama }}</span></td>
                                 <td style="text-align:right">
                                     <div class="btn-row" style="margin-top:0;justify-content:flex-end">
@@ -67,7 +67,7 @@
                     <thead>
                         <tr>
                             <th>Nama</th>
-                            <th>Email</th>
+                            <th>Username</th>
                             <th>Status</th>
                             <th>Peran</th>
                         </tr>
@@ -76,7 +76,7 @@
                         @forelse ($users as $user)
                             <tr>
                                 <td><b>{{ $user->nama }}</b></td>
-                                <td class="muted">{{ $user->email }}</td>
+                                <td class="muted">{{ $user->username }}</td>
                                 <td>
                                     <x-badge-status :status="$user->status_verifikasi" />
                                 </td>

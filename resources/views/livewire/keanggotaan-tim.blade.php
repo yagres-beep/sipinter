@@ -7,7 +7,7 @@
                 <div class="ac-av">{{ strtoupper(substr($ketua->nama, 0, 1)) }}{{ strtoupper(substr(strrchr($ketua->nama, ' ') ?: '', 1, 1)) }}</div>
                 <div>
                     <div class="ac-name">{{ $ketua->nama }}</div>
-                    <div class="ac-sub">{{ $ketua->email }}</div>
+                    <div class="ac-sub">{{ $ketua->username }}</div>
                 </div>
             </div>
             <div class="ac-chips">

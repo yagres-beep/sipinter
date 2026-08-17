@@ -23,14 +23,14 @@ class RegisteredUserController extends Controller
     {
         $validated = $request->validate([
             'nama' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
+            'username' => ['required', 'string', 'max:255', 'alpha_dash', 'unique:users,username'],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
             'role_id' => ['required', 'exists:roles,id'],
         ]);
 
         User::create([
             'nama' => $validated['nama'],
-            'email' => $validated['email'],
+            'username' => $validated['username'],
             'password' => $validated['password'],
             'role_id' => $validated['role_id'],
             'status_verifikasi' => 'pending',

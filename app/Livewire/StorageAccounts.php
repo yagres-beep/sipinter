@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use App\Models\StorageAccount;
+use App\Services\GoogleDriveService;
 use Livewire\Component;
 
 /**
@@ -22,6 +23,11 @@ class StorageAccounts extends Component
     public string $driveFolderId = '';
 
     public $kuotaTotal = 15;
+
+    /** ID akun yang sedang diubah folder Drive-nya lewat menu "✏️ Ubah folder", null bila tidak ada. */
+    public ?int $editFolderId = null;
+
+    public string $editFolderValue = '';
 
     public function mount(): void
     {
@@ -58,7 +64,7 @@ class StorageAccounts extends Component
 
         $akun = StorageAccount::create([
             'email_gmail_institusi' => $this->email,
-            'drive_folder_id' => $this->driveFolderId ?: null,
+            'drive_folder_id' => GoogleDriveService::idFolderDariInput($this->driveFolderId) ?: null,
             'kuota_total' => $this->kuotaTotal,
             // Default 'penuh' (= belum aktif). Lihat StorageAccount::STATUS_PENUH —
             // status ini dipakai juga untuk akun yang belum pernah diaktifkan, bukan
@@ -88,6 +94,106 @@ class StorageAccounts extends Component
         StorageAccount::findOrFail($id)->jadikanAktif();
 
         session()->flash('status', 'Storage aktif berhasil diperbarui.');
+    }
+
+    /**
+     * Pindahkan status "akun master folder" (lihat StorageAccount::master()) ke akun
+     * ini — dulu hanya bisa diatur lewat GOOGLE_DRIVE_MASTER_ACCOUNT_EMAIL di .env,
+     * sekarang Tim SAKIP bisa mengubahnya sendiri tanpa perlu akses server.
+     */
+    public function jadikanMaster(int $id): void
+    {
+        StorageAccount::findOrFail($id)->jadikanMaster();
+
+        session()->flash('status', 'Akun master folder berhasil diperbarui. Akun yang baru terhubung ke Google Drive setelah ini akan otomatis diarahkan ke folder akun master.');
+    }
+
+    public function mulaiUbahFolder(int $id): void
+    {
+        $akun = StorageAccount::findOrFail($id);
+
+        $this->editFolderId = $akun->id;
+        $this->editFolderValue = (string) $akun->drive_folder_id;
+        $this->resetErrorBag('editFolderValue');
+    }
+
+    public function batalUbahFolder(): void
+    {
+        $this->editFolderId = null;
+        $this->editFolderValue = '';
+        $this->resetErrorBag('editFolderValue');
+    }
+
+    /**
+     * Ganti folder Drive tujuan sebuah akun storage — Tim SAKIP tinggal tempel URL
+     * folder Drive (lihat GoogleDriveService::idFolderDariInput()) alih-alih mengetik
+     * ID mentahnya. Dipakai mis. saat institusi sudah punya folder lama (mis. folder
+     * "sakip7409" yang dibuat manual sebelum SIPINTER ada) dan ingin akun terhubung
+     * ke folder ITU alih-alih folder "SIPINTER" baru yang dibuat otomatis saat OAuth.
+     *
+     * Bila akun yang diubah adalah akun MASTER, folder baru ini otomatis dibagikan
+     * (share, writer) ke semua akun LAIN yang sudah terhubung ke Google Drive, dan
+     * drive_folder_id mereka ikut diarahkan ke folder baru — supaya semua akun
+     * institusi tetap menulis ke SATU folder yang sama tanpa Tim SAKIP harus
+     * menghubungkan ulang akun-akun itu satu per satu (lihat StorageAccount::master(),
+     * GoogleOAuthController::callback()).
+     */
+    public function simpanFolder(): void
+    {
+        // Diambil lewat app() (bukan type-hint parameter) — method aksi Livewire
+        // dipanggil TANPA dependency injection (lihat HandleComponents::callMethods():
+        // wrap($root)->{$method}(...$params), hanya param dari front-end), beda dari
+        // method controller biasa.
+        $driveService = app(GoogleDriveService::class);
+
+        // find() (bukan findOrFail()) — editFolderId bisa saja sudah null/berubah
+        // lagi (mis. dua klik beruntun sebelum mode edit sempat termuat di browser).
+        // findOrFail() di sini akan membuat Laravel merender HALAMAN 404 MENTAH
+        // menggantikan komponen, bukan pesan error yang ramah seperti di bawah.
+        $akun = StorageAccount::find($this->editFolderId);
+
+        if (! $akun) {
+            $this->batalUbahFolder();
+
+            return;
+        }
+
+        $folderId = GoogleDriveService::idFolderDariInput($this->editFolderValue);
+
+        if ($folderId === '') {
+            $this->addError('editFolderValue', 'ID/URL folder tidak boleh kosong.');
+
+            return;
+        }
+
+        $akun->update(['drive_folder_id' => $folderId]);
+
+        if ($akun->is_master && $akun->googleTerhubung()) {
+            try {
+                $clientMaster = $driveService->clientOAuthUntukAkun($akun);
+
+                StorageAccount::where('id', '!=', $akun->id)->get()
+                    ->filter(fn (StorageAccount $lain) => $lain->googleTerhubung())
+                    ->each(function (StorageAccount $lain) use ($driveService, $clientMaster, $folderId) {
+                        $driveService->bagikanFolder($clientMaster, $folderId, $lain->email_gmail_institusi);
+                        $lain->update(['drive_folder_id' => $folderId]);
+                    });
+            } catch (\Throwable $e) {
+                session()->flash('error',
+                    "Folder akun {$akun->email_gmail_institusi} tersimpan, tapi gagal membagikannya ke akun lain: ".$e->getMessage()
+                );
+
+                $this->editFolderId = null;
+                $this->editFolderValue = '';
+
+                return;
+            }
+        }
+
+        $this->editFolderId = null;
+        $this->editFolderValue = '';
+
+        session()->flash('status', "Folder Drive akun {$akun->email_gmail_institusi} berhasil diperbarui.");
     }
 
     public function render()

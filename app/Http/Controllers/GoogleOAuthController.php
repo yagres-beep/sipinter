@@ -142,27 +142,26 @@ class GoogleOAuthController extends Controller
             );
         }
 
-        $masterEmail = config('services.google_drive.master_account_email');
-        $akunIniMaster = $masterEmail && strcasecmp($storageAccount->email_gmail_institusi, $masterEmail) === 0;
+        $master = StorageAccount::master();
+        $akunIniMaster = $master && $master->id === $storageAccount->id;
 
         try {
-            if ($masterEmail && ! $akunIniMaster) {
+            if ($master && ! $akunIniMaster) {
                 // Akun BUKAN-master: jangan buat folder root sendiri — pakai folder milik
                 // akun master supaya semua akun institusi tetap menulis ke SATU struktur
-                // folder yang sama (lihat catatan config('services.google_drive.master_account_email')).
-                $master = StorageAccount::where('email_gmail_institusi', $masterEmail)->first();
-
-                if (! $master || ! $master->drive_folder_id) {
+                // folder yang sama (lihat StorageAccount::master() & menu Akun & Storage →
+                // "Jadikan Master").
+                if (! $master->drive_folder_id) {
                     return redirect()->route('storage-accounts.index')->with('error', sprintf(
                         'Akun master folder (%s) belum siap — hubungkan akun itu ke Google Drive terlebih dahulu, baru hubungkan akun ini.',
-                        $masterEmail
+                        $master->email_gmail_institusi
                     ));
                 }
 
                 if (! $master->googleTerhubung()) {
                     return redirect()->route('storage-accounts.index')->with('error', sprintf(
                         'Akun master folder (%s) sesi Drive-nya belum/tidak aktif — hubungkan ulang akun itu dulu supaya bisa membagikan foldernya ke akun ini.',
-                        $masterEmail
+                        $master->email_gmail_institusi
                     ));
                 }
 

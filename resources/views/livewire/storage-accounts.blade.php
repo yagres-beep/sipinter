@@ -43,11 +43,11 @@
 
         <div class="field">
             <label>ID Folder Induk Drive <span class="fhint" style="margin:0">(opsional)</span></label>
-            <input type="text" class="inp filled" wire:model="driveFolderId" placeholder="Kosongkan saja — akan dibuat otomatis saat akun dihubungkan ke Google Drive">
+            <input type="text" class="inp filled" wire:model="driveFolderId" placeholder="Kosongkan saja, atau tempel URL/ID folder Drive yang sudah ada">
             <div style="color:var(--muted);font-size:11.5px;margin-top:5px">
-                Tidak perlu diisi manual lagi — klik <b>🔗 Hubungkan ke Google Drive</b> pada akun ini setelah
-                ditambahkan, folder akan dibuat otomatis di akun tersebut. Isian ini hanya untuk kasus lama:
-                folder yang sudah dibagikan (share) ke Service Account (Google Workspace/Shared Drive saja).
+                Kosongkan bila ingin folder dibuat otomatis saat akun ini nanti diklik <b>🔗 Hubungkan ke Google
+                Drive</b>. Atau tempel URL folder Drive yang SUDAH ADA (mis. hasil "Salin tautan" di Drive) supaya
+                akun ini memakai folder itu — bisa juga diubah belakangan lewat "✏️ Ubah folder" di tabel bawah.
             </div>
             @error('driveFolderId')
                 <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
@@ -76,7 +76,7 @@
                     <tr wire:key="akun-{{ $akun->id }}">
                         <td>
                             {{ $akun->email_gmail_institusi }}
-                            @if (strcasecmp($akun->email_gmail_institusi, (string) config('services.google_drive.master_account_email')) === 0)
+                            @if ($akun->is_master)
                                 <span class="badge b-draft" title="Akun lain otomatis dibagikan (share) ke folder milik akun ini saat terhubung">🔑 Folder Master</span>
                             @endif
                         </td>
@@ -99,6 +99,31 @@
                             @else
                                 <a href="{{ route('storage-accounts.google-redirect', $akun) }}" class="btn btn-ghost btn-sm">🔗 Hubungkan ke Google Drive</a>
                             @endif
+
+                            <div style="margin-top:8px">
+                                @if ($editFolderId === $akun->id)
+                                    <input type="text" class="inp filled" wire:model="editFolderValue"
+                                        placeholder="Tempel URL folder Drive, mis. https://drive.google.com/drive/folders/sakip7409"
+                                        style="font-size:11.5px;padding:6px 8px">
+                                    @error('editFolderValue')
+                                        <div style="color:var(--red);font-size:11px;margin-top:3px">{{ $message }}</div>
+                                    @enderror
+                                    <div style="display:flex;gap:6px;margin-top:6px">
+                                        <button type="button" class="btn btn-teal btn-sm" wire:click="simpanFolder">Simpan</button>
+                                        <button type="button" class="btn btn-ghost btn-sm" wire:click="batalUbahFolder">Batal</button>
+                                    </div>
+                                @else
+                                    <div style="font-size:11px;color:var(--muted)">
+                                        Folder:
+                                        @if ($akun->drive_folder_id)
+                                            <a href="https://drive.google.com/drive/folders/{{ $akun->drive_folder_id }}" target="_blank" rel="noopener">{{ \Illuminate\Support\Str::limit($akun->drive_folder_id, 18) }}</a>
+                                        @else
+                                            <span>belum diatur</span>
+                                        @endif
+                                        <button type="button" class="btn btn-ghost btn-sm" style="padding:1px 7px;margin-left:4px" wire:click="mulaiUbahFolder({{ $akun->id }})">✏️ Ubah</button>
+                                    </div>
+                                @endif
+                            </div>
                         </td>
                         <td>
                             <div class="quota-bar">
@@ -114,6 +139,13 @@
                                 <button type="button" class="btn btn-teal btn-sm" wire:click="jadikanAktif({{ $akun->id }})">Jadikan Aktif</button>
                             @else
                                 <span style="font-size:11.5px;color:var(--muted)">Sedang dipakai</span>
+                            @endif
+                            @if (! $akun->is_master)
+                                <button type="button" class="btn btn-ghost btn-sm" style="margin-left:6px"
+                                    wire:click="jadikanMaster({{ $akun->id }})"
+                                    title="Akun lain yang terhubung ke Google Drive setelah ini akan otomatis menulis ke folder akun ini">
+                                    🔑 Jadikan Master
+                                </button>
                             @endif
                         </td>
                     </tr>

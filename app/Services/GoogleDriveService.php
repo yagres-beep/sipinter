@@ -74,6 +74,31 @@ class GoogleDriveService
     }
 
     /**
+     * Terima ID folder Drive ATAU URL folder Drive lengkap (mis. hasil "Salin tautan"
+     * di Drive: https://drive.google.com/drive/folders/&lt;ID&gt;?usp=sharing) dan selalu
+     * kembalikan ID mentahnya — dipakai di StorageAccounts supaya Tim SAKIP cukup
+     * tempel URL folder tanpa perlu tahu cara membaca ID dari dalam URL-nya.
+     */
+    public static function idFolderDariInput(string $input): string
+    {
+        $input = trim($input);
+
+        if ($input === '') {
+            return '';
+        }
+
+        if (preg_match('#/folders/([a-zA-Z0-9_-]+)#', $input, $cocok)) {
+            return $cocok[1];
+        }
+
+        if (preg_match('#[?&]id=([a-zA-Z0-9_-]+)#', $input, $cocok)) {
+            return $cocok[1];
+        }
+
+        return $input;
+    }
+
+    /**
      * Buat folder baru di Drive. Dipakai langsung hanya bila pemanggil SUDAH yakin
      * folder belum ada; untuk pemakaian normal (hierarki folder otomatis RF-11 s.d.
      * RF-14) pakai findOrCreateFolder() supaya tidak membuat folder duplikat.

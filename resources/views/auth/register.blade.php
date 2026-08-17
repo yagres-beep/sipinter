@@ -25,7 +25,7 @@
                 <div class="badge b-tunggu" style="display:block;margin-bottom:14px">{{ $errors->first() }}</div>
             @endif
 
-            <form method="POST" action="{{ route('register') }}">
+            <form method="POST" action="{{ route('register') }}" x-data="{ showPw: false, showConfirm: false }">
                 @csrf
                 <div class="field">
                     <label>Nama Lengkap <span class="req">*</span></label>
@@ -33,8 +33,8 @@
                 </div>
                 <div class="row2">
                     <div class="field">
-                        <label>Email <span class="req">*</span></label>
-                        <input class="inp filled" type="email" name="email" value="{{ old('email') }}" placeholder="nama@bps.go.id" required>
+                        <label>Username <span class="req">*</span></label>
+                        <input class="inp filled" type="text" name="username" value="{{ old('username') }}" placeholder="username tanpa spasi" required>
                     </div>
                     <div class="field">
                         <label>Peran yang Diajukan <span class="req">*</span></label>
@@ -49,13 +49,19 @@
                 <div class="field">
                     <label>Kata Sandi <span class="req">*</span></label>
                     <div class="pw-wrap">
-                        <input class="inp filled" type="password" name="password" placeholder="Minimal 8 karakter" required>
+                        <input class="inp filled" :type="showPw ? 'text' : 'password'" name="password" placeholder="Minimal 8 karakter" required>
+                        <button type="button" class="eye" @click="showPw = !showPw" tabindex="-1">
+                            <span x-text="showPw ? '🙈' : '👁'"></span>
+                        </button>
                     </div>
                 </div>
                 <div class="field">
                     <label>Konfirmasi Kata Sandi <span class="req">*</span></label>
                     <div class="pw-wrap">
-                        <input class="inp filled" type="password" name="password_confirmation" placeholder="Ulangi kata sandi" required>
+                        <input class="inp filled" :type="showConfirm ? 'text' : 'password'" name="password_confirmation" placeholder="Ulangi kata sandi" required>
+                        <button type="button" class="eye" @click="showConfirm = !showConfirm" tabindex="-1">
+                            <span x-text="showConfirm ? '🙈' : '👁'"></span>
+                        </button>
                     </div>
                 </div>
                 <button type="submit" class="btn btn-primary auth-btn">Daftar →</button>

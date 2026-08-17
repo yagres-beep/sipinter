@@ -171,8 +171,17 @@
                     <div class="pdf-view">
                         <h4>{{ strtoupper(str_replace('_', ' ', $file->kategori)) }}</h4>
                         <div class="pmeta">{{ $file->nama_file }}</div>
-                        <p>Buka berkas asli untuk memeriksa isi dokumen secara lengkap sebelum menandai kesesuaiannya.</p>
-                        <a href="{{ route('berkas.show', $file) }}" target="_blank" class="btn btn-ghost btn-sm">🔍 Buka Berkas Asli</a>
+                        {{-- src diisi lewat Alpine (bukan langsung di server) SUPAYA berkas baru
+                            diminta/dimuat saat modal-nya benar-benar dibuka — kalau semua
+                            &lt;iframe&gt; ini diberi src langsung, browser akan diam-diam mengunduh
+                            SEMUA berkas bukti di halaman ini sekaligus saat halaman dimuat,
+                            meski modalnya masih tersembunyi (x-show cuma mengatur display:none,
+                            tidak mencegah iframe mulai memuat). --}}
+                        <iframe
+                            x-bind:src="modalBerkas === {{ $file->id }} ? @js(route('berkas.show', $file)) : null"
+                            class="pdf-frame" title="Pratinjau {{ $file->nama_file }}"
+                        ></iframe>
+                        <a href="{{ route('berkas.show', $file) }}" target="_blank" class="btn btn-ghost btn-sm" style="margin-top:10px;align-self:flex-start">🔗 Buka di tab baru / layar penuh</a>
                     </div>
                     <div class="verify-panel">
                         <div class="vp-t">Verifikasi Berkas</div>
