@@ -17,8 +17,8 @@
     @endif
 
     @if ($notula->status === \App\Models\Notula::STATUS_DIKEMBALIKAN && $notula->catatan_pengembalian)
-        <div class="card" style="border-color:#fca5a5;background:var(--red-soft);margin-bottom:16px">
-            <div class="sec" style="color:var(--red);border-color:#fca5a5"><span>↩ Dikembalikan Kepala</span></div>
+        <div class="card card-red" style="margin-bottom:16px">
+            <div class="sec"><span>↩ Dikembalikan Kepala</span></div>
             <p style="color:var(--red);font-size:13px;margin:0">{{ $notula->catatan_pengembalian }}</p>
         </div>
     @endif

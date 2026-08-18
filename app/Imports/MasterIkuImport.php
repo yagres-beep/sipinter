@@ -13,10 +13,18 @@ use Maatwebsite\Excel\Concerns\ToCollection;
  * dari template resmi masih utuh sebelum mengurai baris data (baris 4 dst.) ke
  * tabel master_ikus. Bila salah satu bagian template hilang/berubah, seluruh
  * berkas ditolak dan $errors berisi alasannya.
+ *
+ * Template resmi (lihat MasterIkuTemplateExport) berisi DUA sheet: "Master IKU"
+ * (data yang diproses di sini) dan "Daftar Nama" (referensi, ikut terunggah balik
+ * tanpa diubah pengguna). Tanpa WithMultipleSheets, Maatwebsite Excel memanggil
+ * collection() untuk SETIAP sheet pada berkas — sheet "Daftar Nama" dikenali lewat
+ * headernya sendiri dan dilewati diam-diam (bukan error) di collection().
  */
 class MasterIkuImport implements ToCollection
 {
-    public const EXPECTED_HEADER = ['Kode', 'Indikator', 'Tim', 'Penanggung Jawab'];
+    public const EXPECTED_HEADER = ['Kode', 'Indikator', 'Tim', 'Penanggung Jawab', 'Sasaran'];
+
+    public const HEADER_SHEET_REFERENSI = ['Nama', 'Peran', 'Tim'];
 
     /** @var list<string> */
     public array $errors = [];
@@ -27,15 +35,20 @@ class MasterIkuImport implements ToCollection
     {
         $header = $this->normalizeRow($rows->get(0));
 
+        if (array_slice($header, 0, 3) === self::HEADER_SHEET_REFERENSI) {
+            // Sheet referensi "Daftar Nama" bawaan template — bukan data untuk diimpor.
+            return;
+        }
+
         if ($header !== self::EXPECTED_HEADER) {
-            $this->errors[] = 'Format kolom tidak sesuai template resmi. Kolom yang diharapkan: Kode, Indikator, Tim, Penanggung Jawab.';
+            $this->errors[] = 'Format kolom tidak sesuai template resmi. Kolom yang diharapkan: Kode, Indikator, Tim, Penanggung Jawab, Sasaran.';
 
             return;
         }
 
         $contoh = $this->normalizeRow($rows->get(1));
 
-        if ($contoh === ['', '', '', '']) {
+        if ($contoh === ['', '', '', '', '']) {
             $this->errors[] = 'Baris contoh (baris ke-2) pada template tidak boleh dihapus.';
 
             return;
@@ -56,8 +69,9 @@ class MasterIkuImport implements ToCollection
             $indikator = trim((string) ($row[1] ?? ''));
             $tim = trim((string) ($row[2] ?? ''));
             $penanggungJawab = trim((string) ($row[3] ?? ''));
+            $sasaran = trim((string) ($row[4] ?? ''));
 
-            if ($kode === '' && $indikator === '' && $tim === '' && $penanggungJawab === '') {
+            if ($kode === '' && $indikator === '' && $tim === '' && $penanggungJawab === '' && $sasaran === '') {
                 continue;
             }
 
@@ -73,6 +87,7 @@ class MasterIkuImport implements ToCollection
                     'indikator' => $indikator,
                     'tim' => $tim,
                     'penanggung_jawab' => $penanggungJawab,
+                    'sasaran' => $sasaran ?: null,
                 ]
             );
 
@@ -81,7 +96,7 @@ class MasterIkuImport implements ToCollection
     }
 
     /**
-     * @return array{0: string, 1: string, 2: string, 3: string}
+     * @return array{0: string, 1: string, 2: string, 3: string, 4: string}
      */
     protected function normalizeRow(mixed $row): array
     {
@@ -92,6 +107,7 @@ class MasterIkuImport implements ToCollection
             trim((string) ($row->get(1) ?? '')),
             trim((string) ($row->get(2) ?? '')),
             trim((string) ($row->get(3) ?? '')),
+            trim((string) ($row->get(4) ?? '')),
         ];
     }
 }

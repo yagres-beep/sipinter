@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -20,6 +21,18 @@ class MasterIku extends Model
         'penanggung_jawab',
         'sasaran',
     ];
+
+    /**
+     * Bagian angka dari kode (mis. "1131" dari "IKU-1131") — dipakai di tabel Daftar
+     * Master IKU supaya kolom Kode ringkas, tanpa mengubah nilai "kode" tersimpan
+     * (tetap dipakai apa adanya di tempat lain: dropdown, ekspor, dsb).
+     */
+    protected function nomorKode(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => preg_replace('/^\D+/', '', $this->kode) ?: $this->kode,
+        );
+    }
 
     /**
      * Daftar Master IKU terurut kode, di-cache 1 jam — dipakai untuk dropdown pilihan

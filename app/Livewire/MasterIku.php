@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Exports\MasterIkuTemplateExport;
 use App\Imports\MasterIkuImport;
 use App\Models\MasterIku as MasterIkuModel;
+use App\Models\User;
 use Maatwebsite\Excel\Facades\Excel as ExcelFacade;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -16,6 +17,8 @@ class MasterIku extends Component
     public $excelFile = null;
 
     public ?int $editingId = null;
+
+    public ?int $pendingDeleteId = null;
 
     public string $kode = '';
 
@@ -88,6 +91,8 @@ class MasterIku extends Component
         $this->tim = $iku->tim;
         $this->penanggungJawab = $iku->penanggung_jawab;
         $this->sasaran = $iku->sasaran ?? '';
+
+        $this->dispatch('scroll-ke-form-iku');
     }
 
     public function cancelEdit(): void
@@ -121,20 +126,65 @@ class MasterIku extends Component
         $this->cancelEdit();
     }
 
-    public function delete(int $id): void
+    public function confirmDelete(int $id): void
     {
-        MasterIkuModel::findOrFail($id)->delete();
+        $this->pendingDeleteId = $id;
+    }
+
+    public function cancelDelete(): void
+    {
+        $this->pendingDeleteId = null;
+    }
+
+    public function delete(): void
+    {
+        if (! $this->pendingDeleteId) {
+            return;
+        }
+
+        MasterIkuModel::whereKey($this->pendingDeleteId)->delete();
 
         MasterIkuModel::lupakanCache();
+
+        $this->pendingDeleteId = null;
 
         session()->flash('status', 'IKU berhasil dihapus.');
     }
 
+    /**
+     * Nilai yang sudah pernah dipakai untuk kolom Tim/Sasaran/Penanggung Jawab —
+     * ditawarkan sebagai saran (datalist) di form Tambah/Ubah supaya penamaan
+     * konsisten, tanpa mengunci pengguna: kolom tetap teks bebas, saran ini cuma
+     * mempercepat pengisian ulang nilai yang sudah ada.
+     */
+    protected function daftarSaran(string $kolom): array
+    {
+        return MasterIkuModel::query()
+            ->whereNotNull($kolom)
+            ->where($kolom, '!=', '')
+            ->distinct()
+            ->orderBy($kolom)
+            ->pluck($kolom)
+            ->all();
+    }
+
     public function render()
     {
+        $daftarPenanggungJawab = collect($this->daftarSaran('penanggung_jawab'))
+            ->merge(User::where('status_verifikasi', 'terverifikasi')->orderBy('nama')->pluck('nama'))
+            ->unique()
+            ->sort()
+            ->values();
+
         return view('livewire.master-iku', [
             'ikuList' => MasterIkuModel::orderBy('kode')->get(),
             'totalIndikator' => MasterIkuModel::count(),
+            'daftarTim' => $this->daftarSaran('tim'),
+            'daftarSasaran' => $this->daftarSaran('sasaran'),
+            'daftarPenanggungJawab' => $daftarPenanggungJawab,
+            'pendingDeleteKode' => $this->pendingDeleteId
+                ? MasterIkuModel::find($this->pendingDeleteId)?->kode
+                : null,
         ]);
     }
 }

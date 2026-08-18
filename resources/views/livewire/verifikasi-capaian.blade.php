@@ -46,7 +46,7 @@
             </div>
             <div class="num-cell">
                 <label>Capaian %</label>
-                <input type="number" step="0.01" class="box" style="width:100%;background:#f4f6fa" wire:model="persentase_capaian" readonly>
+                <input type="number" step="0.01" class="box" style="width:100%;background:var(--ro-bg);color:var(--muted)" wire:model="persentase_capaian" readonly>
             </div>
         </div>
         @error('target_pk')

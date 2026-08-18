@@ -20,6 +20,8 @@ class TemplateNotula extends Component
 
     public $templateFile = null;
 
+    public bool $konfirmasiHapus = false;
+
     protected function rules(): array
     {
         return [
@@ -49,6 +51,16 @@ class TemplateNotula extends Component
         $this->reset('templateFile');
     }
 
+    public function confirmHapus(): void
+    {
+        $this->konfirmasiHapus = true;
+    }
+
+    public function cancelHapus(): void
+    {
+        $this->konfirmasiHapus = false;
+    }
+
     public function hapus(): void
     {
         $config = FolderConfig::current();
@@ -58,6 +70,8 @@ class TemplateNotula extends Component
         }
 
         $config->update(['template_notula_path' => null, 'template_notula_nama_asli' => null]);
+
+        $this->konfirmasiHapus = false;
 
         session()->flash('status', 'Template notula dihapus.');
     }

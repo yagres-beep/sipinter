@@ -51,7 +51,7 @@
         @if ($daftarKegiatan->isEmpty())
             <p style="color:var(--muted);font-size:13px">Tidak ada kegiatan yang cocok dengan pencarian/filter ini.</p>
         @else
-            <div class="table-scroll" wire:loading.class="table-loading" wire:target="filterTriwulan,filterBulan,cari,urutkan">
+            <div class="table-scroll" wire:loading.class="table-loading" wire:target="filterTriwulan,filterBulan,cari,urutkan" x-data="dataTable(10)">
                 <table>
                     <thead>
                         <tr>
@@ -75,10 +75,10 @@
                             </th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody x-ref="tbody">
                         @foreach ($daftarKegiatan as $kegiatan)
                             @php $tautan = $tautanBaris[$kegiatan->id] ?? null; @endphp
-                            <tr @if ($tautan) class="clickable" onclick="Livewire.navigate('{{ $tautan }}')" @endif>
+                            <tr wire:key="kegiatan-{{ $kegiatan->id }}" @if ($tautan) class="clickable" onclick="Livewire.navigate('{{ $tautan }}')" @endif>
                                 <td><b>{{ $kegiatan->masterIku->kode ?? '—' }}</b></td>
                                 <td>{{ $kegiatan->masterIku->indikator ?? '—' }}</td>
                                 <td>{{ $namaBulan[$kegiatan->periode->bulan ?? 0] ?? '—' }}</td>
@@ -89,6 +89,7 @@
                         @endforeach
                     </tbody>
                 </table>
+                <x-table-pagination />
             </div>
         @endif
     </div>

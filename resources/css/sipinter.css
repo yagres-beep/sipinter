@@ -21,27 +21,27 @@
    & app.js) yang disimpan di localStorage supaya pilihan bertahan antar kunjungan. */
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --navy:#152449; --navy2:#22376b; --blue:#60a5fa; --blue-600:#3b82f6; --blue-soft:rgba(59,130,246,.16);
+    --navy:#152449; --navy2:#7ea6f2; --blue:#60a5fa; --blue-600:#3b82f6; --blue-soft:rgba(59,130,246,.16);
     --teal:#2dd4bf; --teal-soft:rgba(45,212,191,.14); --amber:#fbbf24; --amber-soft:rgba(251,191,36,.14);
     --red:#f87171; --red-soft:rgba(248,113,113,.14); --green:#4ade80; --green-soft:rgba(74,222,128,.14);
     --ink:#e7ecf6; --muted:#93a1bd; --faint:#6b7fa3; --line:#26324a; --line2:#1d283d;
     --bg:#0b1220; --white:#131c2e;
     --sh-sm:0 1px 2px rgba(0,0,0,.4); --sh:0 4px 16px rgba(0,0,0,.45),0 1px 3px rgba(0,0,0,.3);
     --sh-lg:0 12px 40px rgba(0,0,0,.55); --sh-nav:0 2px 8px rgba(59,130,246,.35);
-    --topbar-bg:rgba(19,28,46,.85); --ro-bg:rgba(255,255,255,.04); --soft-surface:rgba(255,255,255,.03);
-    --dashed-line:rgba(255,255,255,.18); --chip-auto-bg:rgba(255,255,255,.05);
+    --topbar-bg:rgba(19,28,46,.85); --ro-bg:rgba(255,255,255,.06); --soft-surface:rgba(255,255,255,.03);
+    --dashed-line:rgba(255,255,255,.18); --chip-auto-bg:rgba(255,255,255,.07);
   }
 }
 :root[data-theme="dark"]{
-  --navy:#152449; --navy2:#22376b; --blue:#60a5fa; --blue-600:#3b82f6; --blue-soft:rgba(59,130,246,.16);
+  --navy:#152449; --navy2:#7ea6f2; --blue:#60a5fa; --blue-600:#3b82f6; --blue-soft:rgba(59,130,246,.16);
   --teal:#2dd4bf; --teal-soft:rgba(45,212,191,.14); --amber:#fbbf24; --amber-soft:rgba(251,191,36,.14);
   --red:#f87171; --red-soft:rgba(248,113,113,.14); --green:#4ade80; --green-soft:rgba(74,222,128,.14);
   --ink:#e7ecf6; --muted:#93a1bd; --faint:#6b7fa3; --line:#26324a; --line2:#1d283d;
   --bg:#0b1220; --white:#131c2e;
   --sh-sm:0 1px 2px rgba(0,0,0,.4); --sh:0 4px 16px rgba(0,0,0,.45),0 1px 3px rgba(0,0,0,.3);
   --sh-lg:0 12px 40px rgba(0,0,0,.55); --sh-nav:0 2px 8px rgba(59,130,246,.35);
-  --topbar-bg:rgba(19,28,46,.85); --ro-bg:rgba(255,255,255,.04); --soft-surface:rgba(255,255,255,.03);
-  --dashed-line:rgba(255,255,255,.18); --chip-auto-bg:rgba(255,255,255,.05);
+  --topbar-bg:rgba(19,28,46,.85); --ro-bg:rgba(255,255,255,.06); --soft-surface:rgba(255,255,255,.03);
+  --dashed-line:rgba(255,255,255,.18); --chip-auto-bg:rgba(255,255,255,.07);
 }
 
 body{font-family:'Inter','Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);line-height:1.55;font-size:14px;-webkit-font-smoothing:antialiased;transition:background-color .15s,color .15s}
@@ -95,6 +95,8 @@ a{text-decoration:none;color:inherit}
 
 /* card */
 .card{background:var(--white);border:1px solid var(--line);border-radius:var(--radius);padding:20px;box-shadow:var(--sh);margin-bottom:16px}
+.card-red{border-color:color-mix(in srgb, var(--red) 45%, transparent);background:var(--red-soft)}
+.card-red .sec{color:var(--red);border-color:color-mix(in srgb, var(--red) 45%, transparent)}
 .card-h{font-size:15px;font-weight:700;margin-bottom:15px;display:flex;align-items:center;gap:9px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 
@@ -151,6 +153,17 @@ th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.6px;c
 td{padding:12px;border-bottom:1px solid var(--line2);font-size:13px}
 tr.clickable{cursor:pointer}
 tr.clickable:hover{background:var(--blue-soft)}
+
+/* paginasi tabel (client-side, lihat resources/js/app.js Alpine.data('dataTable')) */
+.table-pagination{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding-top:14px;margin-top:6px;border-top:1px solid var(--line2);font-size:12px;color:var(--muted)}
+.table-pagination b{color:var(--ink);font-weight:700}
+.tp-size{display:flex;align-items:center;gap:7px}
+.tp-size select{padding:6px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;font-weight:600;color:var(--ink);background:var(--white)}
+.tp-nav{display:flex;align-items:center;gap:4px}
+.tp-nav button{width:27px;height:27px;border:1.5px solid var(--line);background:var(--white);border-radius:7px;color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;padding:0}
+.tp-nav button:hover:not(:disabled){background:var(--ro-bg)}
+.tp-nav button:disabled{opacity:.4;cursor:not-allowed}
+.tp-nav .tp-page{padding:0 6px;font-weight:600;color:var(--ink);white-space:nowrap}
 
 /* indikator kuota storage (RF-10c) */
 .quota-bar{width:100%;height:10px;background:var(--line2);border-radius:20px;overflow:hidden}

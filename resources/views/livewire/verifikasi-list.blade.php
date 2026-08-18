@@ -24,41 +24,44 @@
             <button type="button" class="btn btn-ghost btn-sm" wire:click="resetFilter">↺ Reset</button>
         </div>
 
-        <table>
-            <thead>
-                <tr>
-                    <th class="th-sort {{ $urutanKolom === 'kode' ? 'active' : '' }}" wire:click="urutkan('kode')">
-                        IKU <span class="th-arrow">{{ $urutanKolom === 'kode' ? ($urutanArah === 'asc' ? '▲' : '▼') : '↕' }}</span>
-                    </th>
-                    <th class="th-sort {{ $urutanKolom === 'periode' ? 'active' : '' }}" wire:click="urutkan('periode')">
-                        Periode <span class="th-arrow">{{ $urutanKolom === 'periode' ? ($urutanArah === 'asc' ? '▲' : '▼') : '↕' }}</span>
-                    </th>
-                    <th class="th-sort {{ $urutanKolom === 'tim' ? 'active' : '' }}" wire:click="urutkan('tim')">
-                        Tim <span class="th-arrow">{{ $urutanKolom === 'tim' ? ($urutanArah === 'asc' ? '▲' : '▼') : '↕' }}</span>
-                    </th>
-                    <th>Kegiatan Pendukung</th>
-                    <th>Status</th>
-                    <th style="text-align:right">Tindakan</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse ($daftarCapaian as $capaian)
-                    <tr wire:key="capaian-{{ $capaian->id }}">
-                        <td>{{ $capaian->masterIku->kode }} — {{ $capaian->masterIku->indikator }}</td>
-                        <td>{{ $namaBulan[$capaian->periode->bulan - 1] }} {{ $capaian->periode->tahun }}</td>
-                        <td class="muted">{{ $capaian->masterIku->tim }}</td>
-                        <td>{{ $jumlahKegiatan->get($capaian->id, 0) }} kegiatan</td>
-                        <td><x-badge-status status="diajukan" /></td>
-                        <td style="text-align:right">
-                            <a wire:navigate href="{{ route('verifikasi.show', $capaian) }}" class="btn btn-primary btn-sm">Periksa →</a>
-                        </td>
-                    </tr>
-                @empty
+        <div class="table-scroll" style="max-height:520px" x-data="dataTable(10)">
+            <table>
+                <thead>
                     <tr>
-                        <td colspan="6" style="color:var(--muted)">Tidak ada isian yang menunggu verifikasi pada periode/kata kunci ini.</td>
+                        <th class="th-sort {{ $urutanKolom === 'kode' ? 'active' : '' }}" wire:click="urutkan('kode')">
+                            IKU <span class="th-arrow">{{ $urutanKolom === 'kode' ? ($urutanArah === 'asc' ? '▲' : '▼') : '↕' }}</span>
+                        </th>
+                        <th class="th-sort {{ $urutanKolom === 'periode' ? 'active' : '' }}" wire:click="urutkan('periode')">
+                            Periode <span class="th-arrow">{{ $urutanKolom === 'periode' ? ($urutanArah === 'asc' ? '▲' : '▼') : '↕' }}</span>
+                        </th>
+                        <th class="th-sort {{ $urutanKolom === 'tim' ? 'active' : '' }}" wire:click="urutkan('tim')">
+                            Tim <span class="th-arrow">{{ $urutanKolom === 'tim' ? ($urutanArah === 'asc' ? '▲' : '▼') : '↕' }}</span>
+                        </th>
+                        <th>Kegiatan Pendukung</th>
+                        <th>Status</th>
+                        <th style="text-align:right">Tindakan</th>
                     </tr>
-                @endforelse
-            </tbody>
-        </table>
+                </thead>
+                <tbody x-ref="tbody">
+                    @forelse ($daftarCapaian as $capaian)
+                        <tr wire:key="capaian-{{ $capaian->id }}">
+                            <td>{{ $capaian->masterIku->kode }} — {{ $capaian->masterIku->indikator }}</td>
+                            <td>{{ $namaBulan[$capaian->periode->bulan - 1] }} {{ $capaian->periode->tahun }}</td>
+                            <td class="muted">{{ $capaian->masterIku->tim }}</td>
+                            <td>{{ $jumlahKegiatan->get($capaian->id, 0) }} kegiatan</td>
+                            <td><x-badge-status status="diajukan" /></td>
+                            <td style="text-align:right">
+                                <a wire:navigate href="{{ route('verifikasi.show', $capaian) }}" class="btn btn-primary btn-sm">Periksa →</a>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="6" style="color:var(--muted)">Tidak ada isian yang menunggu verifikasi pada periode/kata kunci ini.</td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+            <x-table-pagination />
+        </div>
     </div>
 </div>

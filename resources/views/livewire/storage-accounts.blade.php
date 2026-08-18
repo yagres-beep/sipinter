@@ -11,7 +11,7 @@
 
     {{-- RF-10c: peringatan saat storage aktif mendekati penuh --}}
     @if ($akunAktif && $akunAktif->mendekatiPenuh())
-        <div class="card" style="border-color:#fca5a5;background:var(--red-soft);margin-bottom:16px">
+        <div class="card card-red" style="margin-bottom:16px">
             <div class="card-h" style="color:var(--red)">⚠ Kuota Storage Aktif Hampir Penuh</div>
             <p style="color:var(--red);font-size:13px;margin:0">
                 Akun <b>{{ $akunAktif->email_gmail_institusi }}</b> sudah terpakai

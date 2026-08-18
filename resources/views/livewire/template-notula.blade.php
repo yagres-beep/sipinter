@@ -50,11 +50,15 @@
         @if ($config->template_notula_path)
             <div class="filechip ok">
                 <span class="nm">📄 {{ $config->template_notula_nama_asli }} <span class="sub">Diperbarui {{ $config->updated_at->translatedFormat('d F Y, H:i') }}</span></span>
-                <button type="button" class="btn btn-red btn-sm" wire:click="hapus"
-                    onclick="return confirm('Hapus template notula ini?')">Hapus</button>
+                <button type="button" class="btn btn-red btn-sm" wire:click="confirmHapus">Hapus</button>
             </div>
         @else
             <p style="color:var(--muted);font-size:13px">Belum ada template yang diunggah.</p>
         @endif
     </div>
+
+    <x-confirm-modal :show="$konfirmasiHapus" title="Hapus Template Notula?" message="Hapus template notula ini? Tindakan ini tidak dapat dibatalkan.">
+        <button type="button" class="btn btn-ghost" wire:click="cancelHapus">Batal</button>
+        <button type="button" class="btn btn-red" wire:click="hapus">Hapus</button>
+    </x-confirm-modal>
 </div>

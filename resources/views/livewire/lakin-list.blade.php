@@ -25,27 +25,30 @@
 
     <div class="card" style="margin-top:16px">
         <div class="sec"><span>Daftar LAKIN</span></div>
-        <table>
-            <thead>
-                <tr>
-                    <th>Tahun</th>
-                    <th>Jumlah Indikator</th>
-                    <th style="text-align:right">Terakhir Diperbarui</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse ($daftar as $lakin)
-                    <tr class="clickable" onclick="window.location='{{ route('lakin.show', $lakin) }}'">
-                        <td><b>{{ $lakin->tahun }}</b></td>
-                        <td>{{ $lakin->baris_count }} indikator</td>
-                        <td style="text-align:right" class="muted">{{ $lakin->updated_at->translatedFormat('d F Y, H:i') }}</td>
-                    </tr>
-                @empty
+        <div class="table-scroll" style="max-height:520px" x-data="dataTable(10)">
+            <table>
+                <thead>
                     <tr>
-                        <td colspan="3" style="color:var(--muted)">Belum ada LAKIN yang dibentuk.</td>
+                        <th>Tahun</th>
+                        <th>Jumlah Indikator</th>
+                        <th style="text-align:right">Terakhir Diperbarui</th>
                     </tr>
-                @endforelse
-            </tbody>
-        </table>
+                </thead>
+                <tbody x-ref="tbody">
+                    @forelse ($daftar as $lakin)
+                        <tr wire:key="lakin-{{ $lakin->id }}" class="clickable" onclick="window.location='{{ route('lakin.show', $lakin) }}'">
+                            <td><b>{{ $lakin->tahun }}</b></td>
+                            <td>{{ $lakin->baris_count }} indikator</td>
+                            <td style="text-align:right" class="muted">{{ $lakin->updated_at->translatedFormat('d F Y, H:i') }}</td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="3" style="color:var(--muted)">Belum ada LAKIN yang dibentuk.</td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+            <x-table-pagination />
+        </div>
     </div>
 </div>
