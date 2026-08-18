@@ -59,12 +59,16 @@
             @enderror
 
             @foreach ($kategori as $i => $k)
-                <div class="fl-row" style="flex-wrap:wrap">
-                    <span class="catchip" style="flex:1">
+                <div class="fl-row" style="flex-wrap:wrap" x-data="{ terbuka: false }" wire:key="kat-{{ $i }}">
+                    <span class="catchip" style="flex:1;cursor:pointer" @click="terbuka = !terbuka">
                         {{ $k['nama'] }}
                         @if ($k['wajib'])
                             <span class="lock">wajib</span>
                         @endif
+                        <span class="muted" style="font-size:10.5px;font-weight:400" x-show="!terbuka">
+                            @if ($k['subfolder_per_bulan'] ?? false)· per bulan @endif
+                            @if ($k['subfolder_per_kegiatan'] ?? false)· per kegiatan @endif
+                        </span>
                     </span>
                     <span class="fl-move">
                         <button type="button" wire:click="naikkanKategori({{ $i }})" @disabled($i === 0)>↑</button>
@@ -72,15 +76,18 @@
                         @unless ($k['wajib'])
                             <button type="button" wire:click="hapusKategori({{ $i }})">✕</button>
                         @endunless
+                        <button type="button" @click="terbuka = !terbuka" title="Detail subfolder"><span x-text="terbuka ? '▲' : '▼'"></span></button>
                     </span>
-                    <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);width:100%;margin-top:6px">
-                        <input type="checkbox" wire:click="toggleSubfolderBulan({{ $i }})" @checked($k['subfolder_per_bulan'] ?? false)>
-                        Subfolder per bulan
-                    </label>
-                    <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);width:100%;margin-top:2px">
-                        <input type="checkbox" wire:click="toggleSubfolderKegiatan({{ $i }})" @checked($k['subfolder_per_kegiatan'])>
-                        Subfolder per kegiatan
-                    </label>
+                    <div style="width:100%" x-show="terbuka" x-cloak>
+                        <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);width:100%;margin-top:6px">
+                            <input type="checkbox" wire:click="toggleSubfolderBulan({{ $i }})" @checked($k['subfolder_per_bulan'] ?? false)>
+                            Subfolder per bulan
+                        </label>
+                        <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);width:100%;margin-top:2px">
+                            <input type="checkbox" wire:click="toggleSubfolderKegiatan({{ $i }})" @checked($k['subfolder_per_kegiatan'])>
+                            Subfolder per kegiatan
+                        </label>
+                    </div>
                 </div>
             @endforeach
 
@@ -200,12 +207,16 @@
                 @enderror
 
                 @foreach ($kategoriIku as $i => $k)
-                    <div class="fl-row" style="flex-wrap:wrap">
-                        <span class="catchip" style="flex:1">
+                    <div class="fl-row" style="flex-wrap:wrap" x-data="{ terbuka: false }" wire:key="kat-iku-{{ $i }}">
+                        <span class="catchip" style="flex:1;cursor:pointer" @click="terbuka = !terbuka">
                             {{ $k['nama'] }}
                             @if ($k['wajib'])
                                 <span class="lock">wajib</span>
                             @endif
+                            <span class="muted" style="font-size:10.5px;font-weight:400" x-show="!terbuka">
+                                @if ($k['subfolder_per_bulan'] ?? false)· per bulan @endif
+                                @if ($k['subfolder_per_kegiatan'] ?? false)· per kegiatan @endif
+                            </span>
                         </span>
                         <span class="fl-move">
                             <button type="button" wire:click="naikkanKategoriIku({{ $i }})" @disabled($i === 0)>↑</button>
@@ -213,15 +224,18 @@
                             @unless ($k['wajib'])
                                 <button type="button" wire:click="hapusKategoriIku({{ $i }})">✕</button>
                             @endunless
+                            <button type="button" @click="terbuka = !terbuka" title="Detail subfolder"><span x-text="terbuka ? '▲' : '▼'"></span></button>
                         </span>
-                        <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);width:100%;margin-top:6px">
-                            <input type="checkbox" wire:click="toggleSubfolderBulanIku({{ $i }})" @checked($k['subfolder_per_bulan'] ?? false)>
-                            Subfolder per bulan
-                        </label>
-                        <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);width:100%;margin-top:2px">
-                            <input type="checkbox" wire:click="toggleSubfolderKegiatanIku({{ $i }})" @checked($k['subfolder_per_kegiatan'])>
-                            Subfolder per kegiatan
-                        </label>
+                        <div style="width:100%" x-show="terbuka" x-cloak>
+                            <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);width:100%;margin-top:6px">
+                                <input type="checkbox" wire:click="toggleSubfolderBulanIku({{ $i }})" @checked($k['subfolder_per_bulan'] ?? false)>
+                                Subfolder per bulan
+                            </label>
+                            <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);width:100%;margin-top:2px">
+                                <input type="checkbox" wire:click="toggleSubfolderKegiatanIku({{ $i }})" @checked($k['subfolder_per_kegiatan'])>
+                                Subfolder per kegiatan
+                            </label>
+                        </div>
                     </div>
                 @endforeach
 

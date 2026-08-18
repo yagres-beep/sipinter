@@ -110,7 +110,7 @@ a{text-decoration:none;color:inherit}
 
 /* upload */
 .upload{border:2px dashed var(--line);border-radius:11px;padding:16px;text-align:center;background:var(--bg);color:var(--muted);font-size:12.5px}
-.upload.need{border-color:#fca5a5;background:var(--red-soft);color:var(--red)}
+.upload.need{border-color:color-mix(in srgb, var(--red) 45%, transparent);background:var(--red-soft);color:var(--red)}
 .upload .big{font-size:22px;margin-bottom:2px}
 .upload.upload-tinggi{min-height:96px;align-items:center;justify-content:center;width:100%}
 
@@ -258,14 +258,15 @@ tr.clickable:hover{background:var(--blue-soft)}
 @keyframes blokMasuk{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
 .k-num{position:absolute;top:-9px;left:12px;background:linear-gradient(135deg,var(--blue),var(--blue-600));color:#fff;font-size:10px;font-weight:600;padding:3px 10px;border-radius:20px}
 .k-num.stat-in{position:static;display:inline-block;margin-bottom:8px}
-.rtl-planned{display:flex;gap:8px;align-items:flex-start;background:var(--teal-soft);border:1px solid #ccf2ec;border-radius:9px;padding:10px 12px;font-size:12px;color:#0f766e;line-height:1.5}
+.rtl-planned{display:flex;gap:8px;align-items:flex-start;background:var(--teal-soft);border:1px solid color-mix(in srgb, var(--teal) 45%, transparent);border-radius:9px;padding:10px 12px;font-size:12px;color:var(--teal);line-height:1.5}
 .rtl-planned .pl-lbl{display:block;font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;color:var(--teal);margin-bottom:2px}
 
-/* info banner (4 varian) */
-.info{background:var(--blue-soft);border:1px solid #dbe8ff;padding:11px 13px;border-radius:11px;font-size:12px;color:#1e40af;margin-bottom:14px;display:flex;gap:9px;align-items:flex-start;line-height:1.5}
-.info.warn{background:var(--amber-soft);border-color:#fed7aa;color:#9a3412}
-.info.teal{background:var(--teal-soft);border-color:#ccf2ec;color:#0f766e}
-.info.red{background:var(--red-soft);border-color:#fecaca;color:#991b1b}
+/* info banner (4 varian) — warna teks & border ikut var() (bukan hex tetap) supaya
+   tetap terbaca di mode gelap, bukan teks gelap di atas latar yang ikut menggelap */
+.info{background:var(--blue-soft);border:1px solid color-mix(in srgb, var(--blue-600) 35%, transparent);padding:11px 13px;border-radius:11px;font-size:12px;color:var(--blue-600);margin-bottom:14px;display:flex;gap:9px;align-items:flex-start;line-height:1.5}
+.info.warn{background:var(--amber-soft);border-color:color-mix(in srgb, var(--amber) 45%, transparent);color:var(--amber)}
+.info.teal{background:var(--teal-soft);border-color:color-mix(in srgb, var(--teal) 45%, transparent);color:var(--teal)}
+.info.red{background:var(--red-soft);border-color:color-mix(in srgb, var(--red) 45%, transparent);color:var(--red)}
 
 /* toolbar pencarian & filter daftar */
 .toolbar{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
@@ -294,7 +295,7 @@ th.th-sort.active .th-arrow{opacity:1;color:var(--blue-600);font-weight:700}
 .tgh-count{margin-left:auto;font-size:11px;font-weight:600;color:var(--muted);text-transform:none;letter-spacing:0;background:var(--bg);border:1px solid var(--line);padding:2px 9px;border-radius:20px}
 .assign-card{border:1.5px solid var(--line);border-radius:13px;padding:16px;margin-bottom:11px;background:var(--white);box-shadow:var(--sh-sm,0 1px 2px rgba(16,32,70,.05));transition:.15s}
 .assign-card:hover{border-color:#c9d4e8;box-shadow:0 4px 14px rgba(16,32,70,.08);transform:translateY(-1px)}
-.assign-card.ac-kosong{border-color:#fca5a5;background:var(--red-soft)}
+.assign-card.ac-kosong{border-color:color-mix(in srgb, var(--red) 45%, transparent);background:var(--red-soft)}
 .ac-person{display:flex;align-items:center;gap:12px;margin-bottom:13px}
 .ac-av{width:40px;height:40px;border-radius:11px;background:linear-gradient(135deg,var(--blue),#60a5fa);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12.5px;box-shadow:0 3px 8px rgba(59,130,246,.3);flex:none}
 .ac-name{font-weight:700;font-size:13.5px}
@@ -534,9 +535,9 @@ th.th-sort.active .th-arrow{opacity:1;color:var(--blue-600);font-weight:700}
 .toast .ic{flex:none;font-size:15px;line-height:1}
 .toast .msg{flex:1;line-height:1.5}
 .toast .x{flex:none;color:var(--faint);cursor:pointer;font-size:13px;background:none;border:none;padding:0}
-.toast.success{border-color:#bbf7d0;background:var(--green-soft)}
-.toast.error{border-color:#fecaca;background:var(--red-soft)}
-.toast.warning{border-color:#fde68a;background:var(--amber-soft,#fffbeb)}
+.toast.success{border-color:color-mix(in srgb, var(--green) 40%, transparent);background:var(--green-soft)}
+.toast.error{border-color:color-mix(in srgb, var(--red) 40%, transparent);background:var(--red-soft)}
+.toast.warning{border-color:color-mix(in srgb, var(--amber) 40%, transparent);background:var(--amber-soft,#fffbeb)}
 .toast.info{border-color:var(--line);background:var(--blue-soft)}
 @keyframes toastIn{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
 

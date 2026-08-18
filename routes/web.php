@@ -24,7 +24,6 @@ Route::middleware('auth')->group(function () {
         Route::get('/', [UserVerificationController::class, 'index'])->name('index');
         Route::post('/{user}/approve', [UserVerificationController::class, 'approve'])->name('approve');
         Route::post('/{user}/reject', [UserVerificationController::class, 'reject'])->name('reject');
-        Route::put('/{user}/role', [UserVerificationController::class, 'updateRole'])->name('role');
     });
 
     Route::middleware('role:Ketua Tim')->group(function () {

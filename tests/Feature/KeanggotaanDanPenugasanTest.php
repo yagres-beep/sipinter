@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Livewire\KeanggotaanTim;
+use App\Livewire\AkunAktif;
 use App\Livewire\PenugasanIku;
 use App\Models\IkuPenugasan;
 use App\Models\MasterIku;
@@ -41,7 +41,7 @@ class KeanggotaanDanPenugasanTest extends TestCase
         $this->loginSebagaiSakip();
         $ketua = $this->buatKetua('Andi Saputra', 'andi@example.test');
 
-        Livewire::test(KeanggotaanTim::class)
+        Livewire::test(AkunAktif::class)
             ->set("timBaru.{$ketua->id}", 'Statistik Sosial')
             ->call('tambahTim', $ketua->id)
             ->assertHasNoErrors();
@@ -50,7 +50,7 @@ class KeanggotaanDanPenugasanTest extends TestCase
 
         $userTim = UserTim::where('user_id', $ketua->id)->first();
 
-        Livewire::test(KeanggotaanTim::class)->call('hapusTim', $userTim->id);
+        Livewire::test(AkunAktif::class)->call('hapusTim', $userTim->id);
 
         $this->assertDatabaseMissing('user_tim', ['id' => $userTim->id]);
     }
@@ -82,7 +82,7 @@ class KeanggotaanDanPenugasanTest extends TestCase
         ]);
 
         Livewire::test(PenugasanIku::class)
-            ->set("orangBaru.{$iku->id}", (string) $ketua->id)
+            ->set("orangBaru.{$iku->id}", [(string) $ketua->id])
             ->call('tambahManual', $iku->id)
             ->assertHasNoErrors();
 
@@ -93,6 +93,25 @@ class KeanggotaanDanPenugasanTest extends TestCase
         Livewire::test(PenugasanIku::class)->call('hapusManual', $penugasan->id);
 
         $this->assertDatabaseMissing('iku_penugasan', ['id' => $penugasan->id]);
+    }
+
+    public function test_tambah_penugasan_manual_bisa_pilih_lebih_dari_satu_orang_sekaligus(): void
+    {
+        $this->loginSebagaiSakip();
+        $ketuaSatu = $this->buatKetua('Dewi Lestari', 'dewi@example.test');
+        $ketuaDua = $this->buatKetua('Fajar Nugroho', 'fajar@example.test');
+
+        $iku = MasterIku::create([
+            'kode' => 'IKU-W', 'indikator' => 'Indikator W', 'tim' => 'Tim W', 'penanggung_jawab' => 'PJ W',
+        ]);
+
+        Livewire::test(PenugasanIku::class)
+            ->set("orangBaru.{$iku->id}", [(string) $ketuaSatu->id, (string) $ketuaDua->id])
+            ->call('tambahManual', $iku->id)
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('iku_penugasan', ['iku_id' => $iku->id, 'user_id' => $ketuaSatu->id]);
+        $this->assertDatabaseHas('iku_penugasan', ['iku_id' => $iku->id, 'user_id' => $ketuaDua->id]);
     }
 
     public function test_pencarian_menyaring_daftar_iku_penugasan(): void

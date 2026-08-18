@@ -25,7 +25,11 @@
                 <div class="badge b-tunggu" style="display:block;margin-bottom:14px">{{ $errors->first() }}</div>
             @endif
 
-            <form method="POST" action="{{ route('register') }}" x-data="{ showPw: false, showConfirm: false }">
+            <form method="POST" action="{{ route('register') }}" x-data="{
+                    showPw: false, showConfirm: false,
+                    roleId: '{{ old('role_id') }}',
+                    namaRole: {{ \Illuminate\Support\Js::from($roles->pluck('nama', 'id')) }},
+                }">
                 @csrf
                 <div class="field">
                     <label>Nama Lengkap <span class="req">*</span></label>
@@ -38,13 +42,26 @@
                     </div>
                     <div class="field">
                         <label>Peran yang Diajukan <span class="req">*</span></label>
-                        <select class="inp sel filled" name="role_id" required>
+                        <select class="inp sel filled" name="role_id" x-model="roleId" required>
                             <option value="">— Pilih Peran —</option>
                             @foreach ($roles as $role)
                                 <option value="{{ $role->id }}" @selected(old('role_id') == $role->id)>{{ $role->nama }}</option>
                             @endforeach
                         </select>
                     </div>
+                </div>
+                <div class="field" x-show="namaRole[roleId] === 'Ketua Tim'" x-cloak>
+                    <label>Tim yang Diajukan</label>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+                        @foreach ($daftarTim as $tim)
+                            <label class="chk" style="background:var(--bg);border:1.5px solid var(--line);border-radius:9px;padding:7px 11px;font-size:12.5px;cursor:pointer">
+                                <input type="checkbox" name="tim[]" value="{{ $tim }}" @checked(collect(old('tim'))->contains($tim))>
+                                {{ $tim }}
+                            </label>
+                        @endforeach
+                    </div>
+                    <input class="inp filled" type="text" name="tim_baru" value="{{ old('tim_baru') }}" placeholder="Tim lain (pisahkan dengan koma bila lebih dari satu)">
+                    <div class="fhint">Boleh pilih lebih dari satu tim, atau ketik tim baru. Bisa diubah lagi nanti oleh Tim SAKIP setelah akun disetujui.</div>
                 </div>
                 <div class="field">
                     <label>Kata Sandi <span class="req">*</span></label>

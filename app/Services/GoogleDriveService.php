@@ -201,6 +201,37 @@ class GoogleDriveService
     }
 
     /**
+     * Ambil kuota Drive SEBENARNYA dari Google (bukan hitungan sendiri) untuk satu
+     * akun storage — dipanggil lewat client MILIK akun itu sendiri (bukan client()
+     * yang terikat ke akun "aktif" saat ini), supaya bisa disinkronkan untuk akun
+     * mana pun, aktif atau tidak. Dipakai StorageAccounts::sinkronKuota() karena
+     * kuota_terpakai tersimpan hanya bertambah lewat tambahKuotaTerpakai() (dihitung
+     * dari unggahan lewat aplikasi ini saja) sehingga bisa melenceng dari kondisi
+     * asli di Drive (mis. ada berkas lain di akun yang sama, di luar aplikasi ini).
+     *
+     * @return array{usage_bytes: int, limit_bytes: ?int} limit_bytes null berarti
+     *              akun tidak punya batas kuota tetap (mis. Google Workspace tanpa
+     *              batas) — pemanggil sebaiknya tidak menimpa kuota_total bila null.
+     */
+    public function ambilKuota(StorageAccount $akun): array
+    {
+        if (! $akun->googleTerhubung()) {
+            throw new RuntimeException("Akun {$akun->email_gmail_institusi} belum terhubung ke Google Drive.");
+        }
+
+        $client = $this->clientOAuthUntukAkun($akun);
+        $drive = new Drive($client);
+
+        $about = $drive->about->get(['fields' => 'storageQuota']);
+        $kuota = $about->getStorageQuota();
+
+        return [
+            'usage_bytes' => (int) $kuota->getUsage(),
+            'limit_bytes' => $kuota->getLimit() !== null ? (int) $kuota->getLimit() : null,
+        ];
+    }
+
+    /**
      * Buat SATU folder di root ("My Drive") akun yang baru saja login lewat OAuth,
      * memakai client yang MASIH membawa access token segar hasil pertukaran kode
      * otorisasi (belum tentu = StorageAccount::aktif(), dan belum tentu tersimpan

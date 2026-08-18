@@ -129,9 +129,17 @@
                             <div class="quota-bar">
                                 <div class="quota-fill {{ $akun->mendekatiPenuh() ? 'danger' : '' }}" style="width: {{ $akun->persentaseTerpakai() }}%"></div>
                             </div>
-                            <div style="font-size:11px;color:var(--muted);margin-top:4px">
-                                {{ (float) $akun->kuota_terpakai }} GB / {{ (float) $akun->kuota_total }} GB
-                                ({{ $akun->persentaseTerpakai() }}%)
+                            <div style="font-size:11px;color:var(--muted);margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                                <span>{{ (float) $akun->kuota_terpakai }} GB / {{ (float) $akun->kuota_total }} GB
+                                ({{ $akun->persentaseTerpakai() }}%)</span>
+                                @if ($akun->googleTerhubung())
+                                    <button type="button" class="btn btn-ghost btn-sm" style="padding:1px 7px"
+                                        wire:click="sinkronKuota({{ $akun->id }})" wire:loading.attr="disabled" wire:target="sinkronKuota({{ $akun->id }})"
+                                        title="Ambil angka kuota terpakai/total sebenarnya dari Google Drive, menggantikan hitungan aplikasi ini">
+                                        <span wire:loading.remove wire:target="sinkronKuota({{ $akun->id }})">🔄 Sinkron</span>
+                                        <span wire:loading wire:target="sinkronKuota({{ $akun->id }})">Menyinkron…</span>
+                                    </button>
+                                @endif
                             </div>
                         </td>
                         <td style="text-align:right">

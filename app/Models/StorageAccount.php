@@ -209,4 +209,25 @@ class StorageAccount extends Model
 
         $this->increment('kuota_terpakai', round($gb, 4));
     }
+
+    /**
+     * Timpa kuota_terpakai (dan kuota_total bila Google melaporkan batas tetap)
+     * dengan angka SEBENARNYA dari Google Drive (GoogleDriveService::ambilKuota())
+     * — beda dari tambahKuotaTerpakai() yang hanya menambah berdasarkan unggahan
+     * lewat aplikasi ini, method ini MENGGANTI angka lama supaya tersinkron ulang
+     * dengan kondisi asli di Drive (mis. ada berkas lain di akun yang sama, atau
+     * berkas yang sudah dihapus manual di Drive).
+     *
+     * @param  array{usage_bytes: int, limit_bytes: ?int}  $kuota
+     */
+    public function sinkronKuota(array $kuota): void
+    {
+        $data = ['kuota_terpakai' => round($kuota['usage_bytes'] / 1024 / 1024 / 1024, 4)];
+
+        if ($kuota['limit_bytes'] !== null) {
+            $data['kuota_total'] = round($kuota['limit_bytes'] / 1024 / 1024 / 1024, 4);
+        }
+
+        $this->update($data);
+    }
 }

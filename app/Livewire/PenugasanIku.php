@@ -18,23 +18,26 @@ class PenugasanIku extends Component
     public string $cari = '';
 
     /**
-     * Pilihan "tambah manual" per IKU, dikunci pada id IKU.
+     * Pilihan "tambah manual" per IKU, dikunci pada id IKU — array karena field
+     * namanya adalah multi-select (bisa menugaskan beberapa orang sekaligus).
      *
-     * @var array<int, string>
+     * @var array<int, list<string>>
      */
     public array $orangBaru = [];
 
     public function tambahManual(int $ikuId): void
     {
-        $userId = $this->orangBaru[$ikuId] ?? null;
+        $userIds = collect((array) ($this->orangBaru[$ikuId] ?? []))->filter()->unique();
 
-        if (blank($userId)) {
+        if ($userIds->isEmpty()) {
             return;
         }
 
-        IkuPenugasan::firstOrCreate(['iku_id' => $ikuId, 'user_id' => $userId]);
+        foreach ($userIds as $userId) {
+            IkuPenugasan::firstOrCreate(['iku_id' => $ikuId, 'user_id' => $userId]);
+        }
 
-        $this->orangBaru[$ikuId] = '';
+        $this->orangBaru[$ikuId] = [];
 
         session()->flash('status', 'Penugasan IKU berhasil ditambahkan.');
     }

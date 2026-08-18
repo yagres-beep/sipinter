@@ -25,7 +25,7 @@
         </div>
     </div>
 
-    <div class="info">ℹ️ Chip abu-abu "via tim" otomatis dari Keanggotaan Tim (tim IKU sama dengan tim Ketua Tim). Chip biru adalah penugasan manual tambahan.</div>
+    <div class="info">ℹ️ Chip abu-abu "via tim" otomatis dari Keanggotaan Tim (tim IKU sama dengan tim Ketua Tim). Chip biru adalah penugasan manual tambahan — saring dulu lewat dropdown Tim (opsional), lalu pilih satu/lebih nama (tahan Ctrl/Cmd untuk pilih beberapa) sebelum menekan "Tambah Terpilih".</div>
 
     @forelse ($ikuPerTim as $namaTim => $daftarIku)
         <div class="tim-group">
@@ -41,6 +41,9 @@
                     $sudahDitugaskan = $iku->penugasanManual->pluck('user_id')->merge($idOtomatis);
                     $kandidat = $ketuaTimList->whereNotIn('id', $sudahDitugaskan);
                     $punyaPenanggungJawab = $otomatis->isNotEmpty() || $iku->penugasanManual->isNotEmpty();
+                @endphp
+                @php
+                    $timKandidat = $kandidat->flatMap(fn ($orang) => $orang->namaTimList())->unique()->sort()->values();
                 @endphp
                 <div class="assign-card {{ ! $punyaPenanggungJawab ? 'ac-kosong' : '' }}" wire:key="iku-{{ $iku->id }}">
                     <div class="ac-person">
@@ -66,13 +69,23 @@
                         @endforeach
 
                         @if ($kandidat->isNotEmpty())
-                            <select class="inp filled" style="width:auto;display:inline-block" wire:model="orangBaru.{{ $iku->id }}">
-                                <option value="">＋ Tambah manual…</option>
-                                @foreach ($kandidat as $orang)
-                                    <option value="{{ $orang->id }}">{{ $orang->nama }}</option>
-                                @endforeach
-                            </select>
-                            <button type="button" class="btn btn-ghost btn-sm" wire:click="tambahManual({{ $iku->id }})">＋ Tambah</button>
+                            <div x-data="{ timFilter: '' }" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+                                @if ($timKandidat->isNotEmpty())
+                                    <select class="inp filled" style="width:auto;display:inline-block" x-model="timFilter">
+                                        <option value="">Semua tim</option>
+                                        @foreach ($timKandidat as $timOpsi)
+                                            <option value="{{ $timOpsi }}">{{ $timOpsi }}</option>
+                                        @endforeach
+                                    </select>
+                                @endif
+                                <select class="inp filled" style="width:auto;display:inline-block;min-width:170px" multiple size="3"
+                                    wire:model="orangBaru.{{ $iku->id }}">
+                                    @foreach ($kandidat as $orang)
+                                        <option value="{{ $orang->id }}" :hidden="timFilter && !{{ \Illuminate\Support\Js::from($orang->namaTimList()) }}.includes(timFilter)">{{ $orang->nama }}</option>
+                                    @endforeach
+                                </select>
+                                <button type="button" class="btn btn-ghost btn-sm" wire:click="tambahManual({{ $iku->id }})">＋ Tambah Terpilih</button>
+                            </div>
                         @endif
                     </div>
                 </div>

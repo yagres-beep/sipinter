@@ -108,6 +108,27 @@ class StorageAccounts extends Component
         session()->flash('status', 'Akun master folder berhasil diperbarui. Akun yang baru terhubung ke Google Drive setelah ini akan otomatis diarahkan ke folder akun master.');
     }
 
+    /**
+     * Sinkronkan kuota_terpakai/kuota_total dengan angka SEBENARNYA dari Google
+     * Drive (RF-10c) — kuota_terpakai tersimpan cuma bertambah lewat unggahan lewat
+     * aplikasi ini (lihat StorageAccount::tambahKuotaTerpakai()), jadi bisa
+     * melenceng dari kondisi asli. Tombol ini menimpanya dengan data langsung dari
+     * Google (about.get), bukan cuma menambah.
+     */
+    public function sinkronKuota(int $id): void
+    {
+        $akun = StorageAccount::findOrFail($id);
+
+        try {
+            $kuota = app(GoogleDriveService::class)->ambilKuota($akun);
+            $akun->sinkronKuota($kuota);
+
+            session()->flash('status', "Kuota akun {$akun->email_gmail_institusi} disinkronkan dari Google Drive.");
+        } catch (\Throwable $e) {
+            session()->flash('error', "Gagal menyinkronkan kuota akun {$akun->email_gmail_institusi}: ".$e->getMessage());
+        }
+    }
+
     public function mulaiUbahFolder(int $id): void
     {
         $akun = StorageAccount::findOrFail($id);

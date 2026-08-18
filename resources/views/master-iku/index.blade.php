@@ -1,8 +1,8 @@
 @extends('layouts.app')
 
-@section('title', 'Master IKU — SIPINTER')
+@section('title', 'Data Master & Konfigurasi — SIPINTER')
 
-@section('breadcrumb', 'Master IKU')
+@section('breadcrumb', 'Data Master & Konfigurasi')
 
 @section('content')
     <div x-data="{ tab: 'iku' }">

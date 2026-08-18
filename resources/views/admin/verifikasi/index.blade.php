@@ -14,7 +14,7 @@
 
     <div x-data="{ tab: 'verifikasi' }">
         <div class="subtabs">
-            <button type="button" class="subtab" :class="tab === 'verifikasi' ? 'on' : ''" @click="tab = 'verifikasi'">✅ Verifikasi &amp; Keanggotaan Tim</button>
+            <button type="button" class="subtab" :class="tab === 'verifikasi' ? 'on' : ''" @click="tab = 'verifikasi'">✅ Verifikasi &amp; Akun</button>
             <button type="button" class="subtab" :class="tab === 'penugasan' ? 'on' : ''" @click="tab = 'penugasan'">📋 Penugasan IKU</button>
             <button type="button" class="subtab" :class="tab === 'storage' ? 'on' : ''" @click="tab = 'storage'">☁️ Akun &amp; Storage</button>
         </div>
@@ -30,6 +30,7 @@
                             <th>Nama</th>
                             <th>Username</th>
                             <th>Peran Diajukan</th>
+                            <th>Tim Diajukan</th>
                             <th style="text-align:right">Tindakan</th>
                         </tr>
                     </thead>
@@ -39,6 +40,13 @@
                                 <td><b>{{ $user->nama }}</b></td>
                                 <td class="muted">{{ $user->username }}</td>
                                 <td><span class="badge b-ajukan">{{ $user->role->nama }}</span></td>
+                                <td class="muted">
+                                    @forelse ($user->timList as $anggota)
+                                        <span class="chip chip-tim" style="margin:2px">{{ $anggota->tim }}</span>
+                                    @empty
+                                        —
+                                    @endforelse
+                                </td>
                                 <td style="text-align:right">
                                     <div class="btn-row" style="margin-top:0;justify-content:flex-end">
                                         <form method="POST" action="{{ route('verifikasi-akun.approve', $user) }}" style="display:inline">
@@ -54,7 +62,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="4" style="color:var(--muted)">Tidak ada pendaftaran yang menunggu.</td>
+                                <td colspan="5" style="color:var(--muted)">Tidak ada pendaftaran yang menunggu.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -63,51 +71,8 @@
 
             <div class="card" style="margin-top:16px">
                 <div class="sec"><span>Akun Aktif</span></div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Nama</th>
-                            <th>Username</th>
-                            <th>Status</th>
-                            <th>Peran</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @forelse ($users as $user)
-                            <tr>
-                                <td><b>{{ $user->nama }}</b></td>
-                                <td class="muted">{{ $user->username }}</td>
-                                <td>
-                                    <x-badge-status :status="$user->status_verifikasi" />
-                                </td>
-                                <td>
-                                    <form method="POST" action="{{ route('verifikasi-akun.role', $user) }}" style="display:flex;gap:8px;align-items:center">
-                                        @csrf
-                                        @method('PUT')
-                                        <select name="role_id" class="inp filled" style="width:auto">
-                                            @foreach ($roles as $role)
-                                                <option value="{{ $role->id }}" @selected($user->role_id === $role->id)>{{ $role->nama }}</option>
-                                            @endforeach
-                                        </select>
-                                        <button type="submit" class="btn btn-ghost btn-sm">Simpan</button>
-                                    </form>
-                                </td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="4" style="color:var(--muted)">Belum ada pengguna lain.</td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
+                <livewire:akun-aktif />
             </div>
-
-            <div class="card" style="margin-top:16px">
-                <div class="sec"><span>Keanggotaan Tim</span></div>
-                <div class="info">ℹ️ Atur tim tiap Ketua Tim di sini — langsung sesudah menyetujui akunnya di atas, tanpa pindah menu. Dipakai sebagai dasar "penugasan otomatis via tim" di tab Penugasan IKU.</div>
-                <livewire:keanggotaan-tim />
-            </div>
-
         </div>
 
         <div x-show="tab === 'penugasan'" x-cloak>
