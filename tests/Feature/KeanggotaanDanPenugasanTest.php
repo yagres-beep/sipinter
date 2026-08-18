@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Livewire\AkunAktif;
 use App\Livewire\PenugasanIku;
+use App\Models\IkuPengecualian;
 use App\Models\IkuPenugasan;
 use App\Models\MasterIku;
 use App\Models\Role;
@@ -123,8 +124,97 @@ class KeanggotaanDanPenugasanTest extends TestCase
 
         Livewire::test(PenugasanIku::class)
             ->set('cari', 'ALPHA')
-            ->assertSee('ALPHA-1')
-            ->assertDontSee('BETA-2');
+            ->assertSee('Indikator Alpha')
+            ->assertDontSee('Indikator Beta');
+    }
+
+    public function test_kecualikan_otomatis_menyembunyikan_dari_pj_tanpa_mengeluarkan_dari_tim(): void
+    {
+        $this->loginSebagaiSakip();
+        $ketuaB = $this->buatKetua('Budi', 'budi@example.test');
+        $ketuaC = $this->buatKetua('Cici', 'cici@example.test');
+        $ketuaD = $this->buatKetua('Dedi', 'dedi@example.test');
+
+        $iku = MasterIku::create([
+            'kode' => 'IKU-BCD', 'indikator' => 'Indikator BCD', 'tim' => 'Tim BCD', 'penanggung_jawab' => 'PJ BCD',
+        ]);
+
+        foreach ([$ketuaB, $ketuaC, $ketuaD] as $ketua) {
+            UserTim::create(['user_id' => $ketua->id, 'tim' => 'Tim BCD']);
+        }
+
+        $this->assertCount(3, $iku->penanggungJawabOtomatis());
+
+        Livewire::test(PenugasanIku::class)
+            ->call('kecualikanOtomatis', $iku->id, $ketuaB->id)
+            ->call('kecualikanOtomatis', $iku->id, $ketuaD->id)
+            ->assertHasNoErrors();
+
+        // Dikecualikan dari PJ otomatis IKU ini...
+        $iku->refresh();
+        $otomatis = $iku->penanggungJawabOtomatis();
+        $this->assertCount(1, $otomatis);
+        $this->assertSame('Cici', $otomatis->first()->nama);
+
+        // ...tapi TETAP anggota tim (tidak terhapus dari user_tim).
+        $this->assertDatabaseHas('user_tim', ['user_id' => $ketuaB->id, 'tim' => 'Tim BCD']);
+        $this->assertDatabaseHas('user_tim', ['user_id' => $ketuaD->id, 'tim' => 'Tim BCD']);
+    }
+
+    public function test_sertakan_kembali_mengembalikan_pj_otomatis(): void
+    {
+        $this->loginSebagaiSakip();
+        $ketua = $this->buatKetua('Eka Putra', 'eka@example.test');
+
+        $iku = MasterIku::create([
+            'kode' => 'IKU-E', 'indikator' => 'Indikator E', 'tim' => 'Tim E', 'penanggung_jawab' => 'PJ E',
+        ]);
+
+        UserTim::create(['user_id' => $ketua->id, 'tim' => 'Tim E']);
+
+        $pengecualian = IkuPengecualian::create(['iku_id' => $iku->id, 'user_id' => $ketua->id]);
+        $iku->refresh();
+        $this->assertCount(0, $iku->penanggungJawabOtomatis());
+
+        Livewire::test(PenugasanIku::class)->call('sertakanKembali', $pengecualian->id);
+
+        $this->assertDatabaseMissing('iku_pengecualian', ['id' => $pengecualian->id]);
+        $iku->refresh();
+        $this->assertCount(1, $iku->penanggungJawabOtomatis());
+    }
+
+    public function test_pencarian_bisa_dari_nama_penanggung_jawab(): void
+    {
+        $this->loginSebagaiSakip();
+        $ketua = $this->buatKetua('Gita Wulandari', 'gita@example.test');
+
+        $iku = MasterIku::create([
+            'kode' => 'IKU-G', 'indikator' => 'Indikator G', 'tim' => 'Tim G', 'penanggung_jawab' => 'PJ G',
+        ]);
+        MasterIku::create(['kode' => 'IKU-H', 'indikator' => 'Indikator H', 'tim' => 'Tim H', 'penanggung_jawab' => 'PJ H']);
+
+        UserTim::create(['user_id' => $ketua->id, 'tim' => 'Tim G']);
+
+        Livewire::test(PenugasanIku::class)
+            ->set('cari', 'Gita')
+            ->assertSee('Indikator G')
+            ->assertDontSee('Indikator H');
+    }
+
+    public function test_filter_status_belum_ada_pj_menyaring_daftar(): void
+    {
+        $this->loginSebagaiSakip();
+        $ketua = $this->buatKetua('Hasan Ali', 'hasan@example.test');
+
+        MasterIku::create(['kode' => 'IKU-I', 'indikator' => 'Indikator Terisi', 'tim' => 'Tim I', 'penanggung_jawab' => 'PJ I']);
+        MasterIku::create(['kode' => 'IKU-J', 'indikator' => 'Indikator Kosong', 'tim' => 'Tim J', 'penanggung_jawab' => 'PJ J']);
+
+        UserTim::create(['user_id' => $ketua->id, 'tim' => 'Tim I']);
+
+        Livewire::test(PenugasanIku::class)
+            ->set('filterStatus', 'belum')
+            ->assertSee('Indikator Kosong')
+            ->assertDontSee('Indikator Terisi');
     }
 
     public function test_semua_penanggung_jawab_menggabungkan_otomatis_dan_manual_tanpa_duplikat(): void

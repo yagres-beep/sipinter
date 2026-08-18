@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Models\IkuPengecualian;
 use App\Models\IkuPenugasan;
 use App\Models\MasterIku;
 use App\Models\User;
@@ -9,13 +10,21 @@ use App\Models\UserTim;
 use Livewire\Component;
 
 /**
- * Penugasan IKU — tiap IKU menampilkan penanggung jawab otomatis (via keanggotaan
- * tim, chip abu-abu) dan penanggung jawab manual (tambahan/override, chip biru
- * yang bisa dihapus).
+ * Penugasan IKU — tabel datar (bukan dikelompokkan per tim, lihat perbaikan
+ * tampilan) menampilkan penanggung jawab otomatis (via keanggotaan tim, chip
+ * abu-abu, bisa dikecualikan per-IKU tanpa mengeluarkan dari tim) dan penanggung
+ * jawab manual (tambahan/override, chip biru yang bisa dihapus, multi-pilih).
  */
 class PenugasanIku extends Component
 {
     public string $cari = '';
+
+    /** '' = semua, 'ada' = sudah ada PJ, 'belum' = belum ada PJ. */
+    public string $filterStatus = '';
+
+    public string $urutanKolom = 'kode';
+
+    public string $urutanArah = 'asc';
 
     /**
      * Pilihan "tambah manual" per IKU, dikunci pada id IKU — array karena field
@@ -24,6 +33,24 @@ class PenugasanIku extends Component
      * @var array<int, list<string>>
      */
     public array $orangBaru = [];
+
+    public function urutkan(string $kolom): void
+    {
+        if ($this->urutanKolom === $kolom) {
+            $this->urutanArah = $this->urutanArah === 'asc' ? 'desc' : 'asc';
+        } else {
+            $this->urutanKolom = $kolom;
+            $this->urutanArah = 'asc';
+        }
+    }
+
+    public function resetFilter(): void
+    {
+        $this->cari = '';
+        $this->filterStatus = '';
+        $this->urutanKolom = 'kode';
+        $this->urutanArah = 'asc';
+    }
 
     public function tambahManual(int $ikuId): void
     {
@@ -49,45 +76,107 @@ class PenugasanIku extends Component
         session()->flash('status', 'Penugasan IKU dihapus.');
     }
 
+    /**
+     * Kecualikan satu anggota tim dari penanggung jawab OTOMATIS IKU ini saja —
+     * TIDAK mengeluarkannya dari keanggotaan tim (tetap dihitung untuk IKU lain
+     * di tim yang sama).
+     */
+    public function kecualikanOtomatis(int $ikuId, int $userId): void
+    {
+        IkuPengecualian::firstOrCreate(['iku_id' => $ikuId, 'user_id' => $userId]);
+
+        session()->flash('status', 'Orang tersebut dikecualikan dari penanggung jawab otomatis IKU ini.');
+    }
+
+    public function sertakanKembali(int $pengecualianId): void
+    {
+        IkuPengecualian::whereKey($pengecualianId)->delete();
+
+        session()->flash('status', 'Penanggung jawab otomatis disertakan kembali.');
+    }
+
     public function render()
     {
-        $ikuList = MasterIku::with(['penugasanManual.user'])->orderBy('kode')->get();
-
-        if (filled($this->cari)) {
-            $kataKunci = mb_strtolower($this->cari);
-            $ikuList = $ikuList->filter(fn ($iku) => str_contains(mb_strtolower($iku->kode), $kataKunci)
-                || str_contains(mb_strtolower($iku->indikator), $kataKunci)
-                || str_contains(mb_strtolower($iku->tim), $kataKunci)
-            )->values();
-        }
+        $ikuList = MasterIku::with(['penugasanManual.user', 'pengecualianOtomatis'])->get();
 
         $ketuaTimList = User::whereHas('role', fn ($q) => $q->where('nama', 'Ketua Tim'))
             ->where('status_verifikasi', 'terverifikasi')
             ->orderBy('nama')
             ->get();
 
-        // Satu query untuk penanggung jawab otomatis SELURUH tim yang muncul di
-        // $ikuList, dikelompokkan per tim di PHP — bukan satu query per baris IKU
-        // (sebelumnya lewat $iku->penanggungJawabOtomatis() di dalam @foreach).
-        $otomatisPerTim = UserTim::with('user')
+        // Satu query untuk anggota tim SELURUH tim yang muncul di $ikuList, dikelompokkan
+        // per tim di PHP — bukan satu query per baris IKU.
+        $anggotaPerTim = UserTim::with('user')
             ->whereIn('tim', $ikuList->pluck('tim')->unique()->filter())
             ->get()
             ->groupBy('tim')
             ->map(fn ($baris) => $baris->pluck('user')->filter()->unique('id')->values());
 
-        $ikuPerTim = $ikuList->groupBy('tim');
+        // Susun data per-IKU sekali di sini (otomatis dikurangi pengecualian, kandidat
+        // manual, dst) supaya blade tidak menghitung ulang & supaya pencarian/filter
+        // status bisa memakainya langsung.
+        $data = $ikuList->map(function (MasterIku $iku) use ($anggotaPerTim, $ketuaTimList) {
+            $anggotaTim = $anggotaPerTim->get($iku->tim, collect());
+            $idDikecualikan = $iku->pengecualianOtomatis->pluck('user_id');
 
-        $totalTanpaPenanggungJawab = $ikuList->filter(function ($iku) use ($otomatisPerTim) {
-            $otomatis = $otomatisPerTim->get($iku->tim, collect());
+            $otomatis = $anggotaTim->whereNotIn('id', $idDikecualikan)->values();
+            $dikecualikan = $iku->pengecualianOtomatis
+                ->map(fn ($p) => ['pengecualian_id' => $p->id, 'user' => $anggotaTim->firstWhere('id', $p->user_id)])
+                ->filter(fn ($p) => $p['user'] !== null)
+                ->values();
+            $manual = $iku->penugasanManual;
 
-            return $otomatis->isEmpty() && $iku->penugasanManual->isEmpty();
-        })->count();
+            $sudahDitugaskan = $manual->pluck('user_id')->merge($otomatis->pluck('id'));
+            $kandidat = $ketuaTimList->whereNotIn('id', $sudahDitugaskan)->values();
+
+            return [
+                'iku' => $iku,
+                'otomatis' => $otomatis,
+                'dikecualikan' => $dikecualikan,
+                'manual' => $manual,
+                'kandidat' => $kandidat,
+                'tim_kandidat' => $kandidat->flatMap(fn ($o) => $o->namaTimList())->unique()->sort()->values(),
+                'punya_pj' => $otomatis->isNotEmpty() || $manual->isNotEmpty(),
+            ];
+        });
+
+        $totalTanpaPenanggungJawab = $data->filter(fn ($baris) => ! $baris['punya_pj'])->count();
+
+        if (filled($this->cari)) {
+            $kataKunci = mb_strtolower($this->cari);
+
+            $data = $data->filter(function ($baris) use ($kataKunci) {
+                $iku = $baris['iku'];
+
+                if (str_contains(mb_strtolower($iku->kode), $kataKunci)
+                    || str_contains(mb_strtolower($iku->indikator), $kataKunci)
+                    || str_contains(mb_strtolower($iku->tim), $kataKunci)) {
+                    return true;
+                }
+
+                $namaTerkait = $baris['otomatis']->pluck('nama')
+                    ->merge($baris['manual']->pluck('user.nama'));
+
+                return $namaTerkait->contains(fn ($nama) => str_contains(mb_strtolower((string) $nama), $kataKunci));
+            })->values();
+        }
+
+        if ($this->filterStatus === 'ada') {
+            $data = $data->filter(fn ($baris) => $baris['punya_pj'])->values();
+        } elseif ($this->filterStatus === 'belum') {
+            $data = $data->filter(fn ($baris) => ! $baris['punya_pj'])->values();
+        }
+
+        $data = $data->sortBy(
+            fn ($baris) => $this->urutanKolom === 'indikator' ? $baris['iku']->indikator : $baris['iku']->kode,
+            SORT_REGULAR,
+            $this->urutanArah === 'desc'
+        )->values();
 
         return view('livewire.penugasan-iku', [
-            'ikuList' => $ikuList,
-            'ikuPerTim' => $ikuPerTim,
-            'ketuaTimList' => $ketuaTimList,
-            'otomatisPerTim' => $otomatisPerTim,
+            'data' => $data,
+            'totalIku' => $ikuList->count(),
+            'totalTim' => $ikuList->pluck('tim')->unique()->count(),
             'totalTanpaPenanggungJawab' => $totalTanpaPenanggungJawab,
         ]);
     }

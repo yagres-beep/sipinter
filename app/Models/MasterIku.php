@@ -79,15 +79,32 @@ class MasterIku extends Model
     }
 
     /**
+     * Anggota tim yang DIKECUALIKAN dari penanggung jawab otomatis IKU ini —
+     * dipakai saat satu tim beranggotakan beberapa Ketua Tim tapi hanya sebagian
+     * yang benar-benar bertanggung jawab atas IKU tertentu (RF: "hilangkan dari
+     * pilihan tanpa mengeluarkan dari timnya"). Tidak mengubah keanggotaan tim.
+     */
+    public function pengecualianOtomatis(): HasMany
+    {
+        return $this->hasMany(IkuPengecualian::class, 'iku_id');
+    }
+
+    /**
      * Ketua Tim yang otomatis bertanggung jawab atas IKU ini (RF: "via tim") —
      * dihitung dari keanggotaan tim (user_tim.tim === master_iku.tim), BUKAN
-     * disimpan tersendiri, supaya selalu ikut berubah begitu keanggotaan tim berubah.
+     * disimpan tersendiri, supaya selalu ikut berubah begitu keanggotaan tim
+     * berubah — dikurangi anggota yang sengaja dikecualikan (lihat
+     * pengecualianOtomatis()) untuk IKU ini saja.
      *
      * @return \Illuminate\Support\Collection<int, User>
      */
     public function penanggungJawabOtomatis()
     {
-        return User::whereHas('timList', fn ($q) => $q->where('tim', $this->tim))->get();
+        $dikecualikan = $this->pengecualianOtomatis()->pluck('user_id');
+
+        return User::whereHas('timList', fn ($q) => $q->where('tim', $this->tim))
+            ->whereNotIn('id', $dikecualikan)
+            ->get();
     }
 
     /**
