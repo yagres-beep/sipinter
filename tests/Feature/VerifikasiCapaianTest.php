@@ -224,4 +224,98 @@ class VerifikasiCapaianTest extends TestCase
         $this->assertContains('bukti-rtl.pdf', $namaBerkas);
         $this->assertCount(4, $namaBerkas);
     }
+
+    public function test_verifikasi_selesai_mencatat_satu_riwayat_status_diverifikasi(): void
+    {
+        $sakip = $this->buatSakip();
+        $this->actingAs($sakip);
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+
+        Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
+            ->call('tandaiSesuai', $data['berkas1']->id)
+            ->call('tandaiSesuai', $data['berkas2']->id)
+            ->set('target_pk', 100)
+            ->set('target_tw', 50)
+            ->set('realisasi', 45)
+            ->set('persentase_capaian', 90)
+            ->call('verifikasiSelesai')
+            ->assertHasNoErrors();
+
+        // Dua kegiatan diverifikasi BERSAMAAN, tapi harus tercatat sebagai SATU poin
+        // riwayat saja (bukan satu per kegiatan) karena keduanya berbagi satu Capaian.
+        $this->assertDatabaseCount('riwayat_status_capaian', 1);
+
+        $riwayat = $data['capaian']->fresh()->riwayatStatus->first();
+        $this->assertSame('diverifikasi', $riwayat->status);
+        $this->assertSame($sakip->id, $riwayat->user_id);
+    }
+
+    public function test_kembalikan_ke_ketua_tim_mencatat_riwayat_dikembalikan_dengan_catatan(): void
+    {
+        $sakip = $this->buatSakip();
+        $this->actingAs($sakip);
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+
+        Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
+            ->set('catatanBerkas.'.$data['berkas1']->id, 'Bukti tidak jelas')
+            ->call('tandaiTolak', $data['berkas1']->id)
+            ->call('tandaiSesuai', $data['berkas2']->id)
+            ->call('kembalikanKeKetuaTim')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseCount('riwayat_status_capaian', 1);
+
+        $riwayat = $data['capaian']->fresh()->riwayatStatus->first();
+        $this->assertSame('dikembalikan', $riwayat->status);
+        $this->assertSame($sakip->id, $riwayat->user_id);
+        $this->assertSame('Bukti tidak jelas', $riwayat->catatan);
+    }
+
+    public function test_kegiatan_tambahan_pada_iku_dan_bulan_yang_sama_tergabung_satu_riwayat(): void
+    {
+        $sakip = $this->buatSakip();
+        $this->actingAs($sakip);
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+
+        // Kegiatan pertama diverifikasi lebih dulu.
+        Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
+            ->call('tandaiSesuai', $data['berkas1']->id)
+            ->call('tandaiSesuai', $data['berkas2']->id)
+            ->set('target_pk', 100)
+            ->set('target_tw', 50)
+            ->set('realisasi', 45)
+            ->set('persentase_capaian', 90)
+            ->call('verifikasiSelesai')
+            ->assertHasNoErrors();
+
+        // Ketua Tim mengajukan kegiatan TAMBAHAN pada IKU+bulan yang sama.
+        $kegiatan3 = Kegiatan::create([
+            'iku_id' => $data['iku']->id,
+            'periode_id' => $data['periode']->id,
+            'uraian_kegiatan' => 'Kegiatan tambahan',
+            'jenis' => 'bukan_survei_sensus',
+            'status_dokumen' => Kegiatan::STATUS_DIAJUKAN,
+        ]);
+
+        $berkas3 = Berkas::create([
+            'ref_id' => $kegiatan3->id,
+            'ref_type' => Kegiatan::class,
+            'kategori' => 'capaian',
+            'nama_file' => 'bukti3.pdf',
+            'status_verifikasi' => 'menunggu',
+        ]);
+
+        Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']->fresh()])
+            ->call('tandaiTolak', $berkas3->id)
+            ->set('catatanBerkas.'.$berkas3->id, 'Bukti kegiatan tambahan tidak sesuai')
+            ->call('kembalikanKeKetuaTim')
+            ->assertHasNoErrors();
+
+        // Satu Capaian (IKU+bulan yang sama) menyimpan KEDUA riwayat itu tergabung
+        // dalam satu timeline, bukan tersebar/terputus per batch pengajuan.
+        $riwayat = $data['capaian']->fresh()->riwayatStatus;
+        $this->assertCount(2, $riwayat);
+        $this->assertSame('dikembalikan', $riwayat->first()->status);
+        $this->assertSame('diverifikasi', $riwayat->last()->status);
+    }
 }

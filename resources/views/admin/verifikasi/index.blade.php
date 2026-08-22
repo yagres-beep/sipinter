@@ -5,18 +5,21 @@
 @section('breadcrumb', 'Kelola Pengguna')
 
 @section('content')
-    <div class="page-title">Kelola Pengguna</div>
-    <div class="page-sub">Verifikasi akun, keanggotaan tim, penugasan IKU, dan akun penyimpanan Drive dalam satu tempat.</div>
-
     @if (session('status'))
         <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>
     @endif
 
-    <div x-data="{ tab: 'verifikasi' }">
-        <div class="subtabs">
-            <button type="button" class="subtab" :class="tab === 'verifikasi' ? 'on' : ''" @click="tab = 'verifikasi'">✅ Verifikasi &amp; Akun</button>
-            <button type="button" class="subtab" :class="tab === 'penugasan' ? 'on' : ''" @click="tab = 'penugasan'">📋 Penugasan IKU</button>
-            <button type="button" class="subtab" :class="tab === 'storage' ? 'on' : ''" @click="tab = 'storage'">☁️ Akun &amp; Storage</button>
+    <div class="tabs-page-after-title" x-data="{ tab: 'verifikasi' }">
+        <div class="page-head-group">
+            <div class="page-head">
+                <div class="page-title">Kelola Pengguna</div>
+                <div class="page-sub">Verifikasi akun, keanggotaan tim, penugasan IKU, dan akun penyimpanan Drive dalam satu tempat.</div>
+            </div>
+            <div class="subtabs">
+                <button type="button" class="subtab" :class="tab === 'verifikasi' ? 'on' : ''" @click="tab = 'verifikasi'">✅ Verifikasi &amp; Akun</button>
+                <button type="button" class="subtab" :class="tab === 'penugasan' ? 'on' : ''" @click="tab = 'penugasan'">📋 Penugasan IKU</button>
+                <button type="button" class="subtab" :class="tab === 'storage' ? 'on' : ''" @click="tab = 'storage'">☁️ Akun &amp; Storage</button>
+            </div>
         </div>
 
         <div x-show="tab === 'verifikasi'">

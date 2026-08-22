@@ -20,6 +20,9 @@ class MasterIku extends Component
 
     public ?int $pendingDeleteId = null;
 
+    /** @var list<string>|null */
+    public ?array $alasanTidakBisaHapus = null;
+
     public string $kode = '';
 
     public string $indikator = '';
@@ -29,6 +32,8 @@ class MasterIku extends Component
     public string $penanggungJawab = '';
 
     public string $sasaran = '';
+
+    public string $satuan = 'Persen';
 
     protected function rules(): array
     {
@@ -41,6 +46,7 @@ class MasterIku extends Component
             'tim' => ['required', 'string', 'max:255'],
             'penanggungJawab' => ['required', 'string', 'max:255'],
             'sasaran' => ['nullable', 'string', 'max:255'],
+            'satuan' => ['required', 'string', 'in:Persen,Poin'],
         ];
     }
 
@@ -52,6 +58,7 @@ class MasterIku extends Component
             'tim' => 'tim',
             'penanggungJawab' => 'penanggung jawab',
             'sasaran' => 'sasaran',
+            'satuan' => 'satuan',
         ];
     }
 
@@ -91,13 +98,13 @@ class MasterIku extends Component
         $this->tim = $iku->tim;
         $this->penanggungJawab = $iku->penanggung_jawab;
         $this->sasaran = $iku->sasaran ?? '';
-
-        $this->dispatch('scroll-ke-form-iku');
+        $this->satuan = $iku->satuan;
     }
 
     public function cancelEdit(): void
     {
         $this->reset(['editingId', 'kode', 'indikator', 'tim', 'penanggungJawab', 'sasaran']);
+        $this->satuan = 'Persen';
         $this->resetValidation();
     }
 
@@ -106,11 +113,15 @@ class MasterIku extends Component
         $this->validate();
 
         $data = [
-            'kode' => $this->kode,
+            // Kode dipakai polos angka/kodenya saja (mis. "1131"), tanpa awalan "IKU-"
+            // — dinormalisasi di sini juga (bukan cuma migrasi backfill data lama) supaya
+            // tetap konsisten walau seseorang terbiasa mengetik "IKU-1131" di kolom Kode.
+            'kode' => preg_replace('/^\D+/', '', trim($this->kode)) ?: trim($this->kode),
             'indikator' => $this->indikator,
             'tim' => $this->tim,
             'penanggung_jawab' => $this->penanggungJawab,
             'sasaran' => $this->sasaran ?: null,
+            'satuan' => $this->satuan,
         ];
 
         if ($this->editingId) {
@@ -128,21 +139,43 @@ class MasterIku extends Component
 
     public function confirmDelete(int $id): void
     {
+        // Dicek DI SINI, sebelum modal konfirmasi muncul — supaya Tim SAKIP langsung
+        // diberi tahu KENAPA tidak bisa dihapus, bukan baru tahu setelah klik Hapus
+        // dan gagal (lihat relasiYangMenghalangiHapus() untuk daftar relasinya).
+        $iku = MasterIkuModel::findOrFail($id);
+
         $this->pendingDeleteId = $id;
+        $this->alasanTidakBisaHapus = $iku->relasiYangMenghalangiHapus() ?: null;
     }
 
     public function cancelDelete(): void
     {
         $this->pendingDeleteId = null;
+        $this->alasanTidakBisaHapus = null;
     }
 
     public function delete(): void
     {
-        if (! $this->pendingDeleteId) {
+        if (! $this->pendingDeleteId || $this->alasanTidakBisaHapus) {
             return;
         }
 
-        MasterIkuModel::whereKey($this->pendingDeleteId)->delete();
+        try {
+            MasterIkuModel::whereKey($this->pendingDeleteId)->delete();
+        } catch (\Illuminate\Database\QueryException $e) {
+            // Jaring pengaman kalau ada relasi baru muncul di antara confirmDelete()
+            // dicek dan tombol Hapus benar-benar diklik (mis. dua tab dibuka
+            // bersamaan) — 23503 = foreign_key_violation (Postgres).
+            if ($e->getCode() === '23503') {
+                $this->pendingDeleteId = null;
+                $this->alasanTidakBisaHapus = null;
+                session()->flash('error', 'IKU ini tidak bisa dihapus karena masih ada data terkait yang baru saja ditambahkan. Muat ulang halaman lalu coba lagi.');
+
+                return;
+            }
+
+            throw $e;
+        }
 
         MasterIkuModel::lupakanCache();
 
@@ -151,39 +184,31 @@ class MasterIku extends Component
         session()->flash('status', 'IKU berhasil dihapus.');
     }
 
-    /**
-     * Nilai yang sudah pernah dipakai untuk kolom Tim/Sasaran/Penanggung Jawab —
-     * ditawarkan sebagai saran (datalist) di form Tambah/Ubah supaya penamaan
-     * konsisten, tanpa mengunci pengguna: kolom tetap teks bebas, saran ini cuma
-     * mempercepat pengisian ulang nilai yang sudah ada.
-     */
-    protected function daftarSaran(string $kolom): array
-    {
-        return MasterIkuModel::query()
-            ->whereNotNull($kolom)
-            ->where($kolom, '!=', '')
-            ->distinct()
-            ->orderBy($kolom)
-            ->pluck($kolom)
-            ->all();
-    }
-
     public function render()
     {
-        $daftarPenanggungJawab = collect($this->daftarSaran('penanggung_jawab'))
+        // Satu query untuk seluruh daftar IKU, dipakai ulang di PHP untuk saran
+        // datalist Kode/Tim/Sasaran DAN untuk kode IKU yang mau dihapus — bukan
+        // 4 query distinct() + 1 query find() terpisah seperti sebelumnya. Halaman
+        // ini sengaja TIDAK memakai cache Laravel untuk ikuList sendiri (supaya
+        // perubahan sendiri selalu terlihat instan), tapi query distinct terpisah
+        // untuk saran datalist itu murni pemborosan — datanya sudah ada di sini.
+        $ikuList = MasterIkuModel::orderBy('kode')->get();
+
+        $daftarPenanggungJawab = $ikuList->pluck('penanggung_jawab')->filter()
             ->merge(User::where('status_verifikasi', 'terverifikasi')->orderBy('nama')->pluck('nama'))
             ->unique()
             ->sort()
             ->values();
 
         return view('livewire.master-iku', [
-            'ikuList' => MasterIkuModel::orderBy('kode')->get(),
-            'totalIndikator' => MasterIkuModel::count(),
-            'daftarTim' => $this->daftarSaran('tim'),
-            'daftarSasaran' => $this->daftarSaran('sasaran'),
+            'ikuList' => $ikuList,
+            'totalIndikator' => $ikuList->count(),
+            'daftarKode' => $ikuList->pluck('kode')->filter()->unique()->sort()->values()->all(),
+            'daftarTim' => $ikuList->pluck('tim')->filter()->unique()->sort()->values()->all(),
+            'daftarSasaran' => $ikuList->pluck('sasaran')->filter()->unique()->sort()->values()->all(),
             'daftarPenanggungJawab' => $daftarPenanggungJawab,
             'pendingDeleteKode' => $this->pendingDeleteId
-                ? MasterIkuModel::find($this->pendingDeleteId)?->kode
+                ? $ikuList->firstWhere('id', $this->pendingDeleteId)?->kode
                 : null,
         ]);
     }

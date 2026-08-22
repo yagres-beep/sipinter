@@ -5,8 +5,10 @@
 @endphp
 
 <div>
-    <div class="page-title">Dasbor Pemantauan</div>
-    <div class="page-sub">Progres capaian kinerja SAKIP — {{ $role === 'Tim SAKIP' ? 'klik baris untuk verifikasi' : 'klik baris untuk membuka halaman terkait' }}</div>
+    <div class="page-head">
+        <div class="page-title">Dasbor Pemantauan</div>
+        <div class="page-sub">Progres capaian kinerja SAKIP — {{ $role === 'Tim SAKIP' ? 'klik baris untuk verifikasi' : 'klik baris untuk membuka halaman terkait' }}</div>
+    </div>
 
     <div class="grid grid-4" style="margin-bottom:16px">
         <x-stat-card icon="🎯" icon-class="ico-blue" :value="$ringkasan['total_iku']" label="Total IKU dipantau" />
@@ -30,7 +32,7 @@
             <div class="search-box">
                 🔍
                 <input type="text" wire:model.live.debounce.300ms="cari" placeholder="Cari kode, indikator, atau tim…">
-                <span wire:loading wire:target="cari" class="muted" style="font-size:11px">mencari…</span>
+                <span wire:loading wire:target="cari" class="muted" style="font-size:11px"><i class="spin"></i> mencari…</span>
             </div>
             <select class="filter-sel" wire:model.live="filterTriwulan" wire:loading.attr="disabled" wire:target="filterTriwulan,filterBulan,resetFilter">
                 <option value="">Semua triwulan</option>
@@ -51,7 +53,7 @@
         @if ($daftarKegiatan->isEmpty())
             <p style="color:var(--muted);font-size:13px">Tidak ada kegiatan yang cocok dengan pencarian/filter ini.</p>
         @else
-            <div class="table-scroll" wire:loading.class="table-loading" wire:target="filterTriwulan,filterBulan,cari,urutkan" x-data="dataTable(10)">
+            <div class="table-scroll" wire:loading.class="table-loading" wire:target="filterTriwulan,filterBulan,cari,urutkan,resetFilter" x-data="dataTable(10)">
                 <table>
                     <thead>
                         <tr>

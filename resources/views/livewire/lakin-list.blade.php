@@ -1,6 +1,8 @@
 <div>
-    <div class="page-title">LAKIN</div>
-    <div class="page-sub">Laporan Kinerja tahunan — dibentuk Tim SAKIP dari data capaian yang sudah terverifikasi.</div>
+    <div class="page-head">
+        <div class="page-title">LAKIN</div>
+        <div class="page-sub">Laporan Kinerja tahunan — dibentuk Tim SAKIP dari data capaian yang sudah terverifikasi.</div>
+    </div>
 
     @if (session('status'))
         <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>
@@ -18,7 +20,10 @@
                 @enderror
             </div>
             <div class="btn-row">
-                <button type="button" class="btn btn-primary" wire:click="bentukLakin">📈 Bentuk LAKIN</button>
+                <button type="button" class="btn btn-primary" wire:click="bentukLakin" wire:loading.attr="disabled" wire:target="bentukLakin">
+                    <span wire:loading.remove wire:target="bentukLakin">📈 Bentuk LAKIN</span>
+                    <span wire:loading wire:target="bentukLakin"><i class="spin"></i> Membentuk…</span>
+                </button>
             </div>
         </div>
     @endif

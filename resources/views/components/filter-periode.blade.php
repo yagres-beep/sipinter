@@ -59,5 +59,5 @@
         </div>
     </div>
     <span class="pb-tag" wire:loading.remove wire:target="tahun,triwulan,bulan">{{ $labelPeriodeAktif }}</span>
-    <span class="pb-tag" wire:loading wire:target="tahun,triwulan,bulan">Memuat…</span>
+    <span class="pb-tag" wire:loading wire:target="tahun,triwulan,bulan"><i class="spin"></i> Memuat…</span>
 </div>

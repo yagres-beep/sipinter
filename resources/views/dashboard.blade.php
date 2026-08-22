@@ -6,7 +6,7 @@
 
 @section('content')
     @if (auth()->user()->namaRole() === 'Tim SAKIP')
-        <div x-data="{ tab: 'utama' }">
+        <div class="tabs-page" x-data="{ tab: 'utama' }">
             <div class="subtabs">
                 <button type="button" class="subtab" :class="tab === 'utama' ? 'on' : ''" @click="tab = 'utama'">🏠 Dasbor</button>
                 <button type="button" class="subtab" :class="tab === 'kinerja' ? 'on' : ''" @click="tab = 'kinerja'">📊 Dasbor Kinerja</button>

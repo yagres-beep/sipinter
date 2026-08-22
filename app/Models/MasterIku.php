@@ -20,6 +20,7 @@ class MasterIku extends Model
         'tim',
         'penanggung_jawab',
         'sasaran',
+        'satuan',
     ];
 
     /**
@@ -68,6 +69,36 @@ class MasterIku extends Model
     public function rtlEvaluasi(): HasMany
     {
         return $this->hasMany(RtlEvaluasi::class, 'iku_id');
+    }
+
+    public function bagianKustomPoin(): HasMany
+    {
+        return $this->hasMany(BagianKustomPoin::class, 'iku_id');
+    }
+
+    /**
+     * Label relasi yang masih terisi untuk IKU ini — dipakai untuk memperingatkan
+     * SEBELUM Tim SAKIP mencoba menghapus (bukan cuma menangkap galat setelah gagal),
+     * karena kegiatan/kendala-solusi/evaluasi-RTL/poin bagian kustom sengaja dikunci
+     * restrictOnDelete ke master_iku (lihat migrasinya) supaya riwayat isian lama
+     * tidak ikut hilang diam-diam kalau Master IKU-nya dihapus. Kosong berarti aman
+     * dihapus.
+     *
+     * @return list<string>
+     */
+    public function relasiYangMenghalangiHapus(): array
+    {
+        $labelPerRelasi = [
+            'kegiatan' => 'kegiatan',
+            'kendalaSolusi' => 'kendala & solusi',
+            'rtlEvaluasi' => 'evaluasi RTL',
+            'bagianKustomPoin' => 'poin bagian kustom',
+        ];
+
+        return collect($labelPerRelasi)
+            ->filter(fn ($label, $relasi) => $this->{$relasi}()->exists())
+            ->values()
+            ->all();
     }
 
     /**

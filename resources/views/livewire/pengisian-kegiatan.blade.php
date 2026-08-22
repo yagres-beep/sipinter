@@ -14,8 +14,10 @@
     x-on:livewire-upload-finish.window="pushToast('success', 'Berkas dipilih & tersimpan sementara di server — akan disalin ke Google Drive saat diajukan.')"
     x-on:livewire-upload-error.window="pushToast('error', 'Gagal mengunggah berkas — periksa ukuran (maks 10MB) dan format (harus PDF), lalu coba lagi.')"
 >
-    <div class="page-title">Isian Kegiatan</div>
-    <div class="page-sub">Kegiatan, kendala &amp; solusi, evaluasi RTL, dan rencana tindak lanjut — diajukan sekaligus ke Tim SAKIP.</div>
+    <div class="page-head">
+        <div class="page-title">Isian Kegiatan</div>
+        <div class="page-sub">Kegiatan, kendala &amp; solusi, evaluasi RTL, dan rencana tindak lanjut — diajukan sekaligus ke Tim SAKIP.</div>
+    </div>
 
     @if (session('status'))
         <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>
@@ -40,6 +42,19 @@
                     <li>{{ $pesan }}</li>
                 @endforeach
             </ul>
+        </div>
+    @endif
+
+    @if ($adaDikembalikan)
+        <div class="info red" style="margin-bottom:14px">
+            🔴 <b>Isian ini dikembalikan oleh Tim SAKIP untuk periode ini</b> — perbaiki bagian yang ditandai merah di bawah, lalu ajukan ulang.
+            @if ($catatanPenolakan->isNotEmpty())
+                <ul style="margin:6px 0 0 18px;padding:0">
+                    @foreach ($catatanPenolakan as $catatan)
+                        <li>{{ $catatan }}</li>
+                    @endforeach
+                </ul>
+            @endif
         </div>
     @endif
 
@@ -97,6 +112,43 @@
         <div class="info">ℹ️ Isi tiap kolom berurutan dari atas — uraian kegiatan dulu, baru jenis kegiatan bisa dipilih. Nama folder Drive dibuat otomatis dari tahapan dan uraian kegiatan. Bukti capaian wajib diunggah tiap kegiatan.</div>
 
         @foreach ($blocks as $i => $block)
+            @php $terkunci = in_array($block['status_dokumen'], $statusKegiatanTerkunci, true); @endphp
+            @if ($terkunci)
+                <div class="keg" wire:key="block-{{ $i }}" style="opacity:.8">
+                    <div class="keg-head">
+                        <span class="t">Kegiatan {{ $i + 1 }}</span>
+                        <x-badge-status :status="$block['status_dokumen']" />
+                    </div>
+                    <div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">🔒 Sudah diajukan ke Tim SAKIP — tidak bisa diedit dari sini.</div>
+
+                    <div class="field">
+                        <label>Uraian Kegiatan</label>
+                        <div class="inp filled" style="background:var(--ro-bg)">{{ $block['uraian_kegiatan'] }}</div>
+                    </div>
+                    <div class="field">
+                        <label>Jenis Kegiatan</label>
+                        <div class="inp filled" style="background:var(--ro-bg)">{{ $block['jenis'] === 'survei_sensus' ? 'Survei/Sensus' : 'Bukan Survei/Sensus' }}@if ($block['tahapan_survei']) — {{ ucfirst($block['tahapan_survei']) }}@endif</div>
+                    </div>
+
+                    <div class="field" style="margin-bottom:0">
+                        <label>Bukti Capaian (PDF)</label>
+                        <div class="filechip-grid">
+                            @forelse ($block['existing_bukti'] as $file)
+                                <div class="filechip {{ $file['status_verifikasi'] === 'terverifikasi' ? 'ok' : ($file['status_verifikasi'] === 'ditolak' ? 'no' : '') }}">
+                                    <span class="nm">
+                                        📄 {{ $file['nama_file'] }}
+                                        @if ($file['status_verifikasi'] === 'ditolak' && $file['catatan'])
+                                            <span class="sub" style="color:var(--red)">{{ $file['catatan'] }}</span>
+                                        @endif
+                                    </span>
+                                </div>
+                            @empty
+                                <p style="color:var(--muted);font-size:12.5px">Belum ada bukti diunggah.</p>
+                            @endforelse
+                        </div>
+                    </div>
+                </div>
+            @else
             <div class="keg" wire:key="block-{{ $i }}"
                 x-data="{
                     uraianTerisi: {{ trim($block['uraian_kegiatan']) !== '' ? 'true' : 'false' }},
@@ -116,8 +168,11 @@
                 }">
                 <div class="keg-head">
                     <span class="t">Kegiatan {{ $i + 1 }}</span>
-                    @if (count($blocks) > 1)
-                        <button type="button" class="btn btn-red btn-sm" wire:click="removeBlock({{ $i }})">🗑 Hapus</button>
+                    @if ($block['status_dokumen'])
+                        <x-badge-status :status="$block['status_dokumen']" />
+                    @endif
+                    @if (count($blocks) > 1 && ! $block['id'])
+                        <button type="button" class="btn btn-red btn-sm" wire:click="removeBlock({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="removeBlock({{ $i }})">🗑 Hapus</button>
                     @endif
                 </div>
 
@@ -184,7 +239,22 @@
                 <div x-show="folderPreview !== ''" x-cloak class="foldername">📁 <span x-text="folderPreview"></span></div>
 
                 <div class="field" style="margin-bottom:0">
-                    <label>Bukti Capaian (PDF) <span class="req">wajib</span></label>
+                    <label>Bukti Capaian (PDF) @if (empty($block['existing_bukti']))<span class="req">wajib</span>@endif</label>
+
+                    @if (! empty($block['existing_bukti']))
+                        <div class="filechip-grid">
+                            @foreach ($block['existing_bukti'] as $file)
+                                <div class="filechip {{ $file['status_verifikasi'] === 'terverifikasi' ? 'ok' : ($file['status_verifikasi'] === 'ditolak' ? 'no' : '') }}">
+                                    <span class="nm">
+                                        📄 {{ $file['nama_file'] }}
+                                        @if ($file['status_verifikasi'] === 'ditolak' && $file['catatan'])
+                                            <span class="sub" style="color:var(--red)">{{ $file['catatan'] }}</span>
+                                        @endif
+                                    </span>
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
 
                     <div x-show="jenisTerpilih === '' || (jenisTerpilih === 'survei_sensus' && !tahapanTerisi)" x-cloak
                         class="locked-note" style="padding:14px;border:1.5px dashed var(--line);border-radius:10px;text-align:center">
@@ -200,12 +270,14 @@
                                     @change="pendingBuktiNames = Array.from($event.target.files).map(f => f.name)">
                             </label>
                         @else
-                            @foreach ($block['bukti'] as $fi => $file)
-                                <div class="filechip ok">
-                                    <span class="nm">📄 {{ $file->getClientOriginalName() }}</span>
-                                    <span class="x" style="cursor:pointer" wire:click="removeBuktiKegiatan({{ $i }}, {{ $fi }})">✕</span>
-                                </div>
-                            @endforeach
+                            <div class="filechip-grid">
+                                @foreach ($block['bukti'] as $fi => $file)
+                                    <div class="filechip ok">
+                                        <span class="nm">📄 {{ $file->getClientOriginalName() }}</span>
+                                        <span class="x" style="cursor:pointer" wire:click="removeBuktiKegiatan({{ $i }}, {{ $fi }})" wire:loading.class="btn-busy" wire:target="removeBuktiKegiatan({{ $i }}, {{ $fi }})">✕</span>
+                                    </div>
+                                @endforeach
+                            </div>
                             <label class="btn btn-ghost btn-sm" style="margin-top:8px;cursor:pointer">
                                 ＋ Tambah Bukti
                                 <input type="file" wire:model="blocks.{{ $i }}.bukti" multiple accept="application/pdf" style="display:none"
@@ -232,6 +304,7 @@
                     @enderror
                 </div>
             </div>
+            @endif
         @endforeach
 
         <button type="button" class="btn btn-ghost btn-sm" wire:click="addBlock" wire:loading.attr="disabled" wire:target="addBlock">
@@ -261,6 +334,20 @@
                                 @if ($entri->solusi)
                                     <div style="margin-top:4px"><b>Solusi:</b> {{ $entri->solusi }}</div>
                                 @endif
+                                @if ($entri->berkas->isNotEmpty())
+                                    <div class="filechip-grid">
+                                        @foreach ($entri->berkas as $file)
+                                            <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}">
+                                                <span class="nm">
+                                                    📄 {{ $file->nama_file }}
+                                                    @if ($file->status_verifikasi === 'ditolak' && $file->catatan)
+                                                        <span class="sub" style="color:var(--red)">{{ $file->catatan }}</span>
+                                                    @endif
+                                                </span>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                @endif
                             </div>
                         @endforeach
                     </div>
@@ -269,10 +356,10 @@
         @endif
 
         @foreach ($kendalaBlocks as $i => $block)
-            <div class="poin-row" wire:key="kendala-{{ $i }}" x-data="{ pendingBuktiSolusiNames: [] }">
+            <div class="poin-row" wire:key="kendala-{{ $i }}">
                 <span class="k-num">Pasangan {{ $i + 1 }}</span>
                 @if (count($kendalaBlocks) > 1)
-                    <button type="button" class="btn btn-red btn-sm" style="position:absolute;top:8px;right:8px" wire:click="removeKendalaBlock({{ $i }})">🗑</button>
+                    <button type="button" class="btn btn-red btn-sm" style="position:absolute;top:8px;right:8px" wire:click="removeKendalaBlock({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="removeKendalaBlock({{ $i }})">🗑</button>
                 @endif
 
                 <div class="field" style="margin-bottom:0">
@@ -286,59 +373,9 @@
 
                 <div class="field" style="margin-bottom:0">
                     <label>Solusi</label>
-                    <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model.live="kendalaBlocks.{{ $i }}.solusi"
+                    <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model="kendalaBlocks.{{ $i }}.solusi"
                         placeholder="mis. Percepatan koordinasi dengan mitra terkait"></textarea>
                     @error("kendalaBlocks.{$i}.solusi")
-                        <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-                    @enderror
-                </div>
-
-                <div class="field" style="grid-column:1 / -1;margin-bottom:0;margin-top:2px">
-                    <label style="justify-content:center">
-                        Bukti Dukung Solusi (PDF)
-                        @if (filled($block['solusi']))
-                            <span class="req">wajib</span>
-                        @else
-                            <span class="fhint" style="margin:0">(bila solusi diisi)</span>
-                        @endif
-                    </label>
-
-                    @if (empty($block['bukti_solusi']))
-                        <label class="upload upload-tinggi {{ filled($block['solusi']) ? 'need' : '' }}" style="cursor:pointer;display:flex;width:100%">
-                            <div>
-                                <div class="big">📤</div>
-                                Klik untuk unggah bukti dukung solusi (PDF)
-                            </div>
-                            <input type="file" wire:model="kendalaBlocks.{{ $i }}.bukti_solusi" multiple accept="application/pdf" style="display:none"
-                                @change="pendingBuktiSolusiNames = Array.from($event.target.files).map(f => f.name)">
-                        </label>
-                    @else
-                        <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
-                            @foreach ($block['bukti_solusi'] as $fi => $file)
-                                <div class="filechip ok" style="width:100%">
-                                    <span class="nm">📄 {{ $file->getClientOriginalName() }}</span>
-                                    <span class="x" style="cursor:pointer" wire:click="removeBuktiSolusi({{ $i }}, {{ $fi }})">✕</span>
-                                </div>
-                            @endforeach
-                            <label class="btn btn-ghost btn-sm" style="cursor:pointer">
-                                ＋ Tambah Bukti
-                                <input type="file" wire:model="kendalaBlocks.{{ $i }}.bukti_solusi" multiple accept="application/pdf" style="display:none"
-                                    @change="pendingBuktiSolusiNames = Array.from($event.target.files).map(f => f.name)">
-                            </label>
-                        </div>
-                    @endif
-
-                    <div wire:loading wire:target="kendalaBlocks.{{ $i }}.bukti_solusi" style="font-size:11.5px;color:var(--muted);margin-top:6px">
-                        <template x-for="nama in pendingBuktiSolusiNames" :key="nama">
-                            <div>📄 <span x-text="nama"></span> — mengunggah…</div>
-                        </template>
-                        <div x-show="pendingBuktiSolusiNames.length === 0">Mengunggah berkas…</div>
-                    </div>
-
-                    @error("kendalaBlocks.{$i}.bukti_solusi")
-                        <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-                    @enderror
-                    @error("kendalaBlocks.{$i}.bukti_solusi.*")
                         <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                     @enderror
                 </div>
@@ -397,18 +434,25 @@
                             @endif
                         </label>
 
-                        @foreach ($poin->berkas as $file)
-                            <div class="filechip ok" style="max-width:320px;margin-top:6px">
-                                <span class="nm">📄 {{ $file->nama_file }}</span>
-                            </div>
-                        @endforeach
+                        <div class="filechip-grid">
+                            @foreach ($poin->berkas as $file)
+                                <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}">
+                                    <span class="nm">
+                                        📄 {{ $file->nama_file }}
+                                        @if ($file->status_verifikasi === 'ditolak' && $file->catatan)
+                                            <span class="sub" style="color:var(--red)">{{ $file->catatan }}</span>
+                                        @endif
+                                    </span>
+                                </div>
+                            @endforeach
 
-                        @foreach ($evaluasi[$poin->id]['bukti'] ?? [] as $fi => $file)
-                            <div class="filechip" style="max-width:320px;margin-top:6px">
-                                <span class="nm">📄 {{ $file->getClientOriginalName() }}</span>
-                                <span class="x" style="cursor:pointer" wire:click="removeBuktiEvaluasi({{ $poin->id }}, {{ $fi }})">✕</span>
-                            </div>
-                        @endforeach
+                            @foreach ($evaluasi[$poin->id]['bukti'] ?? [] as $fi => $file)
+                                <div class="filechip">
+                                    <span class="nm">📄 {{ $file->getClientOriginalName() }}</span>
+                                    <span class="x" style="cursor:pointer" wire:click="removeBuktiEvaluasi({{ $poin->id }}, {{ $fi }})" wire:loading.class="btn-busy" wire:target="removeBuktiEvaluasi({{ $poin->id }}, {{ $fi }})">✕</span>
+                                </div>
+                            @endforeach
+                        </div>
 
                         <label class="upload" style="cursor:pointer;display:block;padding:10px;margin-top:8px">
                             <div style="font-weight:600;font-size:11.5px;color:var(--blue-600)">📤 Tambah bukti realisasi (PDF) — boleh lebih dari satu</div>
@@ -465,7 +509,7 @@
                     <div class="poin-single" wire:key="rtlbaru-{{ $i }}">
                         <span class="k-num stat-in">Poin RTL {{ $i + 1 }}</span>
                         @if (count($rtlBaru) > 1)
-                            <button type="button" class="btn btn-red btn-sm" style="position:absolute;top:8px;right:8px" wire:click="removeRtlBlock({{ $i }})">🗑</button>
+                            <button type="button" class="btn btn-red btn-sm" style="position:absolute;top:8px;right:8px" wire:click="removeRtlBlock({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="removeRtlBlock({{ $i }})">🗑</button>
                         @endif
 
                         <div class="field" style="margin-bottom:0">
@@ -486,23 +530,16 @@
 
                 <div class="row2" style="margin-top:14px">
                     <div class="field"><label>PIC Tindak Lanjut <span class="req">*</span></label>
-                        @if ($namaTimIku)
-                            <div class="fhint" style="margin-bottom:6px">Tim: <b>{{ $namaTimIku }}</b></div>
-                        @endif
-                        <select class="inp filled" wire:model.live="rtlBaruPic">
-                            <option value="">— Pilih PIC —</option>
+                        <input type="text" class="inp filled" list="daftar-pic-rtl" wire:model.live.blur="rtlBaruPic" placeholder="Ketik atau pilih nama PIC">
+                        <datalist id="daftar-pic-rtl">
                             @foreach ($picOptions as $nama)
-                                <option value="{{ $nama }}">{{ $nama }}</option>
+                                <option value="{{ $nama }}"></option>
                             @endforeach
-                            <option value="__lainnya__">Lainnya (ketik manual)</option>
-                        </select>
-                        @if ($rtlBaruPic === '__lainnya__')
-                            <input type="text" class="inp filled" style="margin-top:8px" wire:model.live.blur="rtlBaruPicManual" placeholder="Ketik nama PIC">
-                            @error('rtlBaruPicManual')
-                                <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-                            @enderror
-                        @endif
-                        <div class="fhint">Berlaku untuk seluruh poin RTL {{ $labelBerikutnya }} di atas.</div>
+                        </datalist>
+                        <div class="fhint">
+                            @if ($namaTimIku) Tim: <b>{{ $namaTimIku }}</b> · @endif
+                            Berlaku untuk seluruh poin RTL {{ $labelBerikutnya }} di atas. Pilih dari saran, atau ketik nama lain.
+                        </div>
                         @error('rtlBaruPic')
                             <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                         @enderror
@@ -532,15 +569,47 @@
                     <div class="info">ℹ️ Bagian ini opsional. {{ $labelBukti }}</div>
                 @endif
 
+                @if (($riwayatBagianKustom[$bagian->id] ?? collect())->isNotEmpty())
+                    <div style="margin-bottom:14px">
+                        <div style="font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Riwayat Kumulatif Triwulan Berjalan</div>
+                        @foreach ($riwayatBagianKustom[$bagian->id] as $triwulanKe => $entriTriwulan)
+                            <div style="margin-bottom:10px">
+                                <div style="font-size:12px;font-weight:700;color:var(--blue-600);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">
+                                    Triwulan {{ ['I', 'II', 'III', 'IV'][$triwulanKe - 1] }}
+                                </div>
+                                @foreach ($entriTriwulan as $entri)
+                                    <div style="padding:8px 0;border-bottom:1px solid var(--line2);font-size:13px">
+                                        <div>{{ $entri->teks }}</div>
+                                        @if ($entri->berkas->isNotEmpty())
+                                            <div class="filechip-grid">
+                                                @foreach ($entri->berkas as $file)
+                                                    <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}">
+                                                        <span class="nm">
+                                                            📄 {{ $file->nama_file }}
+                                                            @if ($file->status_verifikasi === 'ditolak' && $file->catatan)
+                                                                <span class="sub" style="color:var(--red)">{{ $file->catatan }}</span>
+                                                            @endif
+                                                        </span>
+                                                    </div>
+                                                @endforeach
+                                            </div>
+                                        @endif
+                                    </div>
+                                @endforeach
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+
                 @error("bagianKustomBlocks.{$bagian->id}")
                     <div style="color:var(--red);font-size:11.5px;margin-bottom:10px">{{ $message }}</div>
                 @enderror
 
                 @foreach ($bagianKustomBlocks[$bagian->id] ?? [] as $i => $blok)
-                    <div class="poin-single" wire:key="bagian-{{ $bagian->id }}-{{ $i }}">
+                    <div class="poin-single" wire:key="bagian-{{ $bagian->id }}-{{ $i }}" x-data="{ pendingBuktiBagianNames: [] }">
                         <span class="k-num stat-in">Poin {{ $i + 1 }}</span>
                         @if (count($bagianKustomBlocks[$bagian->id]) > 1)
-                            <button type="button" class="btn btn-red btn-sm" style="position:absolute;top:8px;right:8px" wire:click="removeBagianKustomBlock({{ $bagian->id }}, {{ $i }})">🗑</button>
+                            <button type="button" class="btn btn-red btn-sm" style="position:absolute;top:8px;right:8px" wire:click="removeBagianKustomBlock({{ $bagian->id }}, {{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="removeBagianKustomBlock({{ $bagian->id }}, {{ $i }})">🗑</button>
                         @endif
 
                         <div class="field">
@@ -564,21 +633,30 @@
                                 <label class="upload" style="cursor:pointer;display:block">
                                     <div class="big">📤</div>
                                     Klik untuk unggah bukti dukung (PDF) — boleh lebih dari satu berkas
-                                    <input type="file" wire:model="bagianKustomBlocks.{{ $bagian->id }}.{{ $i }}.bukti" multiple accept="application/pdf" style="display:none">
+                                    <input type="file" wire:model="bagianKustomBlocks.{{ $bagian->id }}.{{ $i }}.bukti" multiple accept="application/pdf" style="display:none"
+                                        @change="pendingBuktiBagianNames = Array.from($event.target.files).map(f => f.name)">
                                 </label>
                             @else
-                                @foreach ($blok['bukti'] as $fi => $file)
-                                    <div class="filechip ok">
-                                        <span class="nm">📄 {{ $file->getClientOriginalName() }}</span>
-                                        <span class="x" style="cursor:pointer" wire:click="removeBuktiBagianKustom({{ $bagian->id }}, {{ $i }}, {{ $fi }})">✕</span>
-                                    </div>
-                                @endforeach
+                                <div class="filechip-grid">
+                                    @foreach ($blok['bukti'] as $fi => $file)
+                                        <div class="filechip ok">
+                                            <span class="nm">📄 {{ $file->getClientOriginalName() }}</span>
+                                            <span class="x" style="cursor:pointer" wire:click="removeBuktiBagianKustom({{ $bagian->id }}, {{ $i }}, {{ $fi }})" wire:loading.class="btn-busy" wire:target="removeBuktiBagianKustom({{ $bagian->id }}, {{ $i }}, {{ $fi }})">✕</span>
+                                        </div>
+                                    @endforeach
+                                </div>
                                 <label class="btn btn-ghost btn-sm" style="margin-top:8px;cursor:pointer">
                                     ＋ Tambah Bukti
-                                    <input type="file" wire:model="bagianKustomBlocks.{{ $bagian->id }}.{{ $i }}.bukti" multiple accept="application/pdf" style="display:none">
+                                    <input type="file" wire:model="bagianKustomBlocks.{{ $bagian->id }}.{{ $i }}.bukti" multiple accept="application/pdf" style="display:none"
+                                        @change="pendingBuktiBagianNames = Array.from($event.target.files).map(f => f.name)">
                                 </label>
                             @endif
-                            <div wire:loading wire:target="bagianKustomBlocks.{{ $bagian->id }}.{{ $i }}.bukti" style="font-size:11.5px;color:var(--muted);margin-top:6px">Mengunggah berkas…</div>
+                            <div wire:loading wire:target="bagianKustomBlocks.{{ $bagian->id }}.{{ $i }}.bukti" style="font-size:11.5px;color:var(--muted);margin-top:6px">
+                                <template x-for="nama in pendingBuktiBagianNames" :key="nama">
+                                    <div>📄 <span x-text="nama"></span> — mengunggah…</div>
+                                </template>
+                                <div x-show="pendingBuktiBagianNames.length === 0">Mengunggah berkas…</div>
+                            </div>
                             @error("bagianKustomBlocks.{$bagian->id}.{$i}.bukti")
                                 <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                             @enderror

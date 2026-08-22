@@ -1,6 +1,8 @@
 <div>
-    <div class="page-title">Rencana Tindak Lanjut &amp; Evaluasi</div>
-    <div class="page-sub">Evaluasi RTL triwulan sebelumnya, dan tetapkan RTL untuk triwulan berikutnya.</div>
+    <div class="page-head">
+        <div class="page-title">Rencana Tindak Lanjut &amp; Evaluasi</div>
+        <div class="page-sub">Evaluasi RTL triwulan sebelumnya, dan tetapkan RTL untuk triwulan berikutnya.</div>
+    </div>
 
     @if (session('status'))
         <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>
@@ -66,7 +68,7 @@
             @endif
 
             @foreach ($rtlSebelumnya as $poin)
-                <div class="poin-single" wire:key="rtl-{{ $poin->id }}">
+                <div class="poin-single" wire:key="rtl-{{ $poin->id }}" x-data="{ pendingBuktiRealisasiNames: [] }">
                     <span class="k-num stat-in">Poin {{ $loop->iteration }}</span>
                     <div class="rtl-planned">
                         <div>
@@ -81,16 +83,18 @@
                             <b>Realisasi:</b> {{ $poin->realisasi }}
                             <x-badge-status :status="$poin->status_cocok" />
                         </div>
-                        @foreach ($poin->berkas as $file)
-                            <div class="filechip" style="max-width:320px;margin-top:6px">
-                                <span class="nm">📄 {{ $file->nama_file }}</span>
-                            </div>
-                        @endforeach
+                        <div class="filechip-grid">
+                            @foreach ($poin->berkas as $file)
+                                <div class="filechip">
+                                    <span class="nm">📄 {{ $file->nama_file }}</span>
+                                </div>
+                            @endforeach
+                        </div>
                     @else
                         <div class="field" style="margin:12px 0 10px">
                             <label>Realisasi <span class="req">*</span></label>
                             <textarea class="inp filled" style="height:auto;display:block" rows="2"
-                                wire:model.live="evaluasi.{{ $poin->id }}.realisasi"
+                                wire:model.live.debounce.500ms="evaluasi.{{ $poin->id }}.realisasi"
                                 placeholder="Uraikan realisasi tindak lanjut untuk poin RTL ini..."></textarea>
                             @error("evaluasi.{$poin->id}.realisasi")
                                 <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
@@ -119,22 +123,36 @@
                             @if (empty($evaluasi[$poin->id]['bukti']))
                                 <label class="upload" style="cursor:pointer;display:block;padding:10px">
                                     <div style="font-weight:600;font-size:11.5px;color:var(--blue-600)">📤 Bukti realisasi (PDF) · opsional</div>
-                                    <input type="file" wire:model="evaluasi.{{ $poin->id }}.bukti" multiple accept="application/pdf" style="display:none">
+                                    <input type="file" wire:model="evaluasi.{{ $poin->id }}.bukti" multiple accept="application/pdf" style="display:none"
+                                        @change="pendingBuktiRealisasiNames = Array.from($event.target.files).map(f => f.name)">
                                 </label>
                             @else
-                                @foreach ($evaluasi[$poin->id]['bukti'] as $fi => $file)
-                                    <div class="filechip">
-                                        <span class="nm">📄 {{ $file->getClientOriginalName() }}</span>
-                                    </div>
-                                @endforeach
+                                <div class="filechip-grid">
+                                    @foreach ($evaluasi[$poin->id]['bukti'] as $fi => $file)
+                                        <div class="filechip">
+                                            <span class="nm">📄 {{ $file->getClientOriginalName() }}</span>
+                                        </div>
+                                    @endforeach
+                                </div>
                             @endif
+
+                            <div wire:loading wire:target="evaluasi.{{ $poin->id }}.bukti" style="font-size:11.5px;color:var(--muted);margin-top:6px">
+                                <template x-for="nama in pendingBuktiRealisasiNames" :key="nama">
+                                    <div>📄 <span x-text="nama"></span> — mengunggah…</div>
+                                </template>
+                                <div x-show="pendingBuktiRealisasiNames.length === 0">Mengunggah berkas…</div>
+                            </div>
+
                             @error("evaluasi.{$poin->id}.bukti.*")
                                 <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                             @enderror
                         </div>
 
                         <div class="btn-row">
-                            <button type="button" class="btn btn-primary btn-sm" wire:click="simpanEvaluasi({{ $poin->id }})">Simpan Evaluasi</button>
+                            <button type="button" class="btn btn-primary btn-sm" wire:click="simpanEvaluasi({{ $poin->id }})" wire:loading.attr="disabled" wire:target="simpanEvaluasi({{ $poin->id }})">
+                                <span wire:loading.remove wire:target="simpanEvaluasi({{ $poin->id }})">Simpan Evaluasi</span>
+                                <span wire:loading wire:target="simpanEvaluasi({{ $poin->id }})"><i class="spin"></i> Menyimpan…</span>
+                            </button>
                         </div>
                     @endif
                 </div>
@@ -158,7 +176,7 @@
                     <div class="poin-single" wire:key="rtlbaru-{{ $i }}">
                         <span class="k-num stat-in">Poin RTL {{ $i + 1 }}</span>
                         @if (count($rtlBaru) > 1)
-                            <button type="button" class="btn btn-red btn-sm" style="position:absolute;top:8px;right:8px" wire:click="removeRtlBlock({{ $i }})">🗑</button>
+                            <button type="button" class="btn btn-red btn-sm" style="position:absolute;top:8px;right:8px" wire:click="removeRtlBlock({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="removeRtlBlock({{ $i }})">🗑</button>
                         @endif
 
                         <div class="field">
@@ -190,8 +208,14 @@
                 @endforeach
 
                 <div class="btn-row">
-                    <button type="button" class="btn btn-ghost btn-sm" wire:click="addRtlBlock">＋ Tambah Poin RTL</button>
-                    <button type="button" class="btn btn-primary" wire:click="tetapkanRtl">Tetapkan RTL →</button>
+                    <button type="button" class="btn btn-ghost btn-sm" wire:click="addRtlBlock" wire:loading.attr="disabled" wire:target="addRtlBlock,tetapkanRtl">
+                        <span wire:loading.remove wire:target="addRtlBlock">＋ Tambah Poin RTL</span>
+                        <span wire:loading wire:target="addRtlBlock"><i class="spin"></i></span>
+                    </button>
+                    <button type="button" class="btn btn-primary" wire:click="tetapkanRtl" wire:loading.attr="disabled" wire:target="addRtlBlock,tetapkanRtl">
+                        <span wire:loading.remove wire:target="tetapkanRtl">Tetapkan RTL →</span>
+                        <span wire:loading wire:target="tetapkanRtl"><i class="spin"></i> Menetapkan…</span>
+                    </button>
                 </div>
             @endif
         </div>

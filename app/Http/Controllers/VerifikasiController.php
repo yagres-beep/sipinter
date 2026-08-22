@@ -3,24 +3,19 @@
 namespace App\Http\Controllers;
 
 use App\Models\Capaian;
-use App\Models\Kegiatan;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 
 class VerifikasiController extends Controller
 {
-    public function show(Capaian $capaian): View|RedirectResponse
+    /**
+     * Terbuka untuk isian berstatus apa pun (diajukan/diverifikasi/dikembalikan/
+     * disetujui) — VerifikasiList kini juga menautkan riwayat ke sini, bukan cuma
+     * worklist "diajukan". Livewire\VerifikasiCapaian sendiri yang membedakan mode
+     * bisa-diubah vs cuma-lihat lewat bisaDiverifikasi() (dicek ulang di tiap method
+     * pengubah juga, bukan cuma disembunyikan di tampilan).
+     */
+    public function show(Capaian $capaian): View
     {
-        $adaYangDiajukan = Kegiatan::where('iku_id', $capaian->iku_id)
-            ->where('periode_id', $capaian->periode_id)
-            ->where('status_dokumen', Kegiatan::STATUS_DIAJUKAN)
-            ->exists();
-
-        if (! $adaYangDiajukan) {
-            return redirect()->route('verifikasi.index')
-                ->with('status', 'Isian ini sudah tidak berstatus "diajukan" dan tidak lagi dapat diverifikasi dari sini.');
-        }
-
         return view('verifikasi.show', [
             'capaian' => $capaian,
         ]);

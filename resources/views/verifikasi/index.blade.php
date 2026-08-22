@@ -5,7 +5,7 @@
 @section('breadcrumb', 'Verifikasi & Notula')
 
 @section('content')
-    <div x-data="{ tab: 'verifikasi' }">
+    <div class="tabs-page" x-data="{ tab: 'verifikasi' }">
         <div class="subtabs">
             <button type="button" class="subtab" :class="tab === 'verifikasi' ? 'on' : ''" @click="tab = 'verifikasi'">✅ Verifikasi</button>
             <button type="button" class="subtab" :class="tab === 'notula' ? 'on' : ''" @click="tab = 'notula'">📄 Kompilasi Notula</button>

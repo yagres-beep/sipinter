@@ -1,6 +1,8 @@
 <div>
-    <div class="page-title">Persetujuan Notula Triwulan {{ ['I', 'II', 'III', 'IV'][$triwulan - 1] }} {{ $tahun }}</div>
-    <div class="page-sub">Tinjau notula gabungan lalu setujui atau kembalikan.</div>
+    <div class="page-head">
+        <div class="page-title">Persetujuan Notula Triwulan {{ ['I', 'II', 'III', 'IV'][$triwulan - 1] }} {{ $tahun }}</div>
+        <div class="page-sub">Tinjau notula gabungan lalu setujui atau kembalikan.</div>
+    </div>
 
     @if (session('status'))
         <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>
@@ -66,8 +68,11 @@
                     @enderror
 
                     @if (! $tampilkanFormKembalikan)
-                        <button type="button" class="btn btn-teal" style="width:100%;justify-content:center;margin-bottom:10px" wire:click="setujui">✓ Setujui &amp; Bubuhkan TTD</button>
-                        <button type="button" class="btn btn-red" style="width:100%;justify-content:center" wire:click="bukaFormKembalikan">↩ Minta Revisi</button>
+                        <button type="button" class="btn btn-teal" style="width:100%;justify-content:center;margin-bottom:10px" wire:click="setujui" wire:loading.attr="disabled" wire:target="setujui">
+                            <span wire:loading.remove wire:target="setujui">✓ Setujui &amp; Bubuhkan TTD</span>
+                            <span wire:loading wire:target="setujui"><i class="spin"></i> Memproses TTD…</span>
+                        </button>
+                        <button type="button" class="btn btn-red" style="width:100%;justify-content:center" wire:click="bukaFormKembalikan" wire:loading.attr="disabled" wire:target="setujui">↩ Minta Revisi</button>
                     @else
                         <div class="field">
                             <label>Catatan Pengembalian <span class="req">*</span></label>
@@ -78,8 +83,11 @@
                             @enderror
                         </div>
                         <div class="btn-row">
-                            <button type="button" class="btn btn-ghost btn-sm" wire:click="batalKembalikan">Batal</button>
-                            <button type="button" class="btn btn-red btn-sm" wire:click="kembalikan">Kirim Pengembalian</button>
+                            <button type="button" class="btn btn-ghost btn-sm" wire:click="batalKembalikan" wire:loading.attr="disabled" wire:target="kembalikan">Batal</button>
+                            <button type="button" class="btn btn-red btn-sm" wire:click="kembalikan" wire:loading.attr="disabled" wire:target="kembalikan">
+                                <span wire:loading.remove wire:target="kembalikan">Kirim Pengembalian</span>
+                                <span wire:loading wire:target="kembalikan"><i class="spin"></i> Mengirim…</span>
+                            </button>
                         </div>
                     @endif
                 @endif

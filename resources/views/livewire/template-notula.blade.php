@@ -1,6 +1,8 @@
 <div>
-    <div class="page-title">Template Notula</div>
-    <div class="page-sub">Unggah template resmi (.docx) berisi penanda otomatis untuk Bagian I.</div>
+    <div class="page-head">
+        <div class="page-title">Template Notula</div>
+        <div class="page-sub">Unggah template resmi (.docx) berisi penanda otomatis untuk Bagian I.</div>
+    </div>
 
     @if (session('status'))
         <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>
@@ -39,7 +41,7 @@
         <div class="btn-row">
             <button type="button" class="btn btn-primary" wire:click="unggah" wire:loading.attr="disabled" wire:target="unggah">
                 <span wire:loading.remove wire:target="unggah">Unggah &amp; Simpan</span>
-                <span wire:loading wire:target="unggah">Menyimpan…</span>
+                <span wire:loading wire:target="unggah"><i class="spin"></i> Menyimpan…</span>
             </button>
         </div>
     </div>
@@ -50,7 +52,7 @@
         @if ($config->template_notula_path)
             <div class="filechip ok">
                 <span class="nm">📄 {{ $config->template_notula_nama_asli }} <span class="sub">Diperbarui {{ $config->updated_at->translatedFormat('d F Y, H:i') }}</span></span>
-                <button type="button" class="btn btn-red btn-sm" wire:click="confirmHapus">Hapus</button>
+                <button type="button" class="btn btn-red btn-sm" wire:click="confirmHapus" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="confirmHapus">Hapus</button>
             </div>
         @else
             <p style="color:var(--muted);font-size:13px">Belum ada template yang diunggah.</p>
@@ -58,7 +60,10 @@
     </div>
 
     <x-confirm-modal :show="$konfirmasiHapus" title="Hapus Template Notula?" message="Hapus template notula ini? Tindakan ini tidak dapat dibatalkan.">
-        <button type="button" class="btn btn-ghost" wire:click="cancelHapus">Batal</button>
-        <button type="button" class="btn btn-red" wire:click="hapus">Hapus</button>
+        <button type="button" class="btn btn-ghost" wire:click="cancelHapus" wire:loading.attr="disabled" wire:target="hapus">Batal</button>
+        <button type="button" class="btn btn-red" wire:click="hapus" wire:loading.attr="disabled" wire:target="hapus">
+            <span wire:loading.remove wire:target="hapus">Hapus</span>
+            <span wire:loading wire:target="hapus"><i class="spin"></i> Menghapus…</span>
+        </button>
     </x-confirm-modal>
 </div>

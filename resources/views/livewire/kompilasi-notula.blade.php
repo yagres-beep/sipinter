@@ -6,10 +6,12 @@
 @endphp
 
 <div>
-    <div class="page-title">Kompilasi Notula Triwulan {{ ['I', 'II', 'III', 'IV'][$triwulan - 1] }} {{ $tahun }}</div>
-    <div class="page-sub">
-        Gabungkan tiga bagian menjadi satu PDF notula utuh.
-        <x-badge-status :status="$notula->status" />
+    <div class="page-head">
+        <div class="page-title">Kompilasi Notula Triwulan {{ ['I', 'II', 'III', 'IV'][$triwulan - 1] }} {{ $tahun }}</div>
+        <div class="page-sub">
+            Gabungkan tiga bagian menjadi satu PDF notula utuh.
+            <x-badge-status :status="$notula->status" />
+        </div>
     </div>
 
     @if (session('status'))
@@ -81,10 +83,66 @@
 
         <div x-data="{
             aktifBold: false, aktifItalic: false, aktifUnderline: false,
+            aktifKiri: false, aktifTengah: false, aktifKanan: false, aktifRata: false,
+            seleksiTersimpan: null,
+            // <select> (beda dari <button>) TIDAK BISA dicegah default mousedown-nya —
+            // itu justru yang membuka dropdown native-nya. Klik ke situ otomatis
+            // memindah fokus dari area edit dan membatalkan seleksi teks yang sedang
+            // disorot, jadi seleksinya disimpan dulu di sini (sebelum fokus berpindah)
+            // lalu dipulihkan begitu pilihan di dropdown selesai dipilih (pulihkanSeleksi).
+            simpanSeleksi() {
+                const sel = window.getSelection();
+                this.seleksiTersimpan = sel.rangeCount > 0 ? sel.getRangeAt(0).cloneRange() : null;
+            },
+            pulihkanSeleksi() {
+                if (this.seleksiTersimpan) {
+                    const sel = window.getSelection();
+                    sel.removeAllRanges();
+                    sel.addRange(this.seleksiTersimpan);
+                }
+                this.$refs.editor.focus();
+            },
+            blokTags: ['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'TD', 'TH', 'BLOCKQUOTE'],
+            // Cari blok (paragraf/judul/dst.) tempat kursor berada SEKARANG — dipakai
+            // cuma untuk menyalakan tombol Kiri/Tengah/Kanan/Rata yang aktif, bukan
+            // untuk menentukan apa yang diubah (lihat blokTerpilih di bawah).
+            blokDiKursor() {
+                const sel = window.getSelection();
+                if (!sel.rangeCount) return null;
+                let node = sel.getRangeAt(0).startContainer;
+                if (node.nodeType === 3) node = node.parentElement;
+                while (node && node !== this.$refs.editor) {
+                    if (this.blokTags.includes(node.tagName)) return node;
+                    node = node.parentElement;
+                }
+                return null;
+            },
+            // Seluruh blok yang TERSENTUH oleh seleksi teks yang sedang disorot —
+            // dipakai Rata/Spasi Baris supaya HANYA bagian yang diblok yang berubah,
+            // bukan seluruh dokumen. Kosong (tidak ada yang diubah) kalau tidak ada
+            // teks yang sedang diseleksi (kursor cuma 'berkedip' di satu titik).
+            blokTerpilih() {
+                const sel = window.getSelection();
+                if (!sel.rangeCount || sel.isCollapsed) return [];
+                const range = sel.getRangeAt(0);
+                const semuaBlok = Array.from(this.$refs.editor.querySelectorAll(this.blokTags.join(',')));
+                const kena = semuaBlok.filter(el => range.intersectsNode(el));
+                // Cuma ambil blok PALING DALAM (yang tidak membungkus blok lain yang
+                // juga kena) — supaya style diterapkan ke elemen yang benar-benar
+                // membungkus teksnya, bukan ke div pembungkus luar yang cuma 'ikut
+                // kena' karena seleksinya lewat di dalamnya.
+                return kena.filter(el => !kena.some(lain => lain !== el && el.contains(lain)));
+            },
             perbaruiStatus() {
                 this.aktifBold = document.queryCommandState('bold');
                 this.aktifItalic = document.queryCommandState('italic');
                 this.aktifUnderline = document.queryCommandState('underline');
+                const blok = this.blokDiKursor();
+                const rata = blok ? (blok.style.textAlign || getComputedStyle(blok).textAlign) : 'left';
+                this.aktifKiri = rata === 'left' || rata === 'start' || rata === '';
+                this.aktifTengah = rata === 'center';
+                this.aktifKanan = rata === 'right' || rata === 'end';
+                this.aktifRata = rata === 'justify';
             },
             jalankan(perintah, nilai = null) {
                 // Pastikan area edit BENAR-BENAR fokus dulu (bukan cuma 'tidak kehilangan
@@ -93,6 +151,50 @@
                 this.$refs.editor.focus();
                 document.execCommand(perintah, false, nilai);
                 this.perbaruiStatus();
+                this.$wire.set('bagian1EditText', this.$refs.editor.innerHTML);
+            },
+            // Perataan (Kiri/Tengah/Kanan/Rata) diterapkan lewat style.textAlign
+            // langsung ke blok yang diblok, BUKAN document.execCommand('justify...')
+            // — execCommand itu tidak konsisten kalau strukturnya bertingkat (mis.
+            // paragraf di dalam div pembungkus seperti hasil 'Susun Ulang Otomatis'),
+            // jadi kliknya kadang terasa tidak berpengaruh sama sekali.
+            aturRata(nilai) {
+                const blok = this.blokTerpilih();
+                if (blok.length === 0) return;
+                blok.forEach(el => { el.style.textAlign = nilai; });
+                this.perbaruiStatus();
+                this.$wire.set('bagian1EditText', this.$refs.editor.innerHTML);
+            },
+            aturFont(nilai) {
+                if (!nilai) return;
+                this.pulihkanSeleksi();
+                document.execCommand('fontName', false, nilai);
+                this.$wire.set('bagian1EditText', this.$refs.editor.innerHTML);
+            },
+            aturUkuranFont(px) {
+                // execCommand('fontSize') cuma punya skala lama 1-7 (bukan px asli) —
+                // trik umum: terapkan skala 7 dulu lalu timpa <font size=7> yang baru
+                // dibuat dengan style.fontSize sesuai pilihan pengguna.
+                if (!px) return;
+                this.pulihkanSeleksi();
+                document.execCommand('fontSize', false, '7');
+                Array.from(this.$refs.editor.getElementsByTagName('font')).forEach(el => {
+                    if (el.getAttribute('size') === '7') {
+                        el.removeAttribute('size');
+                        el.style.fontSize = px + 'px';
+                    }
+                });
+                this.$wire.set('bagian1EditText', this.$refs.editor.innerHTML);
+            },
+            aturSpasiBaris(nilai) {
+                // Sama seperti aturRata: HANYA blok yang sedang diblok/diseleksi yang
+                // berubah. Kalau tidak ada teks yang diseleksi, tidak ada yang diubah
+                // sama sekali (bukan diterapkan ke seluruh dokumen seperti sebelumnya).
+                if (!nilai) return;
+                this.pulihkanSeleksi();
+                const blok = this.blokTerpilih();
+                if (blok.length === 0) return;
+                blok.forEach(el => { el.style.lineHeight = nilai; });
                 this.$wire.set('bagian1EditText', this.$refs.editor.innerHTML);
             }
         }" x-init="document.addEventListener('selectionchange', () => perbaruiStatus())">
@@ -106,6 +208,45 @@
                 <span class="doc-toolbar-sep"></span>
                 <button type="button" @mousedown.prevent @click="jalankan('insertUnorderedList')" title="Daftar bertitik">• Daftar</button>
                 <button type="button" @mousedown.prevent @click="jalankan('insertOrderedList')" title="Daftar bernomor">1. Daftar</button>
+                <span class="doc-toolbar-sep"></span>
+                <button type="button" :class="{ active: aktifKiri }" @mousedown.prevent @click="aturRata('left')" title="Rata kiri (blok teks dulu)">Kiri</button>
+                <button type="button" :class="{ active: aktifTengah }" @mousedown.prevent @click="aturRata('center')" title="Rata tengah (blok teks dulu)">Tengah</button>
+                <button type="button" :class="{ active: aktifKanan }" @mousedown.prevent @click="aturRata('right')" title="Rata kanan (blok teks dulu)">Kanan</button>
+                <button type="button" :class="{ active: aktifRata }" @mousedown.prevent @click="aturRata('justify')" title="Rata kiri-kanan (blok teks dulu)">Rata</button>
+                <span class="doc-toolbar-sep"></span>
+                <select @mousedown="simpanSeleksi()" @change="aturFont($event.target.value); $event.target.selectedIndex = 0" title="Jenis huruf">
+                    <option value="">Font…</option>
+                    <option value="'Times New Roman',Times,serif">Times New Roman</option>
+                    <option value="Arial,sans-serif">Arial</option>
+                    <option value="Calibri,'Segoe UI',sans-serif">Calibri</option>
+                    <option value="Georgia,serif">Georgia</option>
+                    <option value="'Courier New',Courier,monospace">Courier New</option>
+                </select>
+                <select @mousedown="simpanSeleksi()" @change="aturUkuranFont($event.target.value); $event.target.selectedIndex = 0" title="Ukuran huruf">
+                    <option value="">Ukuran…</option>
+                    <option value="10">10</option>
+                    <option value="12">12</option>
+                    <option value="14">14</option>
+                    <option value="16">16</option>
+                    <option value="18">18</option>
+                    <option value="20">20</option>
+                    <option value="24">24</option>
+                    <option value="28">28</option>
+                    <option value="32">32</option>
+                </select>
+                <select @mousedown="simpanSeleksi()" @change="aturSpasiBaris($event.target.value); $event.target.selectedIndex = 0" title="Jarak antar baris">
+                    <option value="">Spasi…</option>
+                    <option value="1">1.0</option>
+                    <option value="1.15">1.15</option>
+                    <option value="1.5">1.5</option>
+                    <option value="1.9">1.9</option>
+                    <option value="2">2.0</option>
+                    <option value="2.5">2.5</option>
+                </select>
+                <span class="doc-toolbar-sep"></span>
+                <button type="button" @mousedown.prevent @click="jalankan('removeFormat')" title="Hapus format">⌫ Format</button>
+                <button type="button" @mousedown.prevent @click="jalankan('undo')" title="Urungkan (Ctrl+Z)">↶</button>
+                <button type="button" @mousedown.prevent @click="jalankan('redo')" title="Ulangi (Ctrl+Y)">↷</button>
             </div>
 
             <div class="word-canvas">
@@ -124,8 +265,14 @@
         </div>
 
         <div class="btn-row" style="margin-top:10px">
-            <button type="button" class="btn btn-ghost btn-sm" wire:click="susunUlangOtomatis">↻ Susun Ulang Otomatis</button>
-            <button type="button" class="btn btn-primary btn-sm" wire:click="simpanSuntinganBagian1">💾 Simpan Bagian I</button>
+            <button type="button" class="btn btn-ghost btn-sm" wire:click="susunUlangOtomatis" wire:loading.attr="disabled" wire:target="susunUlangOtomatis,simpanSuntinganBagian1">
+                <span wire:loading.remove wire:target="susunUlangOtomatis">↻ Susun Ulang Otomatis</span>
+                <span wire:loading wire:target="susunUlangOtomatis"><i class="spin"></i> Menyusun…</span>
+            </button>
+            <button type="button" class="btn btn-primary btn-sm" wire:click="simpanSuntinganBagian1" wire:loading.attr="disabled" wire:target="susunUlangOtomatis,simpanSuntinganBagian1">
+                <span wire:loading.remove wire:target="simpanSuntinganBagian1">💾 Simpan Bagian I</span>
+                <span wire:loading wire:target="simpanSuntinganBagian1"><i class="spin"></i> Menyimpan…</span>
+            </button>
         </div>
 
         {{-- BAGIAN II — berkas unggahan, tampil sebagai kelanjutan dokumen yang sama --}}
@@ -156,7 +303,10 @@
         @enderror
         @if ($bagian2File)
             <div class="btn-row" style="margin-top:8px">
-                <button type="button" class="btn btn-teal btn-sm" wire:click="unggahBagian(2)">Proses →</button>
+                <button type="button" class="btn btn-teal btn-sm" wire:click="unggahBagian(2)" wire:loading.attr="disabled" wire:target="unggahBagian(2)">
+                    <span wire:loading.remove wire:target="unggahBagian(2)">Proses →</span>
+                    <span wire:loading wire:target="unggahBagian(2)"><i class="spin"></i> Memproses…</span>
+                </button>
             </div>
         @endif
 
@@ -188,7 +338,10 @@
         @enderror
         @if ($bagian3File)
             <div class="btn-row" style="margin-top:8px">
-                <button type="button" class="btn btn-teal btn-sm" wire:click="unggahBagian(3)">Proses →</button>
+                <button type="button" class="btn btn-teal btn-sm" wire:click="unggahBagian(3)" wire:loading.attr="disabled" wire:target="unggahBagian(3)">
+                    <span wire:loading.remove wire:target="unggahBagian(3)">Proses →</span>
+                    <span wire:loading wire:target="unggahBagian(3)"><i class="spin"></i> Memproses…</span>
+                </button>
             </div>
         @endif
 
@@ -199,7 +352,10 @@
                     — lengkapi seluruh bagian untuk menggabungkan
                 @endif
             </span>
-            <button type="button" class="btn btn-primary btn-sm" wire:click="gabungkan" @disabled(! ($bagian1Siap && $bagian2Siap && $bagian3Siap))>🔗 Gabungkan → PDF</button>
+            <button type="button" class="btn btn-primary btn-sm" wire:click="gabungkan" wire:loading.attr="disabled" wire:target="gabungkan" @disabled(! ($bagian1Siap && $bagian2Siap && $bagian3Siap))>
+                <span wire:loading.remove wire:target="gabungkan">🔗 Gabungkan → PDF</span>
+                <span wire:loading wire:target="gabungkan"><i class="spin"></i> Menggabungkan…</span>
+            </button>
 
             @if ($sudahDigabung)
                 <a href="{{ route('notula.unduh-draf', $notula) }}" class="btn btn-ghost btn-sm {{ ! $semuaTerverifikasi ? 'disabled' : '' }}"

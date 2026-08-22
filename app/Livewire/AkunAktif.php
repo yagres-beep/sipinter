@@ -45,17 +45,34 @@ class AkunAktif extends Component
     public function updateRole(int $userId): void
     {
         $roleId = $this->roleBaru[$userId] ?? null;
+        $pesan = [];
 
-        if (blank($roleId)) {
-            return;
+        if (filled($roleId)) {
+            $user = User::findOrFail($userId);
+            $role = Role::findOrFail($roleId);
+
+            $user->update(['role_id' => $roleId]);
+
+            $pesan[] = "peran {$user->nama} diperbarui menjadi {$role->nama}";
         }
 
-        $user = User::findOrFail($userId);
-        $role = Role::findOrFail($roleId);
+        // Tombol "Simpan" ini satu-satunya tombol simpan yang terlihat di baris —
+        // kalau pengguna sudah mengetik nama tim di kotak "+ tim…" tapi lupa/tidak
+        // sadar harus menekan tombol ＋ terpisah (atau Enter) untuk menambahkannya,
+        // klik "Simpan" di sini ikut menambahkannya juga supaya tidak terasa seperti
+        // "sudah klik simpan tapi tidak tersimpan".
+        $tim = trim($this->timBaru[$userId] ?? '');
 
-        $user->update(['role_id' => $roleId]);
+        if ($tim !== '') {
+            UserTim::firstOrCreate(['user_id' => $userId, 'tim' => $tim]);
+            $this->timBaru[$userId] = '';
 
-        session()->flash('status', "Peran {$user->nama} diperbarui menjadi {$role->nama}.");
+            $pesan[] = "tim \"{$tim}\" ditambahkan";
+        }
+
+        if ($pesan) {
+            session()->flash('status', ucfirst(implode(', ', $pesan)).'.');
+        }
     }
 
     public function tambahTim(int $userId): void

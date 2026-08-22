@@ -28,7 +28,7 @@ class MasterIkuTemplateSheet implements FromArray, WithColumnWidths, WithHeading
     public function array(): array
     {
         return [
-            ['IKU-1131', 'Persentase publikasi tepat waktu', 'Produksi Statistik', 'Nama Penanggung Jawab', 'Statistik Kesejahteraan Rakyat'],
+            ['1131', 'Persentase publikasi tepat waktu', 'Produksi Statistik', 'Nama Penanggung Jawab', 'Statistik Kesejahteraan Rakyat'],
             [self::BARIS_PETUNJUK, '', '', '', ''],
         ];
     }

@@ -38,6 +38,17 @@ class VerifikasiCapaian extends Component
     public $persentase_capaian = null;
 
     /**
+     * Realisasi kumulatif year-to-date (s.d. triwulan periode ini, TIDAK termasuk
+     * bulan-bulan lain yang belum diverifikasi) — murni info tambahan yang dihitung
+     * ulang tiap kali realisasi bulan ini diketik, TIDAK disimpan ke kolom database
+     * terpisah (lihat hitungKumulatif()). Field target_tw/realisasi bulan ini sendiri
+     * TETAP diisi apa adanya untuk bulan ini saja, tidak diubah jadi kumulatif.
+     */
+    public ?float $realisasiKumulatif = null;
+
+    public ?float $persentaseKumulatif = null;
+
+    /**
      * Catatan per berkas, dikunci pada id berkas.
      *
      * @var array<int, string|null>
@@ -94,6 +105,7 @@ class VerifikasiCapaian extends Component
         $this->target_tw = $capaian->target_tw;
         $this->realisasi = $capaian->realisasi;
         $this->persentase_capaian = $capaian->persentase_capaian;
+        $this->hitungKumulatif();
 
         foreach ($this->berkasList() as $berkas) {
             $this->catatanBerkas[$berkas->id] = $berkas->catatan;
@@ -122,6 +134,20 @@ class VerifikasiCapaian extends Component
             ->where('periode_id', $this->capaian->periode_id)
             ->orderBy('id')
             ->get();
+    }
+
+    /**
+     * Halaman ini bisa diakses untuk MELIHAT isian berstatus apa pun (RF-36 lama
+     * hanya izinkan "diajukan" — sekarang VerifikasiList juga menampilkan riwayat
+     * diverifikasi/dikembalikan/disetujui, jadi tautan "Lihat →" ke sini harus tetap
+     * bisa dibuka), tapi MENGUBAHNYA (tandai berkas, "Verifikasi Selesai",
+     * "Kembalikan ke Ketua Tim") tetap hanya boleh selama kegiatannya masih
+     * berstatus "diajukan" — dicek di sini (dipakai di view utk readonly/sembunyikan
+     * tombol) DAN di tiap method pengubah (defense in depth, bukan cuma sembunyi UI).
+     */
+    public function bisaDiverifikasi(): bool
+    {
+        return $this->kegiatanList()->contains(fn ($k) => $k->status_dokumen === Kegiatan::STATUS_DIAJUKAN);
     }
 
     public function kendalaSolusiList()
@@ -250,22 +276,50 @@ class VerifikasiCapaian extends Component
     public function updatedRealisasi(): void
     {
         $this->hitungPersentase();
+        $this->hitungKumulatif();
     }
 
     public function updatedTargetTw(): void
     {
         $this->hitungPersentase();
+        $this->hitungKumulatif();
     }
 
     protected function hitungPersentase(): void
     {
-        if (is_numeric($this->target_tw) && (float) $this->target_tw > 0 && is_numeric($this->realisasi)) {
-            $this->persentase_capaian = round(((float) $this->realisasi / (float) $this->target_tw) * 100, 2);
-        }
+        $this->persentase_capaian = Capaian::hitungPersentase($this->target_tw, $this->realisasi);
+    }
+
+    /**
+     * Capaian kumulatif year-to-date (info tambahan, lihat komentar properti
+     * $realisasiKumulatif) — realisasi bulan-bulan LAIN yang sudah terverifikasi
+     * dari triwulan I s.d. triwulan periode ini (Capaian::realisasiKumulatif(),
+     * dengan periode ini sendiri sengaja dikecualikan dari sisi tersimpan) DITAMBAH
+     * realisasi bulan ini yang sedang diketik live, dibagi target_tw yang sama.
+     */
+    protected function hitungKumulatif(): void
+    {
+        $periode = $this->capaian->periode;
+
+        $realisasiBulanLain = Capaian::realisasiKumulatif(
+            $this->capaian->iku_id,
+            $periode->tahun,
+            $periode->triwulan,
+            $this->capaian->periode_id
+        );
+
+        $realisasiBulanIni = is_numeric($this->realisasi) ? (float) $this->realisasi : 0.0;
+
+        $this->realisasiKumulatif = $realisasiBulanLain + $realisasiBulanIni;
+        $this->persentaseKumulatif = Capaian::hitungPersentase($this->target_tw, $this->realisasiKumulatif);
     }
 
     public function tandaiSesuai(int $berkasId): void
     {
+        if (! $this->bisaDiverifikasi()) {
+            return;
+        }
+
         Berkas::whereKey($berkasId)->update([
             'status_verifikasi' => 'terverifikasi',
             'catatan' => $this->catatanBerkas[$berkasId] ?? null,
@@ -274,6 +328,10 @@ class VerifikasiCapaian extends Component
 
     public function tandaiTolak(int $berkasId): void
     {
+        if (! $this->bisaDiverifikasi()) {
+            return;
+        }
+
         Berkas::whereKey($berkasId)->update([
             'status_verifikasi' => 'ditolak',
             'catatan' => $this->catatanBerkas[$berkasId] ?? null,
@@ -287,7 +345,10 @@ class VerifikasiCapaian extends Component
             'target_pk' => ['required', 'numeric', 'min:0'],
             'target_tw' => ['required', 'numeric', 'min:0'],
             'realisasi' => ['required', 'numeric', 'min:0'],
-            'persentase_capaian' => ['required', 'numeric', 'min:0'],
+            // Boleh kosong (null) — rumus resmi (Capaian::hitungPersentase()) sengaja
+            // menghasilkan strip "-" ketika realisasi masih 0 (belum ada capaian untuk
+            // triwulan/bulan berjalan), bukan galat isian.
+            'persentase_capaian' => ['nullable', 'numeric', 'min:0'],
             'koreksiKegiatan.*' => ['required', 'string', 'max:1000'],
             'koreksiKendala.*.kendala' => ['required', 'string'],
             'koreksiKendala.*.solusi' => ['nullable', 'string'],
@@ -333,6 +394,10 @@ class VerifikasiCapaian extends Component
 
     public function verifikasiSelesai(): void
     {
+        if (! $this->bisaDiverifikasi()) {
+            return;
+        }
+
         $berkas = $this->berkasList();
 
         if ($berkas->contains(fn ($b) => $b->status_verifikasi === 'menunggu')) {
@@ -366,6 +431,8 @@ class VerifikasiCapaian extends Component
                         $kegiatan->verifikasi();
                     }
                 }
+
+                $this->capaian->catatStatus(Kegiatan::STATUS_DIVERIFIKASI, auth()->user());
             });
         } catch (InvalidStatusTransitionException $e) {
             $this->addError('berkas', $e->getMessage());
@@ -380,6 +447,10 @@ class VerifikasiCapaian extends Component
 
     public function kembalikanKeKetuaTim(): void
     {
+        if (! $this->bisaDiverifikasi()) {
+            return;
+        }
+
         if (! $this->berkasList()->contains(fn ($b) => $b->status_verifikasi === 'ditolak')) {
             $this->addError('berkas', 'Tandai minimal satu berkas sebagai "Tolak" beserta catatan sebelum mengembalikan isian.');
 
@@ -395,6 +466,17 @@ class VerifikasiCapaian extends Component
                         $kegiatan->kembalikan();
                     }
                 }
+
+                // Catatan riwayat mengambil alasan penolakan dari berkas yang ditandai
+                // "Tolak" — sudah divalidasi minimal satu ada sebelum sampai di sini.
+                $catatan = $this->berkasList()
+                    ->where('status_verifikasi', 'ditolak')
+                    ->pluck('catatan')
+                    ->filter()
+                    ->unique()
+                    ->implode(' | ');
+
+                $this->capaian->catatStatus(Kegiatan::STATUS_DIKEMBALIKAN, auth()->user(), $catatan ?: null);
             });
         } catch (InvalidStatusTransitionException $e) {
             $this->addError('berkas', $e->getMessage());
@@ -422,6 +504,8 @@ class VerifikasiCapaian extends Component
             'berkasPerKendala' => $kendalaSolusiList->mapWithKeys(fn ($ks) => [$ks->id => $this->berkasUntukKendala($ks->id)]),
             'bagianKustomList' => $bagianKustomList,
             'berkasPerBagianKustom' => $bagianKustomList->mapWithKeys(fn ($p) => [$p->id => $this->berkasUntukBagianKustom($p->id)]),
+            'bisaDiverifikasi' => $this->bisaDiverifikasi(),
+            'riwayatStatus' => $this->capaian->riwayatStatus()->with('user')->get(),
         ]);
     }
 }

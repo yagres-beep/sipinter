@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\BagianKustom;
 use App\Models\Berkas;
+use App\Models\Capaian;
 use App\Models\Kegiatan;
 use App\Models\KendalaSolusi;
 use App\Models\Notula;
@@ -12,6 +13,7 @@ use App\Models\RtlEvaluasi;
 use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf as PdfFacade;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
@@ -225,7 +227,10 @@ class NotulaService
      */
     public function setujui(Notula $notula, User $kepala): void
     {
-        $notula->setujui($kepala);
+        DB::transaction(function () use ($notula, $kepala) {
+            $notula->setujui($kepala);
+            $this->setujuiKegiatanTriwulan($notula->periode, $kepala);
+        });
 
         $dir = storage_path("app/private/notula/{$notula->id}");
         $this->pastikanFolder($dir);
@@ -258,6 +263,35 @@ class NotulaService
             ]);
         } catch (RuntimeException $e) {
             Log::warning('Gagal mengarsipkan notula final ke Google Drive, tersimpan lokal saja: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * Kegiatan yang sudah "diverifikasi" pada triwulan notula ini ikut disetujui
+     * begitu Kepala menyetujui notula-nya (RF-44) — sebelumnya Kegiatan::setujui()
+     * tidak pernah dipicu di mana pun (lihat catatan lama pada method itu), sehingga
+     * status kegiatan diam di "diverifikasi" selamanya walau notulanya sudah final.
+     *
+     * Riwayat status dicatat SEKALI per Capaian (satu per IKU+bulan dalam triwulan
+     * ini), bukan per kegiatan — supaya kegiatan tambahan yang diajukan belakangan
+     * pada IKU+bulan yang sama tetap tergabung sebagai satu poin riwayat.
+     */
+    private function setujuiKegiatanTriwulan(Periode $periode, User $kepala): void
+    {
+        $kegiatanPerCapaian = Kegiatan::where('status_dokumen', Kegiatan::STATUS_DIVERIFIKASI)
+            ->whereHas('periode', fn ($q) => $q->where('tahun', $periode->tahun)->where('triwulan', $periode->triwulan))
+            ->get()
+            ->groupBy(fn ($k) => $k->iku_id.'-'.$k->periode_id);
+
+        foreach ($kegiatanPerCapaian as $grup) {
+            foreach ($grup as $kegiatan) {
+                $kegiatan->setujui();
+            }
+
+            $acuan = $grup->first();
+
+            Capaian::firstOrCreate(['iku_id' => $acuan->iku_id, 'periode_id' => $acuan->periode_id])
+                ->catatStatus(Kegiatan::STATUS_DISETUJUI, $kepala);
         }
     }
 

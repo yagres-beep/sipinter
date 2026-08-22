@@ -1,6 +1,8 @@
 <div>
-    <div class="page-title">Bagian Kustom</div>
-    <div class="page-sub">Tambahkan bagian baru di Isian Kegiatan Ketua Tim (mis. Manajemen Risiko) tanpa perlu mengubah kode.</div>
+    <div class="page-head">
+        <div class="page-title">Bagian Kustom</div>
+        <div class="page-sub">Tambahkan bagian baru di Isian Kegiatan Ketua Tim (mis. Manajemen Risiko) tanpa perlu mengubah kode.</div>
+    </div>
 
     @if (session('status'))
         <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>
@@ -39,7 +41,10 @@
             </div>
         </div>
         <div class="btn-row">
-            <button type="button" class="btn btn-primary" wire:click="tambah">＋ Tambah Bagian</button>
+            <button type="button" class="btn btn-primary" wire:click="tambah" wire:loading.attr="disabled" wire:target="tambah">
+                <span wire:loading.remove wire:target="tambah">＋ Tambah Bagian</span>
+                <span wire:loading wire:target="tambah"><i class="spin"></i> Menambahkan…</span>
+            </button>
         </div>
     </div>
 
@@ -53,8 +58,8 @@
         @forelse ($daftar as $i => $bagian)
             <div class="fl-row" style="flex-wrap:wrap;align-items:flex-start;padding:12px 0">
                 <span class="fl-move" style="margin-top:2px">
-                    <button type="button" wire:click="naikkan({{ $bagian->id }})" @disabled($i === 0)>↑</button>
-                    <button type="button" wire:click="turunkan({{ $bagian->id }})" @disabled($i === $daftar->count() - 1)>↓</button>
+                    <button type="button" wire:click="naikkan({{ $bagian->id }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="naikkan({{ $bagian->id }})" @disabled($i === 0)>↑</button>
+                    <button type="button" wire:click="turunkan({{ $bagian->id }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="turunkan({{ $bagian->id }})" @disabled($i === $daftar->count() - 1)>↓</button>
                 </span>
 
                 <div style="flex:1;min-width:240px">
@@ -72,24 +77,30 @@
                     </div>
 
                     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px">
-                        <select class="inp filled" style="width:auto;padding:6px 10px;font-size:11.5px" wire:change="setFrekuensi({{ $bagian->id }}, $event.target.value)">
+                        <select class="inp filled" style="width:auto;padding:6px 10px;font-size:11.5px" wire:change="setFrekuensi({{ $bagian->id }}, $event.target.value)" wire:loading.attr="disabled" wire:target="setFrekuensi({{ $bagian->id }})">
                             <option value="opsional" @selected($bagian->frekuensi_wajib === 'opsional')>Selalu opsional</option>
                             <option value="setiap_bulan" @selected($bagian->frekuensi_wajib === 'setiap_bulan')>Wajib tiap bulan</option>
                             <option value="akhir_triwulan" @selected($bagian->frekuensi_wajib === 'akhir_triwulan')>Wajib akhir triwulan</option>
                         </select>
                         <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);cursor:pointer">
-                            <input type="checkbox" wire:click="toggleBuktiWajib({{ $bagian->id }})" @checked($bagian->bukti_wajib)>
+                            <input type="checkbox" wire:click="toggleBuktiWajib({{ $bagian->id }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="toggleBuktiWajib({{ $bagian->id }})" @checked($bagian->bukti_wajib)>
                             Bukti wajib
                         </label>
                     </div>
                 </div>
 
                 <div class="btn-row" style="margin-top:0;flex-wrap:wrap">
-                    <button type="button" class="btn btn-ghost btn-sm" wire:click="simpanEdit({{ $bagian->id }})">💾 Simpan</button>
-                    <button type="button" class="btn btn-ghost btn-sm" wire:click="toggleAktif({{ $bagian->id }})">{{ $bagian->aktif ? 'Nonaktifkan' : 'Aktifkan' }}</button>
-                    <button type="button" class="btn btn-ghost btn-sm" wire:click="togglePratinjau({{ $bagian->id }})">{{ $pratinjauId === $bagian->id ? '✕ Tutup Pratinjau' : '👁 Pratinjau' }}</button>
+                    <button type="button" class="btn btn-ghost btn-sm" wire:click="simpanEdit({{ $bagian->id }})" wire:loading.attr="disabled" wire:target="simpanEdit({{ $bagian->id }})">
+                        <span wire:loading.remove wire:target="simpanEdit({{ $bagian->id }})">💾 Simpan</span>
+                        <span wire:loading wire:target="simpanEdit({{ $bagian->id }})"><i class="spin"></i></span>
+                    </button>
+                    <button type="button" class="btn btn-ghost btn-sm" wire:click="toggleAktif({{ $bagian->id }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="toggleAktif({{ $bagian->id }})">{{ $bagian->aktif ? 'Nonaktifkan' : 'Aktifkan' }}</button>
+                    <button type="button" class="btn btn-ghost btn-sm" wire:click="togglePratinjau({{ $bagian->id }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="togglePratinjau({{ $bagian->id }})">{{ $pratinjauId === $bagian->id ? '✕ Tutup Pratinjau' : '👁 Pratinjau' }}</button>
                     @if ($bagian->poin_count === 0)
-                        <button type="button" class="btn btn-red btn-sm" wire:click="hapus({{ $bagian->id }})" wire:confirm="Hapus bagian ini?">🗑 Hapus</button>
+                        <button type="button" class="btn btn-red btn-sm" wire:click="hapus({{ $bagian->id }})" wire:confirm="Hapus bagian ini?" wire:loading.attr="disabled" wire:target="hapus({{ $bagian->id }})">
+                            <span wire:loading.remove wire:target="hapus({{ $bagian->id }})">🗑 Hapus</span>
+                            <span wire:loading wire:target="hapus({{ $bagian->id }})"><i class="spin"></i> Menghapus…</span>
+                        </button>
                     @endif
                 </div>
 

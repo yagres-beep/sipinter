@@ -65,7 +65,10 @@ class MasterIkuImport implements ToCollection
         foreach ($rows->slice(3) as $i => $row) {
             $baris = $i + 4;
 
-            $kode = trim((string) ($row[0] ?? ''));
+            // Kode dinormalisasi ke angka/kodenya saja (tanpa awalan "IKU-") sama
+            // seperti App\Livewire\MasterIku::save() — supaya baris yang diimpor lewat
+            // Excel konsisten dengan yang ditambah/diubah manual lewat form.
+            $kode = preg_replace('/^\D+/', '', trim((string) ($row[0] ?? ''))) ?: trim((string) ($row[0] ?? ''));
             $indikator = trim((string) ($row[1] ?? ''));
             $tim = trim((string) ($row[2] ?? ''));
             $penanggungJawab = trim((string) ($row[3] ?? ''));

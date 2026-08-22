@@ -112,9 +112,11 @@
 
     @auth
         <div class="theme-switch-float" x-data="{
+            open: false,
             tema: localStorage.getItem('sipinter-tema') || 'system',
             aturTema(t) {
                 this.tema = t;
+                this.open = false;
                 if (t === 'system') {
                     localStorage.removeItem('sipinter-tema');
                     document.documentElement.removeAttribute('data-theme');
@@ -122,16 +124,20 @@
                     localStorage.setItem('sipinter-tema', t);
                     document.documentElement.setAttribute('data-theme', t);
                 }
-            }
-        }" role="group" aria-label="Pilih tema tampilan">
-            <button type="button" :class="{ on: tema === 'system' }" @click="aturTema('system')" title="Ikut tema perangkat">🖥️</button>
-            <button type="button" :class="{ on: tema === 'light' }" @click="aturTema('light')" title="Mode terang">☀️</button>
-            <button type="button" :class="{ on: tema === 'dark' }" @click="aturTema('dark')" title="Mode gelap">🌙</button>
+            },
+            ikon() { return this.tema === 'light' ? '☀️' : (this.tema === 'dark' ? '🌙' : '🖥️'); }
+        }" @click.outside="open = false" @keydown.escape.window="open = false">
+            <div class="theme-switch-panel" x-show="open" x-cloak x-transition role="group" aria-label="Pilih tema tampilan">
+                <button type="button" :class="{ on: tema === 'system' }" @click="aturTema('system')" title="Ikut tema perangkat">🖥️</button>
+                <button type="button" :class="{ on: tema === 'light' }" @click="aturTema('light')" title="Mode terang">☀️</button>
+                <button type="button" :class="{ on: tema === 'dark' }" @click="aturTema('dark')" title="Mode gelap">🌙</button>
+            </div>
+            <button type="button" class="theme-switch-toggle" @click="open = !open" :aria-expanded="open" x-text="ikon()" title="Pilih tema tampilan"></button>
         </div>
     @endauth
 
     <button type="button" class="back-to-top" x-data="{ show: false }" :class="{ show: show }"
-        x-init="window.addEventListener('scroll', () => show = window.scrollY > 300)"
+        x-init="window.addEventListener('scroll', () => show = window.scrollY > 120)"
         @click="window.scrollTo({ top: 0, behavior: 'smooth' })" title="Kembali ke atas">
         ↑
     </button>

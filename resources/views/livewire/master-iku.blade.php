@@ -1,9 +1,15 @@
-<div x-data @scroll-ke-form-iku.window="$nextTick(() => $refs.formIku.scrollIntoView({ behavior: 'smooth', block: 'start' }))">
-    <div class="page-title">Master IKU</div>
-    <div class="page-sub">Kelola Indikator Kinerja Utama sebagai sumber dropdown &amp; penamaan otomatis di seluruh modul.</div>
+<div>
+    <div class="page-head">
+        <div class="page-title">Master IKU</div>
+        <div class="page-sub">Kelola Indikator Kinerja Utama sebagai sumber dropdown &amp; penamaan otomatis di seluruh modul.</div>
+    </div>
 
     @if (session('status'))
         <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>
+    @endif
+
+    @if (session('error'))
+        <div class="info red" style="margin-bottom:14px">⚠️ {{ session('error') }}</div>
     @endif
 
     @if (session('excelErrors'))
@@ -31,7 +37,7 @@
     <div class="card">
         <div class="sec"><span>Unggah Data IKU (Excel)</span></div>
 
-        <div class="field">
+        <div class="field" x-data="{ pendingExcelName: '' }">
             <label>Berkas Excel (.xlsx) <span class="req">*</span></label>
 
             @if ($excelFile)
@@ -43,11 +49,18 @@
                 <label class="upload" style="cursor:pointer;display:block">
                     <div class="big">📤</div>
                     Klik untuk memilih berkas Excel (.xlsx) yang sudah diisi sesuai template
-                    <input type="file" wire:model="excelFile" accept=".xlsx" style="display:none">
+                    <input type="file" wire:model="excelFile" accept=".xlsx" style="display:none"
+                        @change="pendingExcelName = $event.target.files[0]?.name || ''">
                 </label>
-            @endif
 
-            <div wire:loading wire:target="excelFile" style="font-size:11.5px;color:var(--muted);margin-top:6px">Mengunggah berkas…</div>
+                {{-- Tampil SEKETIKA berkas dipilih (dari File API browser via @change di
+                     atas) — tidak menunggu unggahannya ke server benar-benar dimulai
+                     dulu baru terlihat, supaya tidak terasa seperti tidak terjadi
+                     apa-apa selama jeda antara memilih berkas dan unggahan mulai jalan. --}}
+                <div x-show="pendingExcelName !== ''" x-cloak style="font-size:11.5px;color:var(--muted);margin-top:6px">
+                    📄 <span x-text="pendingExcelName"></span> — mengunggah…
+                </div>
+            @endif
 
             @error('excelFile')
                 <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
@@ -57,82 +70,25 @@
         <div class="btn-row">
             <button type="button" class="btn btn-primary" wire:click="uploadExcel" wire:loading.attr="disabled" wire:target="uploadExcel">
                 <span wire:loading.remove wire:target="uploadExcel">Unggah &amp; Proses</span>
-                <span wire:loading wire:target="uploadExcel">Memproses…</span>
+                <span wire:loading wire:target="uploadExcel"><i class="spin"></i> Memproses…</span>
             </button>
         </div>
     </div>
 
-    <div class="card" x-ref="formIku">
-        <div class="sec"><span>{{ $editingId ? '✎ Ubah IKU' : '➕ Tambah IKU Manual' }}</span></div>
+    @unless ($editingId)
+        <div class="card">
+            <div class="sec"><span>➕ Tambah IKU Manual</span></div>
 
-        <div class="row2">
-            <div class="field">
-                <label>Kode <span class="req">*</span></label>
-                <input type="text" class="inp filled" wire:model="kode" placeholder="mis. IKU-1131">
-                @error('kode')
-                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-                @enderror
-            </div>
-            <div class="field">
-                <label>Tim <span class="req">*</span></label>
-                <input type="text" class="inp filled" list="daftar-tim" wire:model="tim" placeholder="mis. Produksi Statistik">
-                <datalist id="daftar-tim">
-                    @foreach ($daftarTim as $opsi)
-                        <option value="{{ $opsi }}"></option>
-                    @endforeach
-                </datalist>
-                <div class="fhint">Pilih dari saran yang sudah ada, atau ketik tim baru.</div>
-                @error('tim')
-                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-                @enderror
+            @include('livewire.partials._master-iku-form-fields')
+
+            <div class="btn-row">
+                <button type="button" class="btn btn-primary" wire:click="save" wire:loading.attr="disabled" wire:target="save">
+                    <span wire:loading.remove wire:target="save">＋ Tambah IKU</span>
+                    <span wire:loading wire:target="save"><i class="spin"></i> Menyimpan…</span>
+                </button>
             </div>
         </div>
-
-        <div class="field">
-            <label>Indikator <span class="req">*</span></label>
-            <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model="indikator"
-                placeholder="mis. Persentase publikasi tepat waktu"></textarea>
-            @error('indikator')
-                <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-            @enderror
-        </div>
-
-        <div class="row2">
-            <div class="field">
-                <label>Penanggung Jawab <span class="req">*</span></label>
-                <input type="text" class="inp filled" list="daftar-pj" wire:model="penanggungJawab" placeholder="Nama petugas/pejabat">
-                <datalist id="daftar-pj">
-                    @foreach ($daftarPenanggungJawab as $opsi)
-                        <option value="{{ $opsi }}"></option>
-                    @endforeach
-                </datalist>
-                <div class="fhint">Saran diambil dari pengguna terverifikasi &amp; isian sebelumnya, atau ketik nama lain.</div>
-                @error('penanggungJawab')
-                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-                @enderror
-            </div>
-            <div class="field">
-                <label>Sasaran</label>
-                <input type="text" class="inp filled" list="daftar-sasaran" wire:model="sasaran" placeholder="mis. Statistik Kesejahteraan Rakyat">
-                <datalist id="daftar-sasaran">
-                    @foreach ($daftarSasaran as $opsi)
-                        <option value="{{ $opsi }}"></option>
-                    @endforeach
-                </datalist>
-                <div class="fhint">Untuk mengelompokkan tabel "Kesiapan per Sasaran" di halaman Kompilasi Notula. Boleh dikosongkan.</div>
-                @error('sasaran')
-                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-                @enderror
-            </div>
-        </div>
-
-        <div class="btn-row">
-            <button type="button" class="btn btn-primary" wire:click="save">{{ $editingId ? 'Simpan Perubahan' : '＋ Tambah IKU' }}</button>
-            @if ($editingId)
-                <button type="button" class="btn btn-ghost" wire:click="cancelEdit">Batal</button>
-            @endif
-        </div>
-    </div>
+    @endunless
 
     <div class="card">
         <div class="sec">
@@ -148,6 +104,7 @@
                         <th>Indikator</th>
                         <th>Tim</th>
                         <th>Sasaran</th>
+                        <th>Satuan</th>
                         <th>Penanggung Jawab</th>
                         <th style="text-align:right">Tindakan</th>
                     </tr>
@@ -159,15 +116,22 @@
                             <td>{{ $iku->indikator }}</td>
                             <td class="muted">{{ $iku->tim }}</td>
                             <td class="muted">{{ $iku->sasaran ?? '—' }}</td>
+                            <td class="muted">{{ $iku->satuan }}</td>
                             <td class="muted">{{ $iku->penanggung_jawab }}</td>
                             <td style="text-align:right;white-space:nowrap">
-                                <button type="button" class="btn btn-ghost btn-sm" wire:click="edit({{ $iku->id }})">Ubah</button>
-                                <button type="button" class="btn btn-red btn-sm" wire:click="confirmDelete({{ $iku->id }})">Hapus</button>
+                                <button type="button" class="btn btn-ghost btn-sm" wire:click="edit({{ $iku->id }})" wire:loading.attr="disabled" wire:target="edit({{ $iku->id }})">
+                                    <span wire:loading.remove wire:target="edit({{ $iku->id }})">Ubah</span>
+                                    <span wire:loading wire:target="edit({{ $iku->id }})"><i class="spin"></i></span>
+                                </button>
+                                <button type="button" class="btn btn-red btn-sm" wire:click="confirmDelete({{ $iku->id }})" wire:loading.attr="disabled" wire:target="confirmDelete({{ $iku->id }})">
+                                    <span wire:loading.remove wire:target="confirmDelete({{ $iku->id }})">Hapus</span>
+                                    <span wire:loading wire:target="confirmDelete({{ $iku->id }})"><i class="spin"></i></span>
+                                </button>
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" style="color:var(--muted)">Belum ada data Master IKU. Unggah Excel atau tambah manual di atas.</td>
+                            <td colspan="7" style="color:var(--muted)">Belum ada data Master IKU. Unggah Excel atau tambah manual di atas.</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -178,8 +142,40 @@
         <div class="info" style="margin:14px 0 0">ℹ️ Bisa juga tambah/perbaiki satu IKU manual (Kode, Indikator, Tim, Penanggung Jawab) tanpa Excel.</div>
     </div>
 
-    <x-confirm-modal :show="$pendingDeleteId !== null" title="Hapus IKU?" :message="'Hapus IKU '.$pendingDeleteKode.'? Tindakan ini tidak dapat dibatalkan.'">
-        <button type="button" class="btn btn-ghost" wire:click="cancelDelete">Batal</button>
-        <button type="button" class="btn btn-red" wire:click="delete">Hapus</button>
-    </x-confirm-modal>
+    @if ($pendingDeleteId && $alasanTidakBisaHapus)
+        <x-confirm-modal :show="true" title="Tidak Bisa Dihapus" :danger="false"
+            :message="'IKU '.$pendingDeleteKode.' tidak bisa dihapus karena masih ada '.implode(', ', $alasanTidakBisaHapus).' yang tertaut ke IKU ini. Hapus atau pindahkan dulu data terkait itu sebelum menghapus IKU-nya.'">
+            <button type="button" class="btn btn-ghost" wire:click="cancelDelete">Tutup</button>
+        </x-confirm-modal>
+    @else
+        <x-confirm-modal :show="$pendingDeleteId !== null" title="Hapus IKU?" :message="'Hapus IKU '.$pendingDeleteKode.'? Tindakan ini tidak dapat dibatalkan.'">
+            <button type="button" class="btn btn-ghost" wire:click="cancelDelete" wire:loading.attr="disabled" wire:target="delete">Batal</button>
+            <button type="button" class="btn btn-red" wire:click="delete" wire:loading.attr="disabled" wire:target="delete">
+                <span wire:loading.remove wire:target="delete">Hapus</span>
+                <span wire:loading wire:target="delete"><i class="spin"></i> Menghapus…</span>
+            </button>
+        </x-confirm-modal>
+    @endif
+
+    @if ($editingId)
+        <div class="modal-overlay" style="z-index:70">
+            <div class="modal" style="max-width:640px;height:auto;max-height:92vh">
+                <div class="modal-top">
+                    <div class="mt-t">✎ Ubah IKU</div>
+                    <button type="button" class="x" wire:click="cancelEdit" wire:loading.attr="disabled" wire:target="save" title="Tutup">✕</button>
+                </div>
+                <div style="padding:18px;overflow-y:auto">
+                    @include('livewire.partials._master-iku-form-fields')
+
+                    <div class="btn-row">
+                        <button type="button" class="btn btn-primary" wire:click="save" wire:loading.attr="disabled" wire:target="save">
+                            <span wire:loading.remove wire:target="save">Simpan Perubahan</span>
+                            <span wire:loading wire:target="save"><i class="spin"></i> Menyimpan…</span>
+                        </button>
+                        <button type="button" class="btn btn-ghost" wire:click="cancelEdit" wire:loading.attr="disabled" wire:target="save">Batal</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
 </div>

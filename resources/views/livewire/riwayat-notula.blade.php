@@ -1,6 +1,8 @@
 <div>
-    <div class="page-title">Notula</div>
-    <div class="page-sub">Pantau status notula tiap triwulan dan buka versi final setelah disetujui Kepala.</div>
+    <div class="page-head">
+        <div class="page-title">Notula</div>
+        <div class="page-sub">Pantau status notula tiap triwulan dan buka versi final setelah disetujui Kepala.</div>
+    </div>
 
     <div class="card">
         <table>

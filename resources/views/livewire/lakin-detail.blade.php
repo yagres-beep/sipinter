@@ -13,8 +13,10 @@
 @endphp
 
 <div>
-    <div class="page-title">LAKIN {{ $lakin->tahun }}</div>
-    <div class="page-sub">Laporan Kinerja tahunan — sasaran, indikator, target, realisasi, dan capaian %.</div>
+    <div class="page-head">
+        <div class="page-title">LAKIN {{ $lakin->tahun }}</div>
+        <div class="page-sub">Laporan Kinerja tahunan — sasaran, indikator, target, realisasi, dan capaian %.</div>
+    </div>
 
     @if (session('status'))
         <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>
@@ -28,9 +30,15 @@
         </div>
         <div class="btn-row" style="margin:0 0 0 auto">
             <a wire:navigate href="{{ route('lakin.index') }}" class="btn btn-ghost btn-sm">← Daftar LAKIN</a>
-            <button type="button" class="btn btn-teal btn-sm" wire:click="unduhExcel">⬇ Unduh Excel</button>
+            <button type="button" class="btn btn-teal btn-sm" wire:click="unduhExcel" wire:loading.attr="disabled" wire:target="unduhExcel">
+                <span wire:loading.remove wire:target="unduhExcel">⬇ Unduh Excel</span>
+                <span wire:loading wire:target="unduhExcel"><i class="spin"></i> Menyiapkan…</span>
+            </button>
             @if ($this->isTimSakip())
-                <button type="button" class="btn btn-ghost btn-sm" wire:click="segarkanAngka" wire:confirm="Segarkan angka baris yang sudah ada dari data capaian terbaru? Baris custom tidak berubah, dan ini tidak menambah baris baru.">↻ Segarkan Angka</button>
+                <button type="button" class="btn btn-ghost btn-sm" wire:click="segarkanAngka" wire:confirm="Segarkan angka baris yang sudah ada dari data capaian terbaru? Baris custom tidak berubah, dan ini tidak menambah baris baru." wire:loading.attr="disabled" wire:target="segarkanAngka">
+                    <span wire:loading.remove wire:target="segarkanAngka">↻ Segarkan Angka</span>
+                    <span wire:loading wire:target="segarkanAngka"><i class="spin"></i> Menyegarkan…</span>
+                </button>
             @endif
         </div>
     </div>
@@ -95,8 +103,14 @@
                                             <span class="badge {{ $badgeCapaian($baris->capaian_persen) }}">{{ $baris->capaian_persen !== null ? $baris->capaian_persen.'%' : '-' }}</span>
                                         </td>
                                         <td style="text-align:right;white-space:nowrap">
-                                            <button type="button" class="btn btn-ghost btn-sm" title="Simpan" wire:click="simpanBaris({{ $baris->id }})">💾</button>
-                                            <button type="button" class="btn btn-red btn-sm" title="Hapus" wire:click="hapusBaris({{ $baris->id }})" wire:confirm="Hapus baris ini?">🗑</button>
+                                            <button type="button" class="btn btn-ghost btn-sm" title="Simpan" wire:click="simpanBaris({{ $baris->id }})" wire:loading.attr="disabled" wire:target="simpanBaris({{ $baris->id }}),hapusBaris({{ $baris->id }})">
+                                                <span wire:loading.remove wire:target="simpanBaris({{ $baris->id }})">💾</span>
+                                                <span wire:loading wire:target="simpanBaris({{ $baris->id }})"><i class="spin"></i></span>
+                                            </button>
+                                            <button type="button" class="btn btn-red btn-sm" title="Hapus" wire:click="hapusBaris({{ $baris->id }})" wire:confirm="Hapus baris ini?" wire:loading.attr="disabled" wire:target="simpanBaris({{ $baris->id }}),hapusBaris({{ $baris->id }})">
+                                                <span wire:loading.remove wire:target="hapusBaris({{ $baris->id }})">🗑</span>
+                                                <span wire:loading wire:target="hapusBaris({{ $baris->id }})"><i class="spin"></i></span>
+                                            </button>
                                         </td>
                                     @else
                                         <td>{{ $baris->indikator }}</td>
@@ -140,7 +154,10 @@
                     @endforeach
                 </div>
                 <div class="btn-row">
-                    <button type="button" class="btn btn-primary" wire:click="tambahDariCapaian">📥 Tambahkan Terpilih</button>
+                    <button type="button" class="btn btn-primary" wire:click="tambahDariCapaian" wire:loading.attr="disabled" wire:target="tambahDariCapaian">
+                        <span wire:loading.remove wire:target="tambahDariCapaian">📥 Tambahkan Terpilih</span>
+                        <span wire:loading wire:target="tambahDariCapaian"><i class="spin"></i> Menambahkan…</span>
+                    </button>
                 </div>
             @endif
         </div>
@@ -170,7 +187,10 @@
                 </div>
             </div>
             <div class="btn-row">
-                <button type="button" class="btn btn-ghost" wire:click="tambahBaris">＋ Tambah Baris</button>
+                <button type="button" class="btn btn-ghost" wire:click="tambahBaris" wire:loading.attr="disabled" wire:target="tambahBaris">
+                    <span wire:loading.remove wire:target="tambahBaris">＋ Tambah Baris</span>
+                    <span wire:loading wire:target="tambahBaris"><i class="spin"></i> Menambahkan…</span>
+                </button>
             </div>
         </div>
     @endif

@@ -1,6 +1,8 @@
 <div>
-    <div class="page-title">Struktur Folder Drive</div>
-    <div class="page-sub">Atur pola folder otomatis di Google Drive tanpa mengubah kode (RF-14, RF-15).</div>
+    <div class="page-head">
+        <div class="page-title">Struktur Folder Drive</div>
+        <div class="page-sub">Atur pola folder otomatis di Google Drive tanpa mengubah kode (RF-14, RF-15).</div>
+    </div>
 
     @if (session('status'))
         <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>
@@ -16,7 +18,7 @@
                 <div class="fl-row">
                     <span class="fl-num">{{ $i + 1 }}</span>
                     <label class="fl-name" style="display:flex;align-items:center;gap:8px;cursor:pointer">
-                        <input type="checkbox" wire:click="toggleHierarki({{ $i }})" @checked($h['aktif']) @disabled($i === 0)>
+                        <input type="checkbox" wire:click="toggleHierarki({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="toggleHierarki({{ $i }})" @checked($h['aktif']) @disabled($i === 0)>
                         {{ ucfirst($h['level']) }}
                         @if ($i === 0)
                             <span class="badge b-draft">terkunci</span>
@@ -26,10 +28,10 @@
                         @endif
                     </label>
                     <span class="fl-move">
-                        <button type="button" wire:click="naikkanHierarki({{ $i }})" @disabled($i <= 1)>↑</button>
-                        <button type="button" wire:click="turunkanHierarki({{ $i }})" @disabled($i === 0 || $i === count($hierarki) - 1)>↓</button>
+                        <button type="button" wire:click="naikkanHierarki({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="naikkanHierarki({{ $i }})" @disabled($i <= 1)>↑</button>
+                        <button type="button" wire:click="turunkanHierarki({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="turunkanHierarki({{ $i }})" @disabled($i === 0 || $i === count($hierarki) - 1)>↓</button>
                         @if ($h['custom'] ?? false)
-                            <button type="button" wire:click="hapusLevel({{ $i }})">✕</button>
+                            <button type="button" wire:click="hapusLevel({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="hapusLevel({{ $i }})">✕</button>
                         @endif
                     </span>
                 </div>
@@ -39,7 +41,10 @@
                 <label style="font-size:11.5px">Tambah Tingkat Baru</label>
                 <div style="display:flex;gap:8px">
                     <input type="text" class="inp filled" wire:model="levelBaru" placeholder="mis. Kategori Survei">
-                    <button type="button" class="btn btn-ghost btn-sm" wire:click="tambahLevel">＋ Tambah</button>
+                    <button type="button" class="btn btn-ghost btn-sm" wire:click="tambahLevel" wire:loading.attr="disabled" wire:target="tambahLevel">
+                        <span wire:loading.remove wire:target="tambahLevel">＋ Tambah</span>
+                        <span wire:loading wire:target="tambahLevel"><i class="spin"></i></span>
+                    </button>
                 </div>
                 <div class="fhint">Tingkat kustom memakai nama tetap yang sama untuk semua periode/IKU (bukan nilai yang dihitung otomatis seperti Triwulan/Bulan/IKU).</div>
                 @error('levelBaru')
@@ -71,20 +76,20 @@
                         </span>
                     </span>
                     <span class="fl-move">
-                        <button type="button" wire:click="naikkanKategori({{ $i }})" @disabled($i === 0)>↑</button>
-                        <button type="button" wire:click="turunkanKategori({{ $i }})" @disabled($i === count($kategori) - 1)>↓</button>
+                        <button type="button" wire:click="naikkanKategori({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="naikkanKategori({{ $i }})" @disabled($i === 0)>↑</button>
+                        <button type="button" wire:click="turunkanKategori({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="turunkanKategori({{ $i }})" @disabled($i === count($kategori) - 1)>↓</button>
                         @unless ($k['wajib'])
-                            <button type="button" wire:click="hapusKategori({{ $i }})">✕</button>
+                            <button type="button" wire:click="hapusKategori({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="hapusKategori({{ $i }})">✕</button>
                         @endunless
                         <button type="button" @click="terbuka = !terbuka" title="Detail subfolder"><span x-text="terbuka ? '▲' : '▼'"></span></button>
                     </span>
                     <div style="width:100%" x-show="terbuka" x-cloak>
                         <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);width:100%;margin-top:6px">
-                            <input type="checkbox" wire:click="toggleSubfolderBulan({{ $i }})" @checked($k['subfolder_per_bulan'] ?? false)>
+                            <input type="checkbox" wire:click="toggleSubfolderBulan({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="toggleSubfolderBulan({{ $i }})" @checked($k['subfolder_per_bulan'] ?? false)>
                             Subfolder per bulan
                         </label>
                         <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);width:100%;margin-top:2px">
-                            <input type="checkbox" wire:click="toggleSubfolderKegiatan({{ $i }})" @checked($k['subfolder_per_kegiatan'])>
+                            <input type="checkbox" wire:click="toggleSubfolderKegiatan({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="toggleSubfolderKegiatan({{ $i }})" @checked($k['subfolder_per_kegiatan'])>
                             Subfolder per kegiatan
                         </label>
                     </div>
@@ -95,7 +100,10 @@
                 <label>Tambah Kategori Baru</label>
                 <div style="display:flex;gap:8px">
                     <input type="text" class="inp filled" wire:model="kategoriBaru" placeholder="mis. Dokumentasi Tambahan">
-                    <button type="button" class="btn btn-teal btn-sm" wire:click="tambahKategori">＋ Tambah</button>
+                    <button type="button" class="btn btn-teal btn-sm" wire:click="tambahKategori" wire:loading.attr="disabled" wire:target="tambahKategori">
+                        <span wire:loading.remove wire:target="tambahKategori">＋ Tambah</span>
+                        <span wire:loading wire:target="tambahKategori"><i class="spin"></i></span>
+                    </button>
                 </div>
                 @error('kategoriBaru')
                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
@@ -103,7 +111,10 @@
             </div>
 
             <div class="btn-row">
-                <button type="button" class="btn btn-primary" wire:click="simpan">💾 Simpan Pola Folder</button>
+                <button type="button" class="btn btn-primary" wire:click="simpan" wire:loading.attr="disabled" wire:target="simpan">
+                    <span wire:loading.remove wire:target="simpan">💾 Simpan Pola Folder</span>
+                    <span wire:loading wire:target="simpan"><i class="spin"></i> Menyimpan…</span>
+                </button>
             </div>
         </div>
 
@@ -134,7 +145,10 @@
                     @enderror
                 </div>
                 <div class="btn-row">
-                    <button type="button" class="btn btn-navy" wire:click="buatFolderTahun">＋ Buat Folder Tahun</button>
+                    <button type="button" class="btn btn-navy" wire:click="buatFolderTahun" wire:loading.attr="disabled" wire:target="buatFolderTahun">
+                        <span wire:loading.remove wire:target="buatFolderTahun">＋ Buat Folder Tahun</span>
+                        <span wire:loading wire:target="buatFolderTahun"><i class="spin"></i> Membuat…</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -146,7 +160,7 @@
 
     <div class="field">
         <label>Pilih IKU</label>
-        <select class="inp filled" wire:change="pilihIku($event.target.value)">
+        <select class="inp filled" wire:change="pilihIku($event.target.value)" wire:loading.attr="disabled" wire:target="pilihIku">
             <option value="">— Pilih IKU —</option>
             @foreach ($ikuList as $iku)
                 <option value="{{ $iku->id }}" @selected($ikuTerpilih === $iku->id)>
@@ -170,7 +184,7 @@
                     <div class="fl-row">
                         <span class="fl-num">{{ $i + 1 }}</span>
                         <label class="fl-name" style="display:flex;align-items:center;gap:8px;cursor:pointer">
-                            <input type="checkbox" wire:click="toggleHierarkiIku({{ $i }})" @checked($h['aktif']) @disabled($i === 0)>
+                            <input type="checkbox" wire:click="toggleHierarkiIku({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="toggleHierarkiIku({{ $i }})" @checked($h['aktif']) @disabled($i === 0)>
                             {{ ucfirst($h['level']) }}
                             @if ($i === 0)
                                 <span class="badge b-draft">terkunci</span>
@@ -180,10 +194,10 @@
                             @endif
                         </label>
                         <span class="fl-move">
-                            <button type="button" wire:click="naikkanHierarkiIku({{ $i }})" @disabled($i <= 1)>↑</button>
-                            <button type="button" wire:click="turunkanHierarkiIku({{ $i }})" @disabled($i === 0 || $i === count($hierarkiIku) - 1)>↓</button>
+                            <button type="button" wire:click="naikkanHierarkiIku({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="naikkanHierarkiIku({{ $i }})" @disabled($i <= 1)>↑</button>
+                            <button type="button" wire:click="turunkanHierarkiIku({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="turunkanHierarkiIku({{ $i }})" @disabled($i === 0 || $i === count($hierarkiIku) - 1)>↓</button>
                             @if ($h['custom'] ?? false)
-                                <button type="button" wire:click="hapusLevelIku({{ $i }})">✕</button>
+                                <button type="button" wire:click="hapusLevelIku({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="hapusLevelIku({{ $i }})">✕</button>
                             @endif
                         </span>
                     </div>
@@ -193,7 +207,10 @@
                     <label style="font-size:11.5px">Tambah Tingkat Baru</label>
                     <div style="display:flex;gap:8px">
                         <input type="text" class="inp filled" wire:model="levelBaruIku" placeholder="mis. Kategori Survei">
-                        <button type="button" class="btn btn-ghost btn-sm" wire:click="tambahLevelIku">＋ Tambah</button>
+                        <button type="button" class="btn btn-ghost btn-sm" wire:click="tambahLevelIku" wire:loading.attr="disabled" wire:target="tambahLevelIku">
+                            <span wire:loading.remove wire:target="tambahLevelIku">＋ Tambah</span>
+                            <span wire:loading wire:target="tambahLevelIku"><i class="spin"></i></span>
+                        </button>
                     </div>
                     @error('levelBaruIku')
                         <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
@@ -219,20 +236,20 @@
                             </span>
                         </span>
                         <span class="fl-move">
-                            <button type="button" wire:click="naikkanKategoriIku({{ $i }})" @disabled($i === 0)>↑</button>
-                            <button type="button" wire:click="turunkanKategoriIku({{ $i }})" @disabled($i === count($kategoriIku) - 1)>↓</button>
+                            <button type="button" wire:click="naikkanKategoriIku({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="naikkanKategoriIku({{ $i }})" @disabled($i === 0)>↑</button>
+                            <button type="button" wire:click="turunkanKategoriIku({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="turunkanKategoriIku({{ $i }})" @disabled($i === count($kategoriIku) - 1)>↓</button>
                             @unless ($k['wajib'])
-                                <button type="button" wire:click="hapusKategoriIku({{ $i }})">✕</button>
+                                <button type="button" wire:click="hapusKategoriIku({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="hapusKategoriIku({{ $i }})">✕</button>
                             @endunless
                             <button type="button" @click="terbuka = !terbuka" title="Detail subfolder"><span x-text="terbuka ? '▲' : '▼'"></span></button>
                         </span>
                         <div style="width:100%" x-show="terbuka" x-cloak>
                             <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);width:100%;margin-top:6px">
-                                <input type="checkbox" wire:click="toggleSubfolderBulanIku({{ $i }})" @checked($k['subfolder_per_bulan'] ?? false)>
+                                <input type="checkbox" wire:click="toggleSubfolderBulanIku({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="toggleSubfolderBulanIku({{ $i }})" @checked($k['subfolder_per_bulan'] ?? false)>
                                 Subfolder per bulan
                             </label>
                             <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);width:100%;margin-top:2px">
-                                <input type="checkbox" wire:click="toggleSubfolderKegiatanIku({{ $i }})" @checked($k['subfolder_per_kegiatan'])>
+                                <input type="checkbox" wire:click="toggleSubfolderKegiatanIku({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="toggleSubfolderKegiatanIku({{ $i }})" @checked($k['subfolder_per_kegiatan'])>
                                 Subfolder per kegiatan
                             </label>
                         </div>
@@ -243,7 +260,10 @@
                     <label>Tambah Kategori Baru</label>
                     <div style="display:flex;gap:8px">
                         <input type="text" class="inp filled" wire:model="kategoriBaruIku" placeholder="mis. Dokumentasi Tambahan">
-                        <button type="button" class="btn btn-teal btn-sm" wire:click="tambahKategoriIku">＋ Tambah</button>
+                        <button type="button" class="btn btn-teal btn-sm" wire:click="tambahKategoriIku" wire:loading.attr="disabled" wire:target="tambahKategoriIku">
+                            <span wire:loading.remove wire:target="tambahKategoriIku">＋ Tambah</span>
+                            <span wire:loading wire:target="tambahKategoriIku"><i class="spin"></i></span>
+                        </button>
                     </div>
                     @error('kategoriBaruIku')
                         <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
@@ -251,9 +271,15 @@
                 </div>
 
                 <div class="btn-row">
-                    <button type="button" class="btn btn-primary" wire:click="simpanPolaIku">💾 Simpan Pola IKU Ini</button>
+                    <button type="button" class="btn btn-primary" wire:click="simpanPolaIku" wire:loading.attr="disabled" wire:target="simpanPolaIku,hapusOverrideIku">
+                        <span wire:loading.remove wire:target="simpanPolaIku">💾 Simpan Pola IKU Ini</span>
+                        <span wire:loading wire:target="simpanPolaIku"><i class="spin"></i> Menyimpan…</span>
+                    </button>
                     @if ($ikuPunyaOverride)
-                        <button type="button" class="btn btn-red" wire:click="hapusOverrideIku">🗑 Hapus Pola Khusus (kembali ke global)</button>
+                        <button type="button" class="btn btn-red" wire:click="hapusOverrideIku" wire:loading.attr="disabled" wire:target="simpanPolaIku,hapusOverrideIku">
+                            <span wire:loading.remove wire:target="hapusOverrideIku">🗑 Hapus Pola Khusus (kembali ke global)</span>
+                            <span wire:loading wire:target="hapusOverrideIku"><i class="spin"></i> Menghapus…</span>
+                        </button>
                     @endif
                 </div>
             </div>
@@ -327,7 +353,10 @@
     </div>
 
     <div class="btn-row">
-        <button type="button" class="btn btn-navy" wire:click="buatFolderManual">📁 Buat Folder</button>
+        <button type="button" class="btn btn-navy" wire:click="buatFolderManual" wire:loading.attr="disabled" wire:target="buatFolderManual">
+            <span wire:loading.remove wire:target="buatFolderManual">📁 Buat Folder</span>
+            <span wire:loading wire:target="buatFolderManual"><i class="spin"></i> Membuat…</span>
+        </button>
     </div>
 </div>
 </div>

@@ -83,6 +83,49 @@ class PengisianKegiatanTest extends TestCase
         $this->assertSame('PIC Uji', $rtlBaru->pic);
     }
 
+    public function test_ajukan_isian_mencatat_riwayat_status_diajukan(): void
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+
+        $ketua = User::create([
+            'nama' => 'Ketua Uji Riwayat',
+            'username' => 'ketua-uji-riwayat@example.test', 'email' => 'ketua-uji-riwayat@example.test',
+            'password' => 'password',
+            'role_id' => $peranKetua->id,
+            'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create([
+            'kode' => 'UJI-RIWAYAT',
+            'indikator' => 'Indikator uji riwayat',
+            'tim' => 'Uji',
+            'penanggung_jawab' => 'Ketua Uji',
+        ]);
+
+        $this->actingAs($ketua);
+
+        Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 9)
+            ->set('iku_id', $iku->id)
+            ->set('blocks.0.uraian_kegiatan', 'Kegiatan uji riwayat')
+            ->set('blocks.0.jenis', 'bukan_survei_sensus')
+            ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
+            ->set('kendalaBlocks.0.kendala', '')
+            ->set('kendalaBlocks.0.solusi', '')
+            ->set('rtlBaru.0.rtl_teks', 'RTL uji riwayat')
+            ->set('rtlBaruPic', 'PIC Uji Riwayat')
+            ->call('ajukanIsian')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseCount('riwayat_status_capaian', 1);
+
+        $capaian = Capaian::first();
+        $riwayat = $capaian->riwayatStatus->first();
+        $this->assertSame('diajukan', $riwayat->status);
+        $this->assertSame($ketua->id, $riwayat->user_id);
+    }
+
     public function test_kendala_solusi_kosong_tidak_disimpan(): void
     {
         $peranKetua = Role::create(['nama' => 'Ketua Tim']);
@@ -119,7 +162,7 @@ class PengisianKegiatanTest extends TestCase
         $this->assertDatabaseCount('kendala_solusi', 0);
     }
 
-    public function test_solusi_tanpa_bukti_ditolak_validasi(): void
+    public function test_solusi_tanpa_bukti_tidak_ditolak_validasi(): void
     {
         $peranKetua = Role::create(['nama' => 'Ketua Tim']);
 
@@ -152,9 +195,9 @@ class PengisianKegiatanTest extends TestCase
             ->set('rtlBaru.0.rtl_teks', 'RTL uji coba 3')
             ->set('rtlBaruPic', 'PIC Uji 3')
             ->call('ajukanIsian')
-            ->assertHasErrors(['kendalaBlocks.0.bukti_solusi']);
+            ->assertHasNoErrors();
 
-        $this->assertDatabaseCount('kegiatan', 0);
+        $this->assertDatabaseCount('kendala_solusi', 1);
     }
 
     public function test_simpan_draft_tidak_mewajibkan_bukti_dan_tidak_mengajukan(): void

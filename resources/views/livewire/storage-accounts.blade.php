@@ -1,6 +1,8 @@
 <div>
-    <div class="page-title">Akun &amp; Storage</div>
-    <div class="page-sub">Kelola akun Gmail institusi tempat seluruh bukti dukung tersimpan di Google Drive.</div>
+    <div class="page-head">
+        <div class="page-title">Akun &amp; Storage</div>
+        <div class="page-sub">Kelola akun Gmail institusi tempat seluruh bukti dukung tersimpan di Google Drive.</div>
+    </div>
 
     @if (session('status'))
         <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>
@@ -55,7 +57,10 @@
         </div>
 
         <div class="btn-row">
-            <button type="button" class="btn btn-primary" wire:click="tambah">＋ Tambah Akun</button>
+            <button type="button" class="btn btn-primary" wire:click="tambah" wire:loading.attr="disabled" wire:target="tambah">
+                <span wire:loading.remove wire:target="tambah">＋ Tambah Akun</span>
+                <span wire:loading wire:target="tambah"><i class="spin"></i> Menambahkan…</span>
+            </button>
         </div>
     </div>
 
@@ -109,8 +114,11 @@
                                         <div style="color:var(--red);font-size:11px;margin-top:3px">{{ $message }}</div>
                                     @enderror
                                     <div style="display:flex;gap:6px;margin-top:6px">
-                                        <button type="button" class="btn btn-teal btn-sm" wire:click="simpanFolder">Simpan</button>
-                                        <button type="button" class="btn btn-ghost btn-sm" wire:click="batalUbahFolder">Batal</button>
+                                        <button type="button" class="btn btn-teal btn-sm" wire:click="simpanFolder" wire:loading.attr="disabled" wire:target="simpanFolder">
+                                            <span wire:loading.remove wire:target="simpanFolder">Simpan</span>
+                                            <span wire:loading wire:target="simpanFolder"><i class="spin"></i></span>
+                                        </button>
+                                        <button type="button" class="btn btn-ghost btn-sm" wire:click="batalUbahFolder" wire:loading.attr="disabled" wire:target="simpanFolder">Batal</button>
                                     </div>
                                 @else
                                     <div style="font-size:11px;color:var(--muted)">
@@ -120,7 +128,7 @@
                                         @else
                                             <span>belum diatur</span>
                                         @endif
-                                        <button type="button" class="btn btn-ghost btn-sm" style="padding:1px 7px;margin-left:4px" wire:click="mulaiUbahFolder({{ $akun->id }})">✏️ Ubah</button>
+                                        <button type="button" class="btn btn-ghost btn-sm" style="padding:1px 7px;margin-left:4px" wire:click="mulaiUbahFolder({{ $akun->id }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="mulaiUbahFolder({{ $akun->id }})">✏️ Ubah</button>
                                     </div>
                                 @endif
                             </div>
@@ -137,22 +145,26 @@
                                         wire:click="sinkronKuota({{ $akun->id }})" wire:loading.attr="disabled" wire:target="sinkronKuota({{ $akun->id }})"
                                         title="Ambil angka kuota terpakai/total sebenarnya dari Google Drive, menggantikan hitungan aplikasi ini">
                                         <span wire:loading.remove wire:target="sinkronKuota({{ $akun->id }})">🔄 Sinkron</span>
-                                        <span wire:loading wire:target="sinkronKuota({{ $akun->id }})">Menyinkron…</span>
+                                        <span wire:loading wire:target="sinkronKuota({{ $akun->id }})"><i class="spin"></i> Menyinkron…</span>
                                     </button>
                                 @endif
                             </div>
                         </td>
                         <td style="text-align:right">
                             @if ($akun->status !== \App\Models\StorageAccount::STATUS_AKTIF)
-                                <button type="button" class="btn btn-teal btn-sm" wire:click="jadikanAktif({{ $akun->id }})">Jadikan Aktif</button>
+                                <button type="button" class="btn btn-teal btn-sm" wire:click="jadikanAktif({{ $akun->id }})" wire:loading.attr="disabled" wire:target="jadikanAktif({{ $akun->id }})">
+                                    <span wire:loading.remove wire:target="jadikanAktif({{ $akun->id }})">Jadikan Aktif</span>
+                                    <span wire:loading wire:target="jadikanAktif({{ $akun->id }})"><i class="spin"></i></span>
+                                </button>
                             @else
                                 <span style="font-size:11.5px;color:var(--muted)">Sedang dipakai</span>
                             @endif
                             @if (! $akun->is_master)
                                 <button type="button" class="btn btn-ghost btn-sm" style="margin-left:6px"
-                                    wire:click="jadikanMaster({{ $akun->id }})"
+                                    wire:click="jadikanMaster({{ $akun->id }})" wire:loading.attr="disabled" wire:target="jadikanMaster({{ $akun->id }})"
                                     title="Akun lain yang terhubung ke Google Drive setelah ini akan otomatis menulis ke folder akun ini">
-                                    🔑 Jadikan Master
+                                    <span wire:loading.remove wire:target="jadikanMaster({{ $akun->id }})">🔑 Jadikan Master</span>
+                                    <span wire:loading wire:target="jadikanMaster({{ $akun->id }})"><i class="spin"></i></span>
                                 </button>
                             @endif
                         </td>

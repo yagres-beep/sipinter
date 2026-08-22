@@ -1,6 +1,8 @@
 <div>
-    <div class="page-title">Kendala &amp; Solusi</div>
-    <div class="page-sub">Catat kendala dan solusi per IKU. Ditampilkan kumulatif pada notula sampai triwulan berjalan.</div>
+    <div class="page-head">
+        <div class="page-title">Kendala &amp; Solusi</div>
+        <div class="page-sub">Catat kendala dan solusi per IKU. Ditampilkan kumulatif pada notula sampai triwulan berjalan.</div>
+    </div>
 
     @if (session('status'))
         <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>
@@ -56,11 +58,13 @@
                             <div><b>Kendala:</b> {{ $entri->kendala }}</div>
                             @if ($entri->solusi)
                                 <div style="margin-top:4px"><b>Solusi:</b> {{ $entri->solusi }}</div>
-                                @foreach ($entri->berkas as $file)
-                                    <div class="filechip" style="max-width:320px">
-                                        <span class="nm">📄 {{ $file->nama_file }}</span>
-                                    </div>
-                                @endforeach
+                                <div class="filechip-grid">
+                                    @foreach ($entri->berkas as $file)
+                                        <div class="filechip">
+                                            <span class="nm">📄 {{ $file->nama_file }}</span>
+                                        </div>
+                                    @endforeach
+                                </div>
                             @endif
                         </div>
                     @endforeach
@@ -71,13 +75,12 @@
 
     <div class="card">
         <div class="sec"><span class="n">2</span><span>Kendala &amp; Solusi</span></div>
-        <div class="info warn">⚠️ Jika mengisi solusi, wajib melampirkan bukti dukung solusinya.</div>
 
         @foreach ($blocks as $i => $block)
             <div class="poin-row" wire:key="block-{{ $i }}">
                 <span class="k-num">Pasangan {{ $i + 1 }}</span>
                 @if (count($blocks) > 1)
-                    <button type="button" class="btn btn-red btn-sm" style="position:absolute;top:8px;right:8px" wire:click="removeBlock({{ $i }})">🗑</button>
+                    <button type="button" class="btn btn-red btn-sm" style="position:absolute;top:8px;right:8px" wire:click="removeBlock({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="removeBlock({{ $i }})">🗑</button>
                 @endif
 
                 <div class="field" style="margin-bottom:0">
@@ -89,57 +92,25 @@
                     @enderror
                 </div>
 
-                <div>
-                    <div class="field" style="margin-bottom:0">
-                        <label>Solusi</label>
-                        <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model.live="blocks.{{ $i }}.solusi"
-                            placeholder="mis. Percepatan koordinasi dengan mitra terkait"></textarea>
-                        @error("blocks.{$i}.solusi")
-                            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-                        @enderror
-                    </div>
-
-                    @if (filled($block['solusi']))
-                        <div style="margin-top:8px">
-                            <label style="font-size:11.5px;font-weight:600;margin-bottom:5px;display:block">Bukti Dukung Solusi (PDF) <span class="req">wajib</span></label>
-
-                            @if (empty($block['bukti_solusi']))
-                                <label class="upload need" style="cursor:pointer;display:block;padding:10px">
-                                    <div style="font-weight:600;font-size:11.5px">📤 Klik untuk unggah bukti solusi (PDF)</div>
-                                    <input type="file" wire:model="blocks.{{ $i }}.bukti_solusi" multiple accept="application/pdf" style="display:none">
-                                </label>
-                            @else
-                                @foreach ($block['bukti_solusi'] as $fi => $file)
-                                    <div class="filechip ok">
-                                        <span class="nm">📄 {{ $file->getClientOriginalName() }}</span>
-                                        <span class="x" style="cursor:pointer" wire:click="removeBukti({{ $i }}, {{ $fi }})">✕</span>
-                                    </div>
-                                @endforeach
-                                <label class="btn btn-ghost btn-sm" style="margin-top:8px;cursor:pointer">
-                                    ⟲ Ganti Berkas
-                                    <input type="file" wire:model="blocks.{{ $i }}.bukti_solusi" multiple accept="application/pdf" style="display:none">
-                                </label>
-                            @endif
-
-                            <div wire:loading wire:target="blocks.{{ $i }}.bukti_solusi" style="font-size:11.5px;color:var(--muted);margin-top:6px">Mengunggah berkas…</div>
-
-                            @error("blocks.{$i}.bukti_solusi")
-                                <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-                            @enderror
-                            @error("blocks.{$i}.bukti_solusi.*")
-                                <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-                            @enderror
-                        </div>
-                    @endif
+                <div class="field" style="margin-bottom:0">
+                    <label>Solusi</label>
+                    <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model="blocks.{{ $i }}.solusi"
+                        placeholder="mis. Percepatan koordinasi dengan mitra terkait"></textarea>
+                    @error("blocks.{$i}.solusi")
+                        <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                    @enderror
                 </div>
             </div>
         @endforeach
 
         <div class="btn-row">
-            <button type="button" class="btn btn-ghost btn-sm" wire:click="addBlock">＋ Tambah Pasangan</button>
-            <button type="button" class="btn btn-primary" wire:click="simpan" wire:loading.attr="disabled" wire:target="simpan">
+            <button type="button" class="btn btn-ghost btn-sm" wire:click="addBlock" wire:loading.attr="disabled" wire:target="addBlock,simpan">
+                <span wire:loading.remove wire:target="addBlock">＋ Tambah Pasangan</span>
+                <span wire:loading wire:target="addBlock"><i class="spin"></i></span>
+            </button>
+            <button type="button" class="btn btn-primary" wire:click="simpan" wire:loading.attr="disabled" wire:target="addBlock,simpan">
                 <span wire:loading.remove wire:target="simpan">Simpan Kendala &amp; Solusi</span>
-                <span wire:loading wire:target="simpan">Menyimpan…</span>
+                <span wire:loading wire:target="simpan"><i class="spin"></i> Menyimpan…</span>
             </button>
         </div>
     </div>

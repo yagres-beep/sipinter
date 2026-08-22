@@ -5,8 +5,10 @@
 @section('breadcrumb', 'Pengaturan Akun')
 
 @section('content')
-    <div class="page-title">Pengaturan Akun</div>
-    <div class="page-sub">Kelola profil dan kata sandi Anda.</div>
+    <div class="page-head">
+        <div class="page-title">Pengaturan Akun</div>
+        <div class="page-sub">Kelola profil dan kata sandi Anda.</div>
+    </div>
 
     @if (session('status'))
         <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>
