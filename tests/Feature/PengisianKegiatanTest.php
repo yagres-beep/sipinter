@@ -742,4 +742,246 @@ class PengisianKegiatanTest extends TestCase
             ->test(PengisianKegiatan::class)
             ->assertSet('iku_id', null);
     }
+
+    public function test_isian_yang_sudah_disetujui_terkunci_total(): void
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $ketua = User::create([
+            'nama' => 'Ketua Uji Terkunci', 'username' => 'ketua-uji-terkunci@example.test', 'email' => 'ketua-uji-terkunci@example.test',
+            'password' => 'password', 'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create([
+            'kode' => 'UJI-TERKUNCI', 'indikator' => 'Indikator uji terkunci', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji',
+        ]);
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 9, 'triwulan' => 3, 'bulan_ke' => 3, 'flag_bulan_terlewat' => false]);
+
+        Capaian::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'status' => Capaian::STATUS_DISETUJUI]);
+
+        Kegiatan::create([
+            'iku_id' => $iku->id, 'periode_id' => $periode->id,
+            'uraian_kegiatan' => 'Kegiatan yang sudah disetujui', 'jenis' => 'bukan_survei_sensus',
+            'status_dokumen' => Kegiatan::STATUS_DISETUJUI,
+        ]);
+
+        $this->actingAs($ketua);
+
+        $component = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 9)
+            ->set('iku_id', $iku->id);
+
+        $this->assertTrue($component->instance()->formTerkunciDisetujui());
+
+        // addBlock() tidak boleh menambah blok baru sama sekali selagi terkunci.
+        $jumlahBlokSebelum = count($component->get('blocks'));
+        $component->call('addBlock');
+        $this->assertCount($jumlahBlokSebelum, $component->get('blocks'));
+
+        // Pertahanan berlapis: simpanDraft()/ajukanIsian() juga menolak, bukan cuma
+        // disembunyikan di UI, kalau-kalau dipanggil langsung lewat request lain.
+        $component->call('simpanDraft');
+        $this->assertDatabaseCount('kegiatan', 1);
+    }
+
+    /**
+     * Siapkan satu kegiatan "dikembalikan" dengan satu berkas "ditolak" (+ catatan)
+     * — dipakai ketiga test hapusBuktiLama() di bawah.
+     *
+     * @return array{ketua: User, iku: MasterIku, kegiatan: Kegiatan, berkas: Berkas}
+     */
+    protected function siapkanKegiatanDikembalikanDenganBerkasDitolak(): array
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $ketua = User::create([
+            'nama' => 'Ketua Uji Hapus Bukti', 'username' => 'ketua-uji-hapus@example.test', 'email' => 'ketua-uji-hapus@example.test',
+            'password' => 'password', 'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create([
+            'kode' => 'UJI-HAPUS', 'indikator' => 'Indikator uji hapus bukti', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji',
+        ]);
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 8, 'triwulan' => 3, 'bulan_ke' => 2, 'flag_bulan_terlewat' => false]);
+
+        Capaian::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'status' => Capaian::STATUS_DIKEMBALIKAN]);
+
+        $kegiatan = Kegiatan::create([
+            'iku_id' => $iku->id, 'periode_id' => $periode->id,
+            'uraian_kegiatan' => 'Kegiatan dikembalikan', 'jenis' => 'bukan_survei_sensus',
+            'status_dokumen' => Kegiatan::STATUS_DIKEMBALIKAN,
+        ]);
+
+        $berkas = Berkas::create([
+            'ref_id' => $kegiatan->id, 'ref_type' => Kegiatan::class, 'kategori' => 'capaian',
+            'nama_file' => 'bukti-ditolak.pdf', 'path' => 'bukti-capaian/bukti-ditolak.pdf',
+            'status_verifikasi' => 'ditolak', 'catatan' => 'Tanggal tidak jelas',
+        ]);
+
+        return compact('ketua', 'iku', 'kegiatan', 'berkas');
+    }
+
+    public function test_hapus_bukti_lama_menghapus_berkas_yang_ditolak(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $data = $this->siapkanKegiatanDikembalikanDenganBerkasDitolak();
+        \Illuminate\Support\Facades\Storage::disk('local')->put($data['berkas']->path, 'isi pdf palsu');
+
+        $this->actingAs($data['ketua']);
+
+        $component = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $data['iku']->id);
+
+        $blockIndex = collect($component->get('blocks'))->search(fn ($b) => $b['id'] === $data['kegiatan']->id);
+        $this->assertNotFalse($blockIndex);
+
+        $component->call('hapusBuktiLama', $blockIndex, $data['berkas']->id);
+
+        $this->assertDatabaseMissing('berkas', ['id' => $data['berkas']->id]);
+        \Illuminate\Support\Facades\Storage::disk('local')->assertMissing($data['berkas']->path);
+        $this->assertEmpty($component->get("blocks.{$blockIndex}.existing_bukti"));
+    }
+
+    public function test_hapus_bukti_lama_menolak_berkas_yang_belum_ditolak(): void
+    {
+        $data = $this->siapkanKegiatanDikembalikanDenganBerkasDitolak();
+        $data['berkas']->update(['status_verifikasi' => 'terverifikasi']);
+
+        $this->actingAs($data['ketua']);
+
+        $component = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $data['iku']->id);
+
+        $blockIndex = collect($component->get('blocks'))->search(fn ($b) => $b['id'] === $data['kegiatan']->id);
+
+        $component->call('hapusBuktiLama', $blockIndex, $data['berkas']->id);
+
+        $this->assertDatabaseHas('berkas', ['id' => $data['berkas']->id]);
+    }
+
+    public function test_hapus_bukti_lama_menolak_berkas_milik_kegiatan_lain(): void
+    {
+        $data = $this->siapkanKegiatanDikembalikanDenganBerkasDitolak();
+
+        $kegiatanLain = Kegiatan::create([
+            'iku_id' => $data['iku']->id, 'periode_id' => $data['kegiatan']->periode_id,
+            'uraian_kegiatan' => 'Kegiatan lain', 'jenis' => 'bukan_survei_sensus',
+            'status_dokumen' => Kegiatan::STATUS_DRAFT,
+        ]);
+
+        $this->actingAs($data['ketua']);
+
+        $component = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $data['iku']->id);
+
+        // blockIndex milik kegiatanLain (BUKAN pemilik $data['berkas']) — payload
+        // dimanipulasi mencoba hapus berkas kegiatan lain lewat block yang salah.
+        $blockIndexLain = collect($component->get('blocks'))->search(fn ($b) => $b['id'] === $kegiatanLain->id);
+        $this->assertNotFalse($blockIndexLain);
+
+        $component->call('hapusBuktiLama', $blockIndexLain, $data['berkas']->id);
+
+        $this->assertDatabaseHas('berkas', ['id' => $data['berkas']->id]);
+    }
+
+    public function test_ketua_tim_bisa_membuka_pratinjau_berkas_miliknya(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $data = $this->siapkanKegiatanDikembalikanDenganBerkasDitolak();
+        \Illuminate\Support\Facades\Storage::disk('local')->put($data['berkas']->path, 'isi pdf palsu');
+
+        $this->actingAs($data['ketua']);
+
+        $this->get(route('berkas.show', $data['berkas']))->assertOk();
+    }
+
+    public function test_kendala_ditolak_dimuat_ulang_ke_form_dan_diperbaiki_di_baris_yang_sama(): void
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $ketua = User::create([
+            'nama' => 'Ketua Uji Kendala', 'username' => 'ketua-uji-kendala@example.test', 'email' => 'ketua-uji-kendala@example.test',
+            'password' => 'password', 'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create(['kode' => 'UJI-KENDALA', 'indikator' => 'Indikator uji kendala', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji']);
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 8, 'triwulan' => 3, 'bulan_ke' => 2, 'flag_bulan_terlewat' => false]);
+
+        $ks = KendalaSolusi::create([
+            'iku_id' => $iku->id, 'periode_id' => $periode->id,
+            'kendala' => 'Kendala lama', 'solusi' => 'Solusi lama',
+            'status_verifikasi' => 'ditolak', 'catatan' => 'Solusi belum konkret',
+        ]);
+
+        $this->actingAs($ketua);
+
+        $component = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $iku->id);
+
+        // Pasangan yang ditolak dimuat ke kendalaBlocks (bukan blok kosong), lengkap
+        // dengan catatan penolakannya, siap diperbaiki.
+        $component->assertSet('kendalaBlocks.0.id', $ks->id)
+            ->assertSet('kendalaBlocks.0.kendala', 'Kendala lama')
+            ->assertSet('kendalaBlocks.0.catatan', 'Solusi belum konkret');
+
+        $component->set('blocks.0.uraian_kegiatan', 'Kegiatan uji kendala')
+            ->set('blocks.0.jenis', 'bukan_survei_sensus')
+            ->set('blocks.0.bukti', [\Illuminate\Http\UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
+            ->set('kendalaBlocks.0.kendala', 'Kendala sudah diperbaiki')
+            ->set('rtlBaru.0.rtl_teks', 'RTL uji')
+            ->set('rtlBaruPic', 'PIC Uji')
+            ->call('ajukanIsian')
+            ->assertHasNoErrors();
+
+        // Baris LAMA diperbarui di tempat (bukan duplikat) — tetap satu baris saja
+        // untuk pasangan ini, statusnya kembali "menunggu" karena diajukan ulang.
+        $this->assertDatabaseCount('kendala_solusi', 1);
+        $ks->refresh();
+        $this->assertSame('Kendala sudah diperbaiki', $ks->kendala);
+        $this->assertSame('menunggu', $ks->status_verifikasi);
+        $this->assertNull($ks->catatan);
+    }
+
+    public function test_kendala_diterima_terkunci_dari_form_edit_tapi_tampil_di_riwayat(): void
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $ketua = User::create([
+            'nama' => 'Ketua Uji Kendala Diterima', 'username' => 'ketua-uji-kendala-terima@example.test', 'email' => 'ketua-uji-kendala-terima@example.test',
+            'password' => 'password', 'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create(['kode' => 'UJI-KENDALA-2', 'indikator' => 'Indikator uji kendala 2', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji']);
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 8, 'triwulan' => 3, 'bulan_ke' => 2, 'flag_bulan_terlewat' => false]);
+
+        KendalaSolusi::create([
+            'iku_id' => $iku->id, 'periode_id' => $periode->id,
+            'kendala' => 'Kendala sudah diterima', 'solusi' => 'Solusi sudah diterima',
+            'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $this->actingAs($ketua);
+
+        $component = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $iku->id);
+
+        // Pasangan yang sudah diterima TIDAK dimuat sebagai blok editable — form tetap
+        // menampilkan satu blok kosong untuk pasangan BARU.
+        $component->assertSet('kendalaBlocks.0.id', null)
+            ->assertSet('kendalaBlocks.0.kendala', '');
+
+        // ...tapi tetap terlihat (hanya-baca) di riwayat kumulatif triwulan berjalan.
+        $riwayat = $component->viewData('riwayatKendala');
+        $ditemukan = collect($riwayat->get(3))->contains(fn ($item) => $item->kendala === 'Kendala sudah diterima');
+        $this->assertTrue($ditemukan);
+    }
 }

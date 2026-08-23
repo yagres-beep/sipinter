@@ -81,7 +81,7 @@ class LakinDetail extends Component
 
     protected function pastikanSakip(): void
     {
-        abort_unless($this->isTimSakip(), 403, 'Hanya Tim SAKIP yang dapat mengubah LAKIN.');
+        abort_unless($this->isTimSakip(), 403, 'Hanya Tim SAKIP yang dapat mengubah rekap kinerja tahunan.');
     }
 
     protected function hitungCapaianPersen(?string $target, ?string $realisasi): ?float
@@ -181,7 +181,7 @@ class LakinDetail extends Component
         $this->lakin->load('baris');
         $this->muatEdit();
 
-        session()->flash('status', 'IKU terpilih berhasil ditambahkan ke LAKIN.');
+        session()->flash('status', 'IKU terpilih berhasil ditambahkan ke rekap.');
     }
 
     /**
@@ -203,7 +203,7 @@ class LakinDetail extends Component
 
     public function unduhExcel()
     {
-        return ExcelFacade::download(new LakinExport($this->lakin), "lakin-{$this->lakin->tahun}.xlsx");
+        return ExcelFacade::download(new LakinExport($this->lakin), "rekap-kinerja-tahunan-{$this->lakin->tahun}.xlsx");
     }
 
     public function render()

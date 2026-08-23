@@ -3,16 +3,20 @@
 namespace App\Livewire;
 
 use App\Models\Capaian;
+use App\Models\CapaianTahunan;
 use App\Models\Kegiatan;
 use App\Models\MasterIku;
+use App\Models\NilaiSakip;
 use Livewire\Component;
 
 /**
  * Dasbor status isian & capaian kinerja (RF-50) — kartu ringkasan, indikator progres
- * per triwulan, dan rekapitulasi otomatis per IKU (RF-49) dalam satu halaman (tadinya
- * dua tab terpisah "Dasbor Kinerja" & "Rekapitulasi" — digabung karena tujuan keduanya
- * sama: memantau capaian triwulan berjalan). Semua dihitung langsung dari DB setiap
- * render, tidak ada data yang di-cache/disimpan terpisah (RNF-01).
+ * per triwulan, rekapitulasi otomatis per IKU (RF-49), dan Penilaian Kinerja
+ * Organisasi (PKO) dalam satu halaman (tadinya dua tab terpisah "Dasbor Kinerja" &
+ * "Rekapitulasi" — digabung karena tujuan keduanya sama: memantau capaian triwulan
+ * berjalan). Semua dihitung langsung dari DB setiap render, tidak ada data yang
+ * di-cache/disimpan terpisah (RNF-01) — kecuali Nilai SAKIP (App\Models\NilaiSakip)
+ * yang memang input tersimpan per tahun.
  */
 class DasborCapaian extends Component
 {
@@ -20,10 +24,82 @@ class DasborCapaian extends Component
 
     public int $triwulan;
 
+    /**
+     * Nilai SAKIP tahun terpilih (dari Inspektorat, satu angka untuk SELURUH
+     * organisasi) — form field untuk simpanNilaiSakip(), lihat hitungPko().
+     */
+    public $nilaiSakipInput = null;
+
     public function mount(): void
     {
         $this->tahun = (int) now()->year;
         $this->triwulan = (int) ceil(((int) now()->month) / 3);
+        $this->muatNilaiSakip();
+    }
+
+    protected function muatNilaiSakip(): void
+    {
+        $this->nilaiSakipInput = NilaiSakip::where('tahun', $this->tahun)->value('nilai');
+    }
+
+    public function updatedTahun(): void
+    {
+        $this->muatNilaiSakip();
+    }
+
+    public function simpanNilaiSakip(): void
+    {
+        $this->validate([
+            'nilaiSakipInput' => ['nullable', 'numeric', 'min:0', 'max:100'],
+        ], [], ['nilaiSakipInput' => 'Nilai SAKIP']);
+
+        NilaiSakip::updateOrCreate(['tahun' => $this->tahun], ['nilai' => $this->nilaiSakipInput]);
+
+        session()->flash('status', 'Nilai SAKIP berhasil disimpan.');
+    }
+
+    /**
+     * Penilaian Kinerja Organisasi (PKO) — Nilai Akhir Capaian PK tiap IKU
+     * (Capaian::nilaiAkhirCapaianPk(), dari Capaian Setahun TW IV dibatasi
+     * batas_normalisasi_pko lalu dikoreksi % sesuai Predikat SAKIP), dijumlah/
+     * dirata-ratakan untuk seluruh IKU pada tahun terpilih. IKU tanpa Capaian
+     * Setahun TW IV (belum ada data) DILEWATI dari rata-rata (pola sama seperti
+     * rataRataPersentase() di bawah), bukan dianggap 0.
+     *
+     * @return array{nilai_sakip: ?float, predikat_sakip: ?string, koreksi_persen: float, total_capaian_pk: float, rata_rata_capaian_pk: ?float, predikat_pko: ?string, jumlah_iku_dihitung: int}
+     */
+    protected function hitungPko(): array
+    {
+        $nilaiSakip = $this->nilaiSakipInput !== null ? (float) $this->nilaiSakipInput : null;
+        $predikat = $nilaiSakip !== null ? Capaian::predikatSakip($nilaiSakip) : null;
+        $koreksi = $predikat !== null ? Capaian::koreksiPredikat($predikat) : 0.0;
+
+        $nilaiAkhirPerIku = CapaianTahunan::with('masterIku')
+            ->where('tahun', $this->tahun)
+            ->get()
+            ->map(fn (CapaianTahunan $ct) => Capaian::nilaiAkhirCapaianPk(
+                Capaian::normalisasiCapaianPk($ct->capaianSetahun(4)),
+                $koreksi
+            ))
+            ->filter(fn ($v) => $v !== null);
+
+        $rataRata = $nilaiAkhirPerIku->isNotEmpty() ? round((float) $nilaiAkhirPerIku->avg(), 2) : null;
+
+        return [
+            'nilai_sakip' => $nilaiSakip,
+            'predikat_sakip' => $predikat,
+            'koreksi_persen' => $koreksi,
+            'total_capaian_pk' => round((float) $nilaiAkhirPerIku->sum(), 2),
+            'rata_rata_capaian_pk' => $rataRata,
+            'predikat_pko' => match (true) {
+                $rataRata === null => null,
+                $rataRata > 100 => 'ISTIMEWA',
+                $rataRata > 80 => 'BAIK',
+                $rataRata > 60 => 'BUTUH PERBAIKAN',
+                default => 'BURUK',
+            },
+            'jumlah_iku_dihitung' => $nilaiAkhirPerIku->count(),
+        ];
     }
 
     protected function kegiatanTriwulanQuery()
@@ -97,56 +173,34 @@ class DasborCapaian extends Component
     }
 
     /**
-     * Realisasi kumulatif year-to-date per IKU — dijumlahkan dari SELURUH periode
-     * (bulan) berstatus terverifikasi/disetujui, dari triwulan I sampai triwulan
-     * yang sedang dipilih, pada tahun yang sama (sesuai sheet resmi Tim SAKIP:
-     * kolom "Realisasi Kumulatif" TW III sudah mencakup TW I+II+III, bukan cuma
-     * realisasi TW III sendiri) — dipakai sebagai pembilang KEDUA jenis capaian
-     * di dataRekap() ("Terhadap Target Triwulanan" MAUPUN "Terhadap Target
-     * Setahun"), karena keduanya sama-sama membandingkan realisasi kumulatif
-     * s.d. triwulan ini, cuma beda target pembaginya.
+     * Target Tahunan + Alokasi/Realisasi Triwulanan per IKU aktif pada tahun terpilih
+     * (App\Models\CapaianTahunan, satu baris per iku_id+tahun — lihat komentar di
+     * sana) — dipetakan sekali di sini, bukan query per baris rekap. `with('masterIku')`
+     * supaya alokasiKumulatif()/realisasiKumulatif() (yang cek MasterIku::pakaiRasio())
+     * tidak N+1 saat dipanggil berulang di loop dataRekap().
      *
-     * @return \Illuminate\Support\Collection<int, float> iku_id => realisasi kumulatif
+     * @return \Illuminate\Support\Collection<int, CapaianTahunan> iku_id => baris
      */
-    protected function realisasiKumulatifPerIku(): \Illuminate\Support\Collection
+    protected function capaianTahunanPerIku(): \Illuminate\Support\Collection
     {
-        $kegiatanYtd = Kegiatan::whereHas('periode', fn ($q) => $q->where('tahun', $this->tahun)->where('triwulan', '<=', $this->triwulan))
-            ->whereIn('status_dokumen', [Kegiatan::STATUS_DIVERIFIKASI, Kegiatan::STATUS_DISETUJUI])
-            ->get(['id', 'iku_id', 'periode_id']);
-
-        if ($kegiatanYtd->isEmpty()) {
-            return collect();
-        }
-
-        $capaianMap = Capaian::whereIn('periode_id', $kegiatanYtd->pluck('periode_id')->unique())
-            ->get(['id', 'iku_id', 'periode_id', 'realisasi'])
-            ->keyBy(fn ($c) => $c->iku_id.'-'.$c->periode_id);
-
-        return $kegiatanYtd
-            ->groupBy('iku_id')
-            ->map(fn ($kegiatanGroup) => (float) $kegiatanGroup
-                ->map(fn ($k) => $capaianMap->get($k->iku_id.'-'.$k->periode_id))
-                ->filter()
-                ->unique(fn ($c) => $c->id)
-                ->sum('realisasi'));
+        return CapaianTahunan::with('masterIku')->where('tahun', $this->tahun)->get()->keyBy('iku_id');
     }
 
     /**
-     * Agregat 3 bulan dalam satu triwulan, per IKU (RF-49, RNF-01, RNF-02) — dibentuk
-     * langsung dari kegiatan+capaian yang sudah TERVERIFIKASI, tanpa penyalinan manual:
-     * - target_pk/target_tw: diisi berulang oleh Tim SAKIP di tiap kegiatan untuk
-     *   IKU & triwulan yang sama (seharusnya konstan) — diambil nilai TERBESAR
-     *   sebagai representasi tunggal, bukan dijumlahkan.
-     * - realisasi: DIJUMLAHKAN antar kegiatan dalam triwulan (mis. akumulasi
-     *   jumlah dokumen/publikasi yang terealisasi sepanjang triwulan).
-     * - persentase (Terhadap Target Triwulanan) & persentase_setahun (Terhadap Target
-     *   Setahun): KEDUANYA memakai realisasi KUMULATIF year-to-date yang sama sebagai
-     *   pembilang (lihat realisasiKumulatifPerIku()) — BUKAN realisasi triwulan ini saja
-     *   ($realisasi di bawah murni informasi "kontribusi triwulan ini") — cuma beda
-     *   pembagi: target_tw (alokasi target kumulatif s.d. triwulan ini) untuk yang
-     *   pertama, target_pk (target tahunan penuh) untuk yang kedua. Sesuai sheet resmi:
-     *   "Alokasi Target" & "Realisasi" SAMA-SAMA kumulatif per TW, bukan nilai triwulan
-     *   itu sendiri — capaian TW II dihitung dari realisasi(TW I+II) ÷ target(TW I+II).
+     * Agregat 3 bulan dalam satu triwulan, per IKU (RF-49, RNF-01, RNF-02) — daftar
+     * IKU-nya (mana yang "aktif" triwulan ini) tetap ditentukan dari Kegiatan yang
+     * sudah TERVERIFIKASI seperti sebelumnya, tapi angka Target Tahunan/Alokasi
+     * Target/Realisasi sekarang diambil dari CapaianTahunan (diisi Tim SAKIP SEKALI
+     * per tahun di halaman Verifikasi per-IKU), bukan lagi dari kolom target_pk/
+     * target_tw/realisasi di `capaian` yang dulu diketik ulang tiap bulan.
+     *
+     * persentase (Terhadap Target Triwulanan) & persentase_setahun (Terhadap Target
+     * Setahun) KEDUANYA memakai Realisasi Kumulatif s.d. triwulan ini sebagai
+     * pembilang (CapaianTahunan::realisasiKumulatif()) — BUKAN realisasi triwulan
+     * ini saja ($realisasi di bawah murni informasi "kontribusi triwulan ini") —
+     * cuma beda pembagi: Alokasi Target Kumulatif untuk yang pertama, Target Tahunan
+     * penuh untuk yang kedua. Rumus tetap lewat Capaian::hitungPersentase() (satu
+     * sumber rumus resmi, tidak diduplikasi di CapaianTahunan maupun di sini).
      *
      * @return \Illuminate\Support\Collection<int, array{iku: MasterIku, jumlah_kegiatan: int, target_pk: float, target_tw: float, realisasi: float, persentase: ?float, realisasi_ytd: float, persentase_setahun: ?float}>
      */
@@ -161,31 +215,18 @@ class DasborCapaian extends Component
             return collect();
         }
 
-        // Angka capaian melekat pada (iku_id, periode_id), bukan per kegiatan (RF-38) —
-        // dipetakan sekali di sini supaya tidak dihitung berulang kalau satu IKU pada
-        // bulan yang sama punya banyak kegiatan pendukung.
-        $capaianMap = Capaian::whereIn('periode_id', $kegiatanTerverifikasi->pluck('periode_id')->unique())
-            ->get()
-            ->keyBy(fn ($c) => $c->iku_id.'-'.$c->periode_id);
-
-        $realisasiYtdPerIku = $this->realisasiKumulatifPerIku();
+        $capaianTahunanPerIku = $this->capaianTahunanPerIku();
 
         return $kegiatanTerverifikasi
             ->groupBy('iku_id')
-            ->map(function ($kegiatanGroup) use ($capaianMap, $realisasiYtdPerIku) {
+            ->map(function ($kegiatanGroup) use ($capaianTahunanPerIku) {
                 $iku = $kegiatanGroup->first()->masterIku;
+                $capaianTahunan = $capaianTahunanPerIku->get($iku->id);
 
-                // Satu Capaian per bulan (periode_id) dalam triwulan ini — di-dedupe
-                // supaya realisasi antarbulan dijumlahkan sekali, bukan sekali per kegiatan.
-                $capaianUnik = $kegiatanGroup
-                    ->map(fn ($k) => $capaianMap->get($k->iku_id.'-'.$k->periode_id))
-                    ->filter()
-                    ->unique(fn ($c) => $c->id);
-
-                $targetPk = (float) $capaianUnik->max('target_pk');
-                $targetTw = (float) $capaianUnik->max('target_tw');
-                $realisasi = (float) $capaianUnik->sum('realisasi');
-                $realisasiYtd = $realisasiYtdPerIku->get($iku->id, 0.0);
+                $targetPk = $capaianTahunan?->targetTahunan() ?? 0.0;
+                $targetTw = $capaianTahunan?->alokasiKumulatif($this->triwulan) ?? 0.0;
+                $realisasi = (float) ($capaianTahunan?->{"realisasi_tw{$this->triwulan}"} ?? 0);
+                $realisasiYtd = $capaianTahunan?->realisasiKumulatif($this->triwulan) ?? 0.0;
 
                 return [
                     'iku' => $iku,
@@ -225,6 +266,7 @@ class DasborCapaian extends Component
             'progresTriwulan' => $this->progresPerTriwulan(),
             'rekap' => $rekap,
             'rataRataPersentase' => $this->rataRataPersentase($rekap),
+            'pko' => $this->hitungPko(),
         ]);
     }
 }

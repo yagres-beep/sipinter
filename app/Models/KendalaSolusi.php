@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class KendalaSolusi extends Model
 {
@@ -18,6 +17,8 @@ class KendalaSolusi extends Model
         'periode_id',
         'kendala',
         'solusi',
+        'status_verifikasi',
+        'catatan',
     ];
 
     public function masterIku(): BelongsTo
@@ -28,14 +29,5 @@ class KendalaSolusi extends Model
     public function periode(): BelongsTo
     {
         return $this->belongsTo(Periode::class, 'periode_id');
-    }
-
-    /**
-     * Bukti dukung solusi (RF-27), disimpan di Drive kategori "Solusi".
-     * Wajib ada bila kolom solusi diisi — divalidasi di KendalaSolusiForm, bukan di sini.
-     */
-    public function berkas(): MorphMany
-    {
-        return $this->morphMany(Berkas::class, 'ref', 'ref_type', 'ref_id');
     }
 }

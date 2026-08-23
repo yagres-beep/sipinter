@@ -3,6 +3,7 @@
 namespace App\Exports;
 
 use App\Models\Lakin;
+use App\Models\PengaturanCapaian;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithColumnWidths;
 use Maatwebsite\Excel\Concerns\WithHeadings;
@@ -10,8 +11,11 @@ use Maatwebsite\Excel\Concerns\WithStyles;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 /**
- * Unduhan Excel satu dokumen LAKIN (RF baru) — satu baris per indikator, sama persis
- * dengan yang tampil di LakinDetail (termasuk baris custom yang ditambah Tim SAKIP).
+ * Unduhan Excel satu dokumen Rekap Kinerja Tahunan (LAKIN) — satu baris per
+ * indikator, sama persis dengan yang tampil di LakinDetail (termasuk baris custom
+ * yang ditambah Tim SAKIP). Format nilai 0 (PengaturanCapaian::formatAngka()/
+ * formatPersen()) mengikuti pengaturan yang sama dengan tampilan tabelnya, supaya
+ * angka di Excel tidak pernah berbeda dari yang dilihat Tim SAKIP di layar.
  */
 class LakinExport implements FromCollection, WithColumnWidths, WithHeadings, WithStyles
 {
@@ -23,9 +27,9 @@ class LakinExport implements FromCollection, WithColumnWidths, WithHeadings, Wit
             $baris->sasaran,
             $baris->masterIku?->kode,
             $baris->indikator,
-            $baris->target,
-            $baris->realisasi,
-            $baris->capaian_persen !== null ? $baris->capaian_persen.'%' : null,
+            PengaturanCapaian::formatAngka($baris->target),
+            PengaturanCapaian::formatAngka($baris->realisasi),
+            PengaturanCapaian::formatPersen($baris->capaian_persen),
         ]);
     }
 

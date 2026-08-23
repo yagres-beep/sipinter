@@ -35,6 +35,19 @@ class MasterIku extends Component
 
     public string $satuan = 'Persen';
 
+    /**
+     * 'langsung': Alokasi Target/Realisasi diketik langsung sebagai angka (default,
+     * cocok untuk IKU bertipe Non %). 'rasio': diketik lewat Pembilang (X)/Penyebut
+     * (Y) mentah, persentasenya dihitung otomatis X÷Y×100 — sesuai Kertas Kerja
+     * Pengukuran Kinerja Triwulanan resmi untuk IKU bertipe % (lihat
+     * App\Models\MasterIku::pakaiRasio(), App\Models\CapaianTahunan).
+     */
+    public string $metodeCapaian = 'langsung';
+
+    public string $deskripsiX = '';
+
+    public string $deskripsiY = '';
+
     protected function rules(): array
     {
         return [
@@ -47,6 +60,9 @@ class MasterIku extends Component
             'penanggungJawab' => ['required', 'string', 'max:255'],
             'sasaran' => ['nullable', 'string', 'max:255'],
             'satuan' => ['required', 'string', 'in:Persen,Poin'],
+            'metodeCapaian' => ['required', 'string', 'in:langsung,rasio'],
+            'deskripsiX' => ['nullable', 'string', 'max:255'],
+            'deskripsiY' => ['nullable', 'string', 'max:255'],
         ];
     }
 
@@ -59,6 +75,9 @@ class MasterIku extends Component
             'penanggungJawab' => 'penanggung jawab',
             'sasaran' => 'sasaran',
             'satuan' => 'satuan',
+            'metodeCapaian' => 'metode perhitungan',
+            'deskripsiX' => 'label pembilang (X)',
+            'deskripsiY' => 'label penyebut (Y)',
         ];
     }
 
@@ -99,12 +118,16 @@ class MasterIku extends Component
         $this->penanggungJawab = $iku->penanggung_jawab;
         $this->sasaran = $iku->sasaran ?? '';
         $this->satuan = $iku->satuan;
+        $this->metodeCapaian = $iku->metode_capaian;
+        $this->deskripsiX = $iku->deskripsi_x ?? '';
+        $this->deskripsiY = $iku->deskripsi_y ?? '';
     }
 
     public function cancelEdit(): void
     {
-        $this->reset(['editingId', 'kode', 'indikator', 'tim', 'penanggungJawab', 'sasaran']);
+        $this->reset(['editingId', 'kode', 'indikator', 'tim', 'penanggungJawab', 'sasaran', 'deskripsiX', 'deskripsiY']);
         $this->satuan = 'Persen';
+        $this->metodeCapaian = 'langsung';
         $this->resetValidation();
     }
 
@@ -122,6 +145,9 @@ class MasterIku extends Component
             'penanggung_jawab' => $this->penanggungJawab,
             'sasaran' => $this->sasaran ?: null,
             'satuan' => $this->satuan,
+            'metode_capaian' => $this->metodeCapaian,
+            'deskripsi_x' => $this->deskripsiX ?: null,
+            'deskripsi_y' => $this->deskripsiY ?: null,
         ];
 
         if ($this->editingId) {

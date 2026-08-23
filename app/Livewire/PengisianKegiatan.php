@@ -155,6 +155,7 @@ class PengisianKegiatan extends Component
             $this->iku_id = $ikuId;
             $this->muatFormEvaluasi();
             $this->muatBlocksKegiatan();
+            $this->muatKendalaBlocks();
             $this->pilihPicOtomatis();
         }
     }
@@ -189,8 +190,11 @@ class PengisianKegiatan extends Component
     protected function emptyKendalaBlock(): array
     {
         return [
+            'id' => null,
             'kendala' => '',
             'solusi' => '',
+            'status_verifikasi' => null,
+            'catatan' => null,
         ];
     }
 
@@ -277,6 +281,10 @@ class PengisianKegiatan extends Component
 
     public function addBlock(): void
     {
+        if ($this->formTerkunciDisetujui()) {
+            return;
+        }
+
         $this->blocks[] = $this->emptyBlock();
     }
 
@@ -300,6 +308,47 @@ class PengisianKegiatan extends Component
     {
         unset($this->blocks[$blockIndex]['bukti'][$fileIndex]);
         $this->blocks[$blockIndex]['bukti'] = array_values($this->blocks[$blockIndex]['bukti']);
+    }
+
+    /**
+     * Hapus SATU berkas bukti capaian yang SUDAH TERSIMPAN (existing_bukti) — hanya
+     * dipakai saat Tim SAKIP menandainya "Tidak Sesuai", supaya Ketua Tim bisa membuang
+     * bukti yang salah lalu mengunggah gantinya (tidak ada jalan lain untuk mengganti
+     * bukti lama sebelum ini — sebelumnya hanya bisa MENAMBAH berkas baru di samping
+     * yang lama). Berkas yang masih "menunggu"/"terverifikasi" TIDAK boleh dihapus
+     * dari sini (dicek di sini, bukan cuma disembunyikan tombolnya di blade —
+     * defense in depth, pola yang sama dipakai VerifikasiCapaian::tandaiTolak() dkk).
+     * File fisik lokal ikut dihapus; salinan di Google Drive (bila sempat tersalin)
+     * TIDAK ikut dihapus (belum ada mekanisme hapus-dari-Drive di GoogleDriveService).
+     */
+    public function hapusBuktiLama(int $blockIndex, int $berkasId): void
+    {
+        $block = $this->blocks[$blockIndex] ?? null;
+
+        if (! $block || ! $block['id']) {
+            return;
+        }
+
+        $berkas = Berkas::where('id', $berkasId)
+            ->where('ref_type', Kegiatan::class)
+            ->where('ref_id', $block['id'])
+            ->where('status_verifikasi', 'ditolak')
+            ->first();
+
+        if (! $berkas) {
+            return;
+        }
+
+        if ($berkas->path) {
+            Storage::disk('local')->delete($berkas->path);
+        }
+
+        $berkas->delete();
+
+        $this->blocks[$blockIndex]['existing_bukti'] = collect($this->blocks[$blockIndex]['existing_bukti'])
+            ->reject(fn ($file) => $file['id'] === $berkasId)
+            ->values()
+            ->all();
     }
 
     public function addKendalaBlock(): void
@@ -345,6 +394,7 @@ class PengisianKegiatan extends Component
     {
         $this->muatFormEvaluasi();
         $this->muatBlocksKegiatan();
+        $this->muatKendalaBlocks();
         $this->pilihPicOtomatis();
     }
 
@@ -352,6 +402,7 @@ class PengisianKegiatan extends Component
     {
         $this->muatFormEvaluasi();
         $this->muatBlocksKegiatan();
+        $this->muatKendalaBlocks();
         $this->rtlBaru = [$this->emptyRtlBlock()];
         $this->rtlBaruBatasWaktu = $this->akhirTriwulanBerikutnya()->toDateString();
     }
@@ -360,6 +411,7 @@ class PengisianKegiatan extends Component
     {
         $this->muatFormEvaluasi();
         $this->muatBlocksKegiatan();
+        $this->muatKendalaBlocks();
         $this->rtlBaru = [$this->emptyRtlBlock()];
         $this->rtlBaruBatasWaktu = $this->akhirTriwulanBerikutnya()->toDateString();
     }
@@ -401,7 +453,7 @@ class PengisianKegiatan extends Component
      */
     protected function lupakanCachePeriodeIku(): void
     {
-        foreach (['riwayat', 'rtl-berjalan', 'rtl-berikutnya-ada', 'rtl-berjalan-terpakai'] as $bagian) {
+        foreach (['riwayat', 'rtl-berjalan', 'rtl-berikutnya-ada', 'rtl-berjalan-terpakai', 'capaian-status'] as $bagian) {
             Cache::forget($this->cacheKeyPeriodeIku($bagian));
         }
 
@@ -412,7 +464,13 @@ class PengisianKegiatan extends Component
 
     /**
      * Riwayat kendala-solusi kumulatif (RF-28): seluruh pasangan milik IKU terpilih,
-     * dari triwulan 1 sampai triwulan yang sedang berjalan, tahun yang sama.
+     * dari triwulan 1 sampai triwulan yang sedang berjalan, tahun yang sama —
+     * KECUALI pasangan periode INI SENDIRI yang belum diterima Tim SAKIP (menunggu
+     * baru diajukan, atau ditolak perlu diperbaiki), supaya tidak tampil dobel:
+     * yang belum diterima ditampilkan sebagai blok yang BISA diedit lewat
+     * kendalaBlocks (lihat muatKendalaBlocks()), bukan di sini. Pasangan periode ini
+     * yang SUDAH diterima (terverifikasi) tetap tampil di sini seperti biasa —
+     * itulah cara pasangan yang sudah diterima terlihat terkunci/hanya-baca.
      *
      * @return \Illuminate\Support\Collection<int, \Illuminate\Support\Collection<int, KendalaSolusiModel>>
      */
@@ -424,11 +482,16 @@ class PengisianKegiatan extends Component
 
         return Cache::remember($this->cacheKeyPeriodeIku('riwayat'), self::CACHE_TTL_DETIK, function () {
             $triwulanSekarang = $this->triwulanDari($this->bulan);
+            $periodeSaatIni = $this->periodeSaatIni();
 
-            return KendalaSolusiModel::with(['periode', 'berkas'])
+            return KendalaSolusiModel::with('periode')
                 ->where('iku_id', $this->iku_id)
                 ->whereHas('periode', function ($q) use ($triwulanSekarang) {
                     $q->where('tahun', $this->tahun)->where('triwulan', '<=', $triwulanSekarang);
+                })
+                ->when($periodeSaatIni, function ($q) use ($periodeSaatIni) {
+                    $q->where(fn ($q2) => $q2->where('periode_id', '!=', $periodeSaatIni->id)
+                        ->orWhere('status_verifikasi', 'terverifikasi'));
                 })
                 ->get()
                 ->sortBy(fn ($item) => $item->periode->triwulan)
@@ -492,14 +555,23 @@ class PengisianKegiatan extends Component
         $bagianKustomIds = BagianKustomPoin::where('iku_id', $this->iku_id)->where('periode_id', $periode->id)->pluck('id');
         $rtlIds = $this->rtlTriwulanBerjalan()->pluck('id');
 
-        return Berkas::where('status_verifikasi', 'ditolak')
+        $catatanBerkas = Berkas::where('status_verifikasi', 'ditolak')
             ->where(function ($q) use ($kegiatanIds, $kendalaIds, $bagianKustomIds, $rtlIds) {
                 $q->where(fn ($q2) => $q2->where('ref_type', Kegiatan::class)->whereIn('ref_id', $kegiatanIds))
                     ->orWhere(fn ($q2) => $q2->where('ref_type', KendalaSolusiModel::class)->whereIn('ref_id', $kendalaIds))
                     ->orWhere(fn ($q2) => $q2->where('ref_type', BagianKustomPoin::class)->whereIn('ref_id', $bagianKustomIds))
                     ->orWhere(fn ($q2) => $q2->where('ref_type', RtlEvaluasiModel::class)->whereIn('ref_id', $rtlIds));
             })
-            ->pluck('catatan')
+            ->pluck('catatan');
+
+        // Kendala & Solusi tidak lagi punya bukti dukung sendiri (RF-27 dicabut) —
+        // penolakannya langsung disimpan di kolom catatan miliknya sendiri (lihat
+        // App\Livewire\VerifikasiCapaian::tandaiKendalaTolak()), bukan lewat Berkas.
+        $catatanKendala = KendalaSolusiModel::whereIn('id', $kendalaIds)
+            ->where('status_verifikasi', 'ditolak')
+            ->pluck('catatan');
+
+        return $catatanBerkas->concat($catatanKendala)
             ->filter()
             ->unique()
             ->values();
@@ -534,6 +606,69 @@ class PengisianKegiatan extends Component
     protected function periodeSaatIni(): ?Periode
     {
         return Periode::where('tahun', $this->tahun)->where('bulan', $this->bulan)->first();
+    }
+
+    /**
+     * Status Capaian (satu status per IKU+bulan, lihat App\Models\Capaian) milik
+     * IKU+periode yang sedang dipilih di form ini — null bila belum pernah ada isian
+     * sama sekali untuk kombinasi ini. Di-cache 60 detik seperti data lain di
+     * cacheKeyPeriodeIku() supaya addBlock()/render() yang dipanggil berkali-kali
+     * tidak membayar query DB remote tiap klik (lihat lupakanCachePeriodeIku()).
+     */
+    protected function statusCapaianSaatIni(): ?string
+    {
+        if (! $this->iku_id) {
+            return null;
+        }
+
+        return Cache::remember(
+            $this->cacheKeyPeriodeIku('capaian-status'),
+            self::CACHE_TTL_DETIK,
+            function () {
+                $periode = $this->periodeSaatIni();
+
+                if (! $periode) {
+                    return null;
+                }
+
+                return Capaian::where('iku_id', $this->iku_id)->where('periode_id', $periode->id)->value('status');
+            }
+        );
+    }
+
+    /**
+     * Sekali Capaian berstatus "disetujui" (sudah masuk notula final yang
+     * ditandatangani Kepala), isian ini dikunci TOTAL — Ketua Tim tidak bisa lagi
+     * menambah kegiatan maupun menyimpan draf/mengajukan lewat form ini sama sekali,
+     * supaya notula yang sudah final tidak diam-diam "terbuka" lagi. Kalau memang
+     * perlu revisi, Tim SAKIP harus membuka kembali secara eksplisit dulu (lihat
+     * VerifikasiCapaian::bukaKembali()), yang menariknya ke status "dikembalikan".
+     *
+     * Dipakai untuk UI (sembunyikan/nonaktifkan tombol) — SELALU dicek ULANG tanpa
+     * cache di simpanDraft()/ajukanIsian() sebelum benar-benar menyimpan apa pun
+     * (defense in depth), karena cache 60 detik di atas bisa saja basi kalau Tim
+     * SAKIP baru saja menyetujui dari halaman lain.
+     */
+    public function formTerkunciDisetujui(): bool
+    {
+        return $this->statusCapaianSaatIni() === Capaian::STATUS_DISETUJUI;
+    }
+
+    /**
+     * Versi TANPA cache dari formTerkunciDisetujui() — satu-satunya yang boleh dipakai
+     * sebagai gerbang sebelum benar-benar menyimpan (simpanDraft()/ajukanIsian()).
+     */
+    protected function formTerkunciDisetujuiFresh(): bool
+    {
+        $periode = $this->iku_id ? $this->periodeSaatIni() : null;
+
+        if (! $periode) {
+            return false;
+        }
+
+        $status = Capaian::where('iku_id', $this->iku_id)->where('periode_id', $periode->id)->value('status');
+
+        return $status === Capaian::STATUS_DISETUJUI;
     }
 
     /**
@@ -578,6 +713,46 @@ class PengisianKegiatan extends Component
                 'status_verifikasi' => $b->status_verifikasi,
                 'catatan' => $b->catatan,
             ])->all(),
+        ])->values()->all();
+    }
+
+    /**
+     * Pasangan kendala &amp; solusi milik periode ini SENDIRI yang BELUM diterima
+     * Tim SAKIP ("menunggu" baru diajukan, atau "ditolak" perlu diperbaiki) — beda
+     * dari Kegiatan, pasangan yang sudah "terverifikasi" (diterima) TIDAK ikut
+     * dimuat ke sini (terkunci, tidak boleh diedit lagi), cukup tampil di
+     * riwayatKendalaSolusi() sebagai riwayat hanya-baca. Dipanggil sejajar dengan
+     * muatBlocksKegiatan() supaya isian lama (draft/ditolak) tetap ada saat form
+     * dibuka ulang, bukan selalu kosong.
+     */
+    protected function muatKendalaBlocks(): void
+    {
+        $periode = $this->iku_id ? $this->periodeSaatIni() : null;
+
+        if (! $periode) {
+            $this->kendalaBlocks = [$this->emptyKendalaBlock()];
+
+            return;
+        }
+
+        $daftar = KendalaSolusiModel::where('iku_id', $this->iku_id)
+            ->where('periode_id', $periode->id)
+            ->where('status_verifikasi', '!=', 'terverifikasi')
+            ->orderBy('id')
+            ->get();
+
+        if ($daftar->isEmpty()) {
+            $this->kendalaBlocks = [$this->emptyKendalaBlock()];
+
+            return;
+        }
+
+        $this->kendalaBlocks = $daftar->map(fn (KendalaSolusiModel $ks) => [
+            'id' => $ks->id,
+            'kendala' => $ks->kendala,
+            'solusi' => $ks->solusi ?? '',
+            'status_verifikasi' => $ks->status_verifikasi,
+            'catatan' => $ks->catatan,
         ])->values()->all();
     }
 
@@ -1073,6 +1248,12 @@ class PengisianKegiatan extends Component
      */
     public function simpanDraft(): void
     {
+        if ($this->formTerkunciDisetujuiFresh()) {
+            $this->dispatch('notify', type: 'error', message: 'Isian ini sudah disetujui dan terkunci — hubungi Tim SAKIP untuk membuka kembali bila perlu revisi.');
+
+            return;
+        }
+
         try {
             $this->validate([
                 'tahun' => ['required', 'integer', 'min:2020', 'max:2100'],
@@ -1194,6 +1375,12 @@ class PengisianKegiatan extends Component
 
     public function ajukanIsian(): void
     {
+        if ($this->formTerkunciDisetujuiFresh()) {
+            $this->dispatch('notify', type: 'error', message: 'Isian ini sudah disetujui dan terkunci — hubungi Tim SAKIP untuk membuka kembali bila perlu revisi.');
+
+            return;
+        }
+
         try {
             $this->buatValidator()->validate();
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -1319,18 +1506,31 @@ class PengisianKegiatan extends Component
                 $capaian->catatStatus(Kegiatan::STATUS_DIAJUKAN, auth()->user());
             }
 
-            // 2) Kendala & Solusi (blok kosong dilewati — bagian ini opsional per periode)
+            // 2) Kendala & Solusi (blok kosong dilewati — bagian ini opsional per periode).
+            // UPDATE, bukan create, bila blok ini punya id (pasangan lama yang ditolak
+            // Tim SAKIP dan sedang diperbaiki — lihat muatKendalaBlocks()), supaya tidak
+            // duplikat; status_verifikasi ditarik balik ke "menunggu" karena diajukan
+            // ulang, mengikuti pola yang sama dengan Kegiatan::ajukan().
             foreach ($this->kendalaBlocks as $block) {
                 if (trim($block['kendala']) === '' && trim($block['solusi']) === '') {
                     continue;
                 }
 
-                KendalaSolusiModel::create([
-                    'iku_id' => $this->iku_id,
-                    'periode_id' => $periode->id,
-                    'kendala' => $block['kendala'],
-                    'solusi' => $block['solusi'] ?: null,
-                ]);
+                if ($block['id'] ?? null) {
+                    KendalaSolusiModel::whereKey($block['id'])->update([
+                        'kendala' => $block['kendala'],
+                        'solusi' => $block['solusi'] ?: null,
+                        'status_verifikasi' => 'menunggu',
+                        'catatan' => null,
+                    ]);
+                } else {
+                    KendalaSolusiModel::create([
+                        'iku_id' => $this->iku_id,
+                        'periode_id' => $periode->id,
+                        'kendala' => $block['kendala'],
+                        'solusi' => $block['solusi'] ?: null,
+                    ]);
+                }
             }
 
             // 3) Evaluasi RTL triwulan sebelumnya — cukup bukti realisasi (SEMUA poin wajib
@@ -1494,7 +1694,9 @@ class PengisianKegiatan extends Component
             'riwayatBagianKustom' => $bagianKustomAktif->mapWithKeys(fn ($b) => [$b->id => $this->riwayatBagianKustom($b)]),
             'statusKegiatanTerkunci' => self::STATUS_KEGIATAN_TERKUNCI,
             'catatanPenolakan' => $this->catatanPenolakan(),
-            'adaDikembalikan' => collect($this->blocks)->contains(fn ($b) => ($b['status_dokumen'] ?? null) === Kegiatan::STATUS_DIKEMBALIKAN),
+            'adaDikembalikan' => collect($this->blocks)->contains(fn ($b) => ($b['status_dokumen'] ?? null) === Kegiatan::STATUS_DIKEMBALIKAN)
+                || collect($this->kendalaBlocks)->contains(fn ($b) => ($b['status_verifikasi'] ?? null) === 'ditolak'),
+            'formTerkunciDisetujui' => $this->formTerkunciDisetujui(),
         ]);
     }
 }

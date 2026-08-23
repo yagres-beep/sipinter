@@ -16,10 +16,10 @@
         <p>
             <b>{{ $kegiatan->uraian_kegiatan }}</b><br>
             {{ $capaian?->analisis_capaian ?: 'Analisis capaian belum diisi Tim SAKIP.' }}<br>
-            Target PK: {{ $capaian?->target_pk ?? '-' }} ·
-            Target TW: {{ $capaian?->target_tw ?? '-' }} ·
-            Realisasi: {{ $capaian?->realisasi ?? '-' }} ·
-            Capaian: {{ $capaian?->persentase_capaian ?? '-' }}%
+            Target PK: {{ \App\Models\PengaturanCapaian::formatAngka($capaian?->target_pk) }} ·
+            Target TW: {{ \App\Models\PengaturanCapaian::formatAngka($capaian?->target_tw) }} ·
+            Realisasi: {{ \App\Models\PengaturanCapaian::formatAngka($capaian?->realisasi) }} ·
+            Capaian: {{ \App\Models\PengaturanCapaian::formatPersen($capaian?->persentase_capaian) }}
         </p>
     @endforeach
 @empty

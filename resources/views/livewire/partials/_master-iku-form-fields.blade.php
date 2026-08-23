@@ -65,14 +65,46 @@
     </div>
 </div>
 
-<div class="field">
-    <label>Satuan <span class="req">*</span></label>
-    <select class="inp filled" wire:model="satuan">
-        <option value="Persen">Persen</option>
-        <option value="Poin">Poin</option>
-    </select>
-    <div class="fhint">Satuan target/realisasi IKU ini — hanya label tampilan di form Verifikasi Capaian, tidak mengubah rumus capaian.</div>
-    @error('satuan')
-        <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-    @enderror
+<div class="row2">
+    <div class="field">
+        <label>Satuan <span class="req">*</span></label>
+        <select class="inp filled" wire:model="satuan">
+            <option value="Persen">Persen</option>
+            <option value="Poin">Poin</option>
+        </select>
+        <div class="fhint">Satuan target/realisasi IKU ini — hanya label tampilan di form Verifikasi Capaian, tidak mengubah rumus capaian.</div>
+        @error('satuan')
+            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+        @enderror
+    </div>
+    <div class="field">
+        <label>Metode Perhitungan <span class="req">*</span></label>
+        <select class="inp filled" wire:model.live="metodeCapaian">
+            <option value="langsung">Langsung (nilai apa adanya)</option>
+            <option value="rasio">Rasio X÷Y (persentase dari dua angka)</option>
+        </select>
+        <div class="fhint">"Rasio X÷Y" untuk IKU bertipe % sesuai Kertas Kerja Pengukuran Kinerja Triwulanan — Alokasi Target/Realisasi diisi lewat Pembilang (X)/Penyebut (Y), persentasenya dihitung otomatis. "Langsung" untuk IKU bertipe Non % (diisi apa adanya).</div>
+        @error('metodeCapaian')
+            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+        @enderror
+    </div>
 </div>
+
+@if ($metodeCapaian === 'rasio')
+    <div class="row2">
+        <div class="field">
+            <label>Label Pembilang (X)</label>
+            <input type="text" class="inp filled" wire:model="deskripsiX" placeholder="mis. Jumlah Publikasi berkualitas">
+            @error('deskripsiX')
+                <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+            @enderror
+        </div>
+        <div class="field">
+            <label>Label Penyebut (Y)</label>
+            <input type="text" class="inp filled" wire:model="deskripsiY" placeholder="mis. Jumlah seluruh Publikasi">
+            @error('deskripsiY')
+                <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+            @enderror
+        </div>
+    </div>
+@endif

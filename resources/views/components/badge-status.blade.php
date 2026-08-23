@@ -12,14 +12,22 @@
 @php
     $peta = [
         // Kegiatan / alur dokumen umum
-        'draft' => ['b-draft', 'Draf'],
+        'draft' => ['b-draft', 'Draft'],
+        // Capaian saja: Tim SAKIP sudah mulai menandai berkas tapi belum
+        // memutuskan hasil akhir (lihat App\Models\Capaian::STATUS_SEDANG_DITANGANI).
+        'sedang_ditangani' => ['b-tunggu', 'Sedang Ditangani'],
         'diajukan' => ['b-ajukan', 'Diajukan'],
         'diverifikasi' => ['b-verif', 'Diverifikasi'],
         'dikembalikan' => ['b-kembali', 'Dikembalikan'],
         'disetujui' => ['b-approve', 'Disetujui'],
         // Notula
         'menunggu_persetujuan' => ['b-tunggu', 'Menunggu Persetujuan'],
-        // Berkas & akun pengguna
+        // Berkas & akun pengguna — label generik "Terverifikasi" dipertahankan di
+        // sini (dipakai juga oleh Akun Aktif utk status akun, bukan hanya berkas
+        // bukti capaian); berkas bukti capaian & kendala-solusi pakai label
+        // "Sesuai"/"Tidak Sesuai" sendiri, ditulis manual di
+        // verifikasi-capaian.blade.php & pengisian-kegiatan.blade.php (tidak lewat
+        // komponen ini) supaya tidak ikut mengubah tampilan Akun Aktif.
         'menunggu' => ['b-tunggu', 'Menunggu'],
         'terverifikasi' => ['b-approve', 'Terverifikasi'],
         'ditolak' => ['b-kembali', 'Ditolak'],

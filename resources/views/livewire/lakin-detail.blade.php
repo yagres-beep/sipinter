@@ -1,6 +1,9 @@
 @php
-    $badgeCapaian = function (?float $persen) {
-        if ($persen === null) {
+    $formatAngka = fn ($nilai) => \App\Models\PengaturanCapaian::formatAngka($nilai);
+    $formatPersen = fn ($nilai) => \App\Models\PengaturanCapaian::formatPersen($nilai);
+
+    $badgeCapaian = function (?float $persen) use ($formatPersen) {
+        if ($formatPersen($persen) === '-') {
             return 'b-draft';
         }
 
@@ -14,8 +17,8 @@
 
 <div>
     <div class="page-head">
-        <div class="page-title">LAKIN {{ $lakin->tahun }}</div>
-        <div class="page-sub">Laporan Kinerja tahunan — sasaran, indikator, target, realisasi, dan capaian %.</div>
+        <div class="page-title">Rekap Kinerja Tahunan {{ $lakin->tahun }}</div>
+        <div class="page-sub">Rekap kinerja tahunan — sasaran, indikator, target, realisasi, dan capaian %.</div>
     </div>
 
     @if (session('status'))
@@ -29,7 +32,7 @@
             <div class="pb-val"><b>{{ $lakin->tahun }}</b></div>
         </div>
         <div class="btn-row" style="margin:0 0 0 auto">
-            <a wire:navigate href="{{ route('lakin.index') }}" class="btn btn-ghost btn-sm">← Daftar LAKIN</a>
+            <a wire:navigate href="{{ route('lakin.index') }}" class="btn btn-ghost btn-sm">← Daftar Rekap</a>
             <button type="button" class="btn btn-teal btn-sm" wire:click="unduhExcel" wire:loading.attr="disabled" wire:target="unduhExcel">
                 <span wire:loading.remove wire:target="unduhExcel">⬇ Unduh Excel</span>
                 <span wire:loading wire:target="unduhExcel"><i class="spin"></i> Menyiapkan…</span>
@@ -62,7 +65,7 @@
     </div>
 
     <div class="card">
-        <div class="card-h">📋 Tabel LAKIN</div>
+        <div class="card-h">📋 Tabel Rekap Kinerja</div>
 
         @if ($lakin->baris->isEmpty())
             <p style="color:var(--muted);font-size:13px">Belum ada baris. {{ $this->isTimSakip() ? 'Pilih dari data capaian atau tambahkan baris custom lewat form di bawah.' : '' }}</p>
@@ -100,7 +103,7 @@
                                         <td style="text-align:right"><input type="number" step="0.01" class="inp filled" style="text-align:right" wire:model="edit.{{ $baris->id }}.target"></td>
                                         <td style="text-align:right"><input type="number" step="0.01" class="inp filled" style="text-align:right" wire:model="edit.{{ $baris->id }}.realisasi"></td>
                                         <td style="text-align:right">
-                                            <span class="badge {{ $badgeCapaian($baris->capaian_persen) }}">{{ $baris->capaian_persen !== null ? $baris->capaian_persen.'%' : '-' }}</span>
+                                            <span class="badge {{ $badgeCapaian($baris->capaian_persen) }}">{{ $formatPersen($baris->capaian_persen) }}</span>
                                         </td>
                                         <td style="text-align:right;white-space:nowrap">
                                             <button type="button" class="btn btn-ghost btn-sm" title="Simpan" wire:click="simpanBaris({{ $baris->id }})" wire:loading.attr="disabled" wire:target="simpanBaris({{ $baris->id }}),hapusBaris({{ $baris->id }})">
@@ -114,10 +117,10 @@
                                         </td>
                                     @else
                                         <td>{{ $baris->indikator }}</td>
-                                        <td style="text-align:right">{{ $baris->target ?? '-' }}</td>
-                                        <td style="text-align:right">{{ $baris->realisasi ?? '-' }}</td>
+                                        <td style="text-align:right">{{ $formatAngka($baris->target) }}</td>
+                                        <td style="text-align:right">{{ $formatAngka($baris->realisasi) }}</td>
                                         <td style="text-align:right">
-                                            <span class="badge {{ $badgeCapaian($baris->capaian_persen) }}">{{ $baris->capaian_persen !== null ? $baris->capaian_persen.'%' : '-' }}</span>
+                                            <span class="badge {{ $badgeCapaian($baris->capaian_persen) }}">{{ $formatPersen($baris->capaian_persen) }}</span>
                                         </td>
                                     @endif
                                 </tr>
@@ -132,7 +135,7 @@
     @if ($this->isTimSakip())
         <div class="card" style="margin-top:16px">
             <div class="card-h">📥 Tambah dari Data Capaian</div>
-            <div class="info">ℹ️ Centang IKU yang mau dimasukkan ke LAKIN ini — hanya yang dicentang yang ditambahkan, sisanya tetap tidak ikut sampai Anda pilih sendiri.</div>
+            <div class="info">ℹ️ Centang IKU yang mau dimasukkan ke rekap ini — hanya yang dicentang yang ditambahkan, sisanya tetap tidak ikut sampai Anda pilih sendiri.</div>
 
             @error('ikuTerpilihUntukTambah')
                 <div style="color:var(--red);font-size:11.5px;margin-bottom:10px">{{ $message }}</div>
@@ -148,7 +151,7 @@
                             <span>
                                 <b style="font-size:12.5px">{{ $data->iku->kode }}</b>
                                 <span style="display:block;font-size:12px;color:var(--muted)">{{ $data->iku->indikator }}</span>
-                                <span style="display:block;font-size:11px;color:var(--faint);margin-top:2px">Target {{ $data->target ?? '-' }} · Realisasi {{ $data->realisasi ?? '-' }} · Capaian {{ $data->capaian_persen !== null ? $data->capaian_persen.'%' : '-' }}</span>
+                                <span style="display:block;font-size:11px;color:var(--faint);margin-top:2px">Target {{ $formatAngka($data->target) }} · Realisasi {{ $formatAngka($data->realisasi) }} · Capaian {{ $formatPersen($data->capaian_persen) }}</span>
                             </span>
                         </label>
                     @endforeach
@@ -164,7 +167,7 @@
 
         <div class="card" style="margin-top:16px">
             <div class="card-h">✏️ Tambah Baris Custom</div>
-            <div class="info">ℹ️ Untuk indikator yang tidak mengacu ke Master IKU manapun, atau format LAKIN yang berbeda dari bawaan sistem.</div>
+            <div class="info">ℹ️ Untuk indikator yang tidak mengacu ke Master IKU manapun, atau format rekap yang berbeda dari bawaan sistem.</div>
             <div class="grid grid-2">
                 <div class="field">
                     <label>Sasaran (opsional)</label>

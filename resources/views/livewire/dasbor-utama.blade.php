@@ -50,8 +50,8 @@
             <button type="button" class="btn btn-ghost btn-sm" wire:click="resetFilter" wire:loading.attr="disabled" wire:target="filterTriwulan,filterBulan,resetFilter">↺ Reset</button>
         </div>
 
-        @if ($daftarKegiatan->isEmpty())
-            <p style="color:var(--muted);font-size:13px">Tidak ada kegiatan yang cocok dengan pencarian/filter ini.</p>
+        @if ($daftarCapaian->isEmpty())
+            <p style="color:var(--muted);font-size:13px">Tidak ada isian yang cocok dengan pencarian/filter ini.</p>
         @else
             <div class="table-scroll" wire:loading.class="table-loading" wire:target="filterTriwulan,filterBulan,cari,urutkan,resetFilter" x-data="dataTable(10)">
                 <table>
@@ -72,21 +72,25 @@
                             <th class="th-sort {{ $urutanKolom === 'tim' ? 'active' : '' }}" wire:click="urutkan('tim')">
                                 Tim <span class="th-arrow">{{ $urutanKolom === 'tim' ? ($urutanArah === 'asc' ? '▲' : '▼') : '↕' }}</span>
                             </th>
+                            <th>Kegiatan</th>
+                            <th>Rincian Status Kegiatan</th>
                             <th class="th-sort {{ $urutanKolom === 'status' ? 'active' : '' }}" wire:click="urutkan('status')">
                                 Status <span class="th-arrow">{{ $urutanKolom === 'status' ? ($urutanArah === 'asc' ? '▲' : '▼') : '↕' }}</span>
                             </th>
                         </tr>
                     </thead>
                     <tbody x-ref="tbody">
-                        @foreach ($daftarKegiatan as $kegiatan)
-                            @php $tautan = $tautanBaris[$kegiatan->id] ?? null; @endphp
-                            <tr wire:key="kegiatan-{{ $kegiatan->id }}" @if ($tautan) class="clickable" onclick="Livewire.navigate('{{ $tautan }}')" @endif>
-                                <td><b>{{ $kegiatan->masterIku->kode ?? '—' }}</b></td>
-                                <td>{{ $kegiatan->masterIku->indikator ?? '—' }}</td>
-                                <td>{{ $namaBulan[$kegiatan->periode->bulan ?? 0] ?? '—' }}</td>
-                                <td class="muted">{{ $angkaRomawi[$kegiatan->periode->triwulan ?? 0] ?? '—' }}</td>
-                                <td class="muted">{{ $kegiatan->masterIku->tim ?? '—' }}</td>
-                                <td><x-badge-status :status="$kegiatan->status_dokumen" /></td>
+                        @foreach ($daftarCapaian as $capaian)
+                            @php $tautan = $tautanBaris[$capaian->id] ?? null; @endphp
+                            <tr wire:key="capaian-{{ $capaian->id }}" @if ($tautan) class="clickable" onclick="Livewire.navigate('{{ $tautan }}')" @endif>
+                                <td><b>{{ $capaian->masterIku->kode ?? '—' }}</b></td>
+                                <td>{{ $capaian->masterIku->indikator ?? '—' }}</td>
+                                <td>{{ $namaBulan[$capaian->periode->bulan ?? 0] ?? '—' }}</td>
+                                <td class="muted">{{ $angkaRomawi[$capaian->periode->triwulan ?? 0] ?? '—' }}</td>
+                                <td class="muted">{{ $capaian->masterIku->tim ?? '—' }}</td>
+                                <td class="muted">{{ $jumlahKegiatan->get($capaian->id, 0) }}</td>
+                                <td><x-rincian-status-kegiatan :rincian="$rincianStatusKegiatan->get($capaian->id, collect())" /></td>
+                                <td><x-badge-status :status="$capaian->status" /></td>
                             </tr>
                         @endforeach
                     </tbody>

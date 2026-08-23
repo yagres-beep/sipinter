@@ -1,8 +1,8 @@
 @extends('layouts.app')
 
-@section('title', 'LAKIN '.$lakin->tahun.' — SIPINTER')
+@section('title', 'Rekap Kinerja Tahunan '.$lakin->tahun.' — SIPINTER')
 
-@section('breadcrumb', 'LAKIN '.$lakin->tahun)
+@section('breadcrumb', 'Rekap Kinerja Tahunan '.$lakin->tahun)
 
 @section('content')
     <livewire:lakin-detail :lakin="$lakin" />

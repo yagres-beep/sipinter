@@ -6,6 +6,7 @@ use App\Exceptions\InvalidStatusTransitionException;
 use App\Models\BagianKustomPoin;
 use App\Models\Berkas;
 use App\Models\Capaian;
+use App\Models\CapaianTahunan;
 use App\Models\Kegiatan;
 use App\Models\KendalaSolusi;
 use App\Models\RtlEvaluasi;
@@ -18,8 +19,8 @@ use Livewire\Component;
  * Beroperasi pada satu Capaian (satu IKU pada satu periode), bukan satu Kegiatan,
  * karena satu IKU boleh punya banyak kegiatan (RF-19) yang berbagi satu set angka
  * capaian dan diverifikasi bersamaan. Berkas yang diperiksa di sini mencakup bukti
- * capaian (per kegiatan), bukti solusi (kendala-solusi), dan bukti realisasi RTL
- * triwulan sebelumnya sekaligus (RF-39). Tim SAKIP juga dapat mengoreksi langsung
+ * capaian (per kegiatan) dan bukti realisasi RTL triwulan sebelumnya sekaligus
+ * (RF-39) — kendala-solusi tidak lagi punya bukti dukung sendiri. Tim SAKIP juga dapat mengoreksi langsung
  * teks yang diketik ketua tim (uraian kegiatan, kendala, solusi, realisasi RTL) bila
  * ada salah ketik — koreksi disimpan bersamaan saat "Verifikasi Selesai" ditekan.
  */
@@ -29,24 +30,81 @@ class VerifikasiCapaian extends Component
 
     public ?string $analisis_capaian = null;
 
-    public $target_pk = null;
-
-    public $target_tw = null;
-
-    public $realisasi = null;
-
-    public $persentase_capaian = null;
+    /**
+     * Nilai form Target Tahunan + Alokasi/Realisasi Triwulanan — diikat lewat
+     * wire:model (properti FLAT, bukan atribut model relasi, karena Livewire di sini
+     * tidak mendukung wire:model langsung ke atribut model — "Can't set model
+     * properties directly"), disinkronkan ke CapaianTahunan lewat
+     * capaianTahunanTerkini() sebelum ditampilkan/disimpan. Tim SAKIP cukup mengisi
+     * ini SEKALI per tahun, tidak diketik ulang tiap bulan seperti Target PK/Target
+     * TW lama.
+     */
+    public $target_tahunan = null;
 
     /**
-     * Realisasi kumulatif year-to-date (s.d. triwulan periode ini, TIDAK termasuk
-     * bulan-bulan lain yang belum diverifikasi) — murni info tambahan yang dihitung
-     * ulang tiap kali realisasi bulan ini diketik, TIDAK disimpan ke kolom database
-     * terpisah (lihat hitungKumulatif()). Field target_tw/realisasi bulan ini sendiri
-     * TETAP diisi apa adanya untuk bulan ini saja, tidak diubah jadi kumulatif.
+     * Pembilang (X)/Penyebut (Y) mentah Target Tahunan — HANYA dipakai bila
+     * MasterIku::pakaiRasio(), sebagai pengganti $target_tahunan di atas. Pasangan
+     * X/Y TERPISAH dari x_alokasi_tw1..4/y_alokasi_tw1..4 di bawah (Target Tahunan
+     * bukan sama dengan Alokasi Target TW IV — keduanya diisi independen oleh Tim
+     * SAKIP, lihat CapaianTahunan::targetTahunan()).
      */
-    public ?float $realisasiKumulatif = null;
+    public $x_target = null;
 
-    public ?float $persentaseKumulatif = null;
+    public $y_target = null;
+
+    public $alokasi_tw1 = null;
+
+    public $alokasi_tw2 = null;
+
+    public $alokasi_tw3 = null;
+
+    public $alokasi_tw4 = null;
+
+    public $realisasi_tw1 = null;
+
+    public $realisasi_tw2 = null;
+
+    public $realisasi_tw3 = null;
+
+    public $realisasi_tw4 = null;
+
+    /**
+     * Pembilang (X)/Penyebut (Y) mentah kumulatif per triwulan — HANYA dipakai bila
+     * MasterIku::pakaiRasio() (IKU bertipe %), sebagai pengganti alokasi_tw1..4 /
+     * realisasi_tw1..4 di atas (lihat CapaianTahunan::alokasiKumulatif()). Untuk IKU
+     * bertipe Non % kedelapan properti ini tetap ada tapi tidak pernah dibaca/tampil.
+     */
+    public $x_alokasi_tw1 = null;
+
+    public $x_alokasi_tw2 = null;
+
+    public $x_alokasi_tw3 = null;
+
+    public $x_alokasi_tw4 = null;
+
+    public $y_alokasi_tw1 = null;
+
+    public $y_alokasi_tw2 = null;
+
+    public $y_alokasi_tw3 = null;
+
+    public $y_alokasi_tw4 = null;
+
+    public $x_realisasi_tw1 = null;
+
+    public $x_realisasi_tw2 = null;
+
+    public $x_realisasi_tw3 = null;
+
+    public $x_realisasi_tw4 = null;
+
+    public $y_realisasi_tw1 = null;
+
+    public $y_realisasi_tw2 = null;
+
+    public $y_realisasi_tw3 = null;
+
+    public $y_realisasi_tw4 = null;
 
     /**
      * Catatan per berkas, dikunci pada id berkas.
@@ -54,6 +112,12 @@ class VerifikasiCapaian extends Component
      * @var array<int, string|null>
      */
     public array $catatanBerkas = [];
+
+    /**
+     * Alasan Tim SAKIP membuka kembali isian yang sudah "disetujui" — opsional,
+     * dipakai oleh bukaKembali().
+     */
+    public string $catatanBukaKembali = '';
 
     /**
      * Koreksi teks kegiatan (uraian_kegiatan), dikunci pada id kegiatan.
@@ -68,6 +132,14 @@ class VerifikasiCapaian extends Component
      * @var array<int, array{kendala: string, solusi: ?string}>
      */
     public array $koreksiKendala = [];
+
+    /**
+     * Catatan penolakan per pasangan kendala &amp; solusi, dikunci pada id
+     * kendala_solusi — pola sama persis dengan $catatanBerkas.
+     *
+     * @var array<int, string|null>
+     */
+    public array $catatanKendala = [];
 
     /**
      * Koreksi teks realisasi RTL triwulan sebelumnya, dikunci pada id rtl_evaluasi.
@@ -90,22 +162,53 @@ class VerifikasiCapaian extends Component
 
     protected ?\Illuminate\Support\Collection $cacheBerkasKegiatan = null;
 
-    protected ?\Illuminate\Support\Collection $cacheBerkasKendala = null;
-
     protected ?\Illuminate\Support\Collection $cacheBagianKustomList = null;
 
     protected ?\Illuminate\Support\Collection $cacheBerkasBagianKustom = null;
+
+    /**
+     * TIDAK public dengan sengaja (beda dari $capaian) — Livewire di sini tidak bisa
+     * menghidrasi ulang instance CapaianTahunan yang BELUM tersimpan (firstOrNew)
+     * lewat siklus request-ke-request, jadi cukup dimuat ulang tiap request lewat
+     * capaianTahunanTerkini() dan disimpan di cache ini SELAMA satu request saja
+     * (pola sama seperti cacheKegiatanList dkk. di atas).
+     */
+    protected ?CapaianTahunan $cacheCapaianTahunan = null;
 
     public function mount(Capaian $capaian): void
     {
         $this->capaian = $capaian->load(['masterIku', 'periode']);
 
         $this->analisis_capaian = $capaian->analisis_capaian;
-        $this->target_pk = $capaian->target_pk;
-        $this->target_tw = $capaian->target_tw;
-        $this->realisasi = $capaian->realisasi;
-        $this->persentase_capaian = $capaian->persentase_capaian;
-        $this->hitungKumulatif();
+
+        $capaianTahunan = $this->capaianTahunanTersimpan();
+        $this->target_tahunan = $capaianTahunan->target_tahunan;
+        $this->x_target = $capaianTahunan->x_target;
+        $this->y_target = $capaianTahunan->y_target;
+        $this->alokasi_tw1 = $capaianTahunan->alokasi_tw1;
+        $this->alokasi_tw2 = $capaianTahunan->alokasi_tw2;
+        $this->alokasi_tw3 = $capaianTahunan->alokasi_tw3;
+        $this->alokasi_tw4 = $capaianTahunan->alokasi_tw4;
+        $this->realisasi_tw1 = $capaianTahunan->realisasi_tw1;
+        $this->realisasi_tw2 = $capaianTahunan->realisasi_tw2;
+        $this->realisasi_tw3 = $capaianTahunan->realisasi_tw3;
+        $this->realisasi_tw4 = $capaianTahunan->realisasi_tw4;
+        $this->x_alokasi_tw1 = $capaianTahunan->x_alokasi_tw1;
+        $this->x_alokasi_tw2 = $capaianTahunan->x_alokasi_tw2;
+        $this->x_alokasi_tw3 = $capaianTahunan->x_alokasi_tw3;
+        $this->x_alokasi_tw4 = $capaianTahunan->x_alokasi_tw4;
+        $this->y_alokasi_tw1 = $capaianTahunan->y_alokasi_tw1;
+        $this->y_alokasi_tw2 = $capaianTahunan->y_alokasi_tw2;
+        $this->y_alokasi_tw3 = $capaianTahunan->y_alokasi_tw3;
+        $this->y_alokasi_tw4 = $capaianTahunan->y_alokasi_tw4;
+        $this->x_realisasi_tw1 = $capaianTahunan->x_realisasi_tw1;
+        $this->x_realisasi_tw2 = $capaianTahunan->x_realisasi_tw2;
+        $this->x_realisasi_tw3 = $capaianTahunan->x_realisasi_tw3;
+        $this->x_realisasi_tw4 = $capaianTahunan->x_realisasi_tw4;
+        $this->y_realisasi_tw1 = $capaianTahunan->y_realisasi_tw1;
+        $this->y_realisasi_tw2 = $capaianTahunan->y_realisasi_tw2;
+        $this->y_realisasi_tw3 = $capaianTahunan->y_realisasi_tw3;
+        $this->y_realisasi_tw4 = $capaianTahunan->y_realisasi_tw4;
 
         foreach ($this->berkasList() as $berkas) {
             $this->catatanBerkas[$berkas->id] = $berkas->catatan;
@@ -117,6 +220,7 @@ class VerifikasiCapaian extends Component
 
         foreach ($this->kendalaSolusiList() as $ks) {
             $this->koreksiKendala[$ks->id] = ['kendala' => $ks->kendala, 'solusi' => $ks->solusi];
+            $this->catatanKendala[$ks->id] = $ks->catatan;
         }
 
         foreach ($this->rtlEvaluasiSebelumnya() as $poin) {
@@ -141,13 +245,47 @@ class VerifikasiCapaian extends Component
      * hanya izinkan "diajukan" — sekarang VerifikasiList juga menampilkan riwayat
      * diverifikasi/dikembalikan/disetujui, jadi tautan "Lihat →" ke sini harus tetap
      * bisa dibuka), tapi MENGUBAHNYA (tandai berkas, "Verifikasi Selesai",
-     * "Kembalikan ke Ketua Tim") tetap hanya boleh selama kegiatannya masih
-     * berstatus "diajukan" — dicek di sini (dipakai di view utk readonly/sembunyikan
-     * tombol) DAN di tiap method pengubah (defense in depth, bukan cuma sembunyi UI).
+     * "Kembalikan ke Ketua Tim", "Simpan Sementara") tetap hanya boleh selama
+     * Capaian-nya masih "diajukan" ATAU "sedang ditangani" — dicek di sini (dipakai
+     * di view utk readonly/sembunyikan tombol) DAN di tiap method pengubah (defense
+     * in depth, bukan cuma sembunyi UI).
+     *
+     * "sedang ditangani" TERMASUK di sini (bukan hanya "diajukan") supaya Tim SAKIP
+     * bisa kembali melanjutkan menandai berkas setelah sebelumnya "Simpan Sementara"
+     * — checkpoint itu HARUS tetap bisa disunting, bukan status akhir yang mengunci.
+     *
+     * Didasarkan pada Capaian::status (SATU status per IKU+bulan), bukan lagi
+     * menyimpulkan dari status_dokumen tiap Kegiatan — supaya tidak pernah ada isian
+     * yang "sebagian diajukan, sebagian bukan" secara ambigu di halaman ini.
      */
     public function bisaDiverifikasi(): bool
     {
-        return $this->kegiatanList()->contains(fn ($k) => $k->status_dokumen === Kegiatan::STATUS_DIAJUKAN);
+        return in_array($this->capaian->status, [Capaian::STATUS_DIAJUKAN, Capaian::STATUS_SEDANG_DITANGANI], true);
+    }
+
+    /**
+     * Setelah disetujui (masuk notula final), isian ini dikunci total — Ketua Tim
+     * tidak bisa menambah kegiatan apa pun sampai Tim SAKIP membuka kembali secara
+     * eksplisit lewat bukaKembali() di bawah, menariknya ke status "dikembalikan"
+     * (kegiatan yang sudah disetujui sebelumnya tetap terkunci-edit, hanya kegiatan
+     * BARU yang bisa ditambahkan Ketua Tim — lihat App\Livewire\PengisianKegiatan).
+     */
+    public function bisaDibukaKembali(): bool
+    {
+        return $this->capaian->status === Capaian::STATUS_DISETUJUI;
+    }
+
+    public function bukaKembali(): void
+    {
+        if (! $this->bisaDibukaKembali()) {
+            return;
+        }
+
+        $this->capaian->catatStatus(Capaian::STATUS_DIKEMBALIKAN, auth()->user(), $this->catatanBukaKembali ?: null);
+
+        session()->flash('status', 'Isian dibuka kembali — Ketua Tim sekarang bisa menambahkan kegiatan.');
+
+        $this->redirectRoute('verifikasi.index');
     }
 
     public function kendalaSolusiList()
@@ -209,18 +347,6 @@ class VerifikasiCapaian extends Component
             ->groupBy('ref_id');
     }
 
-    protected function berkasKendalaTerkelompok(): \Illuminate\Support\Collection
-    {
-        if ($this->cacheBerkasKendala !== null) {
-            return $this->cacheBerkasKendala;
-        }
-
-        return $this->cacheBerkasKendala = Berkas::where('ref_type', KendalaSolusi::class)
-            ->whereIn('ref_id', $this->kendalaSolusiList()->pluck('id'))
-            ->get()
-            ->groupBy('ref_id');
-    }
-
     protected function berkasBagianKustomTerkelompok(): \Illuminate\Support\Collection
     {
         if ($this->cacheBerkasBagianKustom !== null) {
@@ -251,72 +377,47 @@ class VerifikasiCapaian extends Component
     }
 
     /**
-     * Bukti solusi milik satu pasangan kendala-solusi tertentu.
-     */
-    public function berkasUntukKendala(int $kendalaSolusiId)
-    {
-        return $this->berkasKendalaTerkelompok()->get($kendalaSolusiId, collect());
-    }
-
-    /**
-     * Gabungan berkas lintas kegiatan (bukti capaian), kendala-solusi (bukti solusi),
-     * dan evaluasi RTL (bukti realisasi) milik IKU+periode ini (RF-39) — dipakai untuk
-     * validasi "semua berkas sudah ditandai" tanpa peduli pengelompokan tampilan.
+     * Gabungan berkas lintas kegiatan (bukti capaian) dan evaluasi RTL (bukti
+     * realisasi) milik IKU+periode ini (RF-39) — dipakai untuk validasi "semua
+     * berkas sudah ditandai" tanpa peduli pengelompokan tampilan. Kendala-solusi
+     * tidak lagi punya bukti dukung (RF-27 dicabut) — lihat App\Models\KendalaSolusi.
      */
     public function berkasList()
     {
         $berkasCapaian = $this->berkasKegiatanTerkelompok()->flatten();
-        $berkasSolusi = $this->berkasKendalaTerkelompok()->flatten();
         $berkasRtl = $this->rtlEvaluasiSebelumnya()->flatMap->berkas;
         $berkasBagianKustom = $this->berkasBagianKustomTerkelompok()->flatten();
 
-        return $berkasCapaian->concat($berkasSolusi)->concat($berkasRtl)->concat($berkasBagianKustom)->sortBy('created_at')->values();
-    }
-
-    public function updatedRealisasi(): void
-    {
-        $this->hitungPersentase();
-        $this->hitungKumulatif();
-    }
-
-    public function updatedTargetTw(): void
-    {
-        $this->hitungPersentase();
-        $this->hitungKumulatif();
-    }
-
-    protected function hitungPersentase(): void
-    {
-        $this->persentase_capaian = Capaian::hitungPersentase($this->target_tw, $this->realisasi);
+        return $berkasCapaian->concat($berkasRtl)->concat($berkasBagianKustom)->sortBy('created_at')->values();
     }
 
     /**
-     * Capaian kumulatif year-to-date (info tambahan, lihat komentar properti
-     * $realisasiKumulatif) — realisasi bulan-bulan LAIN yang sudah terverifikasi
-     * dari triwulan I s.d. triwulan periode ini (Capaian::realisasiKumulatif(),
-     * dengan periode ini sendiri sengaja dikecualikan dari sisi tersimpan) DITAMBAH
-     * realisasi bulan ini yang sedang diketik live, dibagi target_tw yang sama.
+     * Satu berkas boleh ditandai ulang Tim SAKIP hanya bila Capaian-nya masih
+     * "diajukan" DAN — khusus bukti kegiatan — kegiatan pemiliknya sendiri belum
+     * pernah diproses sebelumnya (masih "diajukan"). Berkas evaluasi RTL dan bagian
+     * kustom belum punya status lifecycle sendiri (lihat catatan di
+     * kegiatanBisaDikoreksi()), jadi cukup mengikuti status besar Capaian untuk saat ini.
      */
-    protected function hitungKumulatif(): void
+    public function berkasBisaDiverifikasi(int $berkasId): bool
     {
-        $periode = $this->capaian->periode;
+        if (! $this->bisaDiverifikasi()) {
+            return false;
+        }
 
-        $realisasiBulanLain = Capaian::realisasiKumulatif(
-            $this->capaian->iku_id,
-            $periode->tahun,
-            $periode->triwulan,
-            $this->capaian->periode_id
-        );
+        $berkas = $this->berkasList()->firstWhere('id', $berkasId);
 
-        $realisasiBulanIni = is_numeric($this->realisasi) ? (float) $this->realisasi : 0.0;
+        if (! $berkas || $berkas->ref_type !== Kegiatan::class) {
+            return true;
+        }
 
-        $this->realisasiKumulatif = $realisasiBulanLain + $realisasiBulanIni;
-        $this->persentaseKumulatif = Capaian::hitungPersentase($this->target_tw, $this->realisasiKumulatif);
+        $kegiatan = $this->kegiatanList()->firstWhere('id', $berkas->ref_id);
+
+        return ! $kegiatan || $this->kegiatanBisaDikoreksi($kegiatan);
     }
 
     public function tandaiSesuai(int $berkasId): void
     {
-        if (! $this->bisaDiverifikasi()) {
+        if (! $this->berkasBisaDiverifikasi($berkasId)) {
             return;
         }
 
@@ -328,13 +429,64 @@ class VerifikasiCapaian extends Component
 
     public function tandaiTolak(int $berkasId): void
     {
-        if (! $this->bisaDiverifikasi()) {
+        if (! $this->berkasBisaDiverifikasi($berkasId)) {
+            return;
+        }
+
+        $catatan = trim((string) ($this->catatanBerkas[$berkasId] ?? ''));
+
+        if ($catatan === '') {
+            $this->addError('catatanBerkas.'.$berkasId, 'Catatan wajib diisi saat menandai berkas "Tidak Sesuai" — supaya Ketua Tim tahu apa yang perlu diperbaiki.');
+
             return;
         }
 
         Berkas::whereKey($berkasId)->update([
             'status_verifikasi' => 'ditolak',
-            'catatan' => $this->catatanBerkas[$berkasId] ?? null,
+            'catatan' => $catatan,
+        ]);
+    }
+
+    /**
+     * Pasangan kendala &amp; solusi boleh ditandai ulang Tim SAKIP hanya selagi
+     * Capaian-nya masih "diajukan"/"sedang ditangani" — sama seperti berkasBisaDiverifikasi()
+     * tapi tanpa nuansa per-kegiatan (kendala &amp; solusi tidak terikat status_dokumen
+     * kegiatan tertentu, cuma iku_id+periode_id milik Capaian ini).
+     */
+    public function kendalaBisaDiverifikasi(int $kendalaId): bool
+    {
+        return $this->bisaDiverifikasi() && $this->kendalaSolusiList()->contains('id', $kendalaId);
+    }
+
+    public function tandaiKendalaSesuai(int $kendalaId): void
+    {
+        if (! $this->kendalaBisaDiverifikasi($kendalaId)) {
+            return;
+        }
+
+        KendalaSolusi::whereKey($kendalaId)->update([
+            'status_verifikasi' => 'terverifikasi',
+            'catatan' => $this->catatanKendala[$kendalaId] ?? null,
+        ]);
+    }
+
+    public function tandaiKendalaTolak(int $kendalaId): void
+    {
+        if (! $this->kendalaBisaDiverifikasi($kendalaId)) {
+            return;
+        }
+
+        $catatan = trim((string) ($this->catatanKendala[$kendalaId] ?? ''));
+
+        if ($catatan === '') {
+            $this->addError('catatanKendala.'.$kendalaId, 'Catatan wajib diisi saat menandai pasangan ini "Tidak Sesuai" — supaya Ketua Tim tahu apa yang perlu diperbaiki.');
+
+            return;
+        }
+
+        KendalaSolusi::whereKey($kendalaId)->update([
+            'status_verifikasi' => 'ditolak',
+            'catatan' => $catatan,
         ]);
     }
 
@@ -342,17 +494,37 @@ class VerifikasiCapaian extends Component
     {
         return [
             'analisis_capaian' => ['nullable', 'string'],
-            'target_pk' => ['required', 'numeric', 'min:0'],
-            'target_tw' => ['required', 'numeric', 'min:0'],
-            'realisasi' => ['required', 'numeric', 'min:0'],
-            // Boleh kosong (null) — rumus resmi (Capaian::hitungPersentase()) sengaja
-            // menghasilkan strip "-" ketika realisasi masih 0 (belum ada capaian untuk
-            // triwulan/bulan berjalan), bukan galat isian.
-            'persentase_capaian' => ['nullable', 'numeric', 'min:0'],
             'koreksiKegiatan.*' => ['required', 'string', 'max:1000'],
             'koreksiKendala.*.kendala' => ['required', 'string'],
             'koreksiKendala.*.solusi' => ['nullable', 'string'],
             'koreksiRtlRealisasi.*' => ['nullable', 'string'],
+            'target_tahunan' => ['nullable', 'numeric', 'min:0'],
+            'x_target' => ['nullable', 'numeric', 'min:0'],
+            'y_target' => ['nullable', 'numeric', 'min:0'],
+            'alokasi_tw1' => ['nullable', 'numeric', 'min:0'],
+            'alokasi_tw2' => ['nullable', 'numeric', 'min:0'],
+            'alokasi_tw3' => ['nullable', 'numeric', 'min:0'],
+            'alokasi_tw4' => ['nullable', 'numeric', 'min:0'],
+            'realisasi_tw1' => ['nullable', 'numeric', 'min:0'],
+            'realisasi_tw2' => ['nullable', 'numeric', 'min:0'],
+            'realisasi_tw3' => ['nullable', 'numeric', 'min:0'],
+            'realisasi_tw4' => ['nullable', 'numeric', 'min:0'],
+            'x_alokasi_tw1' => ['nullable', 'numeric', 'min:0'],
+            'x_alokasi_tw2' => ['nullable', 'numeric', 'min:0'],
+            'x_alokasi_tw3' => ['nullable', 'numeric', 'min:0'],
+            'x_alokasi_tw4' => ['nullable', 'numeric', 'min:0'],
+            'y_alokasi_tw1' => ['nullable', 'numeric', 'min:0'],
+            'y_alokasi_tw2' => ['nullable', 'numeric', 'min:0'],
+            'y_alokasi_tw3' => ['nullable', 'numeric', 'min:0'],
+            'y_alokasi_tw4' => ['nullable', 'numeric', 'min:0'],
+            'x_realisasi_tw1' => ['nullable', 'numeric', 'min:0'],
+            'x_realisasi_tw2' => ['nullable', 'numeric', 'min:0'],
+            'x_realisasi_tw3' => ['nullable', 'numeric', 'min:0'],
+            'x_realisasi_tw4' => ['nullable', 'numeric', 'min:0'],
+            'y_realisasi_tw1' => ['nullable', 'numeric', 'min:0'],
+            'y_realisasi_tw2' => ['nullable', 'numeric', 'min:0'],
+            'y_realisasi_tw3' => ['nullable', 'numeric', 'min:0'],
+            'y_realisasi_tw4' => ['nullable', 'numeric', 'min:0'],
         ];
     }
 
@@ -360,11 +532,119 @@ class VerifikasiCapaian extends Component
     {
         return [
             'analisis_capaian' => 'analisis capaian',
-            'target_pk' => 'Target PK',
-            'target_tw' => 'Target TW',
-            'realisasi' => 'realisasi',
-            'persentase_capaian' => 'capaian %',
+            'target_tahunan' => 'Target Tahunan',
+            'x_target' => 'Pembilang (X) Target Tahunan',
+            'y_target' => 'Penyebut (Y) Target Tahunan',
+            'alokasi_tw1' => 'Alokasi Target TW I',
+            'alokasi_tw2' => 'Alokasi Target TW II',
+            'alokasi_tw3' => 'Alokasi Target TW III',
+            'alokasi_tw4' => 'Alokasi Target TW IV',
+            'realisasi_tw1' => 'Realisasi TW I',
+            'realisasi_tw2' => 'Realisasi TW II',
+            'realisasi_tw3' => 'Realisasi TW III',
+            'realisasi_tw4' => 'Realisasi TW IV',
+            'x_alokasi_tw1' => 'Pembilang (X) Alokasi TW I',
+            'x_alokasi_tw2' => 'Pembilang (X) Alokasi TW II',
+            'x_alokasi_tw3' => 'Pembilang (X) Alokasi TW III',
+            'x_alokasi_tw4' => 'Pembilang (X) Alokasi TW IV',
+            'y_alokasi_tw1' => 'Penyebut (Y) Alokasi TW I',
+            'y_alokasi_tw2' => 'Penyebut (Y) Alokasi TW II',
+            'y_alokasi_tw3' => 'Penyebut (Y) Alokasi TW III',
+            'y_alokasi_tw4' => 'Penyebut (Y) Alokasi TW IV',
+            'x_realisasi_tw1' => 'Pembilang (X) Realisasi TW I',
+            'x_realisasi_tw2' => 'Pembilang (X) Realisasi TW II',
+            'x_realisasi_tw3' => 'Pembilang (X) Realisasi TW III',
+            'x_realisasi_tw4' => 'Pembilang (X) Realisasi TW IV',
+            'y_realisasi_tw1' => 'Penyebut (Y) Realisasi TW I',
+            'y_realisasi_tw2' => 'Penyebut (Y) Realisasi TW II',
+            'y_realisasi_tw3' => 'Penyebut (Y) Realisasi TW III',
+            'y_realisasi_tw4' => 'Penyebut (Y) Realisasi TW IV',
         ];
+    }
+
+    /**
+     * Muat baris CapaianTahunan milik IKU+tahun ini APA ADANYA dari DB (sekali per
+     * request, lihat $cacheCapaianTahunan) — TANPA menimpa nilainya dari properti
+     * form flat. Dipakai HANYA di mount() untuk mengisi properti flat dari nilai
+     * tersimpan; di luar mount() pakai capaianTahunanTerkini() di bawah.
+     *
+     * masterIku SENGAJA di-set langsung dari $this->capaian->masterIku (sudah
+     * di-load di mount(), bukan lazy-load ulang) — dipakai oleh
+     * alokasiKumulatif()/realisasiKumulatif() untuk cek MasterIku::pakaiRasio()
+     * tanpa query tambahan.
+     */
+    protected function capaianTahunanTersimpan(): CapaianTahunan
+    {
+        if ($this->cacheCapaianTahunan !== null) {
+            return $this->cacheCapaianTahunan;
+        }
+
+        $model = CapaianTahunan::firstOrNew([
+            'iku_id' => $this->capaian->iku_id,
+            'tahun' => $this->capaian->periode->tahun,
+        ]);
+
+        $model->setRelation('masterIku', $this->capaian->masterIku);
+
+        return $this->cacheCapaianTahunan = $model;
+    }
+
+    /**
+     * capaianTahunanTersimpan() disinkronkan dari properti form flat (fill(), BELUM
+     * save()) — dipakai baik untuk ditampilkan (render(), supaya kolom
+     * kumulatif/Capaian % di blade ikut bereaksi live saat diketik) maupun sesaat
+     * sebelum disimpan (simpanPerubahan()/simpanSementara()/verifikasiSelesai()/
+     * kembalikanKeKetuaTim()).
+     *
+     * HANYA kolom alokasi/realisasi (langsung MAUPUN rasio X/Y) milik TRIWULAN
+     * periode Capaian ini SENDIRI yang disinkronkan — kolom TW lain SENGAJA
+     * dibiarkan apa adanya dari capaianTahunanTersimpan() (tidak ikut fill()),
+     * supaya nilainya tidak bisa tertimpa dari sesi verifikasi bulan lain (satu
+     * CapaianTahunan dibagikan SELURUH bulan dalam satu IKU+tahun — lihat
+     * App\Models\CapaianTahunan) — baik karena properti komponen ini kebetulan
+     * masih menyimpan nilai TW lain dari load awal, maupun payload yang
+     * dimanipulasi. Blade juga menyembunyikan/mengunci kolom TW lain sebagai
+     * <input>, tapi pengecekan di sini tetap dipertahankan (defense in depth,
+     * bukan cuma sembunyi UI — pola yang sama dipakai kegiatanBisaDikoreksi()).
+     * target_tahunan/x_target/y_target TETAP disinkronkan tanpa syarat karena
+     * keduanya bukan milik TW tertentu (sekali per tahun, lihat dokumentasi
+     * $target_tahunan di atas).
+     */
+    protected function capaianTahunanTerkini(): CapaianTahunan
+    {
+        $model = $this->capaianTahunanTersimpan();
+        $tw = (int) $this->capaian->periode->triwulan;
+
+        $fill = [
+            'target_tahunan' => $this->target_tahunan,
+            'x_target' => $this->x_target,
+            'y_target' => $this->y_target,
+        ];
+
+        foreach (['alokasi_tw', 'realisasi_tw', 'x_alokasi_tw', 'y_alokasi_tw', 'x_realisasi_tw', 'y_realisasi_tw'] as $prefix) {
+            $fill["{$prefix}{$tw}"] = $this->{"{$prefix}{$tw}"};
+        }
+
+        $model->fill($fill);
+
+        return $model;
+    }
+
+    /**
+     * Satu kegiatan boleh disunting Tim SAKIP selagi statusnya SENDIRI masih
+     * "diajukan" (belum pernah diverifikasi/disetujui pada batch sebelumnya) — TIDAK
+     * LAGI bergantung pada status BESAR Capaian (bisaDiverifikasi() dicabut dari
+     * sini), supaya Tim SAKIP tetap bisa mengoreksi kegiatan yang masih "diajukan"
+     * walau Capaian-nya sendiri sudah "diverifikasi"/"disetujui" (mis. ada kegiatan
+     * baru yang menyusul dan menarik status Capaian berubah lagi). Pengecekan
+     * status_dokumen kegiatan itu sendiri TETAP dipertahankan sebagai pertahanan
+     * berlapis: kegiatan yang sudah diproses pada batch sebelumnya tidak boleh
+     * diam-diam ikut tersunting lagi hanya karena ada kegiatan BARU di Capaian yang
+     * sama (lihat simpanKoreksiTeks()).
+     */
+    public function kegiatanBisaDikoreksi(Kegiatan $kegiatan): bool
+    {
+        return $kegiatan->status_dokumen === Kegiatan::STATUS_DIAJUKAN;
     }
 
     /**
@@ -375,7 +655,16 @@ class VerifikasiCapaian extends Component
     protected function simpanKoreksiTeks(): void
     {
         foreach ($this->koreksiKegiatan as $id => $teks) {
-            Kegiatan::whereKey($id)->update(['uraian_kegiatan' => $teks]);
+            $kegiatan = $this->kegiatanList()->firstWhere('id', (int) $id);
+
+            // Pertahanan berlapis (bukan cuma readonly di UI): kegiatan yang sudah
+            // diverifikasi/disetujui pada batch SEBELUMNYA tidak boleh ikut tersunting
+            // hanya karena ada kegiatan BARU yang membuat Capaian ini "diajukan" lagi.
+            if (! $kegiatan || ! $this->kegiatanBisaDikoreksi($kegiatan)) {
+                continue;
+            }
+
+            $kegiatan->update(['uraian_kegiatan' => $teks]);
         }
 
         foreach ($this->koreksiKendala as $id => $data) {
@@ -392,6 +681,59 @@ class VerifikasiCapaian extends Component
         }
     }
 
+    /**
+     * Simpan Analisis Capaian + Target Tahunan/Alokasi/Realisasi Triwulanan + koreksi
+     * teks TANPA mengubah Capaian::status — dipakai Tim SAKIP untuk mengedit isian
+     * pada status APA PUN (draft/sedang ditangani/diajukan/diverifikasi/dikembalikan/
+     * disetujui), bukan hanya saat "diajukan"/"sedang ditangani" seperti tombol
+     * simpanSementara()/verifikasiSelesai()/kembalikanKeKetuaTim() di bawah (ketiga
+     * method itu tetap dikhususkan untuk transisi status alur kerja).
+     */
+    public function simpanPerubahan(): void
+    {
+        $this->validate();
+
+        DB::transaction(function () {
+            $this->capaian->update(['analisis_capaian' => $this->analisis_capaian]);
+            $this->capaianTahunanTerkini()->save();
+            $this->simpanKoreksiTeks();
+        });
+
+        session()->flash('status', 'Perubahan disimpan.');
+    }
+
+    /**
+     * Checkpoint sementara di tengah pemeriksaan — dipakai saat sebagian berkas
+     * sudah ditandai Sesuai/Tidak Sesuai (dengan catatan) tapi Tim SAKIP belum
+     * memutuskan hasil akhirnya. TIDAK mensyaratkan seluruh berkas sudah ditandai
+     * (beda dari verifikasiSelesai()/kembalikanKeKetuaTim() di bawah) dan TIDAK
+     * menyentuh status_dokumen kegiatan mana pun — isian tetap bisa dilanjutkan
+     * Tim SAKIP kapan saja selagi masih "sedang ditangani" (lihat bisaDiverifikasi()).
+     * Status hanya dicatat SEKALI ke Riwayat Status saat pertama kali beralih dari
+     * "diajukan" — simpan sementara berikutnya tidak menambah baris riwayat baru
+     * selama isian belum berpindah status lagi.
+     */
+    public function simpanSementara(): void
+    {
+        if (! $this->bisaDiverifikasi()) {
+            return;
+        }
+
+        $this->validate();
+
+        DB::transaction(function () {
+            $this->capaian->update(['analisis_capaian' => $this->analisis_capaian]);
+            $this->capaianTahunanTerkini()->save();
+            $this->simpanKoreksiTeks();
+
+            if ($this->capaian->status !== Capaian::STATUS_SEDANG_DITANGANI) {
+                $this->capaian->catatStatus(Capaian::STATUS_SEDANG_DITANGANI, auth()->user());
+            }
+        });
+
+        session()->flash('status', 'Progres pemeriksaan disimpan sementara — Anda bisa melanjutkan kapan saja.');
+    }
+
     public function verifikasiSelesai(): void
     {
         if (! $this->bisaDiverifikasi()) {
@@ -399,15 +741,16 @@ class VerifikasiCapaian extends Component
         }
 
         $berkas = $this->berkasList();
+        $kendala = $this->kendalaSolusiList();
 
-        if ($berkas->contains(fn ($b) => $b->status_verifikasi === 'menunggu')) {
-            $this->addError('berkas', 'Seluruh berkas harus ditandai "Sesuai" atau "Tolak" terlebih dahulu.');
+        if ($berkas->contains(fn ($b) => $b->status_verifikasi === 'menunggu') || $kendala->contains(fn ($k) => $k->status_verifikasi === 'menunggu')) {
+            $this->addError('berkas', 'Seluruh berkas dan pasangan kendala & solusi harus ditandai "Sesuai" atau "Tidak Sesuai" terlebih dahulu.');
 
             return;
         }
 
-        if ($berkas->contains(fn ($b) => $b->status_verifikasi === 'ditolak')) {
-            $this->addError('berkas', 'Terdapat berkas yang ditolak — gunakan tombol "Kembalikan ke Ketua Tim", bukan "Verifikasi Selesai".');
+        if ($berkas->contains(fn ($b) => $b->status_verifikasi === 'ditolak') || $kendala->contains(fn ($k) => $k->status_verifikasi === 'ditolak')) {
+            $this->addError('berkas', 'Terdapat berkas atau pasangan kendala & solusi yang ditolak — gunakan tombol "Kembalikan ke Ketua Tim", bukan "Verifikasi Selesai".');
 
             return;
         }
@@ -416,14 +759,8 @@ class VerifikasiCapaian extends Component
 
         try {
             DB::transaction(function () {
-                $this->capaian->update([
-                    'analisis_capaian' => $this->analisis_capaian,
-                    'target_pk' => $this->target_pk,
-                    'target_tw' => $this->target_tw,
-                    'realisasi' => $this->realisasi,
-                    'persentase_capaian' => $this->persentase_capaian,
-                ]);
-
+                $this->capaian->update(['analisis_capaian' => $this->analisis_capaian]);
+                $this->capaianTahunanTerkini()->save();
                 $this->simpanKoreksiTeks();
 
                 foreach ($this->kegiatanList() as $kegiatan) {
@@ -445,33 +782,68 @@ class VerifikasiCapaian extends Component
         $this->redirectRoute('verifikasi.index');
     }
 
+    /**
+     * Kegiatan yang buktinya SENDIRI ditolak dikembalikan (dikembalikan →
+     * Ketua Tim wajib perbaiki bukti itu), sedangkan kegiatan lain pada IKU+periode
+     * yang sama namun buktinya sendiri sudah diterima ikut DIVERIFIKASI (bukan ikut
+     * "dikembalikan" begitu saja) — supaya bukti yang sebenarnya sudah benar tidak
+     * pernah tampil "✓ Sesuai" di bawah label kegiatan yang kelihatannya
+     * "dikembalikan" (sumber kebingungan sebelumnya), dan Ketua Tim hanya perlu
+     * membenahi kegiatan yang benar-benar bermasalah. Status BESAR Capaian tetap
+     * "dikembalikan" karena isian periode ini belum selesai seluruhnya.
+     */
     public function kembalikanKeKetuaTim(): void
     {
         if (! $this->bisaDiverifikasi()) {
             return;
         }
 
-        if (! $this->berkasList()->contains(fn ($b) => $b->status_verifikasi === 'ditolak')) {
-            $this->addError('berkas', 'Tandai minimal satu berkas sebagai "Tolak" beserta catatan sebelum mengembalikan isian.');
+        $berkas = $this->berkasList();
+        $kendala = $this->kendalaSolusiList();
+
+        if ($berkas->contains(fn ($b) => $b->status_verifikasi === 'menunggu') || $kendala->contains(fn ($k) => $k->status_verifikasi === 'menunggu')) {
+            $this->addError('berkas', 'Seluruh berkas dan pasangan kendala & solusi harus ditandai "Sesuai" atau "Tidak Sesuai" terlebih dahulu.');
+
+            return;
+        }
+
+        $adaBerkasDitolak = $berkas->contains(fn ($b) => $b->status_verifikasi === 'ditolak');
+        $adaKendalaDitolak = $kendala->contains(fn ($k) => $k->status_verifikasi === 'ditolak');
+
+        if (! $adaBerkasDitolak && ! $adaKendalaDitolak) {
+            $this->addError('berkas', 'Tandai minimal satu berkas atau pasangan kendala & solusi sebagai "Tidak Sesuai" beserta catatan sebelum mengembalikan isian.');
 
             return;
         }
 
         try {
             DB::transaction(function () {
+                $this->capaian->update(['analisis_capaian' => $this->analisis_capaian]);
+                $this->capaianTahunanTerkini()->save();
                 $this->simpanKoreksiTeks();
 
                 foreach ($this->kegiatanList() as $kegiatan) {
-                    if ($kegiatan->status_dokumen === Kegiatan::STATUS_DIAJUKAN) {
+                    if ($kegiatan->status_dokumen !== Kegiatan::STATUS_DIAJUKAN) {
+                        continue;
+                    }
+
+                    $berkasKegiatanIni = $this->berkasUntukKegiatan($kegiatan->id);
+                    $buktiSendiriDitolak = $berkasKegiatanIni->contains(fn ($b) => $b->status_verifikasi === 'ditolak');
+
+                    if ($buktiSendiriDitolak) {
                         $kegiatan->kembalikan();
+                    } else {
+                        $kegiatan->verifikasi();
                     }
                 }
 
-                // Catatan riwayat mengambil alasan penolakan dari berkas yang ditandai
-                // "Tolak" — sudah divalidasi minimal satu ada sebelum sampai di sini.
+                // Catatan riwayat mengambil alasan penolakan dari berkas MAUPUN pasangan
+                // kendala & solusi yang ditandai "Tolak" — sudah divalidasi minimal satu
+                // ada (di salah satu keduanya) sebelum sampai di sini.
                 $catatan = $this->berkasList()
                     ->where('status_verifikasi', 'ditolak')
                     ->pluck('catatan')
+                    ->concat($this->kendalaSolusiList()->where('status_verifikasi', 'ditolak')->pluck('catatan'))
                     ->filter()
                     ->unique()
                     ->implode(' | ');
@@ -501,11 +873,12 @@ class VerifikasiCapaian extends Component
             'kendalaSolusiList' => $kendalaSolusiList,
             'rtlSebelumnya' => $this->rtlEvaluasiSebelumnya(),
             'berkasPerKegiatan' => $kegiatanList->mapWithKeys(fn ($k) => [$k->id => $this->berkasUntukKegiatan($k->id)]),
-            'berkasPerKendala' => $kendalaSolusiList->mapWithKeys(fn ($ks) => [$ks->id => $this->berkasUntukKendala($ks->id)]),
             'bagianKustomList' => $bagianKustomList,
             'berkasPerBagianKustom' => $bagianKustomList->mapWithKeys(fn ($p) => [$p->id => $this->berkasUntukBagianKustom($p->id)]),
             'bisaDiverifikasi' => $this->bisaDiverifikasi(),
+            'bisaDibukaKembali' => $this->bisaDibukaKembali(),
             'riwayatStatus' => $this->capaian->riwayatStatus()->with('user')->get(),
+            'capaianTahunan' => $this->capaianTahunanTerkini(),
         ]);
     }
 }

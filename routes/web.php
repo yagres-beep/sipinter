@@ -28,14 +28,19 @@ Route::middleware('auth')->group(function () {
 
     Route::middleware('role:Ketua Tim')->group(function () {
         Route::view('/pengisian', 'pengisian.index')->name('pengisian.index');
-        Route::view('/kendala-solusi', 'kendala-solusi.index')->name('kendala-solusi.index');
         Route::view('/rtl-evaluasi', 'rtl-evaluasi.index')->name('rtl-evaluasi.index');
     });
+
+    // Pratinjau/unduh satu berkas bukti — dipakai Tim SAKIP saat verifikasi MAUPUN
+    // Ketua Tim untuk melihat kembali bukti yang sudah diunggahnya sendiri (RF-40a
+    // + permintaan supaya Ketua Tim tidak perlu hanya mengandalkan nama berkas).
+    Route::middleware('role:Tim SAKIP,Ketua Tim')
+        ->get('/berkas/{berkas}/buka', [BerkasDownloadController::class, 'show'])
+        ->name('berkas.show');
 
     Route::middleware('role:Tim SAKIP')->group(function () {
         Route::view('/verifikasi', 'verifikasi.index')->name('verifikasi.index');
         Route::get('/verifikasi/{capaian}', [VerifikasiController::class, 'show'])->name('verifikasi.show');
-        Route::get('/berkas/{berkas}/buka', [BerkasDownloadController::class, 'show'])->name('berkas.show');
         Route::view('/master-iku', 'master-iku.index')->name('master-iku.index');
         Route::view('/akun-storage', 'storage-accounts.index')->name('storage-accounts.index');
         Route::get('/akun-storage/{storageAccount}/google/redirect', [GoogleOAuthController::class, 'redirect'])->name('storage-accounts.google-redirect');

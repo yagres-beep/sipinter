@@ -18,8 +18,9 @@ use Livewire\Component;
  * triwulan ini") = filter TRIWULANAN yang merekap ketiga bulan sekaligus (RF-48).
  *
  * Default status TETAP "diajukan" saat halaman dibuka (worklist verifikasi
- * sehari-hari) — status lain (diverifikasi/dikembalikan/disetujui) cuma untuk
- * menelusuri riwayat, dipilih manual lewat filter, tidak pernah jadi default.
+ * sehari-hari) — status lain (sedang ditangani/diverifikasi/dikembalikan/
+ * disetujui) cuma untuk menelusuri riwayat, dipilih manual lewat filter, tidak
+ * pernah jadi default.
  */
 class VerifikasiList extends Component
 {
@@ -30,11 +31,11 @@ class VerifikasiList extends Component
     public $bulan = '';
 
     /**
-     * String kosong = "Semua Status" (gabungan 4 status di statusTersedia(), TIDAK
+     * String kosong = "Semua Status" (gabungan 5 status di statusTersedia(), TIDAK
      * termasuk "draft" karena itu belum diajukan Ketua Tim sama sekali — di luar
      * lingkup pemantauan Tim SAKIP).
      */
-    public string $status = Kegiatan::STATUS_DIAJUKAN;
+    public string $status = Capaian::STATUS_DIAJUKAN;
 
     public string $cari = '';
 
@@ -48,10 +49,11 @@ class VerifikasiList extends Component
     public static function statusTersedia(): array
     {
         return [
-            Kegiatan::STATUS_DIAJUKAN,
-            Kegiatan::STATUS_DIVERIFIKASI,
-            Kegiatan::STATUS_DIKEMBALIKAN,
-            Kegiatan::STATUS_DISETUJUI,
+            Capaian::STATUS_DIAJUKAN,
+            Capaian::STATUS_SEDANG_DITANGANI,
+            Capaian::STATUS_DIVERIFIKASI,
+            Capaian::STATUS_DIKEMBALIKAN,
+            Capaian::STATUS_DISETUJUI,
         ];
     }
 
@@ -99,7 +101,7 @@ class VerifikasiList extends Component
         $this->bulan = '';
         $this->tahun = (int) now()->year;
         $this->triwulan = (int) ceil(((int) now()->month) / 3);
-        $this->status = Kegiatan::STATUS_DIAJUKAN;
+        $this->status = Capaian::STATUS_DIAJUKAN;
         $this->urutanKolom = 'periode';
         $this->urutanArah = 'asc';
     }
@@ -109,32 +111,25 @@ class VerifikasiList extends Component
      */
     protected function daftarCapaian()
     {
-        // Status kosong ("Semua Status") mencakup keempat status alur verifikasi
+        // Status kosong ("Semua Status") mencakup kelima status alur verifikasi
         // sekaligus (bukan tanpa syarat sama sekali) — draft sengaja dikecualikan
         // karena belum diajukan Ketua Tim, di luar lingkup pemantauan Tim SAKIP.
+        //
+        // Difilter langsung dari Capaian::status (SATU status per IKU+bulan, lihat
+        // App\Models\Capaian) — bukan lagi menyimpulkan pasangan iku_id+periode_id
+        // dari Kegiatan::status_dokumen seperti sebelumnya, karena status_dokumen tiap
+        // kegiatan bisa berbeda-beda dalam satu Capaian yang sama (kegiatan diajukan
+        // bertahap) sehingga query lama bisa salah menampilkan Capaian di status yang
+        // tidak sedang dicari.
         $statusDicari = filled($this->status) ? [$this->status] : self::statusTersedia();
 
-        $pasanganTersaring = Kegiatan::whereIn('status_dokumen', $statusDicari)
+        $daftar = Capaian::with(['masterIku', 'periode'])
+            ->whereIn('status', $statusDicari)
             ->whereHas('periode', function ($q) {
                 $q->where('tahun', $this->tahun)->where('triwulan', $this->triwulan);
 
                 if (filled($this->bulan)) {
                     $q->where('bulan', $this->bulan);
-                }
-            })
-            ->get(['iku_id', 'periode_id'])
-            ->unique(fn ($k) => $k->iku_id.'-'.$k->periode_id);
-
-        if ($pasanganTersaring->isEmpty()) {
-            return collect();
-        }
-
-        $daftar = Capaian::with(['masterIku', 'periode'])
-            ->where(function ($q) use ($pasanganTersaring) {
-                foreach ($pasanganTersaring as $pasangan) {
-                    $q->orWhere(function ($sub) use ($pasangan) {
-                        $sub->where('iku_id', $pasangan->iku_id)->where('periode_id', $pasangan->periode_id);
-                    });
                 }
             })
             ->get();
@@ -164,11 +159,10 @@ class VerifikasiList extends Component
     /**
      * Kegiatan pendukung per Capaian (RF-37), dihitung SEKALI untuk seluruh daftar
      * dalam SATU query (bukan satu query per baris lewat $capaian->kegiatanList() —
-     * N+1) — dipakai untuk turunkan jumlah kegiatan MAUPUN status asli tiap kegiatan
-     * (lihat render(): satu Capaian bisa punya kegiatan berstatus campuran, mis.
-     * sebagian "dikembalikan" sebagian "diverifikasi", jadi kolom Status & tombol
-     * Tindakan di tabel tidak bisa asal mengasumsikan status filter yang sedang
-     * dipilih — terutama saat filter "Semua Status").
+     * N+1) — dipakai untuk turunkan jumlah MAUPUN rincian status kegiatan (lihat
+     * Kegiatan::rincianStatus()). Status besar yang ditampilkan tetap $capaian->status
+     * (lihat App\Models\Capaian); rincian ini cuma pelengkap supaya campurannya (mis.
+     * "3 diverifikasi, 2 dikembalikan") tetap terlihat tanpa buka detail.
      *
      * @param  \Illuminate\Support\Collection<int, Capaian>  $daftarCapaian
      * @return \Illuminate\Support\Collection<int, \Illuminate\Support\Collection<int, Kegiatan>>
@@ -197,10 +191,7 @@ class VerifikasiList extends Component
         return view('livewire.verifikasi-list', [
             'daftarCapaian' => $daftarCapaian,
             'jumlahKegiatan' => $kegiatanPerCapaian->map->count(),
-            // Status DISTINCT yang benar-benar dimiliki kegiatan Capaian ini — dipakai
-            // di tabel supaya baris dengan kegiatan berstatus campuran tetap ditampilkan
-            // jujur (badge lebih dari satu), bukan diasumsikan sama dengan filter aktif.
-            'statusPerCapaian' => $kegiatanPerCapaian->map(fn ($g) => $g->pluck('status_dokumen')->unique()->values()),
+            'rincianStatusKegiatan' => $kegiatanPerCapaian->map(fn ($g) => Kegiatan::rincianStatus($g)),
             'statusTersedia' => self::statusTersedia(),
         ]);
     }

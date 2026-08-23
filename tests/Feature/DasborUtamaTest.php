@@ -31,6 +31,22 @@ class DasborUtamaTest extends TestCase
         Capaian::create(['iku_id' => $ikuB->id, 'periode_id' => $periode->id]);
     }
 
+    public function test_ringkasan_menghitung_capaian_sedang_ditangani_sebagai_menunggu_verifikasi(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 8, 'triwulan' => 3, 'bulan_ke' => 2, 'flag_bulan_terlewat' => false]);
+        $iku = MasterIku::create(['kode' => 'DELTA-4', 'indikator' => 'Indikator Delta', 'tim' => 'Tim D', 'penanggung_jawab' => 'PJ D']);
+        Capaian::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'status' => Capaian::STATUS_SEDANG_DITANGANI]);
+
+        $ringkasan = Livewire::test(DasborUtama::class)->viewData('ringkasan');
+
+        // Sebelum diperbaiki, Capaian berstatus "sedang_ditangani" tidak terhitung di
+        // kedua sisi (bukan "menunggu_verifikasi" ataupun "sudah_diverifikasi") —
+        // seolah hilang dari ringkasan dasbor.
+        $this->assertSame(1, $ringkasan['menunggu_verifikasi']);
+    }
+
     protected function loginSebagai(string $peranNama): User
     {
         $peran = Role::firstOrCreate(['nama' => $peranNama]);
@@ -113,5 +129,35 @@ class DasborUtamaTest extends TestCase
         $response = $this->get('/dashboard');
         $response->assertOk();
         $response->assertSee('iku_id='.$ikuA->id, false);
+    }
+
+    /**
+     * Skenario: 1 IKU, 5 kegiatan (3 diverifikasi + 2 dikembalikan) — dasbor tetap
+     * satu baris untuk IKU+bulan ini (bukan 5 baris terpisah seperti sebelum
+     * Capaian::status ada), dengan rincian status kegiatannya terlihat di kolomnya sendiri.
+     */
+    public function test_rincian_status_kegiatan_tampil_saat_sebagian_dikembalikan(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 8, 'triwulan' => 3, 'bulan_ke' => 2, 'flag_bulan_terlewat' => false]);
+        $iku = MasterIku::create(['kode' => 'DELTA-4', 'indikator' => 'Indikator Delta', 'tim' => 'Tim D', 'penanggung_jawab' => 'PJ D']);
+
+        Capaian::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'status' => Capaian::STATUS_DIKEMBALIKAN]);
+
+        for ($i = 1; $i <= 3; $i++) {
+            Kegiatan::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'uraian_kegiatan' => "Kegiatan verif {$i}", 'jenis' => 'bukan_survei_sensus', 'status_dokumen' => 'diverifikasi']);
+        }
+        for ($i = 1; $i <= 2; $i++) {
+            Kegiatan::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'uraian_kegiatan' => "Kegiatan kembali {$i}", 'jenis' => 'bukan_survei_sensus', 'status_dokumen' => 'dikembalikan']);
+        }
+
+        Livewire::test(DasborUtama::class)
+            ->assertSeeInOrder(['DELTA-4'])
+            ->assertSee('3 Diverifikasi')
+            ->assertSee('2 Dikembalikan');
+
+        // Tetap SATU baris untuk IKU+bulan ini, bukan 5 baris.
+        $this->assertDatabaseCount('capaian', 1);
     }
 }

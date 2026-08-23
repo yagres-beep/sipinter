@@ -54,4 +54,43 @@
             </button>
         </div>
     </div>
+
+    <div class="card">
+        <div class="sec"><span>Format Angka Capaian</span> <span class="badge b-tunggu">bisa diubah</span></div>
+        <div class="info">ℹ️ Berlaku untuk kolom Target/Realisasi/Capaian % di seluruh aplikasi yang menampilkan angka capaian: tabel &amp; Excel Rekap Kinerja Tahunan, Detail Verifikasi (Alokasi/Realisasi Kumulatif &amp; Capaian %), Dasbor Kinerja, dan isi otomatis Notula Bagian I. Nilai kosong (belum ada data) selalu ditulis "-"; pengaturan ini hanya menentukan tulisan untuk nilai yang benar-benar 0.</div>
+
+        <div class="field" style="max-width:420px">
+            <label class="fl-row" style="cursor:pointer;gap:8px">
+                <input type="checkbox" wire:model="tampilkanNolSebagaiStrip">
+                <span>Tulis nilai 0 sebagai "-" <span class="muted" style="font-weight:400">(dianggap belum ada data, bukan capaian nol)</span></span>
+            </label>
+        </div>
+
+        <div class="btn-row">
+            <button type="button" class="btn btn-primary" wire:click="simpan" wire:loading.attr="disabled" wire:target="simpan">
+                <span wire:loading.remove wire:target="simpan">Simpan Pengaturan</span>
+                <span wire:loading wire:target="simpan"><i class="spin"></i> Menyimpan…</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="sec"><span>Penilaian Kinerja Organisasi (PKO)</span> <span class="badge b-tunggu">bisa diubah</span></div>
+        <div class="info">ℹ️ Normalisasi Capaian PK (di Dasbor Capaian) = min(Capaian % Setahun TW IV tiap IKU, batas ini). Batas ini TERPISAH dari "Batas Maksimal Capaian" di atas — ubah di sini kalau rumus PKO resmi berubah (saat ini 110%).</div>
+
+        <div class="field" style="max-width:220px">
+            <label>Batas Normalisasi Capaian PK (%) <span class="req">*</span></label>
+            <input type="number" step="0.01" class="inp filled" style="width:100%" wire:model="batasNormalisasiPko">
+            @error('batasNormalisasiPko')
+                <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+            @enderror
+        </div>
+
+        <div class="btn-row">
+            <button type="button" class="btn btn-primary" wire:click="simpan" wire:loading.attr="disabled" wire:target="simpan">
+                <span wire:loading.remove wire:target="simpan">Simpan Pengaturan</span>
+                <span wire:loading wire:target="simpan"><i class="spin"></i> Menyimpan…</span>
+            </button>
+        </div>
+    </div>
 </div>

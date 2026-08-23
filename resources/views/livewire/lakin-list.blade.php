@@ -1,7 +1,7 @@
 <div>
     <div class="page-head">
-        <div class="page-title">LAKIN</div>
-        <div class="page-sub">Laporan Kinerja tahunan — dibentuk Tim SAKIP dari data capaian yang sudah terverifikasi.</div>
+        <div class="page-title">Rekap Kinerja Tahunan</div>
+        <div class="page-sub">Rekap kinerja tahunan — dibentuk Tim SAKIP dari data capaian yang sudah terverifikasi.</div>
     </div>
 
     @if (session('status'))
@@ -10,8 +10,8 @@
 
     @if (auth()->user()->namaRole() === 'Tim SAKIP')
         <div class="card">
-            <div class="sec"><span>Bentuk LAKIN</span></div>
-            <div class="info">ℹ️ Buat dokumen LAKIN untuk tahun ini, lalu pilih sendiri IKU mana saja yang mau dimasukkan lewat checklist di halaman berikutnya — tidak otomatis semua. Bila LAKIN untuk tahun itu sudah pernah dibuat, Anda akan diarahkan ke dokumen yang sama.</div>
+            <div class="sec"><span>Bentuk Rekap Baru</span></div>
+            <div class="info">ℹ️ Buat rekap kinerja tahunan untuk tahun ini, lalu pilih sendiri IKU mana saja yang mau dimasukkan lewat checklist di halaman berikutnya — tidak otomatis semua. Bila rekap untuk tahun itu sudah pernah dibuat, Anda akan diarahkan ke dokumen yang sama.</div>
             <div class="field" style="max-width:200px">
                 <label>Tahun</label>
                 <input type="number" class="inp filled" wire:model="tahunBaru">
@@ -21,7 +21,7 @@
             </div>
             <div class="btn-row">
                 <button type="button" class="btn btn-primary" wire:click="bentukLakin" wire:loading.attr="disabled" wire:target="bentukLakin">
-                    <span wire:loading.remove wire:target="bentukLakin">📈 Bentuk LAKIN</span>
+                    <span wire:loading.remove wire:target="bentukLakin">📈 Bentuk Rekap</span>
                     <span wire:loading wire:target="bentukLakin"><i class="spin"></i> Membentuk…</span>
                 </button>
             </div>
@@ -29,7 +29,7 @@
     @endif
 
     <div class="card" style="margin-top:16px">
-        <div class="sec"><span>Daftar LAKIN</span></div>
+        <div class="sec"><span>Daftar Rekap Kinerja Tahunan</span></div>
         <div class="table-scroll" style="max-height:520px" x-data="dataTable(10)">
             <table>
                 <thead>
@@ -48,7 +48,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="3" style="color:var(--muted)">Belum ada LAKIN yang dibentuk.</td>
+                            <td colspan="3" style="color:var(--muted)">Belum ada rekap yang dibentuk.</td>
                         </tr>
                     @endforelse
                 </tbody>

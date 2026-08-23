@@ -19,11 +19,10 @@
         <div class="badge b-kembali" style="display:block;margin-bottom:14px">{{ $message }}</div>
     @enderror
 
-    @if ($bisaDiverifikasi)
-        <div class="info teal">✏️ Teks yang bergaris putus-putus (uraian kegiatan, kendala, solusi, realisasi RTL) bisa langsung disunting bila ada salah ketik dari isian ketua tim.</div>
-    @else
-        <div class="info">🔒 Isian ini sudah berstatus <x-badge-status :status="$kegiatanList->first()?->status_dokumen ?? 'diverifikasi'" /> — ditampilkan sebagai riwayat (baca saja), tidak bisa diverifikasi/dikembalikan ulang dari sini.</div>
-    @endif
+    <div class="info teal">✏️ Analisis Capaian, Target &amp; Realisasi Triwulanan, dan teks bergaris putus-putus (uraian kegiatan, kendala, solusi, realisasi RTL) selalu bisa disunting Tim SAKIP — klik "Simpan Perubahan" di bawah kapan pun, tidak perlu menunggu status "diajukan".</div>
+    @unless ($bisaDiverifikasi)
+        <div class="info">🔒 Isian ini berstatus <x-badge-status :status="$capaian->status" /> — verifikasi/pengembalian bukti hanya bisa dilakukan selagi berstatus "diajukan" atau "sedang ditangani", tapi field di atas tetap bisa disunting &amp; disimpan.</div>
+    @endunless
 
     @if ($riwayatStatus->isNotEmpty())
         <div class="card">
@@ -49,73 +48,180 @@
         <div class="field">
             <label>Analisis Capaian</label>
             <textarea class="inp filled" style="height:auto;display:block" rows="3" wire:model="analisis_capaian"
-                placeholder="Narasi analisis capaian..." @readonly(!$bisaDiverifikasi)></textarea>
+                placeholder="Narasi analisis capaian..."></textarea>
             @error('analisis_capaian')
                 <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
             @enderror
         </div>
 
-        <div class="num-grid">
-            <div class="num-cell">
-                <label>Target PK</label>
-                <input type="number" step="0.01" class="inp filled" style="width:100%" wire:model="target_pk" @readonly(!$bisaDiverifikasi)>
+        @if ($capaian->masterIku->pakaiRasio())
+            <div class="field">
+                <label>Target Tahunan <span class="muted" style="font-weight:400;font-size:10px">— {{ $capaian->masterIku->deskripsi_x ?: 'Pembilang (X)' }} ÷ {{ $capaian->masterIku->deskripsi_y ?: 'Penyebut (Y)' }}, sekali per tahun</span></label>
+                <div style="display:flex;gap:8px;align-items:center">
+                    <input type="number" step="0.01" class="inp filled" style="width:120px" wire:model.live="x_target" placeholder="X">
+                    <span class="muted">÷</span>
+                    <input type="number" step="0.01" class="inp filled" style="width:120px" wire:model.live="y_target" placeholder="Y">
+                    <span class="muted">= {{ $capaianTahunan->targetTahunan() }}%</span>
+                </div>
+                @error('x_target')
+                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                @enderror
+                @error('y_target')
+                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                @enderror
             </div>
-            <div class="num-cell">
-                <label>Target TW <span class="muted" style="font-weight:400;font-size:10px">({{ $capaian->masterIku->satuan }})</span></label>
-                <input type="number" step="0.01" class="inp filled" style="width:100%" wire:model.live="target_tw" @readonly(!$bisaDiverifikasi)>
+            <div class="fhint" style="margin:10px 0 6px">Isi Pembilang (X) &amp; Penyebut (Y) TRIWULAN INI SAJA (bukan kumulatif, tidak perlu melihat isian triwulan sebelumnya) — kumulatif TW I s.d. TW berjalan &amp; persentasenya (X÷Y×100) dihitung otomatis di bawah.</div>
+        @else
+            <div class="field">
+                <label>Target Tahunan <span class="muted" style="font-weight:400;font-size:10px">({{ $capaian->masterIku->satuan }}) — sekali per tahun, dipakai di seluruh bulan IKU ini</span></label>
+                <input type="number" step="0.01" class="inp filled" style="width:100%;max-width:220px" wire:model.live="target_tahunan">
+                @error('target_tahunan')
+                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                @enderror
             </div>
-            <div class="num-cell">
-                <label>Realisasi <span class="muted" style="font-weight:400;font-size:10px">({{ $capaian->masterIku->satuan }})</span></label>
-                <input type="number" step="0.01" class="inp filled" style="width:100%" wire:model.live="realisasi" @readonly(!$bisaDiverifikasi)>
-            </div>
-            <div class="num-cell">
-                <label>Capaian % <span class="muted" style="font-weight:400;font-size:10px">(bulan ini)</span></label>
-                @if ($persentase_capaian === null)
-                    <input type="text" class="inp ro" style="width:100%" value="-" readonly>
+            <div class="fhint" style="margin:10px 0 6px">Isi Alokasi Target &amp; Realisasi TRIWULAN INI SAJA (bukan kumulatif, tidak perlu melihat isian triwulan sebelumnya) — kumulatif TW I s.d. TW berjalan dihitung otomatis di bawah.</div>
+        @endif
+
+        @php $twAktif = (int) $capaian->periode->triwulan; @endphp
+        <div class="fhint" style="margin-bottom:8px">🔒 Hanya kolom TW {{ ['I', 'II', 'III', 'IV'][$twAktif - 1] }} yang bisa diubah dari sesi verifikasi ini (sesuai periode isian ini) — kolom triwulan lain ditampilkan sebagai referensi, disunting lewat sesi verifikasi bulan pada triwulan itu sendiri.</div>
+        <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th></th>
+                        @foreach (['I', 'II', 'III', 'IV'] as $tw)
+                            <th style="text-align:center">TW {{ $tw }}</th>
+                        @endforeach
+                    </tr>
+                </thead>
+                <tbody>
+                @if ($capaian->masterIku->pakaiRasio())
+                    @foreach ([
+                        ['x_alokasi', $capaian->masterIku->deskripsi_x ?: 'Pembilang (X)', 'Alokasi'],
+                        ['y_alokasi', $capaian->masterIku->deskripsi_y ?: 'Penyebut (Y)', 'Alokasi'],
+                        ['x_realisasi', $capaian->masterIku->deskripsi_x ?: 'Pembilang (X)', 'Realisasi'],
+                        ['y_realisasi', $capaian->masterIku->deskripsi_y ?: 'Penyebut (Y)', 'Realisasi'],
+                    ] as [$prefix, $label, $bagian])
+                        <tr>
+                            <td>{{ $label }} — {{ $bagian }} <span class="muted" style="font-weight:400">(TW ini)</span></td>
+                            @for ($tw = 1; $tw <= 4; $tw++)
+                                <td style="text-align:center">
+                                    @if ($tw === $twAktif)
+                                        <input type="number" step="0.01" class="inp filled" style="width:100px;text-align:center" wire:model.live="{{ $prefix }}_tw{{ $tw }}">
+                                        @error("{$prefix}_tw{$tw}")
+                                            <div style="color:var(--red);font-size:10.5px">{{ $message }}</div>
+                                        @enderror
+                                    @else
+                                        <span class="muted" title="Hanya bisa diubah dari sesi verifikasi TW {{ ['I', 'II', 'III', 'IV'][$tw - 1] }}">🔒 {{ $capaianTahunan->{"{$prefix}_tw{$tw}"} ?? '-' }}</span>
+                                    @endif
+                                </td>
+                            @endfor
+                        </tr>
+                    @endforeach
+                    <tr class="muted">
+                        <td>Alokasi Target Kumulatif (%)</td>
+                        @for ($tw = 1; $tw <= 4; $tw++)
+                            <td style="text-align:center">{{ \App\Models\PengaturanCapaian::formatAngka($capaianTahunan->alokasiKumulatif($tw)) }}</td>
+                        @endfor
+                    </tr>
+                    <tr class="muted">
+                        <td>Realisasi Kumulatif (%)</td>
+                        @for ($tw = 1; $tw <= 4; $tw++)
+                            <td style="text-align:center">{{ \App\Models\PengaturanCapaian::formatAngka($capaianTahunan->realisasiKumulatif($tw)) }}</td>
+                        @endfor
+                    </tr>
                 @else
-                    <input type="number" step="0.01" class="inp ro" style="width:100%" wire:model="persentase_capaian" readonly>
+                    <tr>
+                        <td>Alokasi Target <span class="muted" style="font-weight:400">(TW ini)</span></td>
+                        @for ($tw = 1; $tw <= 4; $tw++)
+                            <td style="text-align:center">
+                                @if ($tw === $twAktif)
+                                    <input type="number" step="0.01" class="inp filled" style="width:100px;text-align:center" wire:model.live="alokasi_tw{{ $tw }}">
+                                    @error("alokasi_tw{$tw}")
+                                        <div style="color:var(--red);font-size:10.5px">{{ $message }}</div>
+                                    @enderror
+                                @else
+                                    <span class="muted" title="Hanya bisa diubah dari sesi verifikasi TW {{ ['I', 'II', 'III', 'IV'][$tw - 1] }}">🔒 {{ \App\Models\PengaturanCapaian::formatAngka($capaianTahunan->{"alokasi_tw{$tw}"}) }}</span>
+                                @endif
+                            </td>
+                        @endfor
+                    </tr>
+                    <tr>
+                        <td>Realisasi <span class="muted" style="font-weight:400">(TW ini)</span></td>
+                        @for ($tw = 1; $tw <= 4; $tw++)
+                            <td style="text-align:center">
+                                @if ($tw === $twAktif)
+                                    <input type="number" step="0.01" class="inp filled" style="width:100px;text-align:center" wire:model.live="realisasi_tw{{ $tw }}">
+                                    @error("realisasi_tw{$tw}")
+                                        <div style="color:var(--red);font-size:10.5px">{{ $message }}</div>
+                                    @enderror
+                                @else
+                                    <span class="muted" title="Hanya bisa diubah dari sesi verifikasi TW {{ ['I', 'II', 'III', 'IV'][$tw - 1] }}">🔒 {{ \App\Models\PengaturanCapaian::formatAngka($capaianTahunan->{"realisasi_tw{$tw}"}) }}</span>
+                                @endif
+                            </td>
+                        @endfor
+                    </tr>
+                    <tr class="muted">
+                        <td>Alokasi Target Kumulatif</td>
+                        @for ($tw = 1; $tw <= 4; $tw++)
+                            <td style="text-align:center">{{ \App\Models\PengaturanCapaian::formatAngka($capaianTahunan->alokasiKumulatif($tw)) }}</td>
+                        @endfor
+                    </tr>
+                    <tr class="muted">
+                        <td>Realisasi Kumulatif</td>
+                        @for ($tw = 1; $tw <= 4; $tw++)
+                            <td style="text-align:center">{{ \App\Models\PengaturanCapaian::formatAngka($capaianTahunan->realisasiKumulatif($tw)) }}</td>
+                        @endfor
+                    </tr>
                 @endif
-            </div>
-            <div class="num-cell">
-                <label>Realisasi Kumulatif <span class="muted" style="font-weight:400;font-size:10px">(TW I s.d. TW {{ ['I', 'II', 'III', 'IV'][$capaian->periode->triwulan - 1] }})</span></label>
-                <input type="text" class="inp ro" style="width:100%" value="{{ $realisasiKumulatif }}" readonly>
-            </div>
-            <div class="num-cell">
-                <label>Capaian % <span class="muted" style="font-weight:400;font-size:10px">(kumulatif TW)</span></label>
-                <input type="text" class="inp ro" style="width:100%" value="{{ $persentaseKumulatif === null ? '-' : $persentaseKumulatif }}" readonly>
-            </div>
+                    <tr>
+                        <td>Capaian % <span class="muted" style="font-weight:400">(Triwulanan)</span></td>
+                        @for ($tw = 1; $tw <= 4; $tw++)
+                            <td style="text-align:center">{{ \App\Models\PengaturanCapaian::formatPersen($capaianTahunan->capaianTriwulanan($tw)) }}</td>
+                        @endfor
+                    </tr>
+                    <tr>
+                        <td>Capaian % <span class="muted" style="font-weight:400">(Setahun)</span></td>
+                        @for ($tw = 1; $tw <= 4; $tw++)
+                            <td style="text-align:center">{{ \App\Models\PengaturanCapaian::formatPersen($capaianTahunan->capaianSetahun($tw)) }}</td>
+                        @endfor
+                    </tr>
+                </tbody>
+            </table>
         </div>
-        <div class="fhint" style="margin-top:8px">ℹ️ "Capaian % (bulan ini)" dihitung dari realisasi bulan ini saja ÷ Target TW. "Capaian % (kumulatif TW)" dihitung dari total realisasi seluruh bulan terverifikasi dari TW I s.d. triwulan ini ÷ Target TW — angka inilah yang dipakai di tabel Dasbor Kinerja &amp; rumus resmi Kertas Kerja Pengukuran Kinerja Triwulanan. Keduanya dibatasi maksimal sesuai <a wire:navigate href="{{ route('master-iku.index') }}">Pengaturan Rumus Capaian</a>; realisasi 0 ditampilkan sebagai "-".</div>
-        @error('target_pk')
-            <div style="color:var(--red);font-size:11.5px;margin-top:8px">{{ $message }}</div>
-        @enderror
-        @error('target_tw')
-            <div style="color:var(--red);font-size:11.5px;margin-top:8px">{{ $message }}</div>
-        @enderror
-        @error('realisasi')
-            <div style="color:var(--red);font-size:11.5px;margin-top:8px">{{ $message }}</div>
-        @enderror
-        @error('persentase_capaian')
-            <div style="color:var(--red);font-size:11.5px;margin-top:8px">{{ $message }}</div>
-        @enderror
+        <div class="fhint" style="margin-top:8px">ℹ️ Kumulatif = jumlah TW I s.d. triwulan tsb, dihitung otomatis dari isian triwulanan di atas — tidak perlu dijumlahkan manual. Capaian % (Triwulanan) = Realisasi Kumulatif ÷ Alokasi Target Kumulatif; Capaian % (Setahun) = Realisasi Kumulatif ÷ Target Tahunan — sesuai Kertas Kerja Pengukuran Kinerja Triwulanan, dibatasi maksimal sesuai <a wire:navigate href="{{ route('master-iku.index') }}">Pengaturan Rumus Capaian</a>.</div>
+
+        <div class="btn-row" style="margin-top:14px">
+            <button type="button" class="btn btn-teal" wire:click="simpanPerubahan" wire:loading.attr="disabled" wire:target="simpanPerubahan">
+                <span wire:loading.remove wire:target="simpanPerubahan">💾 Simpan Perubahan</span>
+                <span wire:loading wire:target="simpanPerubahan"><i class="spin"></i> Menyimpan…</span>
+            </button>
+        </div>
     </div>
 
     <div class="card">
         <div class="sec"><span>Verifikasi Bukti Capaian per Kegiatan</span></div>
         @if ($bisaDiverifikasi)
-            <div class="info">ℹ️ Klik tiap berkas untuk memeriksa &amp; menandai sesuai/tidak. Uraian kegiatan bisa disunting bila ada salah ketik.</div>
+            <div class="info">ℹ️ Klik tiap berkas untuk memeriksa &amp; menandai sesuai/tidak sesuai. Uraian kegiatan bisa disunting bila ada salah ketik.</div>
         @endif
 
         @forelse ($kegiatanList as $kegiatan)
-            @php $berkasKegiatan = $berkasPerKegiatan[$kegiatan->id] ?? collect(); @endphp
-            <div class="keg" wire:key="keg-{{ $kegiatan->id }}">
+            @php
+                $berkasKegiatan = $berkasPerKegiatan[$kegiatan->id] ?? collect();
+                $bisaDikoreksi = $this->kegiatanBisaDikoreksi($kegiatan);
+            @endphp
+            <div class="keg" wire:key="keg-{{ $kegiatan->id }}" @if (!$bisaDikoreksi) style="opacity:.8" @endif>
                 <div class="keg-head">
                     <span class="t">Kegiatan {{ $loop->iteration }}</span>
+                    <x-badge-status :status="$kegiatan->status_dokumen" />
                     <span style="color:var(--muted);font-size:11.5px">
                         {{ $kegiatan->jenis === 'survei_sensus' ? 'Survei/Sensus' : 'Bukan Survei/Sensus' }}{{ $kegiatan->tahapan_survei ? ' · '.ucfirst($kegiatan->tahapan_survei) : '' }}
                     </span>
                 </div>
-                <textarea class="inp filled" style="height:auto;display:block;font-style:italic" rows="2" wire:model="koreksiKegiatan.{{ $kegiatan->id }}" @readonly(!$bisaDiverifikasi)></textarea>
+                @unless ($bisaDikoreksi)
+                    <div style="font-size:11.5px;color:var(--muted);margin-bottom:6px">🔒 Sudah diproses pada pengajuan sebelumnya — tidak ikut disunting di sini.</div>
+                @endunless
+                <textarea class="inp filled" style="height:auto;display:block;font-style:italic" rows="2" wire:model="koreksiKegiatan.{{ $kegiatan->id }}" @readonly(!$bisaDikoreksi)></textarea>
                 @error("koreksiKegiatan.{$kegiatan->id}")
                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                 @enderror
@@ -125,7 +231,7 @@
                         <span class="nm">
                             📄 {{ $file->nama_file }}
                             @if ($file->status_verifikasi === 'ditolak')
-                                <span class="sub" style="color:var(--red)">Tidak sesuai</span>
+                                <span class="sub" style="color:var(--red)">Tidak Sesuai</span>
                             @endif
                         </span>
                         <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file->id }}">🔍 Periksa</button>
@@ -143,25 +249,46 @@
         <div class="card">
             <div class="sec"><span>Kendala &amp; Solusi</span></div>
             @foreach ($kendalaSolusiList as $ks)
-                @php $berkasSolusi = $berkasPerKendala[$ks->id] ?? collect(); @endphp
                 <div class="keg" wire:key="ks-{{ $ks->id }}">
+                    <div class="keg-head">
+                        <span class="t">Pasangan {{ $loop->iteration }}</span>
+                        <x-badge-status :status="$ks->status_verifikasi === 'terverifikasi' ? 'diverifikasi' : ($ks->status_verifikasi === 'ditolak' ? 'dikembalikan' : 'diajukan')" :label="$ks->status_verifikasi === 'terverifikasi' ? 'Sesuai' : ($ks->status_verifikasi === 'ditolak' ? 'Tidak Sesuai' : 'Menunggu')" />
+                    </div>
                     <div class="field" style="margin-bottom:10px">
                         <label style="font-size:11.5px">Kendala</label>
-                        <textarea class="inp filled" style="height:auto;display:block;font-style:italic" rows="2" wire:model="koreksiKendala.{{ $ks->id }}.kendala" @readonly(!$bisaDiverifikasi)></textarea>
+                        <textarea class="inp filled" style="height:auto;display:block;font-style:italic" rows="2" wire:model="koreksiKendala.{{ $ks->id }}.kendala"></textarea>
                     </div>
                     @if ($ks->solusi)
-                        <div class="field" style="margin-bottom:0">
+                        <div class="field" style="margin-bottom:10px">
                             <label style="font-size:11.5px">Solusi</label>
-                            <textarea class="inp filled" style="height:auto;display:block;font-style:italic" rows="2" wire:model="koreksiKendala.{{ $ks->id }}.solusi" @readonly(!$bisaDiverifikasi)></textarea>
+                            <textarea class="inp filled" style="height:auto;display:block;font-style:italic" rows="2" wire:model="koreksiKendala.{{ $ks->id }}.solusi"></textarea>
                         </div>
-                        @forelse ($berkasSolusi as $file)
-                            <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}" style="margin-top:8px" wire:key="berkas-{{ $file->id }}">
-                                <span class="nm">📄 {{ $file->nama_file }} <span class="sub">Bukti solusi</span></span>
-                                <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file->id }}">🔍 Periksa</button>
-                            </div>
-                        @empty
-                            <p style="color:var(--muted);font-size:12.5px;margin-top:8px">Belum ada bukti solusi diunggah.</p>
-                        @endforelse
+                    @endif
+
+                    @if ($this->kendalaBisaDiverifikasi($ks->id))
+                        <div style="display:flex;gap:8px;margin-top:6px">
+                            <button type="button" class="mark {{ $ks->status_verifikasi === 'terverifikasi' ? 'ok' : '' }}" wire:click="tandaiKendalaSesuai({{ $ks->id }})" wire:loading.attr="disabled" wire:target="tandaiKendalaSesuai({{ $ks->id }}),tandaiKendalaTolak({{ $ks->id }})">
+                                <span wire:loading.remove wire:target="tandaiKendalaSesuai({{ $ks->id }})">✓ Sesuai</span>
+                                <span wire:loading wire:target="tandaiKendalaSesuai({{ $ks->id }})"><i class="spin"></i></span>
+                            </button>
+                            <button type="button" class="mark {{ $ks->status_verifikasi === 'ditolak' ? 'no' : '' }}" wire:click="tandaiKendalaTolak({{ $ks->id }})" wire:loading.attr="disabled" wire:target="tandaiKendalaSesuai({{ $ks->id }}),tandaiKendalaTolak({{ $ks->id }})">
+                                <span wire:loading.remove wire:target="tandaiKendalaTolak({{ $ks->id }})">✕ Tidak Sesuai</span>
+                                <span wire:loading wire:target="tandaiKendalaTolak({{ $ks->id }})"><i class="spin"></i></span>
+                            </button>
+                        </div>
+                        <div class="field" style="margin-top:10px;margin-bottom:0">
+                            <label style="font-size:11.5px">Catatan (wajib bila tidak sesuai)</label>
+                            <textarea class="inp filled" style="height:auto;display:block;font-size:11.5px" rows="2"
+                                wire:model="catatanKendala.{{ $ks->id }}" placeholder="mis. Solusi belum konkret / tidak relevan dengan kendala"></textarea>
+                            @error('catatanKendala.'.$ks->id)
+                                <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                            @enderror
+                        </div>
+                    @elseif ($ks->catatan)
+                        <div class="field" style="margin-top:6px;margin-bottom:0">
+                            <label style="font-size:11.5px">Catatan</label>
+                            <p style="font-size:12.5px;color:var(--muted);margin:0">{{ $ks->catatan }}</p>
+                        </div>
                     @endif
                 </div>
             @endforeach
@@ -194,7 +321,6 @@
 
     @php
         $semuaBerkas = collect($berkasPerKegiatan)->flatten(1)
-            ->concat(collect($berkasPerKendala)->flatten(1))
             ->concat($rtlSebelumnya->flatMap->berkas)
             ->concat(collect($berkasPerBagianKustom)->flatten(1));
     @endphp
@@ -224,7 +350,7 @@
                     </div>
                     <div class="verify-panel">
                         <div class="vp-t">Verifikasi Berkas</div>
-                        @if ($bisaDiverifikasi)
+                        @if ($this->berkasBisaDiverifikasi($file->id))
                             <button type="button" class="mark {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : '' }}" wire:click="tandaiSesuai({{ $file->id }})" wire:loading.attr="disabled" wire:target="tandaiSesuai({{ $file->id }}),tandaiTolak({{ $file->id }})">
                                 <span wire:loading.remove wire:target="tandaiSesuai({{ $file->id }})">✓ Sesuai</span>
                                 <span wire:loading wire:target="tandaiSesuai({{ $file->id }})"><i class="spin"></i></span>
@@ -237,9 +363,15 @@
                                 <label style="font-size:11.5px">Catatan (wajib bila tidak sesuai)</label>
                                 <textarea class="inp filled" style="height:auto;display:block;min-height:56px;font-size:11.5px" rows="3"
                                     wire:model="catatanBerkas.{{ $file->id }}" placeholder="mis. Bukti belum menunjukkan tanggal pelaksanaan…"></textarea>
+                                @error('catatanBerkas.'.$file->id)
+                                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                                @enderror
                             </div>
                         @else
                             <span class="mark {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}" style="cursor:default">{{ $file->status_verifikasi === 'terverifikasi' ? '✓ Sesuai' : ($file->status_verifikasi === 'ditolak' ? '✕ Tidak Sesuai' : '… Menunggu') }}</span>
+                            @if ($bisaDiverifikasi)
+                                <div style="font-size:11px;color:var(--muted);margin-top:6px">🔒 Milik kegiatan yang sudah diproses sebelumnya.</div>
+                            @endif
                             @if ($file->catatan)
                                 <div class="field" style="margin-top:12px">
                                     <label style="font-size:11.5px">Catatan</label>
@@ -265,7 +397,7 @@
                     <div class="match-col">
                         <div class="mc-lbl">Realisasi Dilaporkan</div>
                         <textarea class="inp filled" style="height:auto;display:block;font-style:italic;font-size:12px" rows="2"
-                            wire:model="koreksiRtlRealisasi.{{ $poin->id }}" placeholder="— belum dilaporkan —" @readonly(!$bisaDiverifikasi)></textarea>
+                            wire:model="koreksiRtlRealisasi.{{ $poin->id }}" placeholder="— belum dilaporkan —"></textarea>
                         @foreach ($poin->berkas as $file)
                             <div class="filechip" style="margin-top:6px"><span class="nm">📄 {{ $file->nama_file }}</span></div>
                         @endforeach
@@ -277,14 +409,37 @@
 
     @if ($bisaDiverifikasi)
         <div class="btn-row" style="margin-top:16px">
-            <button type="button" class="btn btn-teal" wire:click="verifikasiSelesai" wire:loading.attr="disabled" wire:target="verifikasiSelesai,kembalikanKeKetuaTim">
+            <button type="button" class="btn btn-teal" wire:click="verifikasiSelesai" wire:loading.attr="disabled" wire:target="verifikasiSelesai,kembalikanKeKetuaTim,simpanSementara">
                 <span wire:loading.remove wire:target="verifikasiSelesai">✓ Verifikasi Selesai — Masukkan ke Notula</span>
                 <span wire:loading wire:target="verifikasiSelesai"><i class="spin"></i> Memproses…</span>
             </button>
-            <button type="button" class="btn btn-red" wire:click="kembalikanKeKetuaTim" wire:loading.attr="disabled" wire:target="verifikasiSelesai,kembalikanKeKetuaTim">
+            <button type="button" class="btn btn-red" wire:click="kembalikanKeKetuaTim" wire:loading.attr="disabled" wire:target="verifikasiSelesai,kembalikanKeKetuaTim,simpanSementara">
                 <span wire:loading.remove wire:target="kembalikanKeKetuaTim">↩ Kembalikan ke Ketua Tim</span>
                 <span wire:loading wire:target="kembalikanKeKetuaTim"><i class="spin"></i> Mengembalikan…</span>
             </button>
+            <button type="button" class="btn btn-ghost" wire:click="simpanSementara" wire:loading.attr="disabled" wire:target="verifikasiSelesai,kembalikanKeKetuaTim,simpanSementara">
+                <span wire:loading.remove wire:target="simpanSementara">💾 Simpan Sementara</span>
+                <span wire:loading wire:target="simpanSementara"><i class="spin"></i> Menyimpan…</span>
+            </button>
+        </div>
+        @if ($capaian->status === \App\Models\Capaian::STATUS_SEDANG_DITANGANI)
+            <div class="info" style="margin-top:10px">💾 Pemeriksaan ini masih <b>Sedang Ditangani</b> — progres tersimpan, lanjutkan menandai berkas lalu pilih "Verifikasi Selesai" atau "Kembalikan ke Ketua Tim" saat sudah selesai memeriksa semuanya.</div>
+        @endif
+    @elseif ($bisaDibukaKembali)
+        <div class="card">
+            <div class="sec"><span>Buka Kembali Isian</span></div>
+            <div class="info warn">⚠️ Isian ini sudah <b>disetujui</b> dan masuk notula final. Membuka kembali akan mengembalikannya ke Ketua Tim untuk ditambahkan kegiatan baru — kegiatan yang sudah disetujui sebelumnya TIDAK ikut berubah/terhapus.</div>
+            <div class="field" style="margin-top:10px">
+                <label style="font-size:11.5px">Alasan membuka kembali (opsional)</label>
+                <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model="catatanBukaKembali" placeholder="mis. Ada kegiatan tambahan yang perlu dilaporkan…"></textarea>
+            </div>
+            <div class="btn-row" style="margin-top:12px">
+                <button type="button" class="btn btn-red" wire:click="bukaKembali" wire:loading.attr="disabled" wire:target="bukaKembali">
+                    <span wire:loading.remove wire:target="bukaKembali">↩ Buka Kembali ke Ketua Tim</span>
+                    <span wire:loading wire:target="bukaKembali"><i class="spin"></i> Memproses…</span>
+                </button>
+                <a wire:navigate href="{{ route('verifikasi.index') }}" class="btn btn-ghost">← Kembali ke Daftar</a>
+            </div>
         </div>
     @else
         <div class="btn-row" style="margin-top:16px">

@@ -38,7 +38,7 @@
             <select class="filter-sel" wire:model.live="status" wire:loading.attr="disabled" wire:target="status,bulan,triwulan,tahun,cari,urutkan,resetFilter">
                 <option value="">Semua Status</option>
                 @foreach ($statusTersedia as $opsi)
-                    <option value="{{ $opsi }}">{{ ucfirst($opsi) }}</option>
+                    <option value="{{ $opsi }}">{{ ucwords(str_replace('_', ' ', $opsi)) }}</option>
                 @endforeach
             </select>
             <button type="button" class="btn btn-ghost btn-sm" wire:click="resetFilter" wire:loading.attr="disabled" wire:target="status,bulan,triwulan,tahun,cari,urutkan,resetFilter">↺ Reset</button>
@@ -59,35 +59,27 @@
                             Tim <span class="th-arrow">{{ $urutanKolom === 'tim' ? ($urutanArah === 'asc' ? '▲' : '▼') : '↕' }}</span>
                         </th>
                         <th>Kegiatan Pendukung</th>
+                        <th>Rincian Status Kegiatan</th>
                         <th>Status</th>
                         <th style="text-align:right">Tindakan</th>
                     </tr>
                 </thead>
                 <tbody x-ref="tbody">
                     @forelse ($daftarCapaian as $capaian)
-                        @php
-                            $statusBaris = $statusPerCapaian->get($capaian->id, collect());
-                            $adaDiajukan = $statusBaris->contains('diajukan');
-                        @endphp
                         <tr wire:key="capaian-{{ $capaian->id }}">
                             <td>{{ $capaian->masterIku->kode }} — {{ $capaian->masterIku->indikator }}</td>
                             <td>{{ $namaBulan[$capaian->periode->bulan - 1] }} {{ $capaian->periode->tahun }}</td>
                             <td class="muted">{{ $capaian->masterIku->tim }}</td>
                             <td>{{ $jumlahKegiatan->get($capaian->id, 0) }} kegiatan</td>
-                            <td>
-                                @forelse ($statusBaris as $s)
-                                    <x-badge-status :status="$s" />
-                                @empty
-                                    <x-badge-status :status="$status" />
-                                @endforelse
-                            </td>
+                            <td><x-rincian-status-kegiatan :rincian="$rincianStatusKegiatan->get($capaian->id, collect())" /></td>
+                            <td><x-badge-status :status="$capaian->status" /></td>
                             <td style="text-align:right">
-                                <a wire:navigate href="{{ route('verifikasi.show', $capaian) }}" class="btn btn-primary btn-sm">{{ $adaDiajukan ? 'Periksa →' : 'Lihat →' }}</a>
+                                <a wire:navigate href="{{ route('verifikasi.show', $capaian) }}" class="btn btn-primary btn-sm">{{ $capaian->status === 'diajukan' ? 'Periksa →' : 'Lihat →' }}</a>
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" style="color:var(--muted)">Tidak ada isian {{ $status === '' ? '' : 'berstatus '.ucfirst($status).' ' }}pada periode/kata kunci ini.</td>
+                            <td colspan="7" style="color:var(--muted)">Tidak ada isian {{ $status === '' ? '' : 'berstatus '.ucfirst($status).' ' }}pada periode/kata kunci ini.</td>
                         </tr>
                     @endforelse
                 </tbody>

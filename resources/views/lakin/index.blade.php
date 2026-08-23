@@ -1,8 +1,8 @@
 @extends('layouts.app')
 
-@section('title', 'LAKIN — SIPINTER')
+@section('title', 'Rekap Kinerja Tahunan — SIPINTER')
 
-@section('breadcrumb', 'LAKIN')
+@section('breadcrumb', 'Rekap Kinerja Tahunan')
 
 @section('content')
     <livewire:lakin-list />

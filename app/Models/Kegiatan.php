@@ -102,6 +102,32 @@ class Kegiatan extends Model
         return in_array($status, self::TRANSITIONS[$this->status_dokumen] ?? [], true);
     }
 
+    /**
+     * Rincian jumlah kegiatan per status_dokumen dalam satu Capaian (IKU+bulan) —
+     * mis. 3 diverifikasi + 2 dikembalikan — dipakai di tabel dasbor/daftar verifikasi
+     * SUPAYA status besar satu Capaian (Capaian::status, satu-satunya yang menentukan
+     * alur bisa-diverifikasi/tidak) tetap bisa ditelusuri sampai ke rincian per
+     * kegiatannya tanpa harus membuka detail. Hanya status yang benar-benar ada
+     * (jumlah > 0) yang disertakan, diurutkan sesuai alur (draft→...→disetujui) supaya
+     * tampilannya konsisten di semua tabel.
+     *
+     * @param  \Illuminate\Support\Collection<int, self>  $kegiatanSatuIkuPeriode
+     * @return \Illuminate\Support\Collection<string, int>
+     */
+    public static function rincianStatus($kegiatanSatuIkuPeriode)
+    {
+        $jumlahPerStatus = $kegiatanSatuIkuPeriode->countBy('status_dokumen');
+
+        return collect([
+            self::STATUS_DRAFT,
+            self::STATUS_DIAJUKAN,
+            self::STATUS_DIVERIFIKASI,
+            self::STATUS_DIKEMBALIKAN,
+            self::STATUS_DISETUJUI,
+        ])->mapWithKeys(fn ($status) => [$status => $jumlahPerStatus->get($status, 0)])
+            ->filter(fn ($jumlah) => $jumlah > 0);
+    }
+
     protected function transitionTo(string $status): void
     {
         if (! $this->canTransitionTo($status)) {

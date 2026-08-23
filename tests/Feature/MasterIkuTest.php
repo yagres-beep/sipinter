@@ -64,4 +64,71 @@ class MasterIkuTest extends TestCase
         $this->assertSame([], $import->errors);
         $this->assertSame('Sasaran Uji', MasterIkuModel::where('kode', 'IKU-2000')->value('sasaran'));
     }
+
+    protected function loginSebagaiTimSakip(): User
+    {
+        $peran = Role::create(['nama' => 'Tim SAKIP']);
+        $user = User::create([
+            'nama' => 'SAKIP Uji', 'username' => 'sakip-metode@example.test', 'email' => 'sakip-metode@example.test',
+            'password' => 'password', 'role_id' => $peran->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+        $this->actingAs($user);
+
+        return $user;
+    }
+
+    public function test_iku_baru_default_metode_langsung(): void
+    {
+        $this->loginSebagaiTimSakip();
+
+        Livewire::test(MasterIku::class)
+            ->set('kode', '9001')
+            ->set('indikator', 'Indikator uji metode default')
+            ->set('tim', 'Tim Uji')
+            ->set('penanggungJawab', 'Petugas Uji')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $iku = MasterIkuModel::where('kode', '9001')->first();
+        $this->assertSame('langsung', $iku->metode_capaian);
+        $this->assertFalse($iku->pakaiRasio());
+    }
+
+    public function test_iku_bisa_disimpan_dengan_metode_rasio_dan_label_x_y(): void
+    {
+        $this->loginSebagaiTimSakip();
+
+        Livewire::test(MasterIku::class)
+            ->set('kode', '9002')
+            ->set('indikator', 'Persentase publikasi berkualitas')
+            ->set('tim', 'Tim Uji')
+            ->set('penanggungJawab', 'Petugas Uji')
+            ->set('metodeCapaian', 'rasio')
+            ->set('deskripsiX', 'Jumlah publikasi berkualitas')
+            ->set('deskripsiY', 'Jumlah seluruh publikasi')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $iku = MasterIkuModel::where('kode', '9002')->first();
+        $this->assertTrue($iku->pakaiRasio());
+        $this->assertSame('Jumlah publikasi berkualitas', $iku->deskripsi_x);
+        $this->assertSame('Jumlah seluruh publikasi', $iku->deskripsi_y);
+    }
+
+    public function test_edit_iku_memuat_metode_capaian_yang_tersimpan(): void
+    {
+        $this->loginSebagaiTimSakip();
+
+        $iku = MasterIkuModel::create([
+            'kode' => '9003', 'indikator' => 'Indikator uji edit', 'tim' => 'Tim Uji',
+            'penanggung_jawab' => 'Petugas Uji', 'metode_capaian' => 'rasio',
+            'deskripsi_x' => 'X uji', 'deskripsi_y' => 'Y uji',
+        ]);
+
+        Livewire::test(MasterIku::class)
+            ->call('edit', $iku->id)
+            ->assertSet('metodeCapaian', 'rasio')
+            ->assertSet('deskripsiX', 'X uji')
+            ->assertSet('deskripsiY', 'Y uji');
+    }
 }

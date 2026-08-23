@@ -47,6 +47,54 @@
     </div>
 
     <div class="card">
+        <div class="card-h">
+            🏛️ Penilaian Kinerja Organisasi (PKO) — {{ $tahun }}
+            @if ($pko['predikat_pko'])
+                <span class="badge {{ $pko['rata_rata_capaian_pk'] >= 80 ? 'b-approve' : ($pko['rata_rata_capaian_pk'] >= 60 ? 'b-tunggu' : 'b-tolak') }}">{{ $pko['predikat_pko'] }}</span>
+            @endif
+        </div>
+
+        <div class="field" style="max-width:260px">
+            <label>Nilai SAKIP {{ $tahun }} <span class="muted" style="font-weight:400;font-size:10px">— dari Inspektorat, satu angka untuk seluruh organisasi</span></label>
+            <div style="display:flex;gap:8px;align-items:center">
+                <input type="number" step="0.01" class="inp filled" style="width:120px" wire:model="nilaiSakipInput">
+                <button type="button" class="btn btn-ghost btn-sm" wire:click="simpanNilaiSakip" wire:loading.attr="disabled" wire:target="simpanNilaiSakip">
+                    <span wire:loading.remove wire:target="simpanNilaiSakip">Simpan</span>
+                    <span wire:loading wire:target="simpanNilaiSakip"><i class="spin"></i></span>
+                </button>
+            </div>
+            @error('nilaiSakipInput')
+                <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+            @enderror
+        </div>
+
+        <div class="stat-grid" style="margin-top:14px">
+            <div class="stat-tile">
+                <div class="si">📜</div>
+                <div class="sv" style="font-size:15px">{{ $pko['predikat_sakip'] ?? '-' }}</div>
+                <div class="sl">Predikat SAKIP</div>
+            </div>
+            <div class="stat-tile">
+                <div class="si">➖</div>
+                <div class="sv">{{ $pko['koreksi_persen'] }}%</div>
+                <div class="sl">Koreksi Predikat</div>
+            </div>
+            <div class="stat-tile">
+                <div class="si">Σ</div>
+                <div class="sv">{{ $pko['total_capaian_pk'] }}</div>
+                <div class="sl">Total Capaian PK ({{ $pko['jumlah_iku_dihitung'] }} IKU)</div>
+            </div>
+            <div class="stat-tile">
+                <div class="si">🎯</div>
+                <div class="sv">{{ $pko['rata_rata_capaian_pk'] ?? '-' }}</div>
+                <div class="sl">Rata-rata Capaian PK (NKO)</div>
+            </div>
+        </div>
+
+        <div class="fhint" style="margin-top:10px">ℹ️ Normalisasi Capaian PK = min(Capaian % Setahun TW IV tiap IKU, batas — diatur di <a wire:navigate href="{{ route('master-iku.index') }}">Pengaturan Rumus Capaian</a>). Nilai Akhir = Normalisasi × (100% − Koreksi Predikat SAKIP). Total/Rata-rata dihitung dari seluruh IKU yang sudah punya Capaian Setahun TW IV pada tahun ini.</div>
+    </div>
+
+    <div class="card">
         <div class="card-h">📋 Status Dokumen Kegiatan — Triwulan {{ ['I', 'II', 'III', 'IV'][$triwulan - 1] }} {{ $tahun }}</div>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
             @foreach ($labelStatus as $key => $label)
@@ -119,8 +167,8 @@
                             <td>{{ $baris['iku']->kode }}</td>
                             <td>{{ $baris['iku']->indikator }}</td>
                             <td style="text-align:center">{{ $baris['jumlah_kegiatan'] }}</td>
-                            <td style="text-align:right">{{ $baris['target_tw'] }}</td>
-                            <td style="text-align:right">{{ $baris['realisasi_ytd'] }}</td>
+                            <td style="text-align:right">{{ \App\Models\PengaturanCapaian::formatAngka($baris['target_tw']) }}</td>
+                            <td style="text-align:right">{{ \App\Models\PengaturanCapaian::formatAngka($baris['realisasi_ytd']) }}</td>
                             <td style="text-align:right">
                                 @if ($baris['persentase'] === null)
                                     <span class="badge b-draft">-</span>
@@ -130,7 +178,7 @@
                                     </span>
                                 @endif
                             </td>
-                            <td style="text-align:right">{{ $baris['target_pk'] }}</td>
+                            <td style="text-align:right">{{ \App\Models\PengaturanCapaian::formatAngka($baris['target_pk']) }}</td>
                             <td style="text-align:right">
                                 @if ($baris['persentase_setahun'] === null)
                                     <span class="badge b-draft">-</span>
@@ -140,7 +188,7 @@
                                     </span>
                                 @endif
                             </td>
-                            <td style="text-align:right" class="muted">{{ $baris['realisasi'] }}</td>
+                            <td style="text-align:right" class="muted">{{ \App\Models\PengaturanCapaian::formatAngka($baris['realisasi']) }}</td>
                         </tr>
                     @empty
                         <tr>

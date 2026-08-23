@@ -4,11 +4,10 @@ namespace Tests\Feature;
 
 use App\Livewire\LakinDetail;
 use App\Livewire\LakinList;
-use App\Models\Capaian;
+use App\Models\CapaianTahunan;
 use App\Models\Lakin;
 use App\Models\LakinBaris;
 use App\Models\MasterIku;
-use App\Models\Periode;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\LakinBuilderService;
@@ -33,33 +32,36 @@ class LakinTest extends TestCase
         return $user;
     }
 
-    protected function buatCapaian(MasterIku $iku, int $tahun, int $bulan, int $triwulan, float $targetPk, float $realisasi): Capaian
+    /**
+     * Isi/tambahkan Target Tahunan + Realisasi triwulan $triwulan untuk satu IKU —
+     * dipanggil berkali-kali (triwulan berbeda) pada IKU yang sama untuk menyimulasikan
+     * beberapa triwulan sudah diisi Tim SAKIP (updateOrCreate mempertahankan
+     * realisasi_twN triwulan lain yang sudah tersimpan sebelumnya).
+     */
+    protected function buatCapaian(MasterIku $iku, int $tahun, int $triwulan, float $targetTahunan, float $realisasiTriwulanIni): CapaianTahunan
     {
-        $periode = Periode::firstOrCreate(
-            ['tahun' => $tahun, 'bulan' => $bulan],
-            ['triwulan' => $triwulan, 'bulan_ke' => 1, 'flag_bulan_terlewat' => true]
+        return CapaianTahunan::updateOrCreate(
+            ['iku_id' => $iku->id, 'tahun' => $tahun],
+            ['target_tahunan' => $targetTahunan, "realisasi_tw{$triwulan}" => $realisasiTriwulanIni]
         );
-
-        return Capaian::create([
-            'iku_id' => $iku->id, 'periode_id' => $periode->id,
-            'target_pk' => $targetPk, 'target_tw' => $targetPk / 4, 'realisasi' => $realisasi,
-            'persentase_capaian' => $targetPk > 0 ? round($realisasi / $targetPk * 100, 2) : null,
-        ]);
     }
 
     public function test_iku_tersedia_untuk_tahun_menghitung_kumulatif_dari_capaian(): void
     {
         $iku = MasterIku::create(['kode' => '1131', 'indikator' => 'Uji', 'tim' => 'Sosial', 'penanggung_jawab' => 'A', 'sasaran' => 'Sasaran Uji']);
 
-        $this->buatCapaian($iku, 2026, 3, 1, 100, 25);
-        $this->buatCapaian($iku, 2026, 6, 2, 100, 25);
+        // ikuTersediaUntukTahun() membaca realisasiKumulatif(4) (TW IV) sebagai total
+        // setahun — realisasi_tw4 SUDAH nilai kumulatif sampai akhir tahun, diisi
+        // langsung oleh Tim SAKIP (bukan dijumlah dari TW-TW sebelumnya, lihat
+        // App\Models\CapaianTahunan::realisasiKumulatif()).
+        $this->buatCapaian($iku, 2026, 4, 100, 50);
 
         $tersedia = app(LakinBuilderService::class)->ikuTersediaUntukTahun(2026);
 
         $this->assertCount(1, $tersedia);
         $data = $tersedia->get($iku->id);
         $this->assertEquals(100, $data->target);
-        $this->assertEquals(50, $data->realisasi); // 25 + 25 dari dua triwulan.
+        $this->assertEquals(50, $data->realisasi);
         $this->assertEquals(50, $data->capaian_persen);
     }
 
@@ -68,8 +70,8 @@ class LakinTest extends TestCase
         $ikuDipilih = MasterIku::create(['kode' => '1131', 'indikator' => 'Uji A', 'tim' => 'Sosial', 'penanggung_jawab' => 'A', 'sasaran' => 'Sasaran Uji']);
         $ikuTidakDipilih = MasterIku::create(['kode' => '1132', 'indikator' => 'Uji B', 'tim' => 'Sosial', 'penanggung_jawab' => 'A']);
 
-        $this->buatCapaian($ikuDipilih, 2026, 3, 1, 100, 25);
-        $this->buatCapaian($ikuTidakDipilih, 2026, 3, 1, 100, 40);
+        $this->buatCapaian($ikuDipilih, 2026, 1, 100, 25);
+        $this->buatCapaian($ikuTidakDipilih, 2026, 1, 100, 40);
 
         $lakin = Lakin::create(['tahun' => 2026]);
         app(LakinBuilderService::class)->tambahDariIku($lakin, [$ikuDipilih->id]);
@@ -82,7 +84,7 @@ class LakinTest extends TestCase
     public function test_segarkan_angka_tidak_menimpa_baris_custom(): void
     {
         $iku = MasterIku::create(['kode' => '1131', 'indikator' => 'Uji', 'tim' => 'Sosial', 'penanggung_jawab' => 'A']);
-        $this->buatCapaian($iku, 2026, 3, 1, 100, 25);
+        $this->buatCapaian($iku, 2026, 1, 100, 25);
 
         $lakin = Lakin::create(['tahun' => 2026]);
         app(LakinBuilderService::class)->tambahDariIku($lakin, [$iku->id]);
@@ -150,8 +152,8 @@ class LakinTest extends TestCase
         $this->loginSebagai('Tim SAKIP');
         $ikuDipilih = MasterIku::create(['kode' => '1131', 'indikator' => 'Uji A', 'tim' => 'Sosial', 'penanggung_jawab' => 'A']);
         $ikuTidakDipilih = MasterIku::create(['kode' => '1132', 'indikator' => 'Uji B', 'tim' => 'Sosial', 'penanggung_jawab' => 'A']);
-        $this->buatCapaian($ikuDipilih, 2026, 3, 1, 100, 25);
-        $this->buatCapaian($ikuTidakDipilih, 2026, 3, 1, 100, 40);
+        $this->buatCapaian($ikuDipilih, 2026, 1, 100, 25);
+        $this->buatCapaian($ikuTidakDipilih, 2026, 1, 100, 40);
 
         $lakin = Lakin::create(['tahun' => 2026]);
 
@@ -221,6 +223,6 @@ class LakinTest extends TestCase
 
         Livewire::test(LakinDetail::class, ['lakin' => $lakin])
             ->call('unduhExcel')
-            ->assertFileDownloaded("lakin-{$lakin->tahun}.xlsx");
+            ->assertFileDownloaded("rekap-kinerja-tahunan-{$lakin->tahun}.xlsx");
     }
 }

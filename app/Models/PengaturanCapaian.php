@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Cache;
  * SAKIP lewat halaman Pengaturan Rumus Capaian — dipakai Capaian::hitungPersentase()
  * supaya batas capaian (saat ini 120%, sesuai Kertas Kerja Pengukuran Kinerja
  * Triwulanan) tidak dikodekan langsung dan bisa menyesuaikan bila rumus resmi berubah.
+ * batas_normalisasi_pko (default 110) adalah batas TERPISAH, dipakai
+ * Capaian::normalisasiCapaianPk() untuk rumus Penilaian Kinerja Organisasi (PKO).
  */
 class PengaturanCapaian extends Model
 {
@@ -20,12 +22,16 @@ class PengaturanCapaian extends Model
 
     protected $fillable = [
         'batas_maksimal_persen',
+        'batas_normalisasi_pko',
+        'tampilkan_nol_sebagai_strip',
     ];
 
     protected function casts(): array
     {
         return [
             'batas_maksimal_persen' => 'decimal:2',
+            'batas_normalisasi_pko' => 'decimal:2',
+            'tampilkan_nol_sebagai_strip' => 'boolean',
         ];
     }
 
@@ -38,12 +44,45 @@ class PengaturanCapaian extends Model
     {
         return Cache::rememberForever(
             'pengaturan-capaian',
-            fn () => static::firstOrCreate(['id' => 1], ['batas_maksimal_persen' => 120])
+            fn () => static::firstOrCreate(['id' => 1], [
+                'batas_maksimal_persen' => 120,
+                'batas_normalisasi_pko' => 110,
+                'tampilkan_nol_sebagai_strip' => false,
+            ])
         );
     }
 
     public static function lupakanCache(): void
     {
         Cache::forget('pengaturan-capaian');
+    }
+
+    /**
+     * Format nilai Target/Realisasi (tabel Rekap Kinerja Tahunan/LAKIN & Excel-nya)
+     * sesuai pilihan tampilkan_nol_sebagai_strip — null SELALU "-" (belum ada data
+     * sama sekali), sedangkan 0 mengikuti pengaturan (default: ditulis "0" apa
+     * adanya, sama seperti perilaku sebelum pengaturan ini ada).
+     */
+    public static function formatAngka(mixed $nilai): string
+    {
+        if ($nilai === null || $nilai === '') {
+            return '-';
+        }
+
+        if ((float) $nilai === 0.0 && static::ambil()->tampilkan_nol_sebagai_strip) {
+            return '-';
+        }
+
+        return (string) $nilai;
+    }
+
+    /**
+     * Sama seperti formatAngka(), ditambah sufiks "%" — dipakai untuk kolom Capaian %.
+     */
+    public static function formatPersen(mixed $nilai): string
+    {
+        $formatted = static::formatAngka($nilai);
+
+        return $formatted === '-' ? '-' : $formatted.'%';
     }
 }

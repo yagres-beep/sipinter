@@ -1,6 +1,7 @@
 <div
     x-data="{
         bisaDiisiTw: {{ $bulan % 3 === 0 ? 'true' : 'false' }},
+        modalBerkas: null,
         toasts: [],
         toastSeq: 0,
         pushToast(type, message) {
@@ -42,6 +43,12 @@
                     <li>{{ $pesan }}</li>
                 @endforeach
             </ul>
+        </div>
+    @endif
+
+    @if ($formTerkunciDisetujui)
+        <div class="info" style="margin-bottom:14px">
+            🔒 <b>IKU ini pada periode ini sudah disetujui</b> dan masuk notula final — tidak bisa ditambah/diubah lagi dari sini. Hubungi Tim SAKIP bila perlu revisi (mereka bisa membuka kembali lewat halaman Verifikasi).
         </div>
     @endif
 
@@ -141,6 +148,7 @@
                                             <span class="sub" style="color:var(--red)">{{ $file['catatan'] }}</span>
                                         @endif
                                     </span>
+                                    <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file['id'] }}">🔍 Lihat</button>
                                 </div>
                             @empty
                                 <p style="color:var(--muted);font-size:12.5px">Belum ada bukti diunggah.</p>
@@ -251,6 +259,10 @@
                                             <span class="sub" style="color:var(--red)">{{ $file['catatan'] }}</span>
                                         @endif
                                     </span>
+                                    <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file['id'] }}">🔍 Lihat</button>
+                                    @if ($file['status_verifikasi'] === 'ditolak')
+                                        <span class="x" style="cursor:pointer" title="Hapus bukti yang ditolak ini" wire:click="hapusBuktiLama({{ $i }}, {{ $file['id'] }})" wire:confirm="Hapus bukti ini? Anda perlu mengunggah bukti pengganti sebelum mengajukan ulang." wire:loading.class="btn-busy" wire:target="hapusBuktiLama({{ $i }}, {{ $file['id'] }})">✕</span>
+                                    @endif
                                 </div>
                             @endforeach
                         </div>
@@ -307,7 +319,7 @@
             @endif
         @endforeach
 
-        <button type="button" class="btn btn-ghost btn-sm" wire:click="addBlock" wire:loading.attr="disabled" wire:target="addBlock">
+        <button type="button" class="btn btn-ghost btn-sm" wire:click="addBlock" wire:loading.attr="disabled" wire:target="addBlock" @disabled($formTerkunciDisetujui)>
             <span wire:loading.remove wire:target="addBlock">＋ Tambah Kegiatan</span>
             <span wire:loading wire:target="addBlock">Menambahkan…</span>
         </button>
@@ -318,38 +330,29 @@
         <div x-show="!ikuDipilih" class="info warn">🔒 Pilih IKU terlebih dahulu (Bagian 1) untuk mengisi kendala &amp; solusi.</div>
 
         <div x-show="ikuDipilih" x-cloak>
-        <div class="info warn">⚠️ Jika mengisi solusi, wajib melampirkan bukti dukung solusinya. Boleh dikosongkan bila tidak ada kendala periode ini.</div>
+        <div class="info">ℹ️ Boleh dikosongkan bila tidak ada kendala periode ini.</div>
 
         @if ($iku_id && $riwayatKendala->isNotEmpty())
-            <div style="margin-bottom:14px">
-                <div style="font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Riwayat Kumulatif Triwulan Berjalan</div>
+            <div style="margin-bottom:16px">
+                <div style="font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📜 Riwayat Kumulatif Triwulan Berjalan</div>
                 @foreach ($riwayatKendala as $triwulanKe => $entriTriwulan)
                     <div style="margin-bottom:10px">
-                        <div style="font-size:12px;font-weight:700;color:var(--blue-600);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">
+                        <div style="font-size:11px;font-weight:700;color:var(--blue-600);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">
                             Triwulan {{ ['I', 'II', 'III', 'IV'][$triwulanKe - 1] }}
                         </div>
-                        @foreach ($entriTriwulan as $entri)
-                            <div style="padding:8px 0;border-bottom:1px solid var(--line2);font-size:13px">
-                                <div><b>Kendala:</b> {{ $entri->kendala }}</div>
-                                @if ($entri->solusi)
-                                    <div style="margin-top:4px"><b>Solusi:</b> {{ $entri->solusi }}</div>
-                                @endif
-                                @if ($entri->berkas->isNotEmpty())
-                                    <div class="filechip-grid">
-                                        @foreach ($entri->berkas as $file)
-                                            <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}">
-                                                <span class="nm">
-                                                    📄 {{ $file->nama_file }}
-                                                    @if ($file->status_verifikasi === 'ditolak' && $file->catatan)
-                                                        <span class="sub" style="color:var(--red)">{{ $file->catatan }}</span>
-                                                    @endif
-                                                </span>
-                                            </div>
-                                        @endforeach
+                        <div style="display:grid;gap:8px">
+                            @foreach ($entriTriwulan as $entri)
+                                <div style="padding:12px 14px;border:1.5px solid var(--line);border-radius:11px;background:var(--bg);font-size:12.5px">
+                                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                                        <span style="font-size:10.5px;color:var(--muted)">🔒 Terkunci — sudah diterima Tim SAKIP</span>
                                     </div>
-                                @endif
-                            </div>
-                        @endforeach
+                                    <div><b>Kendala:</b> {{ $entri->kendala }}</div>
+                                    @if ($entri->solusi)
+                                        <div style="margin-top:4px"><b>Solusi:</b> {{ $entri->solusi }}</div>
+                                    @endif
+                                </div>
+                            @endforeach
+                        </div>
                     </div>
                 @endforeach
             </div>
@@ -358,8 +361,15 @@
         @foreach ($kendalaBlocks as $i => $block)
             <div class="poin-row" wire:key="kendala-{{ $i }}">
                 <span class="k-num">Pasangan {{ $i + 1 }}</span>
+                @if ($block['status_verifikasi'] === 'ditolak')
+                    <span class="badge b-kembali" style="position:absolute;top:-9px;right:12px">✕ Tidak Sesuai (Tim SAKIP)</span>
+                @endif
                 @if (count($kendalaBlocks) > 1)
                     <button type="button" class="btn btn-red btn-sm" style="position:absolute;top:8px;right:8px" wire:click="removeKendalaBlock({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="removeKendalaBlock({{ $i }})">🗑</button>
+                @endif
+
+                @if ($block['status_verifikasi'] === 'ditolak' && $block['catatan'])
+                    <div style="grid-column:1/-1;font-size:11.5px;color:var(--red);margin-bottom:2px">📝 {{ $block['catatan'] }} — perbaiki lalu ajukan ulang.</div>
                 @endif
 
                 <div class="field" style="margin-bottom:0">
@@ -678,11 +688,11 @@
     </div>
 
     <div class="btn-row">
-        <button type="button" class="btn btn-ghost" wire:click="simpanDraft" wire:loading.attr="disabled" wire:target="simpanDraft">
+        <button type="button" class="btn btn-ghost" wire:click="simpanDraft" wire:loading.attr="disabled" wire:target="simpanDraft" @disabled($formTerkunciDisetujui)>
             <span wire:loading.remove wire:target="simpanDraft">💾 Simpan Draft</span>
             <span wire:loading wire:target="simpanDraft">Menyimpan…</span>
         </button>
-        <button type="button" class="btn btn-primary" wire:click="ajukanIsian" wire:loading.attr="disabled" wire:target="ajukanIsian" @disabled(! $this->formLengkap())>
+        <button type="button" class="btn btn-primary" wire:click="ajukanIsian" wire:loading.attr="disabled" wire:target="ajukanIsian" @disabled($formTerkunciDisetujui || ! $this->formLengkap())>
             <span wire:loading.remove wire:target="ajukanIsian">Ajukan ke Tim SAKIP →</span>
             <span wire:loading wire:target="ajukanIsian">Mengirim…</span>
         </button>
@@ -699,6 +709,28 @@
         isinya sempat belum sempat dikosongkan oleh stream() terakhir.
     --}}
     <div wire:stream="progres-unggah" wire:loading wire:target="ajukanIsian" class="progres-unggah" style="margin-top:10px"></div>
+
+    @php $semuaBerkasKegiatan = collect($blocks)->flatMap(fn ($b) => $b['existing_bukti'])->unique('id'); @endphp
+    @foreach ($semuaBerkasKegiatan as $file)
+        <div class="modal-overlay" x-show="modalBerkas === {{ $file['id'] }}" x-cloak style="display:none" @click.self="modalBerkas = null" wire:key="modal-berkas-{{ $file['id'] }}">
+            <div class="modal">
+                <div class="modal-top">
+                    <div class="mt-t">📄 {{ $file['nama_file'] }}</div>
+                    <button type="button" class="x" @click="modalBerkas = null">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="pdf-view">
+                        <div class="pmeta">{{ $file['nama_file'] }}</div>
+                        <iframe
+                            x-bind:src="modalBerkas === {{ $file['id'] }} ? @js(route('berkas.show', $file['id'])) : null"
+                            class="pdf-frame" title="Pratinjau {{ $file['nama_file'] }}"
+                        ></iframe>
+                        <a href="{{ route('berkas.show', $file['id']) }}" target="_blank" class="btn btn-ghost btn-sm" style="margin-top:10px;align-self:flex-start">🔗 Buka di tab baru / layar penuh</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endforeach
 
     <div class="toast-stack">
         <template x-for="toast in toasts" :key="toast.id">

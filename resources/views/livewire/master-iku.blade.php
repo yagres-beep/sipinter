@@ -105,6 +105,7 @@
                         <th>Tim</th>
                         <th>Sasaran</th>
                         <th>Satuan</th>
+                        <th>Metode</th>
                         <th>Penanggung Jawab</th>
                         <th style="text-align:right">Tindakan</th>
                     </tr>
@@ -117,6 +118,13 @@
                             <td class="muted">{{ $iku->tim }}</td>
                             <td class="muted">{{ $iku->sasaran ?? '—' }}</td>
                             <td class="muted">{{ $iku->satuan }}</td>
+                            <td>
+                                @if ($iku->pakaiRasio())
+                                    <span class="badge b-tunggu">Rasio X÷Y</span>
+                                @else
+                                    <span class="muted">Langsung</span>
+                                @endif
+                            </td>
                             <td class="muted">{{ $iku->penanggung_jawab }}</td>
                             <td style="text-align:right;white-space:nowrap">
                                 <button type="button" class="btn btn-ghost btn-sm" wire:click="edit({{ $iku->id }})" wire:loading.attr="disabled" wire:target="edit({{ $iku->id }})">
@@ -131,7 +139,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" style="color:var(--muted)">Belum ada data Master IKU. Unggah Excel atau tambah manual di atas.</td>
+                            <td colspan="8" style="color:var(--muted)">Belum ada data Master IKU. Unggah Excel atau tambah manual di atas.</td>
                         </tr>
                     @endforelse
                 </tbody>

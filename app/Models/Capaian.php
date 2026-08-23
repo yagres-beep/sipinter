@@ -20,9 +20,43 @@ class Capaian extends Model
 
     protected $table = 'capaian';
 
+    /**
+     * Status alur verifikasi SATU-SATUNYA yang ditampilkan ke pengguna (dasbor, daftar
+     * verifikasi, detail) — nilai sama persis dengan Kegiatan::STATUS_* (kecuali
+     * SEDANG_DITANGANI, khusus milik Capaian) tapi didefinisikan terpisah supaya
+     * Capaian tidak bergantung pada class Kegiatan hanya untuk konstanta.
+     * Satu Capaian TIDAK PERNAH punya lebih dari satu status pada satu waktu; lihat
+     * catatStatus() untuk satu-satunya jalur yang boleh mengubahnya.
+     *
+     * Ringkasan alur: draft (Ketua Tim simpan draf) -> diajukan (Ketua Tim ajukan) ->
+     * sedang ditangani (Tim SAKIP sudah mulai menandai sebagian bukti/kendala-solusi
+     * & simpan sementara) -> diverifikasi (SEMUA bukti & kendala-solusi "Sesuai") atau
+     * dikembalikan (ADA yang "Tidak Sesuai") -> disetujui (masuk Notula final).
+     */
+    public const STATUS_DRAFT = 'draft';
+
+    /**
+     * Checkpoint sementara: Tim SAKIP sudah mulai menandai sebagian berkas/kendala &
+     * solusi Sesuai/Tidak Sesuai (lewat "Simpan Sementara") tapi belum memutuskan
+     * hasil akhirnya (Verifikasi Selesai atau Kembalikan ke Ketua Tim) — lihat
+     * App\Livewire\VerifikasiCapaian::simpanSementara(). Tetap dianggap "bisa
+     * diverifikasi" (isian masih bisa disunting Tim SAKIP), BEDA dari STATUS_DRAFT
+     * yang berarti isian milik Ketua Tim yang belum pernah diajukan sama sekali.
+     */
+    public const STATUS_SEDANG_DITANGANI = 'sedang_ditangani';
+
+    public const STATUS_DIAJUKAN = 'diajukan';
+
+    public const STATUS_DIVERIFIKASI = 'diverifikasi';
+
+    public const STATUS_DIKEMBALIKAN = 'dikembalikan';
+
+    public const STATUS_DISETUJUI = 'disetujui';
+
     protected $fillable = [
         'iku_id',
         'periode_id',
+        'status',
         'analisis_capaian',
         'target_pk',
         'target_tw',
@@ -63,14 +97,19 @@ class Capaian extends Model
     }
 
     /**
-     * Catat satu perubahan status ke riwayat (RF baru: jejak audit siapa/status/waktu).
-     * Dipanggil sekali per aksi alur verifikasi (ajukan/verifikasi/kembalikan/setujui),
-     * bukan per kegiatan, supaya satu aksi yang menyentuh banyak kegiatan sekaligus
-     * (RF-37/RF-38 — satu IKU boleh punya banyak kegiatan) tetap tercatat sebagai satu
-     * poin riwayat, bukan duplikat.
+     * Catat satu perubahan status ke riwayat (RF baru: jejak audit siapa/status/waktu)
+     * SEKALIGUS memutakhirkan kolom status Capaian ini sendiri — inilah SATU-SATUNYA
+     * jalur yang boleh mengubah status, supaya kolom `status` dan riwayatnya tidak
+     * pernah berbeda. Dipanggil sekali per aksi alur verifikasi (ajukan/verifikasi/
+     * kembalikan/setujui/buka kembali), bukan per kegiatan, supaya satu aksi yang
+     * menyentuh banyak kegiatan sekaligus (RF-37/RF-38 — satu IKU boleh punya banyak
+     * kegiatan) tetap tercatat sebagai SATU poin riwayat & SATU status, bukan duplikat
+     * atau campur-aduk.
      */
     public function catatStatus(string $status, ?User $user, ?string $catatan = null): RiwayatStatusCapaian
     {
+        $this->update(['status' => $status]);
+
         return $this->riwayatStatus()->create([
             'status' => $status,
             'user_id' => $user?->id,
@@ -120,6 +159,65 @@ class Capaian extends Model
 
         // Aturan (a)/(b): rasio realisasi/target, dibatasi maksimal $batas.
         return min(round(($realisasi / $target) * 100, 2), $batas);
+    }
+
+    /**
+     * Predikat SAKIP dari Nilai SAKIP (angka dari Inspektorat, App\Models\NilaiSakip)
+     * — sesuai Kertas Kerja Pengukuran Kinerja Triwulanan, dipakai untuk menentukan
+     * % koreksi pada rumus Penilaian Kinerja Organisasi (PKO) di bawah.
+     */
+    public static function predikatSakip(float $nilaiSakip): string
+    {
+        return match (true) {
+            $nilaiSakip > 90 => 'AA/Sangat Memuaskan',
+            $nilaiSakip > 80 => 'A/Memuaskan',
+            $nilaiSakip > 70 => 'BB/Sangat Baik',
+            $nilaiSakip > 60 => 'B/Baik',
+            $nilaiSakip > 50 => 'CC/Cukup (Memadai)',
+            $nilaiSakip > 30 => 'C/Kurang',
+            default => 'D/Sangat Kurang',
+        };
+    }
+
+    /**
+     * % koreksi Nilai Akhir Capaian PK berdasarkan Predikat SAKIP — dipakai SATU
+     * angka untuk SELURUH IKU (organisasi), bukan per-IKU.
+     */
+    public static function koreksiPredikat(string $predikat): float
+    {
+        return match ($predikat) {
+            'AA/Sangat Memuaskan', 'A/Memuaskan' => 0.0,
+            'BB/Sangat Baik' => 10.0,
+            'B/Baik' => 15.0,
+            'CC/Cukup (Memadai)' => 20.0,
+            default => 30.0, // C/Kurang, D/Sangat Kurang
+        };
+    }
+
+    /**
+     * Normalisasi Capaian PK (1) — Capaian Setahun TW IV satu IKU (CapaianTahunan::
+     * capaianSetahun(4)) dibatasi maksimal PengaturanCapaian::batas_normalisasi_pko
+     * (default 110, TERPISAH dari batas_maksimal_persen 120 yang dipakai
+     * hitungPersentase()) — null bila belum ada Capaian Setahun TW IV sama sekali
+     * (strip "-", bukan dianggap 0).
+     */
+    public static function normalisasiCapaianPk(?float $capaianSetahunTw4): ?float
+    {
+        if ($capaianSetahunTw4 === null) {
+            return null;
+        }
+
+        return min($capaianSetahunTw4, (float) PengaturanCapaian::ambil()->batas_normalisasi_pko);
+    }
+
+    /**
+     * Nilai Akhir Capaian PK satu IKU = Normalisasi (1) × (100% − Koreksi Predikat
+     * SAKIP (2)) — dijumlah/dirata-ratakan seluruh IKU di App\Livewire\DasborCapaian::
+     * hitungPko() untuk menghasilkan Total/Rata-rata Capaian PK (NKO) organisasi.
+     */
+    public static function nilaiAkhirCapaianPk(?float $normalisasi, float $koreksiPersen): ?float
+    {
+        return $normalisasi === null ? null : round($normalisasi * (1 - $koreksiPersen / 100), 2);
     }
 
     /**

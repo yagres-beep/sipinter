@@ -22,7 +22,7 @@ class LakinList extends Component
 
     protected function pastikanSakip(): void
     {
-        abort_unless(auth()->user()->namaRole() === 'Tim SAKIP', 403, 'Hanya Tim SAKIP yang dapat membentuk LAKIN.');
+        abort_unless(auth()->user()->namaRole() === 'Tim SAKIP', 403, 'Hanya Tim SAKIP yang dapat membentuk rekap kinerja tahunan.');
     }
 
     public function bentukLakin(): void

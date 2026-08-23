@@ -21,7 +21,28 @@ class MasterIku extends Model
         'penanggung_jawab',
         'sasaran',
         'satuan',
+        'metode_capaian',
+        'deskripsi_x',
+        'deskripsi_y',
     ];
+
+    /**
+     * Alokasi Target/Realisasi diisi langsung sebagai angka (perilaku lama, default).
+     */
+    public const METODE_LANGSUNG = 'langsung';
+
+    /**
+     * Alokasi Target/Realisasi diisi lewat Pembilang (X)/Penyebut (Y) mentah per
+     * triwulan, persentasenya dihitung otomatis X÷Y×100 — sesuai Kertas Kerja
+     * Pengukuran Kinerja Triwulanan resmi untuk IKU bertipe %. Lihat
+     * App\Models\CapaianTahunan::alokasiKumulatif()/realisasiKumulatif().
+     */
+    public const METODE_RASIO = 'rasio';
+
+    public function pakaiRasio(): bool
+    {
+        return $this->metode_capaian === self::METODE_RASIO;
+    }
 
     /**
      * Bagian angka dari kode (mis. "1131" dari "IKU-1131") — dipakai di tabel Daftar

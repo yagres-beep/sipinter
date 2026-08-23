@@ -216,20 +216,12 @@ class DemoDataSeeder extends Seeder
         $periodePertama = Periode::where('tahun', $tahun)->where('bulan', $bulanPertama)->first();
 
         // Kendala & solusi (kumulatif) — dicatat pada bulan pertama triwulan berjalan.
-        $kendalaSolusi = KendalaSolusi::firstOrCreate(
+        // Tidak lagi punya bukti dukung sendiri (RF-27 dicabut, lihat App\Models\KendalaSolusi).
+        KendalaSolusi::firstOrCreate(
             ['iku_id' => $iku->id, 'periode_id' => $periodePertama->id],
             [
                 'kendala' => 'Keterlambatan pengumpulan dokumen dari mitra kerja.',
                 'solusi' => 'Percepatan koordinasi dan pengingat berkala kepada mitra.',
-            ]
-        );
-
-        Berkas::firstOrCreate(
-            ['ref_id' => $kendalaSolusi->id, 'ref_type' => KendalaSolusi::class, 'kategori' => 'solusi'],
-            [
-                'nama_file' => 'bukti-solusi.pdf',
-                'status_verifikasi' => 'terverifikasi',
-                'storage_account_id' => $storageAccount->id,
             ]
         );
 

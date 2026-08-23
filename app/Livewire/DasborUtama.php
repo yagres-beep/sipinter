@@ -90,16 +90,19 @@ class DasborUtama extends Component
             ->count();
 
         // Satu query dengan agregat bersyarat (FILTER, sintaks Postgres) alih-alih dua
-        // query Kegiatan::count() terpisah untuk status yang berbeda.
-        $statusKegiatan = Kegiatan::selectRaw(
-            "count(*) filter (where status_dokumen in ('diverifikasi','disetujui')) as sudah_diverifikasi,
-             count(*) filter (where status_dokumen = 'diajukan') as menunggu_verifikasi"
+        // query Capaian::count() terpisah untuk status yang berbeda. Dihitung dari
+        // Capaian::status (satu status per IKU+bulan) bukan lagi Kegiatan::status_dokumen
+        // — supaya "2 sudah diverifikasi" berarti 2 ISIAN (IKU+bulan), bukan 2 baris
+        // kegiatan mentah yang bisa menghitung satu isian berkali-kali.
+        $statusCapaian = Capaian::selectRaw(
+            "count(*) filter (where status in ('diverifikasi','disetujui')) as sudah_diverifikasi,
+             count(*) filter (where status in ('diajukan','sedang_ditangani')) as menunggu_verifikasi"
         )->first();
 
         return [
             'total_iku' => MasterIku::count(),
-            'sudah_diverifikasi' => (int) $statusKegiatan->sudah_diverifikasi,
-            'menunggu_verifikasi' => (int) $statusKegiatan->menunggu_verifikasi,
+            'sudah_diverifikasi' => (int) $statusCapaian->sudah_diverifikasi,
+            'menunggu_verifikasi' => (int) $statusCapaian->menunggu_verifikasi,
             'lewat_tenggat' => $lewatTenggat,
         ];
     }
@@ -107,16 +110,22 @@ class DasborUtama extends Component
     /**
      * Query + filter + sort didorong seluruhnya ke database (JOIN ke master_iku &amp; periode)
      * alih-alih memuat semua baris ke memori lalu memfilter/mengurutkan lewat Collection —
-     * supaya pencarian dan sort tetap cepat walau jumlah kegiatan terus bertambah.
+     * supaya pencarian dan sort tetap cepat walau jumlah isian terus bertambah.
      *
-     * @return \Illuminate\Support\Collection<int, Kegiatan>
+     * SATU baris = SATU Capaian (IKU+bulan, lihat App\Models\Capaian), bukan lagi satu
+     * baris per Kegiatan — sebelumnya satu IKU+bulan bisa tampil berkali-kali di tabel
+     * ini dengan status berbeda-beda tiap barisnya (mis. "Dikembalikan" dua kali lalu
+     * "Diverifikasi" dua kali) karena tiap Kegiatan punya status_dokumen sendiri;
+     * sekarang statusnya SATU per IKU+bulan (Capaian::status), jadi satu baris cukup.
+     *
+     * @return \Illuminate\Support\Collection<int, Capaian>
      */
-    protected function daftarKegiatan()
+    protected function daftarCapaian()
     {
-        $query = Kegiatan::query()
-            ->join('master_iku', 'kegiatan.iku_id', '=', 'master_iku.id')
-            ->join('periode', 'kegiatan.periode_id', '=', 'periode.id')
-            ->select('kegiatan.*')
+        $query = Capaian::query()
+            ->join('master_iku', 'capaian.iku_id', '=', 'master_iku.id')
+            ->join('periode', 'capaian.periode_id', '=', 'periode.id')
+            ->select('capaian.*')
             ->with(['masterIku', 'periode']);
 
         if (filled($this->filterTriwulan)) {
@@ -144,7 +153,7 @@ class DasborUtama extends Component
             'indikator' => 'master_iku.indikator',
             'triwulan' => 'periode.triwulan',
             'tim' => 'master_iku.tim',
-            'status' => 'kegiatan.status_dokumen',
+            'status' => 'capaian.status',
             default => 'periode.tahun',
         };
 
@@ -158,55 +167,74 @@ class DasborUtama extends Component
     }
 
     /**
+     * Kegiatan pendukung per Capaian yang tampil di halaman ini, SATU query untuk
+     * seluruh daftar (bukan N+1 lewat $capaian->kegiatanList() per baris) — dipakai
+     * untuk turunkan jumlah MAUPUN rincian status kegiatan (lihat Kegiatan::rincianStatus()),
+     * supaya campuran status dalam satu Capaian (mis. "3 diverifikasi, 2 dikembalikan")
+     * tetap terlihat di tabel ini tanpa perlu buka halaman lain.
+     *
+     * @param  \Illuminate\Support\Collection<int, Capaian>  $daftarCapaian
+     * @return \Illuminate\Support\Collection<int, \Illuminate\Support\Collection<int, Kegiatan>>
+     */
+    protected function kegiatanPerCapaian($daftarCapaian)
+    {
+        if ($daftarCapaian->isEmpty()) {
+            return collect();
+        }
+
+        $perPasangan = Kegiatan::whereIn('iku_id', $daftarCapaian->pluck('iku_id'))
+            ->whereIn('periode_id', $daftarCapaian->pluck('periode_id'))
+            ->get(['iku_id', 'periode_id', 'status_dokumen'])
+            ->groupBy(fn ($k) => $k->iku_id.'-'.$k->periode_id);
+
+        return $daftarCapaian->mapWithKeys(
+            fn ($c) => [$c->id => $perPasangan->get($c->iku_id.'-'.$c->periode_id, collect())]
+        );
+    }
+
+    /**
      * Tautan baris sesuai peran yang login — Tim SAKIP menuju detail verifikasi
-     * (bila masih diajukan), Ketua Tim &amp; Kepala menuju halaman kerja utama mereka
-     * (tidak ada halaman detail per kegiatan untuk kedua peran ini).
+     * langsung (baris SUDAH berupa Capaian, tidak perlu lagi dicocokkan lewat query
+     * terpisah seperti sebelumnya), Ketua Tim &amp; Kepala menuju halaman kerja utama
+     * mereka (tidak ada halaman detail per Capaian untuk kedua peran ini).
      *
-     * Untuk Tim SAKIP, seluruh Capaian yang dibutuhkan diambil SEKALI (bukan satu
-     * query per baris kegiatan — N+1) lalu dicocokkan di PHP.
-     *
-     * @param  \Illuminate\Support\Collection<int, Kegiatan>  $daftarKegiatan
+     * @param  \Illuminate\Support\Collection<int, Capaian>  $daftarCapaian
      * @return \Illuminate\Support\Collection<int, ?string>
      */
-    protected function tautanSemuaBaris($daftarKegiatan, string $role)
+    protected function tautanSemuaBaris($daftarCapaian, string $role)
     {
         if ($role === 'Ketua Tim') {
-            return $daftarKegiatan->mapWithKeys(fn ($k) => [$k->id => route('pengisian.index', [
-                'iku_id' => $k->iku_id,
-                'tahun' => $k->periode->tahun,
-                'bulan' => $k->periode->bulan,
+            return $daftarCapaian->mapWithKeys(fn ($c) => [$c->id => route('pengisian.index', [
+                'iku_id' => $c->iku_id,
+                'tahun' => $c->periode->tahun,
+                'bulan' => $c->periode->bulan,
             ])]);
         }
 
         if ($role === 'Kepala') {
-            return $daftarKegiatan->mapWithKeys(fn ($k) => [$k->id => route('persetujuan.index')]);
+            return $daftarCapaian->mapWithKeys(fn ($c) => [$c->id => route('persetujuan.index')]);
         }
 
         if ($role === 'Tim SAKIP') {
-            $capaianPerPasangan = Capaian::whereIn('periode_id', $daftarKegiatan->pluck('periode_id')->unique())
-                ->get()
-                ->keyBy(fn ($c) => $c->iku_id.'-'.$c->periode_id);
-
-            return $daftarKegiatan->mapWithKeys(function ($k) use ($capaianPerPasangan) {
-                $capaian = $capaianPerPasangan->get($k->iku_id.'-'.$k->periode_id);
-
-                return [$k->id => $capaian ? route('verifikasi.show', $capaian) : null];
-            });
+            return $daftarCapaian->mapWithKeys(fn ($c) => [$c->id => route('verifikasi.show', $c)]);
         }
 
-        return $daftarKegiatan->mapWithKeys(fn ($k) => [$k->id => null]);
+        return $daftarCapaian->mapWithKeys(fn ($c) => [$c->id => null]);
     }
 
     public function render()
     {
         $role = auth()->user()->namaRole();
-        $daftarKegiatan = $this->daftarKegiatan();
+        $daftarCapaian = $this->daftarCapaian();
+        $kegiatanPerCapaian = $this->kegiatanPerCapaian($daftarCapaian);
 
         return view('livewire.dasbor-utama', [
             'role' => $role,
             'ringkasan' => $this->ringkasan(),
-            'daftarKegiatan' => $daftarKegiatan,
-            'tautanBaris' => $this->tautanSemuaBaris($daftarKegiatan, $role),
+            'daftarCapaian' => $daftarCapaian,
+            'jumlahKegiatan' => $kegiatanPerCapaian->map->count(),
+            'rincianStatusKegiatan' => $kegiatanPerCapaian->map(fn ($g) => Kegiatan::rincianStatus($g)),
+            'tautanBaris' => $this->tautanSemuaBaris($daftarCapaian, $role),
             'ikuBelumTerisiTriwulanIni' => $this->ikuBelumTerisiTriwulanIni(),
             'triwulanBerjalan' => (int) ceil(now()->month / 3),
         ]);

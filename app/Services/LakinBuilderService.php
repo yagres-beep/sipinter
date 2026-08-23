@@ -2,28 +2,26 @@
 
 namespace App\Services;
 
-use App\Models\Capaian;
+use App\Models\CapaianTahunan;
 use App\Models\Lakin;
 use App\Models\LakinBaris;
 use Illuminate\Support\Collection;
 
 /**
- * Menyiapkan pilihan IKU yang bisa dimasukkan ke LAKIN dari data capaian yang sudah
- * tersimpan (dari isian Ketua Tim yang sudah diverifikasi Tim SAKIP, sama seperti
- * sumber data Bagian I notula), lalu menambahkan HANYA IKU yang dipilih Tim SAKIP
- * secara eksplisit — LAKIN tidak pernah terisi otomatis-semua, karena tiap instansi
- * bisa punya alasan berbeda memasukkan/tidak memasukkan suatu indikator.
+ * Menyiapkan pilihan IKU yang bisa dimasukkan ke LAKIN dari Target Tahunan +
+ * Realisasi Triwulanan yang sudah diisi Tim SAKIP (App\Models\CapaianTahunan, satu
+ * baris per iku_id+tahun), lalu menambahkan HANYA IKU yang dipilih Tim SAKIP secara
+ * eksplisit — LAKIN tidak pernah terisi otomatis-semua, karena tiap instansi bisa
+ * punya alasan berbeda memasukkan/tidak memasukkan suatu indikator.
  *
- * Target = Target PK (Perjanjian Kinerja, bersifat TAHUNAN) dari capaian mana pun
- * pada tahun itu yang sudah mengisinya. Realisasi = jumlah realisasi seluruh triwulan
- * tahun itu (capaian bersifat kumulatif triwulanan). Kedua asumsi ini adalah TITIK AWAL
- * yang masuk akal, bukan aturan baku — Tim SAKIP bisa menimpa angka apa pun secara
- * manual di LakinDetail sesudahnya.
+ * Target = Target Tahunan. Realisasi = Realisasi Kumulatif TW I s.d. TW IV (setahun
+ * penuh). Kedua asumsi ini adalah TITIK AWAL yang masuk akal, bukan aturan baku —
+ * Tim SAKIP bisa menimpa angka apa pun secara manual di LakinDetail sesudahnya.
  */
 class LakinBuilderService
 {
     /**
-     * IKU yang punya data capaian pada tahun ini, lengkap dengan angka
+     * IKU yang punya data CapaianTahunan pada tahun ini, lengkap dengan angka
      * target/realisasi/capaian% hasil hitung — dipakai untuk checklist pemilihan di
      * LakinDetail. TIDAK menyimpan apa pun; hanya pratinjau sebelum Tim SAKIP memilih.
      *
@@ -31,21 +29,16 @@ class LakinBuilderService
      */
     public function ikuTersediaUntukTahun(int $tahun): Collection
     {
-        return Capaian::with('masterIku')
-            ->whereHas('periode', fn ($q) => $q->where('tahun', $tahun))
+        return CapaianTahunan::with('masterIku')
+            ->where('tahun', $tahun)
             ->get()
-            ->groupBy('iku_id')
-            ->map(function ($daftarCapaian) {
-                $iku = $daftarCapaian->first()->masterIku;
-                $target = $daftarCapaian->pluck('target_pk')->filter()->last();
-                $realisasi = $daftarCapaian->pluck('realisasi')->filter();
-                $totalRealisasi = $realisasi->isEmpty() ? null : $realisasi->sum();
-                $capaianPersen = ($target && (float) $target > 0 && $totalRealisasi !== null)
-                    ? round(((float) $totalRealisasi / (float) $target) * 100, 2)
-                    : null;
+            ->map(function (CapaianTahunan $capaianTahunan) {
+                $target = $capaianTahunan->targetTahunan();
+                $totalRealisasi = $capaianTahunan->realisasiKumulatif(4);
+                $capaianPersen = $capaianTahunan->capaianSetahun(4);
 
                 return (object) [
-                    'iku' => $iku,
+                    'iku' => $capaianTahunan->masterIku,
                     'target' => $target,
                     'realisasi' => $totalRealisasi,
                     'capaian_persen' => $capaianPersen,
