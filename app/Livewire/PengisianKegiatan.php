@@ -1515,6 +1515,14 @@ class PengisianKegiatan extends Component
                 $kegiatan->ajukan();
                 $adaKegiatanDiajukan = true;
 
+                // RF-17: nama berkas & folder mengikuti uraian kegiatan (bukan tahapan
+                // survei — itu cuma prefix folder, lihat namaFolderAuto di atas), supaya
+                // langsung dikenali dari daftar berkas tanpa harus dibuka satu-satu. Dipakai
+                // baik untuk nama_file awal (sebelum sempat diunggah ke Drive) maupun sebagai
+                // $namaBerkasOverride Drive — namaUnik() di FolderStructureService yang
+                // menambahkan angka di belakang bila lebih dari satu berkas.
+                $namaBerkasDasar = 'Kegiatan '.$block['uraian_kegiatan'];
+
                 foreach ($block['bukti'] as $file) {
                     $path = $file->store('bukti-capaian', 'local');
 
@@ -1522,7 +1530,7 @@ class PengisianKegiatan extends Component
                         'ref_id' => $kegiatan->id,
                         'ref_type' => Kegiatan::class,
                         'kategori' => 'capaian',
-                        'nama_file' => $file->getClientOriginalName(),
+                        'nama_file' => $namaBerkasDasar.'.pdf',
                         'path' => $path,
                         'status_verifikasi' => 'menunggu',
                     ]);
@@ -1536,7 +1544,7 @@ class PengisianKegiatan extends Component
                     try {
                         $this->streamProgresUnggah($file->getClientOriginalName(), 'bukti kegiatan');
                         $localFullPath = Storage::disk('local')->path($path);
-                        $hasilDrive = $folderService->unggahBerkasKegiatan($kegiatan, 'capaian', $localFullPath);
+                        $hasilDrive = $folderService->unggahBerkasKegiatan($kegiatan, 'capaian', $localFullPath, namaBerkasOverride: $namaBerkasDasar);
                         $berkas->update($hasilDrive);
                         $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti kegiatan', true);
                     } catch (\Throwable $e) {
@@ -1587,6 +1595,7 @@ class PengisianKegiatan extends Component
                 }
 
                 $poin = RtlEvaluasiModel::with(['periode', 'masterIku'])->findOrFail($rtlId);
+                $namaBerkasDasar = 'Evaluasi RTL '.$poin->rtl_teks;
 
                 foreach ($data['bukti'] as $file) {
                     $path = $file->store('bukti-evaluasi-rtl', 'local');
@@ -1595,7 +1604,7 @@ class PengisianKegiatan extends Component
                         'ref_id' => $poin->id,
                         'ref_type' => RtlEvaluasiModel::class,
                         'kategori' => 'evaluasi_rtl',
-                        'nama_file' => $file->getClientOriginalName(),
+                        'nama_file' => $namaBerkasDasar.'.pdf',
                         'path' => $path,
                         'status_verifikasi' => 'menunggu',
                     ]);
@@ -1603,7 +1612,7 @@ class PengisianKegiatan extends Component
                     try {
                         $this->streamProgresUnggah($file->getClientOriginalName(), 'bukti evaluasi RTL');
                         $localFullPath = Storage::disk('local')->path($path);
-                        $hasilDrive = $folderService->unggahBerkas($poin->periode, $poin->masterIku, 'evaluasi_rtl', $localFullPath);
+                        $hasilDrive = $folderService->unggahBerkas($poin->periode, $poin->masterIku, 'evaluasi_rtl', $localFullPath, namaBerkasOverride: $namaBerkasDasar);
                         $berkas->update($hasilDrive);
                         $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti evaluasi RTL', true);
                     } catch (\Throwable $e) {
@@ -1657,6 +1666,8 @@ class PengisianKegiatan extends Component
                         'teks' => $blok['teks'],
                     ]);
 
+                    $namaBerkasDasar = $bagian->nama.' '.$poin->teks;
+
                     foreach ($blok['bukti'] as $file) {
                         $path = $file->store('bukti-bagian-kustom', 'local');
 
@@ -1664,7 +1675,7 @@ class PengisianKegiatan extends Component
                             'ref_id' => $poin->id,
                             'ref_type' => BagianKustomPoin::class,
                             'kategori' => 'bagian_kustom',
-                            'nama_file' => $file->getClientOriginalName(),
+                            'nama_file' => $namaBerkasDasar.'.pdf',
                             'path' => $path,
                             'status_verifikasi' => 'menunggu',
                         ]);
@@ -1673,7 +1684,9 @@ class PengisianKegiatan extends Component
                             $this->streamProgresUnggah($file->getClientOriginalName(), "bukti {$bagian->nama}");
                             $localFullPath = Storage::disk('local')->path($path);
                             $hasilDrive = $folderService->unggahBerkas(
-                                $periode, $iku, 'bagian_kustom', $localFullPath, namaFolderOverride: $bagian->nama
+                                $periode, $iku, 'bagian_kustom', $localFullPath,
+                                namaFolderOverride: $bagian->nama,
+                                namaBerkasOverride: $namaBerkasDasar,
                             );
                             $berkas->update($hasilDrive);
                             $this->notifikasiHasilUnggah($file->getClientOriginalName(), "bukti {$bagian->nama}", true);

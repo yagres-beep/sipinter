@@ -320,11 +320,17 @@ class FolderStructureService
         // jadi nama BERKAS itu sendiri cukup mengikuti kategorinya, bukan nama asli
         // file dari komputer pengguna. Cocok dengan contoh jalur di SRS: ".../bukti-capaian.pdf".
         // $namaBerkasOverride dipakai untuk kategori yang lebih informatif diberi nama dari
-        // ISI teksnya sendiri (mis. bukti solusi diberi nama dari teks kendala-solusinya),
-        // supaya mudah dikenali langsung dari daftar berkas di Drive tanpa harus dibuka satu-satu.
+        // ISI teksnya sendiri (mis. bukti kegiatan diberi nama "Kegiatan <uraian kegiatan>",
+        // bukti evaluasi RTL "Evaluasi RTL <rtl_teks>", bukti bagian kustom
+        // "<nama bagian> <teks poin>"), supaya mudah dikenali langsung dari daftar berkas
+        // di Drive tanpa harus dibuka satu-satu. TIDAK di-slug (beda dari $namaDasar
+        // kategori default di bawah) — human-readable, sama seperti nama folder kegiatan
+        // (lihat resolveKegiatanFolder()). Duplikat dalam folder yang sama (mis. lebih
+        // dari satu berkas bukti untuk kegiatan yang sama) otomatis diberi angka di
+        // belakang lewat namaUnik() di bawah.
         $kategoriSlug = Str::slug($namaKategori);
         $namaDasar = $namaBerkasOverride !== null && trim($namaBerkasOverride) !== ''
-            ? Str::slug(self::namaOtomatis($namaBerkasOverride, 80))
+            ? self::namaOtomatis($namaBerkasOverride, 80)
             : (str_starts_with($kategoriSlug, 'bukti') ? $kategoriSlug : "bukti-{$kategoriSlug}");
 
         $namaSudahAda = $this->namesInFolderCached($tujuanFolderId);
@@ -347,9 +353,9 @@ class FolderStructureService
      * Alias nyaman untuk unggahan kategori "Capaian" yang SELALU terikat ke satu
      * kegiatan — dipakai oleh PengisianKegiatan.
      */
-    public function unggahBerkasKegiatan(Kegiatan $kegiatan, string $kategoriEnum, string $localPath, string $ekstensi = '.pdf', string $mimeType = 'application/pdf'): array
+    public function unggahBerkasKegiatan(Kegiatan $kegiatan, string $kategoriEnum, string $localPath, string $ekstensi = '.pdf', string $mimeType = 'application/pdf', ?string $namaBerkasOverride = null): array
     {
-        return $this->unggahBerkas($kegiatan->periode, $kegiatan->masterIku, $kategoriEnum, $localPath, $kegiatan, $ekstensi, $mimeType);
+        return $this->unggahBerkas($kegiatan->periode, $kegiatan->masterIku, $kategoriEnum, $localPath, $kegiatan, $ekstensi, $mimeType, namaBerkasOverride: $namaBerkasOverride);
     }
 
     // ================================================================
