@@ -5,8 +5,10 @@ namespace App\Services;
 use App\Models\BagianKustom;
 use App\Models\Berkas;
 use App\Models\Capaian;
+use App\Models\CapaianTahunan;
 use App\Models\Kegiatan;
 use App\Models\KendalaSolusi;
+use App\Models\MasterIku;
 use App\Models\Notula;
 use App\Models\Periode;
 use App\Models\RtlEvaluasi;
@@ -61,23 +63,58 @@ class NotulaService
     public function susunBagianSatu(Notula $notula): string
     {
         $periode = $notula->periode;
+        $tw = $periode->triwulan;
+
+        // Seluruh Sasaran/IKU resmi ditampilkan sebagai kerangka baku (RF-42, sesuai
+        // Template Notula Monitoring Kinerja Triwulanan BPS), bukan cuma IKU yang
+        // kebetulan sudah punya kegiatan triwulan ini — supaya dokumen selalu tampil
+        // lengkap sebagai "template siap isi" dan Tim SAKIP tinggal melengkapi sel
+        // yang masih kosong, bukan menambah baris/tabel baru secara manual.
+        $sasaranPerIku = MasterIku::whereNotNull('sasaran')->where('sasaran', '!=', '')
+            ->orderBy('kode')
+            ->get()
+            ->groupBy('sasaran');
 
         $kegiatanPerIku = Kegiatan::with('masterIku')
-            ->whereHas('periode', fn ($q) => $q->where('tahun', $periode->tahun)->where('triwulan', $periode->triwulan))
+            ->whereHas('periode', fn ($q) => $q->where('tahun', $periode->tahun)->where('triwulan', $tw))
             ->whereIn('status_dokumen', [Kegiatan::STATUS_DIVERIFIKASI, Kegiatan::STATUS_DISETUJUI])
             ->get()
             ->groupBy('iku_id');
 
-        // RF-28: kumulatif dari triwulan 1 s.d. triwulan berjalan, tahun yang sama.
-        $kendalaSolusiPerTriwulan = KendalaSolusi::with(['masterIku', 'periode'])
-            ->whereHas('periode', fn ($q) => $q->where('tahun', $periode->tahun)->where('triwulan', '<=', $periode->triwulan))
-            ->get()
-            ->sortBy(fn ($k) => $k->periode->triwulan)
-            ->groupBy(fn ($k) => $k->periode->triwulan);
+        $capaianPerIku = Capaian::where('periode_id', $periode->id)->get()->keyBy('iku_id');
 
-        $rtlBerjalan = RtlEvaluasi::with('masterIku')
-            ->whereHas('periode', fn ($q) => $q->where('tahun', $periode->tahun)->where('triwulan', $periode->triwulan))
-            ->get();
+        // Target PK/Target TW/Realisasi/Capaian % — sumber tunggalnya CapaianTahunan
+        // (diisi Tim SAKIP sekali per tahun, lihat App\Livewire\VerifikasiCapaian),
+        // BUKAN kolom target_pk/target_tw lama di Capaian — sama seperti yang dipakai
+        // App\Livewire\DasborCapaian::dataRekap(), supaya angka di notula selalu
+        // konsisten dengan yang tampil di dasbor.
+        $capaianTahunanPerIku = CapaianTahunan::with('masterIku')->where('tahun', $periode->tahun)->get()->keyBy('iku_id');
+
+        $rekapPerIku = $sasaranPerIku->flatten()->mapWithKeys(function (MasterIku $iku) use ($capaianTahunanPerIku, $tw) {
+            $ct = $capaianTahunanPerIku->get($iku->id);
+
+            return [$iku->id => [
+                'target_pk' => $ct?->targetTahunan(),
+                'target_tw' => $ct?->alokasiKumulatif($tw),
+                'realisasi' => $ct ? (float) ($ct->{"realisasi_tw{$tw}"} ?? 0) : null,
+                'capaian_tw' => $ct?->capaianTriwulanan($tw),
+                'capaian_pk' => $ct?->capaianSetahun($tw),
+            ]];
+        });
+
+        // RF-28: kumulatif dari triwulan 1 s.d. triwulan berjalan, tahun yang sama —
+        // dikelompokkan per IKU dulu (kerangka resmi menampilkan Kendala/Solusi di
+        // bawah tiap indikator, bukan sebagai satu daftar gabungan seperti sebelumnya),
+        // baru per triwulan di dalamnya supaya kumulatifnya tetap terlihat jelas.
+        $kendalaSolusiPerIku = KendalaSolusi::with('periode')
+            ->whereHas('periode', fn ($q) => $q->where('tahun', $periode->tahun)->where('triwulan', '<=', $tw))
+            ->get()
+            ->groupBy('iku_id')
+            ->map(fn ($items) => $items->sortBy(fn ($k) => $k->periode->triwulan)->groupBy(fn ($k) => $k->periode->triwulan));
+
+        $rtlPerIku = RtlEvaluasi::whereHas('periode', fn ($q) => $q->where('tahun', $periode->tahun)->where('triwulan', $tw))
+            ->get()
+            ->groupBy('iku_id');
 
         // Bagian kustom (mis. Manajemen Risiko) — SEMUA bagian yang punya poin di
         // triwulan ini ikut ditampilkan, termasuk yang sudah dinonaktifkan Tim SAKIP
@@ -85,28 +122,34 @@ class NotulaService
         $bagianKustomPerBagian = BagianKustom::query()
             ->whereHas('poin', fn ($q) => $q->whereHas(
                 'periode',
-                fn ($q2) => $q2->where('tahun', $periode->tahun)->where('triwulan', $periode->triwulan)
+                fn ($q2) => $q2->where('tahun', $periode->tahun)->where('triwulan', $tw)
             ))
-            ->with(['poin' => function ($q) use ($periode) {
+            ->with(['poin' => function ($q) use ($periode, $tw) {
                 $q->with('masterIku')->whereHas(
                     'periode',
-                    fn ($q2) => $q2->where('tahun', $periode->tahun)->where('triwulan', $periode->triwulan)
+                    fn ($q2) => $q2->where('tahun', $periode->tahun)->where('triwulan', $tw)
                 );
             }])
             ->get();
 
         // RF baru: link bukti dukung per IKU (folder Drive IKU tsb), supaya Tim SAKIP/
         // Kepala bisa langsung buka bukti dari dalam dokumen notula. Dihitung sekali per
-        // IKU yang benar-benar tampil di sini (bukan seluruh Master IKU) — gagal Drive
-        // pada satu IKU (mis. storage belum aktif) tidak menggagalkan penyusunan notula.
+        // IKU yang benar-benar punya kegiatan triwulan ini (bukan seluruh Master IKU) —
+        // gagal Drive pada satu IKU (mis. storage belum aktif) tidak menggagalkan
+        // penyusunan notula.
         $linkFolderPerIku = $kegiatanPerIku->mapWithKeys(function ($daftarKegiatan, $ikuId) use ($periode) {
             return [$ikuId => $this->folder->linkBuktiDukungIku($periode, $daftarKegiatan->first()->masterIku)];
         });
 
         $html = view('pdf.notula-bagian1-konten', [
+            'periode' => $periode,
+            'labelTriwulan' => ['I', 'II', 'III', 'IV'][$tw - 1] ?? $tw,
+            'sasaranPerIku' => $sasaranPerIku,
+            'rekapPerIku' => $rekapPerIku,
+            'capaianPerIku' => $capaianPerIku,
             'kegiatanPerIku' => $kegiatanPerIku,
-            'kendalaSolusiPerTriwulan' => $kendalaSolusiPerTriwulan,
-            'rtlBerjalan' => $rtlBerjalan,
+            'kendalaSolusiPerIku' => $kendalaSolusiPerIku,
+            'rtlPerIku' => $rtlPerIku,
             'bagianKustomPerBagian' => $bagianKustomPerBagian,
             'linkFolderPerIku' => $linkFolderPerIku,
         ])->render();
