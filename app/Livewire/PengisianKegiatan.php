@@ -97,6 +97,10 @@ class PengisianKegiatan extends Component
 
     protected ?\Illuminate\Support\Collection $cacheRtlBerjalanTerpakaiIds = null;
 
+    protected ?Periode $cachePeriodeSaatIni = null;
+
+    protected bool $cachePeriodeSaatIniDihitung = false;
+
     /**
      * Livewire mengirim SETIAP aksi (blur, klik pill, unggah berkas, dst.) sebagai
      * request AJAX terpisah yang membawa "snapshot" kondisi form versi client saat
@@ -453,7 +457,7 @@ class PengisianKegiatan extends Component
      */
     protected function lupakanCachePeriodeIku(): void
     {
-        foreach (['riwayat', 'rtl-berjalan', 'rtl-berikutnya-ada', 'rtl-berjalan-terpakai', 'capaian-status'] as $bagian) {
+        foreach (['riwayat', 'rtl-berjalan', 'rtl-berikutnya-ada', 'rtl-berjalan-terpakai', 'capaian-status', 'catatan-penolakan', 'periode'] as $bagian) {
             Cache::forget($this->cacheKeyPeriodeIku($bagian));
         }
 
@@ -546,35 +550,43 @@ class PengisianKegiatan extends Component
             return collect();
         }
 
-        // Id kegiatan & RTL berjalan dipakai ulang dari yang sudah dimuat/di-cache
-        // ($this->blocks lewat muatBlocksKegiatan(), rtlTriwulanBerjalan() yang sudah
-        // di-cache) — cuma kendala & bagian kustom yang belum ada daftar id-nya di
-        // tempat lain, jadi baru query ringan di sini.
-        $kegiatanIds = collect($this->blocks)->pluck('id')->filter();
-        $kendalaIds = KendalaSolusiModel::where('iku_id', $this->iku_id)->where('periode_id', $periode->id)->pluck('id');
-        $bagianKustomIds = BagianKustomPoin::where('iku_id', $this->iku_id)->where('periode_id', $periode->id)->pluck('id');
-        $rtlIds = $this->rtlTriwulanBerjalan()->pluck('id');
+        // Kegiatan yang dihitung di sini SELALU baris yang sudah tersimpan (id
+        // terisi) — blok kosong yang baru ditambah lewat addBlock() punya id null
+        // dan sudah dibuang lewat filter(), jadi cache di bawah tetap benar walau
+        // $this->blocks berubah bentuk tanpa iku/periode ikut berubah.
+        //
+        // Di-cache seperti data lain di cacheKeyPeriodeIku() — sebelumnya method ini
+        // TIDAK di-cache sama sekali padahal dipanggil di SETIAP render() (yaitu di
+        // setiap aksi Livewire, termasuk yang sepele seperti addBlock()), jadi tiap
+        // klik membayar ~5 query ke DB remote hanya untuk banner catatan penolakan
+        // yang isinya nyaris selalu sama dalam rentang TTL yang sama.
+        return Cache::remember($this->cacheKeyPeriodeIku('catatan-penolakan'), self::CACHE_TTL_DETIK, function () use ($periode) {
+            $kegiatanIds = collect($this->blocks)->pluck('id')->filter();
+            $kendalaIds = KendalaSolusiModel::where('iku_id', $this->iku_id)->where('periode_id', $periode->id)->pluck('id');
+            $bagianKustomIds = BagianKustomPoin::where('iku_id', $this->iku_id)->where('periode_id', $periode->id)->pluck('id');
+            $rtlIds = $this->rtlTriwulanBerjalan()->pluck('id');
 
-        $catatanBerkas = Berkas::where('status_verifikasi', 'ditolak')
-            ->where(function ($q) use ($kegiatanIds, $kendalaIds, $bagianKustomIds, $rtlIds) {
-                $q->where(fn ($q2) => $q2->where('ref_type', Kegiatan::class)->whereIn('ref_id', $kegiatanIds))
-                    ->orWhere(fn ($q2) => $q2->where('ref_type', KendalaSolusiModel::class)->whereIn('ref_id', $kendalaIds))
-                    ->orWhere(fn ($q2) => $q2->where('ref_type', BagianKustomPoin::class)->whereIn('ref_id', $bagianKustomIds))
-                    ->orWhere(fn ($q2) => $q2->where('ref_type', RtlEvaluasiModel::class)->whereIn('ref_id', $rtlIds));
-            })
-            ->pluck('catatan');
+            $catatanBerkas = Berkas::where('status_verifikasi', 'ditolak')
+                ->where(function ($q) use ($kegiatanIds, $kendalaIds, $bagianKustomIds, $rtlIds) {
+                    $q->where(fn ($q2) => $q2->where('ref_type', Kegiatan::class)->whereIn('ref_id', $kegiatanIds))
+                        ->orWhere(fn ($q2) => $q2->where('ref_type', KendalaSolusiModel::class)->whereIn('ref_id', $kendalaIds))
+                        ->orWhere(fn ($q2) => $q2->where('ref_type', BagianKustomPoin::class)->whereIn('ref_id', $bagianKustomIds))
+                        ->orWhere(fn ($q2) => $q2->where('ref_type', RtlEvaluasiModel::class)->whereIn('ref_id', $rtlIds));
+                })
+                ->pluck('catatan');
 
-        // Kendala & Solusi tidak lagi punya bukti dukung sendiri (RF-27 dicabut) —
-        // penolakannya langsung disimpan di kolom catatan miliknya sendiri (lihat
-        // App\Livewire\VerifikasiCapaian::tandaiKendalaTolak()), bukan lewat Berkas.
-        $catatanKendala = KendalaSolusiModel::whereIn('id', $kendalaIds)
-            ->where('status_verifikasi', 'ditolak')
-            ->pluck('catatan');
+            // Kendala & Solusi tidak lagi punya bukti dukung sendiri (RF-27 dicabut) —
+            // penolakannya langsung disimpan di kolom catatan miliknya sendiri (lihat
+            // App\Livewire\VerifikasiCapaian::tandaiKendalaTolak()), bukan lewat Berkas.
+            $catatanKendala = KendalaSolusiModel::whereIn('id', $kendalaIds)
+                ->where('status_verifikasi', 'ditolak')
+                ->pluck('catatan');
 
-        return $catatanBerkas->concat($catatanKendala)
-            ->filter()
-            ->unique()
-            ->values();
+            return $catatanBerkas->concat($catatanKendala)
+                ->filter()
+                ->unique()
+                ->values();
+        });
     }
 
     /**
@@ -602,10 +614,41 @@ class PengisianKegiatan extends Component
      * firstOrCreate di simpanDraft()/ajukanIsian()), supaya membuka form untuk
      * melihat/memuat data tidak ikut membuat baris periode baru yang belum tentu
      * jadi dipakai.
+     *
+     * Dipanggil berkali-kali dalam satu request yang sama (statusCapaianSaatIni,
+     * muatBlocksKegiatan, muatKendalaBlocks, catatanPenolakan, riwayatKendalaSolusi,
+     * dst.) — di-cache per-request seperti ikuTerpilih() supaya tiap pemanggilan
+     * tidak membayar query DB remote sendiri-sendiri (sebelumnya bisa 6-7 query
+     * identik untuk satu aksi "pilih IKU" saja, bikin form terasa sangat lambat
+     * memuat isian yang sudah ada).
      */
     protected function periodeSaatIni(): ?Periode
     {
-        return Periode::where('tahun', $this->tahun)->where('bulan', $this->bulan)->first();
+        if ($this->cachePeriodeSaatIniDihitung) {
+            return $this->cachePeriodeSaatIni;
+        }
+
+        $this->cachePeriodeSaatIniDihitung = true;
+
+        if (! $this->iku_id) {
+            return $this->cachePeriodeSaatIni = Periode::where('tahun', $this->tahun)->where('bulan', $this->bulan)->first();
+        }
+
+        // Cache::remember lintas-request (bukan cuma memoisasi di atas) — periode
+        // hampir tidak pernah berubah selama Ketua Tim mengisi form, tapi sebelumnya
+        // di-query ULANG di SETIAP request Livewire (tiap klik/blur), jadi ini yang
+        // bikin form terasa sangat lambat memuat isian yang sudah ada.
+        //
+        // Dibungkus array — Cache::remember() TIDAK BISA membedakan "belum pernah
+        // di-cache" dari "sudah di-cache tapi nilainya null" (keduanya baca sebagai
+        // null dari store), jadi kalau periode belum ada (nilai asli null) closure-nya
+        // akan diulang TIAP request, cache-nya tidak pernah benar-benar kepakai.
+        // Membungkusnya dalam array membuat nilai yang disimpan selalu non-null.
+        return $this->cachePeriodeSaatIni = Cache::remember(
+            $this->cacheKeyPeriodeIku('periode'),
+            self::CACHE_TTL_DETIK,
+            fn () => ['periode' => Periode::where('tahun', $this->tahun)->where('bulan', $this->bulan)->first()]
+        )['periode'];
     }
 
     /**
@@ -1326,6 +1369,8 @@ class PengisianKegiatan extends Component
         });
 
         session()->flash('status', 'Draf kegiatan berhasil disimpan. Lengkapi bukti & bagian lain lalu ajukan ke Tim SAKIP saat siap.');
+
+        $this->lupakanCachePeriodeIku();
 
         // Reload halaman penuh — lihat catatan senada di akhir ajukanIsian().
         $this->redirect(route('pengisian.index'));
