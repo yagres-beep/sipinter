@@ -116,6 +116,9 @@
         <div x-show="!ikuDipilih" class="info warn">🔒 Pilih IKU terlebih dahulu (Bagian 1) untuk mengisi kegiatan.</div>
 
         <div x-show="ikuDipilih" x-cloak>
+        <div wire:loading wire:target="iku_id,bulan,tahun" class="info">⏳ Memuat kegiatan yang sudah pernah diisi untuk IKU &amp; periode ini, kalau ada…</div>
+
+        <div wire:loading.remove wire:target="iku_id,bulan,tahun">
         <div class="info">ℹ️ Isi tiap kolom berurutan dari atas — uraian kegiatan dulu, baru jenis kegiatan bisa dipilih. Nama folder Drive dibuat otomatis dari tahapan dan uraian kegiatan. Bukti capaian wajib diunggah tiap kegiatan.</div>
 
         @foreach ($blocks as $i => $block)
@@ -324,12 +327,16 @@
             <span wire:loading wire:target="addBlock">Menambahkan…</span>
         </button>
         </div>
+        </div>
 
         <div class="sec" style="margin-top:20px"><span class="n">3</span><span>Kendala &amp; Solusi</span></div>
 
         <div x-show="!ikuDipilih" class="info warn">🔒 Pilih IKU terlebih dahulu (Bagian 1) untuk mengisi kendala &amp; solusi.</div>
 
         <div x-show="ikuDipilih" x-cloak>
+        <div wire:loading wire:target="iku_id,bulan,tahun" class="info">⏳ Memuat kendala &amp; solusi yang sudah pernah diisi untuk IKU &amp; periode ini, kalau ada…</div>
+
+        <div wire:loading.remove wire:target="iku_id,bulan,tahun">
         <div class="info">ℹ️ Boleh dikosongkan bila tidak ada kendala periode ini.</div>
 
         @if ($iku_id && $riwayatKendala->isNotEmpty())
@@ -397,15 +404,16 @@
             <span wire:loading wire:target="addKendalaBlock">Menambahkan…</span>
         </button>
         </div>
+        </div>
 
         <div class="sec" style="margin-top:20px"><span class="n">4</span><span>Evaluasi RTL Triwulan Sebelumnya</span></div>
 
         <div x-show="!ikuDipilih" class="info warn">🔒 Pilih IKU terlebih dahulu (Bagian 1) untuk melihat evaluasi RTL.</div>
 
         <div x-show="ikuDipilih" x-cloak>
-            <div wire:loading wire:target="iku_id" class="info">⏳ Memuat data RTL &amp; evaluasi untuk IKU ini…</div>
+            <div wire:loading wire:target="iku_id,bulan,tahun" class="info">⏳ Memuat data RTL &amp; evaluasi untuk IKU ini…</div>
 
-            <div wire:loading.remove wire:target="iku_id">
+            <div wire:loading.remove wire:target="iku_id,bulan,tahun">
             <div class="info teal">✅ Poin di bawah adalah RTL yang ditetapkan pada triwulan sebelumnya untuk dilaksanakan triwulan ini — sama dengan yang muncul sebagai saran uraian kegiatan di Bagian 2. Lampirkan bukti realisasinya (boleh lebih dari satu berkas) — {{ $bulanKe === 3 ? 'WAJIB semua poin sudah punya bukti sebelum bisa diajukan pada bulan terakhir triwulan ini.' : 'opsional untuk bulan ini, tapi wajib sudah lengkap semua sebelum bulan terakhir triwulan.' }}</div>
 
             @if ($rtlSebelumnya->isEmpty())
