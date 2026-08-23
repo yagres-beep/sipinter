@@ -498,6 +498,9 @@
         <div x-show="!ikuDipilih" class="info warn">🔒 Pilih IKU terlebih dahulu (Bagian 1) untuk mengisi RTL.</div>
 
         <div x-show="ikuDipilih" x-cloak>
+            <div wire:loading wire:target="iku_id,bulan,tahun" class="info">⏳ Memuat…</div>
+
+            <div wire:loading.remove wire:target="iku_id,bulan,tahun">
             <div style="font-size:11.5px;color:var(--muted);margin:-8px 0 12px">
                 {{ $labelBerikutnya }} berarti ({{ $bulanTargetBerikutnya->values()->join(', ', ', dan ') }}).
             </div>
@@ -692,6 +695,7 @@
             @endforeach
 
             <div class="info teal" style="margin-top:12px">✅ Analisis capaian &amp; angka akan diisi oleh Tim SAKIP saat verifikasi.</div>
+            </div>
         </div>
     </div>
 
