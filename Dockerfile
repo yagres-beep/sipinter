@@ -25,6 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libreoffice-writer \
         libreoffice-calc \
         libreoffice-impress \
+        poppler-utils \
         fonts-dejavu \
         fonts-liberation \
     && docker-php-ext-install pdo_pgsql pgsql zip gd mbstring bcmath curl \
@@ -46,6 +47,7 @@ RUN composer dump-autoload --optimize --no-dev \
     && chmod -R 775 storage bootstrap/cache
 
 ENV LIBREOFFICE_PATH=/usr/bin/soffice
+ENV POPPLER_PDFTOPPM_PATH=/usr/bin/pdftoppm
 
 COPY docker/php.ini /usr/local/etc/php/conf.d/zz-app.ini
 COPY docker/nginx.conf /etc/nginx/sites-available/default.template

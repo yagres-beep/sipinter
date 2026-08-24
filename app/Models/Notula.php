@@ -44,9 +44,16 @@ class Notula extends Model
 
     protected $fillable = [
         'periode_id',
+        'hari_tanggal',
+        'waktu',
+        'tempat',
+        'pimpinan_rapat',
+        'notulis',
         'bagian1_html',
         'bagian2_pdf',
         'bagian3_pdf',
+        'bagian2_html',
+        'bagian3_html',
         'pdf_gabungan',
         'pdf_final',
         'status',
@@ -81,9 +88,15 @@ class Notula extends Model
         return $this->morphMany(Berkas::class, 'ref', 'ref_type', 'ref_id');
     }
 
+    /**
+     * "Lengkap" ditentukan dari konten INLINE (bagian2_html/bagian3_html), bukan
+     * bagian2_pdf/bagian3_pdf — kolom PDF itu sekarang cuma dipakai pratinjau iframe,
+     * sedangkan render notula menyatu (lihat NotulaService::gabungkan()/setujui())
+     * memakai versi HTML/inline.
+     */
     public function bagianLengkap(): bool
     {
-        return filled($this->bagian1_html) && filled($this->bagian2_pdf) && filled($this->bagian3_pdf);
+        return filled($this->bagian1_html) && filled($this->bagian2_html) && filled($this->bagian3_html);
     }
 
     public function canTransitionTo(string $status): bool
@@ -111,7 +124,7 @@ class Notula extends Model
     /**
      * Kepala menyetujui notula (menunggu_persetujuan -> disetujui). Hanya mengubah
      * status & mencatat siapa/kapan — pembuatan pdf_final dengan blok TTD dilakukan
-     * NotulaService::setujui(), bukan di sini, karena butuh akses PdfMergeService dll.
+     * NotulaService::setujui(), bukan di sini, karena butuh akses ke dompdf dll.
      */
     public function setujui(User $kepala): void
     {

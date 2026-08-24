@@ -19,16 +19,16 @@
 <div class="nsub">MONITORING KINERJA TRIWULAN {{ $labelTriwulan }} TAHUN {{ $periode->tahun }}</div>
 
 <div class="nrow"><span class="nlabel">Agenda Pembahasan:</span> <span class="ntxt">Monitoring Kinerja Triwulan {{ $labelTriwulan }} Tahun {{ $periode->tahun }}</span></div>
-<div class="nrow"><span class="nlabel">Hari/Tanggal:</span> <span class="ntxt">…</span></div>
-<div class="nrow"><span class="nlabel">Waktu:</span> <span class="ntxt">…</span></div>
-<div class="nrow"><span class="nlabel">Tempat:</span> <span class="ntxt">…</span></div>
-<div class="nrow"><span class="nlabel">Pimpinan Rapat:</span> <span class="ntxt">…</span></div>
+<div class="nrow"><span class="nlabel">Hari/Tanggal:</span> <span class="ntxt">{{ $notula->hari_tanggal ?: '…' }}</span></div>
+<div class="nrow"><span class="nlabel">Waktu:</span> <span class="ntxt">{{ $notula->waktu ?: '…' }}</span></div>
+<div class="nrow"><span class="nlabel">Tempat:</span> <span class="ntxt">{{ $notula->tempat ?: '…' }}</span></div>
+<div class="nrow"><span class="nlabel">Pimpinan Rapat:</span> <span class="ntxt">{{ $notula->pimpinan_rapat ?: '…' }}</span></div>
 
 <h3>I. Capaian Kinerja Triwulan {{ $labelTriwulan }} Tahun {{ $periode->tahun }}</h3>
 <p>
     Capaian Kinerja IKU triwulan {{ $labelTriwulan }} tahun {{ $periode->tahun }} terhadap target triwulanan sebesar
-    <b>… persen</b>. Sedangkan terhadap target tahun {{ $periode->tahun }} (target PK {{ $periode->tahun }}), capaian
-    kinerjanya sebesar <b>… persen</b>. Adapun penjelasan detail capaian untuk setiap indikator kinerja disampaikan di
+    <b>{{ $rataCapaianTw !== null ? $rataCapaianTw.' persen' : '… persen' }}</b>. Sedangkan terhadap target tahun {{ $periode->tahun }} (target PK {{ $periode->tahun }}), capaian
+    kinerjanya sebesar <b>{{ $rataCapaianPk !== null ? $rataCapaianPk.' persen' : '… persen' }}</b>. Adapun penjelasan detail capaian untuk setiap indikator kinerja disampaikan di
     bawah ini.
 </p>
 
@@ -36,7 +36,7 @@
     <table style="width:100%">
         <tr><th colspan="6" style="text-align:left">Sasaran: {{ $sasaran }}</th></tr>
         <tr>
-            <th>Kode</th>
+            <th>No.</th>
             <th>Indikator Kinerja</th>
             <th>Target PK {{ $periode->tahun }}</th>
             <th>Target TW {{ $labelTriwulan }}</th>
@@ -47,7 +47,7 @@
         @foreach ($daftarIku as $iku)
             @php $rekap = $rekapPerIku->get($iku->id, []); @endphp
             <tr>
-                <td>{{ $iku->kode }}</td>
+                <td>{{ $loop->iteration }}</td>
                 <td>{{ $iku->indikator }}</td>
                 <td>{{ $fmt($rekap['target_pk'] ?? null) }}</td>
                 <td>{{ $fmt($rekap['target_tw'] ?? null) }}</td>

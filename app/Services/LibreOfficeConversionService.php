@@ -2,13 +2,20 @@
 
 namespace App\Services;
 
+use DOMDocument;
+use DOMElement;
+use DOMNode;
 use RuntimeException;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Process;
 
 /**
- * Mengonversi berkas Bagian II & III notula (.docx/.xlsx/gambar) menjadi PDF lewat
- * LibreOffice headless (RF-42a, RF-42b, SRS §5.1).
+ * Mengonversi berkas Bagian II & III notula (.docx/.xlsx/dll.) lewat LibreOffice
+ * headless (RF-42a, RF-42b, SRS §5.1) — baik menjadi PDF (dipakai untuk pratinjau
+ * iframe di layar Kompilasi Notula) maupun menjadi HTML INLINE (dipakai NotulaService
+ * untuk menempelkan Bagian II/III ke dalam dokumen notula menyatu, lihat
+ * pdf.notula-utuh, supaya kontennya bisa reflow/menyambung alih-alih selalu mulai
+ * di halaman baru seperti PDF yang digabung halaman-demi-halaman).
  *
  * PENTING: LibreOffice BUKAN paket Composer — ini aplikasi desktop terpisah yang
  * harus dipasang manual di server/komputer yang menjalankan SIPINTER.
@@ -32,12 +39,50 @@ use Symfony\Component\Process\Process;
 class LibreOfficeConversionService
 {
     /**
-     * Konversi satu berkas (docx/xlsx/gambar/dll.) menjadi PDF, disimpan di $outputDir.
+     * Konversi satu berkas (docx/xlsx/dll.) menjadi PDF, disimpan di $outputDir.
      * Nama berkas hasil SAMA dengan nama asli, hanya ekstensinya berubah jadi .pdf.
      *
      * @return string path lengkap ke PDF hasil konversi.
      */
     public function convertToPdf(string $inputPath, string $outputDir): string
+    {
+        return $this->jalankanSoffice($inputPath, $outputDir, 'pdf');
+    }
+
+    /**
+     * Konversi satu berkas dokumen (docx/xlsx/doc/xls/odt/ods) menjadi HTML INLINE
+     * siap tempel — gambar di dalamnya disematkan sebagai data: URI (RF terkait
+     * notula menyatu), dan CSS-nya dilingkupi supaya tidak bentrok dengan gaya
+     * dokumen pembungkus. Berkas HTML/gambar sementara hasil LibreOffice DIHAPUS
+     * sebelum method ini kembali — hanya string HTML yang dikembalikan.
+     */
+    public function convertToHtml(string $inputPath, string $outputDir): string
+    {
+        $htmlPath = $this->jalankanSoffice($inputPath, $outputDir, 'html');
+
+        $html = file_get_contents($htmlPath);
+        $kontenInline = $this->ekstrakKontenInline($html === false ? '' : $html, $outputDir);
+
+        $basename = pathinfo($htmlPath, PATHINFO_FILENAME);
+        foreach (glob(rtrim($outputDir, '/\\').DIRECTORY_SEPARATOR.$basename.'*') ?: [] as $sisa) {
+            if (is_file($sisa)) {
+                @unlink($sisa);
+            }
+        }
+
+        return $kontenInline;
+    }
+
+    /**
+     * Berkas berformat PDF tidak perlu dikonversi — dipakai pemanggil (NotulaService)
+     * untuk memutuskan apakah convertToPdf() perlu dipanggil sama sekali.
+     */
+    public function sudahPdf(string $filePath): bool
+    {
+        return strtolower(pathinfo($filePath, PATHINFO_EXTENSION)) === 'pdf';
+    }
+
+    private function jalankanSoffice(string $inputPath, string $outputDir, string $format): string
     {
         if (! is_file($inputPath)) {
             throw new RuntimeException("Berkas sumber tidak ditemukan: {$inputPath}");
@@ -58,11 +103,11 @@ class LibreOfficeConversionService
 
         // --headless    : jalan tanpa membuka jendela GUI (cocok dipanggil dari server).
         // --convert-to  : format tujuan konversi.
-        // --outdir      : folder tempat PDF hasil konversi disimpan.
+        // --outdir      : folder tempat berkas hasil konversi disimpan.
         $process = new Process([
             $binary,
             '--headless',
-            '--convert-to', 'pdf',
+            '--convert-to', $format,
             '--outdir', $outputDir,
             $inputPath,
         ]);
@@ -76,22 +121,133 @@ class LibreOfficeConversionService
             throw new ProcessFailedException($process);
         }
 
-        $namaPdf = pathinfo($inputPath, PATHINFO_FILENAME).'.pdf';
-        $outputPath = rtrim($outputDir, '/\\').DIRECTORY_SEPARATOR.$namaPdf;
+        $namaHasil = pathinfo($inputPath, PATHINFO_FILENAME).'.'.$format;
+        $outputPath = rtrim($outputDir, '/\\').DIRECTORY_SEPARATOR.$namaHasil;
 
         if (! is_file($outputPath)) {
-            throw new RuntimeException("Konversi LibreOffice tidak menghasilkan berkas PDF yang diharapkan di: {$outputPath}");
+            throw new RuntimeException("Konversi LibreOffice tidak menghasilkan berkas yang diharapkan di: {$outputPath}");
         }
 
         return $outputPath;
     }
 
     /**
-     * Berkas berformat PDF tidak perlu dikonversi — dipakai pemanggil (NotulaService)
-     * untuk memutuskan apakah convertToPdf() perlu dipanggil sama sekali.
+     * Sanitasi HTML hasil ekspor LibreOffice lalu ekstrak jadi potongan siap-tempel:
+     * buang tag berbahaya (script/iframe/dll.) & atribut event-handler, sematkan
+     * gambar sebagai data: URI, dan lingkupi CSS-nya (bukan dibuang) supaya format
+     * asli (font, batas tabel, spasi) tetap terjaga tanpa membocorkan gaya ke luar.
+     *
+     * CATATAN FIDELITAS: rendering dompdf tidak 100% identik dengan Word — dompdf
+     * memakai mesin CSS sendiri (bukan mesin render browser), jadi properti CSS
+     * yang jarang/kompleks dari LibreOffice bisa tampil sedikit berbeda. Untuk
+     * dokumen teks (docx/xlsx) ini tetap far lebih akurat & bisa reflow/menyambung
+     * dibanding rasterisasi (lihat PdfRasterService), yang HANYA dipakai untuk PDF
+     * yang memang harus tampil persis (mis. tanda tangan basah hasil pindai).
      */
-    public function sudahPdf(string $filePath): bool
+    private function ekstrakKontenInline(string $html, string $outputDir): string
     {
-        return strtolower(pathinfo($filePath, PATHINFO_EXTENSION)) === 'pdf';
+        if (trim($html) === '') {
+            return '';
+        }
+
+        $dom = new DOMDocument;
+        libxml_use_internal_errors(true);
+        $dom->loadHTML('<?xml encoding="utf-8" ?>'.$html, LIBXML_NOWARNING | LIBXML_NOERROR);
+        libxml_clear_errors();
+
+        foreach (['script', 'iframe', 'object', 'embed', 'link', 'meta'] as $tag) {
+            $elems = $dom->getElementsByTagName($tag);
+            for ($i = $elems->length - 1; $i >= 0; $i--) {
+                $el = $elems->item($i);
+                $el?->parentNode?->removeChild($el);
+            }
+        }
+
+        if ($dom->documentElement) {
+            $this->buangAtributBerbahaya($dom->documentElement);
+        }
+
+        // LibreOffice menaruh definisi kelas paragraf/tabel (P1, T1, dst.) di
+        // <style> pada <head> — tanpa ini format asli (font, spasi, batas tabel)
+        // hilang total saat body-nya ditempel ke dokumen lain.
+        $css = '';
+        foreach ($dom->getElementsByTagName('style') as $styleEl) {
+            $css .= $styleEl->textContent."\n";
+        }
+
+        foreach ($dom->getElementsByTagName('img') as $img) {
+            $src = $img->getAttribute('src');
+            if ($src === '' || str_starts_with($src, 'data:')) {
+                continue;
+            }
+
+            $namaFile = basename(parse_url($src, PHP_URL_PATH) ?: $src);
+            $pathGambar = rtrim($outputDir, '/\\').DIRECTORY_SEPARATOR.$namaFile;
+
+            if (is_file($pathGambar)) {
+                $mime = match (strtolower(pathinfo($pathGambar, PATHINFO_EXTENSION))) {
+                    'jpg', 'jpeg' => 'image/jpeg',
+                    'gif' => 'image/gif',
+                    'svg' => 'image/svg+xml',
+                    default => 'image/png',
+                };
+                $img->setAttribute('src', 'data:'.$mime.';base64,'.base64_encode((string) file_get_contents($pathGambar)));
+            }
+        }
+
+        $body = $dom->getElementsByTagName('body')->item(0);
+        $bodyHtml = '';
+        if ($body) {
+            foreach ($body->childNodes as $child) {
+                $bodyHtml .= $dom->saveHTML($child) ?: '';
+            }
+        }
+
+        $cssTerlingkup = $this->lingkupkanCss($css, '.notula-inline');
+
+        return '<style>'.$cssTerlingkup.'</style><div class="notula-inline">'.$bodyHtml.'</div>';
+    }
+
+    private function buangAtributBerbahaya(DOMNode $node): void
+    {
+        if ($node instanceof DOMElement && $node->hasAttributes()) {
+            $atributHapus = [];
+            foreach ($node->attributes as $atribut) {
+                $nama = strtolower($atribut->name);
+                $nilai = trim(strtolower($atribut->value));
+                if (str_starts_with($nama, 'on') || (in_array($nama, ['href', 'src'], true) && str_starts_with($nilai, 'javascript:'))) {
+                    $atributHapus[] = $atribut->name;
+                }
+            }
+            foreach ($atributHapus as $nama) {
+                $node->removeAttribute($nama);
+            }
+        }
+
+        foreach (iterator_to_array($node->childNodes) as $anak) {
+            $this->buangAtributBerbahaya($anak);
+        }
+    }
+
+    /**
+     * Prefiks tiap selektor CSS dengan kelas pembungkus supaya definisi gaya
+     * LibreOffice (mis. `.P1 { ... }`) hanya berlaku di dalam potongan yang
+     * ditempel, bukan membocor ke seluruh dokumen notula menyatu. At-rule seperti
+     *
+     * @font-face dibiarkan apa adanya; @page (pengaturan ukuran halaman) dibuang
+     * karena halaman notula gabungan sudah diatur sendiri oleh dokumen pembungkus.
+     */
+    private function lingkupkanCss(string $css, string $lingkup): string
+    {
+        $css = preg_replace('/@page[^{]*\{[^{}]*\}/i', '', $css) ?? $css;
+
+        return preg_replace_callback('/([^{}@]+)\{([^{}]*)\}/', function (array $m) use ($lingkup) {
+            $selektor = array_map(
+                fn ($s) => trim($s) === '' ? '' : $lingkup.' '.trim($s),
+                explode(',', $m[1])
+            );
+
+            return implode(', ', array_filter($selektor)).' {'.$m[2].'}';
+        }, $css) ?? $css;
     }
 }

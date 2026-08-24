@@ -1,5 +1,6 @@
 <div>
     <div class="info teal">🎯 Target Tahunan tiap IKU diisi <strong>sekali per tahun di sini</strong> — dipakai otomatis di halaman Verifikasi setiap bulan untuk IKU tsb (tidak perlu diketik ulang tiap sesi verifikasi bulanan). Alokasi Target &amp; Realisasi per triwulan tetap diisi dari halaman Verifikasi masing-masing bulan.</div>
+    <div class="fhint" style="margin-bottom:14px">ℹ️ Batas/plafon yang dipakai membandingkan Target Tahunan ini terhadap Realisasi (saat ini 120% untuk Capaian biasa, 110% untuk Normalisasi PKO) diatur terpisah di tab <a wire:navigate href="{{ route('master-iku.index') }}#rumus">🧮 Rumus Capaian</a>.</div>
 
     @if (session('status'))
         <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>

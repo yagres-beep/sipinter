@@ -1,7 +1,7 @@
 @php
     $bagian1Siap = filled($notula->bagian1_html);
-    $bagian2Siap = filled($notula->bagian2_pdf);
-    $bagian3Siap = filled($notula->bagian3_pdf);
+    $bagian2Siap = filled($notula->bagian2_html);
+    $bagian3Siap = filled($notula->bagian3_html);
     $sudahDigabung = filled($notula->pdf_gabungan);
 @endphp
 
@@ -67,6 +67,53 @@
             </table>
         </div>
     @endif
+
+    <div class="card">
+        <div class="sec"><span>Detail Rapat</span></div>
+        <div class="fl-row" style="gap:16px;flex-wrap:wrap">
+            <div class="field" style="flex:1;min-width:200px">
+                <label>Hari/Tanggal</label>
+                <input type="text" class="inp filled" style="width:100%" wire:model="hariTanggal">
+                @error('hariTanggal')
+                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                @enderror
+            </div>
+            <div class="field" style="flex:1;min-width:160px">
+                <label>Waktu</label>
+                <input type="text" class="inp filled" style="width:100%" wire:model="waktu">
+                @error('waktu')
+                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                @enderror
+            </div>
+            <div class="field" style="flex:1;min-width:200px">
+                <label>Tempat</label>
+                <input type="text" class="inp filled" style="width:100%" wire:model="tempat">
+                @error('tempat')
+                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                @enderror
+            </div>
+            <div class="field" style="flex:1;min-width:200px">
+                <label>Pimpinan Rapat</label>
+                <input type="text" class="inp filled" style="width:100%" wire:model="pimpinanRapat">
+                @error('pimpinanRapat')
+                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                @enderror
+            </div>
+            <div class="field" style="flex:1;min-width:200px">
+                <label>Notulis</label>
+                <input type="text" class="inp filled" style="width:100%" wire:model="notulis" placeholder="Nama penulis notula">
+                @error('notulis')
+                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                @enderror
+            </div>
+        </div>
+        <div class="btn-row">
+            <button type="button" class="btn btn-primary" wire:click="simpanDetailRapat" wire:loading.attr="disabled" wire:target="simpanDetailRapat">
+                <span wire:loading.remove wire:target="simpanDetailRapat">Simpan Detail Rapat</span>
+                <span wire:loading wire:target="simpanDetailRapat"><i class="spin"></i> Menyimpan…</span>
+            </button>
+        </div>
+    </div>
 
     <div class="card">
         <div class="sec"><span>Pratinjau &amp; Sunting Notula — Bagian I, II, III</span></div>
@@ -288,13 +335,13 @@
             <div class="btn-row" style="margin-top:8px">
                 <label class="btn btn-ghost btn-sm" style="cursor:pointer">
                     ⟲ Ganti Berkas
-                    <input type="file" wire:model="bagian2File" accept=".docx" style="display:none">
+                    <input type="file" wire:model="bagian2File" accept=".docx,.doc,.xlsx,.xls,.odt,.ods,.jpg,.jpeg,.png,.pdf" style="display:none">
                 </label>
             </div>
         @else
             <label class="upload upload-tinggi need" style="cursor:pointer;display:flex">
-                <div><div class="big">📤</div>Klik untuk unggah Bagian II (.docx saja)</div>
-                <input type="file" wire:model="bagian2File" accept=".docx" style="display:none">
+                <div><div class="big">📤</div>Klik untuk unggah Bagian II (docx/xlsx/odt/ods, gambar, atau PDF)</div>
+                <input type="file" wire:model="bagian2File" accept=".docx,.doc,.xlsx,.xls,.odt,.ods,.jpg,.jpeg,.png,.pdf" style="display:none">
             </label>
         @endif
         <div wire:loading wire:target="bagian2File" style="font-size:11.5px;color:var(--muted);margin-top:6px">Mengunggah…</div>
@@ -323,13 +370,13 @@
             <div class="btn-row" style="margin-top:8px">
                 <label class="btn btn-ghost btn-sm" style="cursor:pointer">
                     ⟲ Ganti Berkas
-                    <input type="file" wire:model="bagian3File" accept=".docx" style="display:none">
+                    <input type="file" wire:model="bagian3File" accept=".docx,.doc,.xlsx,.xls,.odt,.ods,.jpg,.jpeg,.png,.pdf" style="display:none">
                 </label>
             </div>
         @else
             <label class="upload upload-tinggi need" style="cursor:pointer;display:flex">
-                <div><div class="big">📤</div>Klik untuk unggah Bagian III (.docx saja)</div>
-                <input type="file" wire:model="bagian3File" accept=".docx" style="display:none">
+                <div><div class="big">📤</div>Klik untuk unggah Bagian III (docx/xlsx/odt/ods, gambar, atau PDF)</div>
+                <input type="file" wire:model="bagian3File" accept=".docx,.doc,.xlsx,.xls,.odt,.ods,.jpg,.jpeg,.png,.pdf" style="display:none">
             </label>
         @endif
         <div wire:loading wire:target="bagian3File" style="font-size:11.5px;color:var(--muted);margin-top:6px">Mengunggah…</div>

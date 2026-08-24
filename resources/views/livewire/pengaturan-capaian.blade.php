@@ -32,7 +32,7 @@
                 </tr>
             </tbody>
         </table>
-        <div class="fhint" style="margin-top:10px">Satuan tiap IKU (Persen, Poin, dst. — diatur di tab Master IKU) tidak mengubah rumus ini; target &amp; realisasi selalu dibandingkan sebagai rasio apa pun satuannya.</div>
+        <div class="fhint" style="margin-top:10px">Satuan tiap IKU (Persen, Poin, dst. — diatur di tab Master IKU) tidak mengubah rumus ini; target &amp; realisasi selalu dibandingkan sebagai rasio apa pun satuannya. Target &amp; Realisasi itu sendiri diisi di tab <a wire:navigate href="{{ route('master-iku.index') }}#target">🎯 Target Tahunan</a> (per IKU, sekali per tahun) dan halaman Verifikasi (Alokasi/Realisasi per triwulan) — bukan di sini.</div>
     </div>
 
     <div class="card">

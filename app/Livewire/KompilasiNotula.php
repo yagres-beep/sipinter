@@ -6,6 +6,7 @@ use App\Models\Kegiatan;
 use App\Models\MasterIku;
 use App\Models\Notula;
 use App\Services\NotulaService;
+use Illuminate\Support\Collection;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use RuntimeException;
@@ -14,9 +15,11 @@ use RuntimeException;
  * Tim SAKIP — Kompilasi Notula 3 Bagian (RF-41 s.d. RF-44a).
  *
  * Bagian I disusun otomatis (RF-42) dan bisa disunting langsung di sini sebelum
- * digabung. Bagian II & III diunggah lalu dikonversi ke PDF (RF-42a/b). Setelah
- * ketiganya lengkap, "Gabungkan → PDF" menghasilkan satu PDF notula dan langsung
- * menandainya menunggu persetujuan Kepala (mockup tidak punya tombol "kirim" terpisah).
+ * digabung. Bagian II & III diunggah lalu dikonversi jadi konten inline (RF-42a/b —
+ * lihat NotulaService::terimaUploadBagian()). Setelah ketiganya lengkap,
+ * "Gabungkan → PDF" merender KETIGANYA sebagai satu dokumen mengalir (bukan tiga
+ * PDF terpisah yang digabung) dan langsung menandainya menunggu persetujuan Kepala
+ * (mockup tidak punya tombol "kirim" terpisah).
  */
 class KompilasiNotula extends Component
 {
@@ -32,6 +35,16 @@ class KompilasiNotula extends Component
 
     public string $bagian1EditText = '';
 
+    public string $hariTanggal = '';
+
+    public string $waktu = '';
+
+    public string $tempat = '';
+
+    public string $pimpinanRapat = '';
+
+    public string $notulis = '';
+
     /**
      * Cache dalam satu siklus request — notula() dipanggil di banyak method
      * (mount, render, tiap aksi) untuk tahun/triwulan yang sama; tanpa memoisasi
@@ -45,17 +58,20 @@ class KompilasiNotula extends Component
         $this->triwulan = (int) ceil(((int) now()->month) / 3);
 
         $this->muatBagian1EditText();
+        $this->muatDetailRapat();
     }
 
     public function updatedTahun(): void
     {
         $this->muatBagian1EditText();
+        $this->muatDetailRapat();
         $this->dispatchKontenBagian1();
     }
 
     public function updatedTriwulan(): void
     {
         $this->muatBagian1EditText();
+        $this->muatDetailRapat();
         $this->dispatchKontenBagian1();
     }
 
@@ -69,9 +85,9 @@ class KompilasiNotula extends Component
      * pada triwulan ini) per Sasaran, ditampilkan sebelum notula disusun. IKU tanpa
      * sasaran terisi tidak diikutkan — Sasaran diisi manual lewat halaman Master IKU.
      *
-     * @return \Illuminate\Support\Collection<int, array{sasaran: string, iku_siap: int, iku_total: int}>
+     * @return Collection<int, array{sasaran: string, iku_siap: int, iku_total: int}>
      */
-    protected function kesiapanPerSasaran(): \Illuminate\Support\Collection
+    protected function kesiapanPerSasaran(): Collection
     {
         $ikuBerSasaran = MasterIku::whereNotNull('sasaran')->where('sasaran', '!=', '')->get();
 
@@ -119,6 +135,42 @@ class KompilasiNotula extends Component
         $this->resetErrorBag();
     }
 
+    /**
+     * Muat ulang Hari/Tanggal, Waktu, Tempat, Pimpinan Rapat milik notula
+     * tahun/triwulan yang sedang dipilih.
+     */
+    protected function muatDetailRapat(): void
+    {
+        $notula = $this->notula();
+
+        $this->hariTanggal = $notula->hari_tanggal ?? '';
+        $this->waktu = $notula->waktu ?? '';
+        $this->tempat = $notula->tempat ?? '';
+        $this->pimpinanRapat = $notula->pimpinan_rapat ?? '';
+        $this->notulis = $notula->notulis ?? '';
+    }
+
+    public function simpanDetailRapat(): void
+    {
+        $data = $this->validate([
+            'hariTanggal' => ['nullable', 'string', 'max:255'],
+            'waktu' => ['nullable', 'string', 'max:255'],
+            'tempat' => ['nullable', 'string', 'max:255'],
+            'pimpinanRapat' => ['nullable', 'string', 'max:255'],
+            'notulis' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $this->notula()->update([
+            'hari_tanggal' => $data['hariTanggal'],
+            'waktu' => $data['waktu'],
+            'tempat' => $data['tempat'],
+            'pimpinan_rapat' => $data['pimpinanRapat'],
+            'notulis' => $data['notulis'],
+        ]);
+
+        session()->flash('status', 'Detail rapat berhasil disimpan.');
+    }
+
     public function susunUlangOtomatis(): void
     {
         $html = app(NotulaService::class)->susunBagianSatu($this->notula());
@@ -148,14 +200,22 @@ class KompilasiNotula extends Component
         session()->flash('status', 'Pratinjau Bagian I berhasil disimpan.');
     }
 
+    /**
+     * Format yang didukung untuk Bagian II/III (lihat NotulaService::konversiKeKontenInline()):
+     * dokumen teks (docx/xlsx/dll., dikonversi ke HTML inline yang bisa reflow/menyambung),
+     * gambar (ditempel langsung), atau PDF (dirasterisasi jadi blok gambar per halaman —
+     * mis. untuk berkas hasil pindai/tanda tangan basah).
+     */
+    public const FORMAT_BAGIAN_DIDUKUNG = 'docx,doc,xlsx,xls,odt,ods,jpg,jpeg,png,pdf';
+
     public function unggahBagian(int $bagianKe): void
     {
         $field = $bagianKe === 2 ? 'bagian2File' : 'bagian3File';
 
         $this->validate([
-            $field => ['required', 'file', 'mimes:docx', 'max:10240'],
+            $field => ['required', 'file', 'mimes:'.self::FORMAT_BAGIAN_DIDUKUNG, 'max:10240'],
         ], [
-            "{$field}.mimes" => 'Berkas Bagian '.($bagianKe === 2 ? 'II' : 'III').' harus berformat .docx.',
+            "{$field}.mimes" => 'Berkas Bagian '.($bagianKe === 2 ? 'II' : 'III').' harus berformat docx/xlsx/odt/ods, gambar (jpg/png), atau PDF.',
         ]);
 
         try {

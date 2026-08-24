@@ -101,4 +101,20 @@ return [
         'binary_path' => env('LIBREOFFICE_PATH', 'C:\\Program Files\\LibreOffice\\program\\soffice.exe'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Poppler pdftoppm (notula menyatu — rasterisasi Bagian II/III berformat PDF)
+    |--------------------------------------------------------------------------
+    |
+    | Dipakai App\Services\PdfRasterService untuk merasterisasi berkas PDF (mis.
+    | hasil pindai/tanda tangan basah) menjadi gambar per halaman yang ditempel
+    | inline ke dokumen notula menyatu. BUKAN paket Composer — Poppler harus
+    | dipasang terpisah (lihat app/Services/PdfRasterService.php untuk instruksi
+    | instalasi Windows).
+    |
+    */
+    'poppler' => [
+        'pdftoppm_path' => env('POPPLER_PDFTOPPM_PATH', 'C:\\Program Files\\poppler\\Library\\bin\\pdftoppm.exe'),
+    ],
+
 ];

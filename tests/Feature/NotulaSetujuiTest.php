@@ -12,7 +12,6 @@ use App\Models\User;
 use App\Services\NotulaService;
 use Barryvdh\DomPDF\Facade\Pdf as PdfFacade;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -65,8 +64,9 @@ class NotulaSetujuiTest extends TestCase
             'bagian1_html' => '<p>Bagian I</p>',
         ]);
 
-        // bagian2/3_pdf harus berupa PDF sungguhan (FPDI mem-parsing strukturnya saat
-        // digabung) — dirender lewat DomPDF yang sama dipakai kode produksi.
+        // bagian2/3_pdf (pratinjau iframe) harus berupa PDF sungguhan — dirender
+        // lewat DomPDF yang sama dipakai kode produksi. Render notula MENYATU yang
+        // dipakai NotulaService::setujui() sendiri memakai bagian2/3_html (inline).
         $dir = storage_path("app/private/notula/{$notula->id}");
 
         if (! is_dir($dir)) {
@@ -79,6 +79,8 @@ class NotulaSetujuiTest extends TestCase
         $notula->update([
             'bagian2_pdf' => "notula/{$notula->id}/bagian2.pdf",
             'bagian3_pdf' => "notula/{$notula->id}/bagian3.pdf",
+            'bagian2_html' => '<p>Bagian II</p>',
+            'bagian3_html' => '<p>Bagian III</p>',
         ]);
 
         app(NotulaService::class)->setujui($notula, $kepala);

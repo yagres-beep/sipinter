@@ -15,6 +15,7 @@ use App\Models\RtlEvaluasi;
 use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf as PdfFacade;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -33,7 +34,7 @@ class NotulaService
 {
     public function __construct(
         protected LibreOfficeConversionService $konversi,
-        protected PdfMergeService $penggabung,
+        protected PdfRasterService $rasterisasi,
         protected FolderStructureService $folder,
     ) {}
 
@@ -141,7 +142,15 @@ class NotulaService
             return [$ikuId => $this->folder->linkBuktiDukungIku($periode, $daftarKegiatan->first()->masterIku)];
         });
 
+        // Ringkasan capaian pada paragraf pembuka (RF-42): rata-rata capaian_tw/capaian_pk
+        // HANYA atas IKU yang punya nilai — IKU strip "-" (belum dinilai, lihat
+        // Capaian::hitungPersentase()) dikecualikan supaya tidak menurunkan rata-rata,
+        // sama seperti pola PkoCalculatorService::capaianKinerjaIKU().
+        $rataCapaianTw = $this->rataRataCapaian($rekapPerIku, 'capaian_tw');
+        $rataCapaianPk = $this->rataRataCapaian($rekapPerIku, 'capaian_pk');
+
         $html = view('pdf.notula-bagian1-konten', [
+            'notula' => $notula,
             'periode' => $periode,
             'labelTriwulan' => ['I', 'II', 'III', 'IV'][$tw - 1] ?? $tw,
             'sasaranPerIku' => $sasaranPerIku,
@@ -152,6 +161,8 @@ class NotulaService
             'rtlPerIku' => $rtlPerIku,
             'bagianKustomPerBagian' => $bagianKustomPerBagian,
             'linkFolderPerIku' => $linkFolderPerIku,
+            'rataCapaianTw' => $rataCapaianTw,
+            'rataCapaianPk' => $rataCapaianPk,
         ])->render();
 
         $notula->update(['bagian1_html' => $html]);
@@ -160,21 +171,41 @@ class NotulaService
     }
 
     /**
-     * Render Bagian I (dari bagian1_html TERSIMPAN — sudah termasuk suntingan manual
-     * Tim SAKIP bila ada) menjadi PDF lewat dompdf.
+     * Render Bagian I + II + III (+ blok TTD bila $sertakanTtd) sebagai SATU HTML
+     * mengalir dari `bagian*_html` TERSIMPAN — bukan tiga PDF terpisah yang digabung
+     * halaman-demi-halaman, supaya tiap bagian bisa menyambung di sisa ruang halaman
+     * sebelumnya. Dipakai baik untuk menghasilkan PDF (dompdf, lihat
+     * renderNotulaUtuhPdf()) maupun untuk pratinjau HTML mentah.
      */
-    public function renderBagianSatuPdf(Notula $notula, bool $sertakanTtd, string $outputPath): string
+    public function renderNotulaUtuhHtml(Notula $notula, bool $sertakanTtd): string
+    {
+        return view('pdf.notula-utuh', $this->dataNotulaUtuh($notula, $sertakanTtd))->render();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function dataNotulaUtuh(Notula $notula, bool $sertakanTtd): array
     {
         $periode = $notula->periode;
 
-        $pdf = PdfFacade::loadView('pdf.notula-bagian1', [
-            'kontenHtml' => $notula->bagian1_html ?? '',
+        return [
+            'bagian1Html' => $notula->bagian1_html ?? '',
+            'bagian2Html' => $notula->bagian2_html ?? '',
+            'bagian3Html' => $notula->bagian3_html ?? '',
             'labelTriwulan' => ['I', 'II', 'III', 'IV'][$periode->triwulan - 1] ?? $periode->triwulan,
             'tahun' => $periode->tahun,
             'sertakanTtd' => $sertakanTtd,
-            'namaKepala' => $sertakanTtd ? $notula->disetujuiOleh?->nama : null,
+            'tempat' => $notula->tempat,
             'tanggal' => $sertakanTtd ? $notula->disetujui_pada?->translatedFormat('d F Y') : null,
-        ]);
+            'namaKepala' => $sertakanTtd ? $notula->disetujuiOleh?->nama : null,
+            'namaNotulis' => $notula->notulis,
+        ];
+    }
+
+    private function renderNotulaUtuhPdf(Notula $notula, bool $sertakanTtd, string $outputPath): string
+    {
+        $pdf = PdfFacade::loadView('pdf.notula-utuh', $this->dataNotulaUtuh($notula, $sertakanTtd));
 
         $this->pastikanFolder(dirname($outputPath));
         $pdf->save($outputPath);
@@ -183,9 +214,16 @@ class NotulaService
     }
 
     /**
-     * RF-42a/42b: terima unggahan Bagian II atau III, konversi ke PDF bila perlu
-     * (LibreOffice headless), simpan hasilnya di disk lokal. Mengganti berkas yang
-     * sudah ada sebelumnya (RF-42e) otomatis membatalkan hasil gabungan lama.
+     * RF-42a/42b: terima unggahan Bagian II atau III (docx/xlsx/doc/xls/odt/ods,
+     * gambar, atau PDF), lalu simpan DUA bentuk:
+     * - bagian{2,3}_pdf: versi PDF (LibreOffice headless bila perlu dikonversi),
+     *   dipakai HANYA untuk pratinjau iframe di layar Kompilasi Notula.
+     * - bagian{2,3}_html: konten INLINE (HTML reflow untuk dokumen teks, atau
+     *   <img> data: URI untuk gambar/PDF rasterisasi), dipakai jalur render notula
+     *   menyatu (lihat gabungkan()/setujui()) supaya bisa menyambung antar bagian.
+     *
+     * Mengganti berkas yang sudah ada sebelumnya (RF-42e) otomatis membatalkan
+     * hasil gabungan lama.
      */
     public function terimaUploadBagian(Notula $notula, int $bagianKe, UploadedFile $file): void
     {
@@ -195,26 +233,60 @@ class NotulaService
 
         $pathAsli = $file->store('notula-sementara', 'local');
         $fullPathAsli = Storage::disk('local')->path($pathAsli);
+        $dirKerja = dirname($fullPathAsli);
+        $ekstensiAsli = strtolower(pathinfo($fullPathAsli, PATHINFO_EXTENSION));
 
         $fullPathPdf = $this->konversi->sudahPdf($fullPathAsli)
             ? $fullPathAsli
-            : $this->konversi->convertToPdf($fullPathAsli, dirname($fullPathAsli));
+            : $this->konversi->convertToPdf($fullPathAsli, $dirKerja);
 
-        $relatifTujuan = "notula/{$notula->id}/bagian{$bagianKe}.pdf";
-        $fullPathTujuan = Storage::disk('local')->path($relatifTujuan);
+        $relatifTujuanPdf = "notula/{$notula->id}/bagian{$bagianKe}.pdf";
+        $fullPathTujuanPdf = Storage::disk('local')->path($relatifTujuanPdf);
+        $this->pastikanFolder(dirname($fullPathTujuanPdf));
+        copy($fullPathPdf, $fullPathTujuanPdf);
 
-        $this->pastikanFolder(dirname($fullPathTujuan));
-        copy($fullPathPdf, $fullPathTujuan);
+        // Konten inline dibaca SEBELUM berkas sementara dihapus di bawah.
+        $kontenInline = $this->konversiKeKontenInline($fullPathAsli, $ekstensiAsli, $dirKerja);
 
-        @unlink($fullPathAsli);
         if ($fullPathPdf !== $fullPathAsli) {
             @unlink($fullPathPdf);
         }
+        @unlink($fullPathAsli);
 
-        $kolom = $bagianKe === 2 ? 'bagian2_pdf' : 'bagian3_pdf';
-        $notula->update([$kolom => $relatifTujuan]);
+        $kolomPdf = $bagianKe === 2 ? 'bagian2_pdf' : 'bagian3_pdf';
+        $kolomHtml = $bagianKe === 2 ? 'bagian2_html' : 'bagian3_html';
+        $notula->update([$kolomPdf => $relatifTujuanPdf, $kolomHtml => $kontenInline]);
 
         $notula->tandaiPerluDigabungUlang();
+    }
+
+    /**
+     * Pilih jalur konversi ke konten inline sesuai format berkas asli — lihat
+     * catatan fidelitas di LibreOfficeConversionService/PdfRasterService: dokumen
+     * teks (docx/xlsx/dll.) memakai jalur HTML supaya bisa reflow/menyambung;
+     * gambar ditempel langsung; PDF dirasterisasi jadi blok gambar per halaman.
+     */
+    private function konversiKeKontenInline(string $filePath, string $ekstensi, string $workDir): string
+    {
+        return match (true) {
+            in_array($ekstensi, ['docx', 'doc', 'xlsx', 'xls', 'odt', 'ods'], true) => $this->konversi->convertToHtml($filePath, $workDir),
+            in_array($ekstensi, ['jpg', 'jpeg', 'png', 'gif'], true) => $this->gambarKeInlineHtml($filePath, $ekstensi),
+            $ekstensi === 'pdf' => $this->rasterisasi->rasterizeToInlineHtml($filePath, $workDir),
+            default => throw new RuntimeException("Format berkas .{$ekstensi} tidak didukung untuk Bagian II/III."),
+        };
+    }
+
+    private function gambarKeInlineHtml(string $filePath, string $ekstensi): string
+    {
+        $mime = match ($ekstensi) {
+            'jpg', 'jpeg' => 'image/jpeg',
+            'gif' => 'image/gif',
+            default => 'image/png',
+        };
+
+        $dataUri = 'data:'.$mime.';base64,'.base64_encode((string) file_get_contents($filePath));
+
+        return '<div class="notula-inline"><img src="'.$dataUri.'" style="max-width:100%;display:block"></div>';
     }
 
     /**
@@ -232,10 +304,12 @@ class NotulaService
     }
 
     /**
-     * RF-42d: gabungkan Bagian I (dirender ulang dari bagian1_html tersimpan, TANPA
-     * TTD) + II + III menjadi satu PDF draf. Notula otomatis dianggap terkirim ke
-     * Kepala begitu berhasil digabungkan — mockup tidak menyediakan tombol "kirim"
-     * terpisah, jadi "sudah digabung" DAN "menunggu persetujuan" adalah hal yang sama.
+     * RF-42d: render Bagian I + II + III sebagai SATU dokumen mengalir (TANPA TTD)
+     * jadi PDF draf — lihat renderNotulaUtuhPdf(), menggantikan penggabungan PDF
+     * halaman-demi-halaman yang dipakai sebelumnya. Notula otomatis dianggap
+     * terkirim ke Kepala begitu berhasil digabungkan — mockup tidak menyediakan
+     * tombol "kirim" terpisah, jadi "sudah digabung" DAN "menunggu persetujuan"
+     * adalah hal yang sama.
      */
     public function gabungkan(Notula $notula): void
     {
@@ -244,16 +318,8 @@ class NotulaService
         }
 
         $dir = storage_path("app/private/notula/{$notula->id}");
-        $this->pastikanFolder($dir);
-
-        $bagian1Path = $dir.'/bagian1-draf.pdf';
-        $this->renderBagianSatuPdf($notula, sertakanTtd: false, outputPath: $bagian1Path);
-
-        $bagian2Path = Storage::disk('local')->path($notula->bagian2_pdf);
-        $bagian3Path = Storage::disk('local')->path($notula->bagian3_pdf);
-
         $gabunganPath = $dir.'/gabungan-draf.pdf';
-        $this->penggabung->merge([$bagian1Path, $bagian2Path, $bagian3Path], $gabunganPath);
+        $this->renderNotulaUtuhPdf($notula, sertakanTtd: false, outputPath: $gabunganPath);
 
         $notula->update(['pdf_gabungan' => "notula/{$notula->id}/gabungan-draf.pdf"]);
 
@@ -263,10 +329,11 @@ class NotulaService
     }
 
     /**
-     * RF-44 & RF-44a: Kepala menyetujui — buat ulang Bagian I DENGAN blok TTD,
-     * gabungkan jadi pdf_final, lalu arsipkan ke Drive institusi. Kegagalan Drive
-     * tidak membatalkan persetujuan (sama seperti pola di fitur unggah lain);
-     * hanya dicatat sebagai peringatan, PDF final tetap tersimpan lokal.
+     * RF-44 & RF-44a: Kepala menyetujui — render ulang dokumen menyatu DENGAN blok
+     * TTD (Kepala & Notulis, di paling akhir setelah Bagian III — lihat
+     * pdf.notula-utuh) jadi pdf_final, lalu arsipkan ke Drive institusi. Kegagalan
+     * Drive tidak membatalkan persetujuan (sama seperti pola di fitur unggah
+     * lain); hanya dicatat sebagai peringatan, PDF final tetap tersimpan lokal.
      */
     public function setujui(Notula $notula, User $kepala): void
     {
@@ -276,16 +343,8 @@ class NotulaService
         });
 
         $dir = storage_path("app/private/notula/{$notula->id}");
-        $this->pastikanFolder($dir);
-
-        $bagian1FinalPath = $dir.'/bagian1-final.pdf';
-        $this->renderBagianSatuPdf($notula, sertakanTtd: true, outputPath: $bagian1FinalPath);
-
-        $bagian2Path = Storage::disk('local')->path($notula->bagian2_pdf);
-        $bagian3Path = Storage::disk('local')->path($notula->bagian3_pdf);
-
         $gabunganFinalPath = $dir.'/gabungan-final.pdf';
-        $this->penggabung->merge([$bagian1FinalPath, $bagian2Path, $bagian3Path], $gabunganFinalPath);
+        $this->renderNotulaUtuhPdf($notula, sertakanTtd: true, outputPath: $gabunganFinalPath);
 
         $relatifFinal = "notula/{$notula->id}/gabungan-final.pdf";
         $notula->update(['pdf_final' => $relatifFinal]);
@@ -344,6 +403,18 @@ class NotulaService
     public function kembalikan(Notula $notula, string $catatan): void
     {
         $notula->kembalikan($catatan);
+    }
+
+    /**
+     * Rata-rata satu kolom rekapPerIku (capaian_tw/capaian_pk), mengecualikan IKU yang
+     * belum dinilai (null, lihat Capaian::hitungPersentase()) — null berarti strip "-",
+     * bukan 0, jadi tidak boleh ikut menurunkan rata-rata.
+     */
+    private function rataRataCapaian(Collection $rekapPerIku, string $kolom): ?float
+    {
+        $nilai = $rekapPerIku->pluck($kolom)->filter(fn ($v) => $v !== null);
+
+        return $nilai->isEmpty() ? null : round($nilai->avg(), 2);
     }
 
     protected function pastikanFolder(string $dir): void
