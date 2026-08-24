@@ -1128,8 +1128,10 @@ class PengisianKegiatanTest extends TestCase
 
         $iku = MasterIku::create(['kode' => 'UJI-EVALUASI', 'indikator' => 'Indikator uji evaluasi', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji']);
 
-        // RTL ditetapkan Triwulan II (Apr-Jun), dievaluasi saat mengisi Triwulan III (Jul-Sep) — bulan 8 = Agustus.
-        $periodeRtl = Periode::create(['tahun' => 2026, 'bulan' => 4, 'triwulan' => 2, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        // RTL disimpan dengan periode TARGET-nya (triwulan III, ditetapkan saat mengisi
+        // triwulan II) — sama seperti siapkanIkuDanRtlSebelumnya() di atas. Dievaluasi
+        // saat mengisi Triwulan III (bulan 8 = Agustus, bulan berjalan form ini).
+        $periodeRtl = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
 
         $poin = RtlEvaluasi::create([
             'iku_id' => $iku->id, 'periode_id' => $periodeRtl->id,

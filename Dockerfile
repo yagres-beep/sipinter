@@ -47,6 +47,7 @@ RUN composer dump-autoload --optimize --no-dev \
 
 ENV LIBREOFFICE_PATH=/usr/bin/soffice
 
+COPY docker/php.ini /usr/local/etc/php/conf.d/zz-app.ini
 COPY docker/nginx.conf /etc/nginx/sites-available/default.template
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY docker/entrypoint.sh /entrypoint.sh
