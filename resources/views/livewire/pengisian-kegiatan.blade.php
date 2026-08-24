@@ -461,6 +461,9 @@
                                             <span class="sub" style="color:var(--red)">{{ $file->catatan }}</span>
                                         @endif
                                     </span>
+                                    @if ($file->status_verifikasi === 'ditolak')
+                                        <span class="x" style="cursor:pointer" title="Hapus bukti yang ditolak ini" wire:click="hapusBuktiLamaEvaluasi({{ $poin->id }}, {{ $file->id }})" wire:confirm="Hapus bukti ini? Anda perlu mengunggah bukti pengganti sebelum mengajukan ulang." wire:loading.class="btn-busy" wire:target="hapusBuktiLamaEvaluasi({{ $poin->id }}, {{ $file->id }})">✕</span>
+                                    @endif
                                 </div>
                             @endforeach
 
@@ -611,6 +614,9 @@
                                                                 <span class="sub" style="color:var(--red)">{{ $file->catatan }}</span>
                                                             @endif
                                                         </span>
+                                                        @if ($file->status_verifikasi === 'ditolak')
+                                                            <span class="x" style="cursor:pointer" title="Hapus bukti yang ditolak ini" wire:click="hapusBuktiLamaBagianKustom({{ $entri->id }}, {{ $file->id }})" wire:confirm="Hapus bukti ini? Anda perlu mengunggah bukti pengganti sebelum mengajukan ulang." wire:loading.class="btn-busy" wire:target="hapusBuktiLamaBagianKustom({{ $entri->id }}, {{ $file->id }})">✕</span>
+                                                        @endif
                                                     </div>
                                                 @endforeach
                                             </div>
@@ -629,7 +635,7 @@
                 @foreach ($bagianKustomBlocks[$bagian->id] ?? [] as $i => $blok)
                     <div class="poin-single" wire:key="bagian-{{ $bagian->id }}-{{ $i }}" x-data="{ pendingBuktiBagianNames: [] }">
                         <span class="k-num stat-in">Poin {{ $i + 1 }}</span>
-                        @if (count($bagianKustomBlocks[$bagian->id]) > 1)
+                        @if (count($bagianKustomBlocks[$bagian->id]) > 1 && ! $blok['id'])
                             <button type="button" class="btn btn-red btn-sm" style="position:absolute;top:8px;right:8px" wire:click="removeBagianKustomBlock({{ $bagian->id }}, {{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="removeBagianKustomBlock({{ $bagian->id }}, {{ $i }})">🗑</button>
                         @endif
 
@@ -650,6 +656,25 @@
                                     <span style="color:var(--muted);font-weight:500">opsional</span>
                                 @endif
                             </label>
+
+                            @if (! empty($blok['existing_bukti']))
+                                <div class="filechip-grid">
+                                    @foreach ($blok['existing_bukti'] as $file)
+                                        <div class="filechip {{ $file['status_verifikasi'] === 'terverifikasi' ? 'ok' : ($file['status_verifikasi'] === 'ditolak' ? 'no' : '') }}">
+                                            <span class="nm">
+                                                📄 {{ $file['nama_file'] }}
+                                                @if ($file['status_verifikasi'] === 'ditolak' && $file['catatan'])
+                                                    <span class="sub" style="color:var(--red)">{{ $file['catatan'] }}</span>
+                                                @endif
+                                            </span>
+                                            @if ($file['status_verifikasi'] === 'ditolak')
+                                                <span class="x" style="cursor:pointer" title="Hapus bukti yang ditolak ini" wire:click="hapusBuktiLamaBagianKustom({{ $blok['id'] }}, {{ $file['id'] }})" wire:confirm="Hapus bukti ini? Anda perlu mengunggah bukti pengganti sebelum mengajukan ulang." wire:loading.class="btn-busy" wire:target="hapusBuktiLamaBagianKustom({{ $blok['id'] }}, {{ $file['id'] }})">✕</span>
+                                            @endif
+                                        </div>
+                                    @endforeach
+                                </div>
+                            @endif
+
                             @if (empty($blok['bukti']))
                                 <label class="upload" style="cursor:pointer;display:block">
                                     <div class="big">📤</div>

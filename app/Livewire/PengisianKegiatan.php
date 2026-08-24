@@ -160,6 +160,7 @@ class PengisianKegiatan extends Component
             $this->muatFormEvaluasi();
             $this->muatBlocksKegiatan();
             $this->muatKendalaBlocks();
+            $this->muatBagianKustomBlocks();
             $this->pilihPicOtomatis();
         }
     }
@@ -212,8 +213,10 @@ class PengisianKegiatan extends Component
     protected function emptyBagianKustomBlock(): array
     {
         return [
+            'id' => null,
             'teks' => '',
             'bukti' => [],
+            'existing_bukti' => [],
         ];
     }
 
@@ -355,6 +358,100 @@ class PengisianKegiatan extends Component
             ->all();
     }
 
+    /**
+     * Hapus SATU berkas bukti dukung bagian kustom (mis. Manajemen Risiko) yang SUDAH
+     * TERSIMPAN dan ditandai "Tidak Sesuai" oleh Tim SAKIP — pasangan dari
+     * hapusBuktiLama() di atas, tapi untuk BagianKustomPoin. Poin dicocokkan ke
+     * iku_id+periode_id form ini supaya Ketua Tim tidak bisa menghapus bukti milik
+     * IKU/periode lain lewat manipulasi parameter. File fisik lokal ikut dihapus;
+     * salinan di Google Drive TIDAK ikut dihapus (sama seperti hapusBuktiLama()).
+     */
+    public function hapusBuktiLamaBagianKustom(int $poinId, int $berkasId): void
+    {
+        $periode = $this->iku_id ? $this->periodeSaatIni() : null;
+
+        if (! $periode) {
+            return;
+        }
+
+        $poin = BagianKustomPoin::where('id', $poinId)
+            ->where('iku_id', $this->iku_id)
+            ->where('periode_id', $periode->id)
+            ->first();
+
+        if (! $poin) {
+            return;
+        }
+
+        $berkas = Berkas::where('id', $berkasId)
+            ->where('ref_type', BagianKustomPoin::class)
+            ->where('ref_id', $poin->id)
+            ->where('status_verifikasi', 'ditolak')
+            ->first();
+
+        if (! $berkas) {
+            return;
+        }
+
+        if ($berkas->path) {
+            Storage::disk('local')->delete($berkas->path);
+        }
+
+        $berkas->delete();
+
+        Cache::forget($this->cacheKeyPeriodeIku("riwayat-bagian-{$poin->bagian_kustom_id}"));
+
+        // Cerminkan penghapusan ke state in-memory (dimuat lewat muatBagianKustomBlocks())
+        // supaya blade langsung mencerminkannya tanpa reload — pola sama seperti
+        // hapusBuktiLama() di atas untuk existing_bukti milik Kegiatan.
+        foreach ($this->bagianKustomBlocks[$poin->bagian_kustom_id] ?? [] as $i => $blok) {
+            if (($blok['id'] ?? null) !== $poin->id) {
+                continue;
+            }
+
+            $this->bagianKustomBlocks[$poin->bagian_kustom_id][$i]['existing_bukti'] = collect($blok['existing_bukti'])
+                ->reject(fn ($file) => $file['id'] === $berkasId)
+                ->values()
+                ->all();
+        }
+    }
+
+    /**
+     * Hapus SATU berkas bukti realisasi RTL triwulan berjalan yang SUDAH TERSIMPAN dan
+     * ditandai "Tidak Sesuai" oleh Tim SAKIP — pasangan dari hapusBuktiLama() di atas,
+     * tapi untuk RtlEvaluasi. $rtlId dicocokkan ke rtlTriwulanBerjalan() (sudah di-scope
+     * ke iku_id+tahun+triwulan form ini) supaya tidak bisa menghapus bukti milik
+     * IKU/periode lain. Cache in-memory & lintas-request 'rtl-berjalan' ikut dibuang
+     * supaya $poin->berkas di blade langsung mencerminkan penghapusan tanpa reload.
+     */
+    public function hapusBuktiLamaEvaluasi(int $rtlId, int $berkasId): void
+    {
+        $poin = $this->rtlTriwulanBerjalan()->firstWhere('id', $rtlId);
+
+        if (! $poin) {
+            return;
+        }
+
+        $berkas = Berkas::where('id', $berkasId)
+            ->where('ref_type', RtlEvaluasiModel::class)
+            ->where('ref_id', $poin->id)
+            ->where('status_verifikasi', 'ditolak')
+            ->first();
+
+        if (! $berkas) {
+            return;
+        }
+
+        if ($berkas->path) {
+            Storage::disk('local')->delete($berkas->path);
+        }
+
+        $berkas->delete();
+
+        $this->cacheRtlBerjalan = null;
+        Cache::forget($this->cacheKeyPeriodeIku('rtl-berjalan'));
+    }
+
     public function addKendalaBlock(): void
     {
         $this->kendalaBlocks[] = $this->emptyKendalaBlock();
@@ -371,8 +468,17 @@ class PengisianKegiatan extends Component
         $this->bagianKustomBlocks[$bagianId][] = $this->emptyBagianKustomBlock();
     }
 
+    /**
+     * Hanya poin yang belum tersimpan (id === null) yang boleh dihapus dari sini —
+     * sama seperti removeBlock() untuk Kegiatan: poin yang sudah tersimpan di DB
+     * hanya boleh diedit teksnya, tidak dihapus (lihat muatBagianKustomBlocks()).
+     */
     public function removeBagianKustomBlock(int $bagianId, int $index): void
     {
+        if (($this->bagianKustomBlocks[$bagianId][$index]['id'] ?? null) !== null) {
+            return;
+        }
+
         unset($this->bagianKustomBlocks[$bagianId][$index]);
         $this->bagianKustomBlocks[$bagianId] = array_values($this->bagianKustomBlocks[$bagianId]);
     }
@@ -399,6 +505,7 @@ class PengisianKegiatan extends Component
         $this->muatFormEvaluasi();
         $this->muatBlocksKegiatan();
         $this->muatKendalaBlocks();
+        $this->muatBagianKustomBlocks();
         $this->pilihPicOtomatis();
     }
 
@@ -407,6 +514,7 @@ class PengisianKegiatan extends Component
         $this->muatFormEvaluasi();
         $this->muatBlocksKegiatan();
         $this->muatKendalaBlocks();
+        $this->muatBagianKustomBlocks();
         $this->rtlBaru = [$this->emptyRtlBlock()];
         $this->rtlBaruBatasWaktu = $this->akhirTriwulanBerikutnya()->toDateString();
     }
@@ -416,6 +524,7 @@ class PengisianKegiatan extends Component
         $this->muatFormEvaluasi();
         $this->muatBlocksKegiatan();
         $this->muatKendalaBlocks();
+        $this->muatBagianKustomBlocks();
         $this->rtlBaru = [$this->emptyRtlBlock()];
         $this->rtlBaruBatasWaktu = $this->akhirTriwulanBerikutnya()->toDateString();
     }
@@ -519,12 +628,21 @@ class PengisianKegiatan extends Component
 
         return Cache::remember($this->cacheKeyPeriodeIku("riwayat-bagian-{$bagian->id}"), self::CACHE_TTL_DETIK, function () use ($bagian) {
             $triwulanSekarang = $this->triwulanDari($this->bulan);
+            $periodeSaatIni = $this->periodeSaatIni();
+            $terkunci = in_array($this->statusCapaianSaatIni(), self::STATUS_KEGIATAN_TERKUNCI, true);
 
             return BagianKustomPoin::with(['periode', 'berkas'])
                 ->where('iku_id', $this->iku_id)
                 ->where('bagian_kustom_id', $bagian->id)
                 ->whereHas('periode', function ($q) use ($triwulanSekarang) {
                     $q->where('tahun', $this->tahun)->where('triwulan', '<=', $triwulanSekarang);
+                })
+                // Poin periode INI SENDIRI yang belum terkunci ditampilkan sebagai blok
+                // EDITABLE lewat bagianKustomBlocks (lihat muatBagianKustomBlocks()),
+                // bukan di sini — supaya tidak tampil dobel (sekali hanya-baca, sekali
+                // bisa disunting). Pola sama seperti riwayatKendalaSolusi() di atas.
+                ->when($periodeSaatIni && ! $terkunci, function ($q) use ($periodeSaatIni) {
+                    $q->where('periode_id', '!=', $periodeSaatIni->id);
                 })
                 ->get()
                 ->sortBy(fn ($item) => $item->periode->triwulan)
@@ -797,6 +915,60 @@ class PengisianKegiatan extends Component
             'status_verifikasi' => $ks->status_verifikasi,
             'catatan' => $ks->catatan,
         ])->values()->all();
+    }
+
+    /**
+     * Muat poin bagian kustom (mis. Manajemen Risiko) yang sudah tersimpan untuk
+     * IKU+periode terpilih ke $this->bagianKustomBlocks supaya isian yang pernah
+     * dibuat (termasuk yang dikembalikan Tim SAKIP) bisa DIEDIT lagi saat form dibuka
+     * ulang — sebelumnya poin lama sama sekali tidak bisa disunting, hanya tampil
+     * hanya-baca di riwayatBagianKustom() tanpa jalan untuk memperbaikinya.
+     *
+     * BagianKustomPoin tidak punya status_verifikasi sendiri (beda dari Kegiatan/
+     * KendalaSolusi) — jadi "boleh diedit?" ditentukan dari status Capaian keseluruhan
+     * periode ini: selama belum diajukan/diverifikasi/disetujui (STATUS_KEGIATAN_TERKUNCI),
+     * poin periode ini dimuat ke sini sebagai editable. Begitu terkunci, poin TIDAK
+     * dimuat ke sini (kembali ke satu blok kosong) dan tetap tampil hanya-baca lewat
+     * riwayatBagianKustom() — lihat pengecualian yang sejalan di sana supaya tidak
+     * dobel tampil.
+     */
+    protected function muatBagianKustomBlocks(): void
+    {
+        $periode = $this->iku_id ? $this->periodeSaatIni() : null;
+        $terkunci = in_array($this->statusCapaianSaatIni(), self::STATUS_KEGIATAN_TERKUNCI, true);
+
+        foreach ($this->bagianKustomAktif() as $bagian) {
+            if (! $periode || $terkunci) {
+                $this->bagianKustomBlocks[$bagian->id] = [$this->emptyBagianKustomBlock()];
+
+                continue;
+            }
+
+            $daftar = BagianKustomPoin::with('berkas')
+                ->where('iku_id', $this->iku_id)
+                ->where('bagian_kustom_id', $bagian->id)
+                ->where('periode_id', $periode->id)
+                ->orderBy('id')
+                ->get();
+
+            if ($daftar->isEmpty()) {
+                $this->bagianKustomBlocks[$bagian->id] = [$this->emptyBagianKustomBlock()];
+
+                continue;
+            }
+
+            $this->bagianKustomBlocks[$bagian->id] = $daftar->map(fn (BagianKustomPoin $poin) => [
+                'id' => $poin->id,
+                'teks' => $poin->teks,
+                'bukti' => [],
+                'existing_bukti' => $poin->berkas->map(fn (Berkas $b) => [
+                    'id' => $b->id,
+                    'nama_file' => $b->nama_file,
+                    'status_verifikasi' => $b->status_verifikasi,
+                    'catatan' => $b->catatan,
+                ])->all(),
+            ])->values()->all();
+        }
     }
 
     public function removeBuktiEvaluasi(int $rtlId, int $fileIndex): void
@@ -1114,12 +1286,22 @@ class PengisianKegiatan extends Component
 
         // Bagian kustom (mis. Manajemen Risiko): poin kosong dilewati saat disimpan
         // (sama seperti kendalaBlocks); poin yang TERISI wajib punya bukti dukung HANYA
-        // bila bagiannya dikonfigurasi bukti_wajib (bisa dimatikan Tim SAKIP per bagian).
+        // bila bagiannya dikonfigurasi bukti_wajib (bisa dimatikan Tim SAKIP per bagian)
+        // DAN belum punya bukti lama tersimpan (existing_bukti, dimuat di
+        // muatBagianKustomBlocks()) — poin yang sedang diedit ulang tidak dipaksa
+        // mengunggah bukti BARU lagi cuma untuk memperbaiki teksnya, sama seperti
+        // aturan blocks.*.bukti untuk Kegiatan di atas.
         foreach ($this->bagianKustomAktif() as $bagian) {
             $rules["bagianKustomBlocks.{$bagian->id}.*.teks"] = ['nullable', 'string'];
-            $rules["bagianKustomBlocks.{$bagian->id}.*.bukti"] = $bagian->bukti_wajib
-                ? ['required_with:bagianKustomBlocks.'.$bagian->id.'.*.teks', 'array']
-                : ['nullable', 'array'];
+
+            foreach ($this->bagianKustomBlocks[$bagian->id] ?? [] as $i => $blok) {
+                $adaBuktiLama = ! empty($blok['existing_bukti']);
+
+                $rules["bagianKustomBlocks.{$bagian->id}.{$i}.bukti"] = ($bagian->bukti_wajib && ! $adaBuktiLama)
+                    ? ['required_with:bagianKustomBlocks.'.$bagian->id.'.'.$i.'.teks', 'array']
+                    : ['nullable', 'array'];
+            }
+
             $rules["bagianKustomBlocks.{$bagian->id}.*.bukti.*"] = ['file', 'mimes:pdf', 'max:10240'];
         }
 
@@ -1653,18 +1835,31 @@ class PengisianKegiatan extends Component
 
             // 5) Bagian kustom (mis. Manajemen Risiko) — poin kosong dilewati, sama
             // seperti Kendala & Solusi; bukti sudah dipastikan wajib lewat validasi di atas.
+            // UPDATE, bukan create, bila blok ini punya id (poin lama yang dimuat lewat
+            // muatBagianKustomBlocks() untuk diperbaiki tekusnya) — supaya tidak
+            // duplikat, mengikuti pola yang sama dengan Kendala & Solusi di atas.
             foreach ($this->bagianKustomAktif() as $bagian) {
                 foreach ($this->bagianKustomBlocks[$bagian->id] ?? [] as $blok) {
                     if (trim($blok['teks'] ?? '') === '') {
                         continue;
                     }
 
-                    $poin = BagianKustomPoin::create([
-                        'bagian_kustom_id' => $bagian->id,
-                        'iku_id' => $this->iku_id,
-                        'periode_id' => $periode->id,
-                        'teks' => $blok['teks'],
-                    ]);
+                    if ($blok['id'] ?? null) {
+                        $poin = BagianKustomPoin::whereKey($blok['id'])->first();
+
+                        if (! $poin) {
+                            continue;
+                        }
+
+                        $poin->update(['teks' => $blok['teks']]);
+                    } else {
+                        $poin = BagianKustomPoin::create([
+                            'bagian_kustom_id' => $bagian->id,
+                            'iku_id' => $this->iku_id,
+                            'periode_id' => $periode->id,
+                            'teks' => $blok['teks'],
+                        ]);
+                    }
 
                     $namaBerkasDasar = $bagian->nama.' '.$poin->teks;
 

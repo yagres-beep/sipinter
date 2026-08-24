@@ -984,4 +984,175 @@ class PengisianKegiatanTest extends TestCase
         $ditemukan = collect($riwayat->get(3))->contains(fn ($item) => $item->kendala === 'Kendala sudah diterima');
         $this->assertTrue($ditemukan);
     }
+
+    /**
+     * Siapkan satu poin bagian kustom milik periode BERJALAN (belum terkunci —
+     * Capaian-nya "dikembalikan") — dipakai test edit-ulang & hapus-bukti-lama bagian
+     * kustom di bawah. Pola sama seperti siapkanKegiatanDikembalikanDenganBerkasDitolak().
+     *
+     * @return array{ketua: User, iku: MasterIku, periode: Periode, bagian: \App\Models\BagianKustom, poin: \App\Models\BagianKustomPoin}
+     */
+    protected function siapkanBagianKustomDikembalikan(): array
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $ketua = User::create([
+            'nama' => 'Ketua Uji Bagian Kustom', 'username' => 'ketua-uji-bagian@example.test', 'email' => 'ketua-uji-bagian@example.test',
+            'password' => 'password', 'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create(['kode' => 'UJI-BAGIAN', 'indikator' => 'Indikator uji bagian kustom', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji']);
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 8, 'triwulan' => 3, 'bulan_ke' => 2, 'flag_bulan_terlewat' => false]);
+
+        $bagian = \App\Models\BagianKustom::create([
+            'nama' => 'Manajemen Risiko', 'frekuensi_wajib' => \App\Models\BagianKustom::FREKUENSI_OPSIONAL,
+            'bukti_wajib' => false, 'aktif' => true, 'urutan' => 1,
+        ]);
+
+        Capaian::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'status' => Capaian::STATUS_DIKEMBALIKAN]);
+
+        $poin = \App\Models\BagianKustomPoin::create([
+            'bagian_kustom_id' => $bagian->id, 'iku_id' => $iku->id, 'periode_id' => $periode->id,
+            'teks' => 'Risiko lama',
+        ]);
+
+        return compact('ketua', 'iku', 'periode', 'bagian', 'poin');
+    }
+
+    public function test_bagian_kustom_ditolak_dimuat_ulang_ke_form_dan_diperbaiki_di_baris_yang_sama(): void
+    {
+        $data = $this->siapkanBagianKustomDikembalikan();
+
+        $this->actingAs($data['ketua']);
+
+        $component = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $data['iku']->id);
+
+        // Poin lama dimuat ke bagianKustomBlocks (bukan blok kosong), siap diperbaiki.
+        $component->assertSet("bagianKustomBlocks.{$data['bagian']->id}.0.id", $data['poin']->id)
+            ->assertSet("bagianKustomBlocks.{$data['bagian']->id}.0.teks", 'Risiko lama');
+
+        $component->set('blocks.0.uraian_kegiatan', 'Kegiatan uji bagian kustom')
+            ->set('blocks.0.jenis', 'bukan_survei_sensus')
+            ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
+            ->set("bagianKustomBlocks.{$data['bagian']->id}.0.teks", 'Risiko sudah diperbaiki')
+            ->set('rtlBaru.0.rtl_teks', 'RTL uji')
+            ->set('rtlBaruPic', 'PIC Uji')
+            ->call('ajukanIsian')
+            ->assertHasNoErrors();
+
+        // Baris LAMA diperbarui di tempat (bukan duplikat) — tetap satu baris saja.
+        $this->assertDatabaseCount('bagian_kustom_poin', 1);
+        $data['poin']->refresh();
+        $this->assertSame('Risiko sudah diperbaiki', $data['poin']->teks);
+    }
+
+    public function test_bagian_kustom_disetujui_terkunci_dari_form_edit_tapi_tampil_di_riwayat(): void
+    {
+        $data = $this->siapkanBagianKustomDikembalikan();
+        Capaian::where('iku_id', $data['iku']->id)->update(['status' => Capaian::STATUS_DISETUJUI]);
+
+        $this->actingAs($data['ketua']);
+
+        $component = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $data['iku']->id);
+
+        // Periode sudah disetujui (terkunci) — poin lama TIDAK dimuat sebagai blok
+        // editable, form tetap menampilkan satu blok kosong untuk poin BARU.
+        $component->assertSet("bagianKustomBlocks.{$data['bagian']->id}.0.id", null)
+            ->assertSet("bagianKustomBlocks.{$data['bagian']->id}.0.teks", '');
+
+        // ...tapi tetap terlihat (hanya-baca) di riwayat kumulatif triwulan berjalan.
+        $riwayat = $component->viewData('riwayatBagianKustom')[$data['bagian']->id];
+        $ditemukan = collect($riwayat->get(3))->contains(fn ($item) => $item->teks === 'Risiko lama');
+        $this->assertTrue($ditemukan);
+    }
+
+    public function test_hapus_bukti_lama_bagian_kustom_menghapus_berkas_yang_ditolak(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $data = $this->siapkanBagianKustomDikembalikan();
+
+        $berkas = Berkas::create([
+            'ref_id' => $data['poin']->id, 'ref_type' => \App\Models\BagianKustomPoin::class, 'kategori' => 'bagian_kustom',
+            'nama_file' => 'bukti-ditolak.pdf', 'path' => 'bukti-bagian-kustom/bukti-ditolak.pdf',
+            'status_verifikasi' => 'ditolak', 'catatan' => 'Belum relevan',
+        ]);
+        \Illuminate\Support\Facades\Storage::disk('local')->put($berkas->path, 'isi pdf palsu');
+
+        $this->actingAs($data['ketua']);
+
+        $component = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $data['iku']->id)
+            ->call('hapusBuktiLamaBagianKustom', $data['poin']->id, $berkas->id);
+
+        $this->assertDatabaseMissing('berkas', ['id' => $berkas->id]);
+        \Illuminate\Support\Facades\Storage::disk('local')->assertMissing($berkas->path);
+        $this->assertEmpty($component->get("bagianKustomBlocks.{$data['bagian']->id}.0.existing_bukti"));
+    }
+
+    public function test_hapus_bukti_lama_bagian_kustom_menolak_berkas_yang_belum_ditolak(): void
+    {
+        $data = $this->siapkanBagianKustomDikembalikan();
+
+        $berkas = Berkas::create([
+            'ref_id' => $data['poin']->id, 'ref_type' => \App\Models\BagianKustomPoin::class, 'kategori' => 'bagian_kustom',
+            'nama_file' => 'bukti.pdf', 'path' => 'bukti-bagian-kustom/bukti.pdf', 'status_verifikasi' => 'menunggu',
+        ]);
+
+        $this->actingAs($data['ketua']);
+
+        Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $data['iku']->id)
+            ->call('hapusBuktiLamaBagianKustom', $data['poin']->id, $berkas->id);
+
+        $this->assertDatabaseHas('berkas', ['id' => $berkas->id]);
+    }
+
+    public function test_hapus_bukti_lama_evaluasi_menghapus_berkas_yang_ditolak(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $ketua = User::create([
+            'nama' => 'Ketua Uji Evaluasi', 'username' => 'ketua-uji-evaluasi@example.test', 'email' => 'ketua-uji-evaluasi@example.test',
+            'password' => 'password', 'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create(['kode' => 'UJI-EVALUASI', 'indikator' => 'Indikator uji evaluasi', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji']);
+
+        // RTL ditetapkan Triwulan II (Apr-Jun), dievaluasi saat mengisi Triwulan III (Jul-Sep) — bulan 8 = Agustus.
+        $periodeRtl = Periode::create(['tahun' => 2026, 'bulan' => 4, 'triwulan' => 2, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+
+        $poin = RtlEvaluasi::create([
+            'iku_id' => $iku->id, 'periode_id' => $periodeRtl->id,
+            'rtl_teks' => 'Rencana uji evaluasi', 'berlaku_bulan' => 'RTL untuk Juli, Agustus, dan September',
+            'pic' => 'PIC Uji', 'batas_waktu' => '2026-09-30',
+        ]);
+
+        $berkas = Berkas::create([
+            'ref_id' => $poin->id, 'ref_type' => RtlEvaluasi::class, 'kategori' => 'evaluasi_rtl',
+            'nama_file' => 'realisasi-ditolak.pdf', 'path' => 'bukti-evaluasi-rtl/realisasi-ditolak.pdf',
+            'status_verifikasi' => 'ditolak', 'catatan' => 'Belum sesuai rencana',
+        ]);
+        \Illuminate\Support\Facades\Storage::disk('local')->put($berkas->path, 'isi pdf palsu');
+
+        $this->actingAs($ketua);
+
+        $component = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $iku->id)
+            ->call('hapusBuktiLamaEvaluasi', $poin->id, $berkas->id);
+
+        $this->assertDatabaseMissing('berkas', ['id' => $berkas->id]);
+        \Illuminate\Support\Facades\Storage::disk('local')->assertMissing($berkas->path);
+    }
 }
