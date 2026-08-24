@@ -50,6 +50,16 @@
                         </select>
                     </div>
                 </div>
+                <div class="row2">
+                    <div class="field">
+                        <label>Email <span class="req">*</span></label>
+                        <input class="inp filled" type="email" name="email" value="{{ old('email') }}" placeholder="untuk reset kata sandi" required>
+                    </div>
+                    <div class="field">
+                        <label>Nomor Telepon <span class="req">*</span></label>
+                        <input class="inp filled" type="text" name="nomor_telepon" value="{{ old('nomor_telepon') }}" placeholder="untuk pengingat tindakan" required>
+                    </div>
+                </div>
                 <div class="field" x-show="namaRole[roleId] === 'Ketua Tim'" x-cloak>
                     <label>Tim yang Diajukan</label>
                     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">

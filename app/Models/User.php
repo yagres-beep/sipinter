@@ -25,6 +25,7 @@ class User extends Authenticatable
         'nama',
         'username',
         'email',
+        'nomor_telepon',
         'password',
         'role_id',
         'status_verifikasi',

@@ -34,6 +34,14 @@
                     <input class="inp filled" type="text" name="username" value="{{ old('username', $user->username) }}" required>
                 </div>
                 <div class="field">
+                    <label>Email <span class="req">*</span></label>
+                    <input class="inp filled" type="email" name="email" value="{{ old('email', $user->email) }}" placeholder="untuk reset kata sandi" required>
+                </div>
+                <div class="field">
+                    <label>Nomor Telepon <span class="req">*</span></label>
+                    <input class="inp filled" type="text" name="nomor_telepon" value="{{ old('nomor_telepon', $user->nomor_telepon) }}" placeholder="untuk pengingat tindakan" required>
+                </div>
+                <div class="field">
                     <label>Peran</label>
                     <div class="inp ro">{{ $user->role->nama }}</div>
                 </div>

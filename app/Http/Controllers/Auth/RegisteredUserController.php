@@ -29,6 +29,8 @@ class RegisteredUserController extends Controller
         $validated = $request->validate([
             'nama' => ['required', 'string', 'max:255'],
             'username' => ['required', 'string', 'max:255', 'alpha_dash', 'unique:users,username'],
+            'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
+            'nomor_telepon' => ['required', 'string', 'max:20'],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
             'role_id' => ['required', 'exists:roles,id'],
             'tim' => ['nullable', 'array'],
@@ -39,6 +41,8 @@ class RegisteredUserController extends Controller
         $user = User::create([
             'nama' => $validated['nama'],
             'username' => $validated['username'],
+            'email' => $validated['email'],
+            'nomor_telepon' => $validated['nomor_telepon'],
             'password' => $validated['password'],
             'role_id' => $validated['role_id'],
             'status_verifikasi' => 'pending',
