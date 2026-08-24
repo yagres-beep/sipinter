@@ -261,12 +261,23 @@
                     @endif
 
                     @if ($this->kendalaBisaDiverifikasi($ks->id))
-                        <div style="display:flex;gap:8px;margin-top:6px">
-                            <button type="button" class="mark {{ $ks->status_verifikasi === 'terverifikasi' ? 'ok' : '' }}" wire:click="tandaiKendalaSesuai({{ $ks->id }})" wire:loading.attr="disabled" wire:target="tandaiKendalaSesuai({{ $ks->id }}),tandaiKendalaTolak({{ $ks->id }})">
+                        {{-- pendingMark = pilihan terakhir yg DIKLIK, ditampilkan LANGSUNG (optimistic)
+                            tanpa menunggu balasan server (Supabase remote ~400ms/query) — supaya tombol
+                            tidak terasa perlu diklik berkali-kali sebelum berubah warna. Begitu respons
+                            server datang, render ulang dari status_verifikasi tetap jadi sumber
+                            kebenaran akhir (fallback saat pendingMark masih null, mis. buka modal baru). --}}
+                        <div style="display:flex;gap:8px;margin-top:6px" x-data="{ pendingMark: null }">
+                            <button type="button" class="mark"
+                                :class="{ ok: pendingMark === 'ok' || (pendingMark === null && {{ $ks->status_verifikasi === 'terverifikasi' ? 'true' : 'false' }}) }"
+                                @click="pendingMark = 'ok'"
+                                wire:click="tandaiKendalaSesuai({{ $ks->id }})" wire:loading.attr="disabled" wire:target="tandaiKendalaSesuai({{ $ks->id }}),tandaiKendalaTolak({{ $ks->id }})">
                                 <span wire:loading.remove wire:target="tandaiKendalaSesuai({{ $ks->id }})">✓ Sesuai</span>
                                 <span wire:loading wire:target="tandaiKendalaSesuai({{ $ks->id }})"><i class="spin"></i></span>
                             </button>
-                            <button type="button" class="mark {{ $ks->status_verifikasi === 'ditolak' ? 'no' : '' }}" wire:click="tandaiKendalaTolak({{ $ks->id }})" wire:loading.attr="disabled" wire:target="tandaiKendalaSesuai({{ $ks->id }}),tandaiKendalaTolak({{ $ks->id }})">
+                            <button type="button" class="mark"
+                                :class="{ no: pendingMark === 'no' || (pendingMark === null && {{ $ks->status_verifikasi === 'ditolak' ? 'true' : 'false' }}) }"
+                                @click="pendingMark = 'no'"
+                                wire:click="tandaiKendalaTolak({{ $ks->id }})" wire:loading.attr="disabled" wire:target="tandaiKendalaSesuai({{ $ks->id }}),tandaiKendalaTolak({{ $ks->id }})">
                                 <span wire:loading.remove wire:target="tandaiKendalaTolak({{ $ks->id }})">✕ Tidak Sesuai</span>
                                 <span wire:loading wire:target="tandaiKendalaTolak({{ $ks->id }})"><i class="spin"></i></span>
                             </button>
@@ -354,21 +365,34 @@
                         ></iframe>
                         <a href="{{ route('berkas.show', $file) }}" target="_blank" class="btn btn-ghost btn-sm" style="margin-top:10px;align-self:flex-start">🔗 Buka di tab baru / layar penuh</a>
                     </div>
-                    <div class="verify-panel">
+                    <div class="verify-panel" x-data="{ pendingMark: null }">
                         <div class="vp-t">Verifikasi Berkas</div>
                         @if ($this->berkasBisaDiverifikasi($file->id))
-                            <button type="button" class="mark {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : '' }}" wire:click="tandaiSesuai({{ $file->id }})" wire:loading.attr="disabled" wire:target="tandaiSesuai({{ $file->id }}),tandaiTolak({{ $file->id }})">
+                            {{-- pendingMark = pilihan terakhir yg DIKLIK, ditampilkan LANGSUNG (optimistic)
+                                tanpa menunggu balasan server (Supabase remote ~400ms/query) — supaya
+                                "Sesuai" langsung ijo di klik pertama, dan "Tidak Sesuai" langsung
+                                kelihatan aktif walau ditolak validasi (catatan kosong) supaya jelas
+                                kalau perlu isi catatan dulu. status_verifikasi tetap sumber kebenaran
+                                akhir lewat pendingMark===null (mis. saat modal baru dibuka). --}}
+                            <button type="button" class="mark"
+                                :class="{ ok: pendingMark === 'ok' || (pendingMark === null && {{ $file->status_verifikasi === 'terverifikasi' ? 'true' : 'false' }}) }"
+                                @click="pendingMark = 'ok'"
+                                wire:click="tandaiSesuai({{ $file->id }})" wire:loading.attr="disabled" wire:target="tandaiSesuai({{ $file->id }}),tandaiTolak({{ $file->id }})">
                                 <span wire:loading.remove wire:target="tandaiSesuai({{ $file->id }})">✓ Sesuai</span>
                                 <span wire:loading wire:target="tandaiSesuai({{ $file->id }})"><i class="spin"></i></span>
                             </button>
-                            <button type="button" class="mark {{ $file->status_verifikasi === 'ditolak' ? 'no' : '' }}" wire:click="tandaiTolak({{ $file->id }})" wire:loading.attr="disabled" wire:target="tandaiSesuai({{ $file->id }}),tandaiTolak({{ $file->id }})">
+                            <button type="button" class="mark"
+                                :class="{ no: pendingMark === 'no' || (pendingMark === null && {{ $file->status_verifikasi === 'ditolak' ? 'true' : 'false' }}) }"
+                                @click="pendingMark = 'no'"
+                                wire:click="tandaiTolak({{ $file->id }})" wire:loading.attr="disabled" wire:target="tandaiSesuai({{ $file->id }}),tandaiTolak({{ $file->id }})">
                                 <span wire:loading.remove wire:target="tandaiTolak({{ $file->id }})">✕ Tidak Sesuai</span>
                                 <span wire:loading wire:target="tandaiTolak({{ $file->id }})"><i class="spin"></i></span>
                             </button>
                             <div class="field" style="margin-top:12px">
                                 <label style="font-size:11.5px">Catatan (wajib bila tidak sesuai)</label>
                                 <textarea class="inp filled" style="height:auto;display:block;min-height:56px;font-size:11.5px" rows="3"
-                                    wire:model="catatanBerkas.{{ $file->id }}" placeholder="mis. Bukti belum menunjukkan tanggal pelaksanaan…"></textarea>
+                                    wire:model="catatanBerkas.{{ $file->id }}" placeholder="mis. Bukti belum menunjukkan tanggal pelaksanaan…"
+                                    :style="pendingMark === 'no' && {{ $file->status_verifikasi !== 'ditolak' ? 'true' : 'false' }} ? 'border-color:var(--red)' : ''"></textarea>
                                 @error('catatanBerkas.'.$file->id)
                                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                                 @enderror
