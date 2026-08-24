@@ -6,6 +6,7 @@ use App\Models\Capaian;
 use App\Models\Kegiatan;
 use App\Models\MasterIku;
 use App\Models\RtlEvaluasi;
+use App\Models\StorageAccount;
 use Livewire\Component;
 
 /**
@@ -222,6 +223,31 @@ class DasborUtama extends Component
         return $daftarCapaian->mapWithKeys(fn ($c) => [$c->id => null]);
     }
 
+    /**
+     * Peringatan storage Drive untuk akun AKTIF, ditampilkan di dasbor supaya Tim SAKIP
+     * segera tahu tanpa harus membuka halaman Akun & Storage lebih dulu — sebelumnya
+     * status ini (sesi rusak/belum terhubung/kuota hampir penuh) hanya kelihatan di
+     * halaman itu sendiri, jadi gampang tidak disadari sampai unggahan mulai gagal.
+     */
+    protected function peringatanStorage(): ?string
+    {
+        $akunAktif = StorageAccount::aktif();
+
+        if (! $akunAktif) {
+            return 'Belum ada akun storage yang dijadikan aktif — unggahan bukti dukung akan gagal. Buka menu Akun & Storage untuk menambah/menetapkannya.';
+        }
+
+        if ($akunAktif->googlePerluHubungUlang()) {
+            return "Sesi Google Drive akun aktif ({$akunAktif->email_gmail_institusi}) rusak/kedaluwarsa — unggahan bukti dukung sedang MATI. Hubungkan ulang lewat menu Akun & Storage.";
+        }
+
+        if ($akunAktif->mendekatiPenuh()) {
+            return "Kuota Drive akun aktif ({$akunAktif->email_gmail_institusi}) sudah {$akunAktif->persentaseTerpakai()}% terpakai — siapkan akun institusi berikutnya lewat menu Akun & Storage.";
+        }
+
+        return null;
+    }
+
     public function render()
     {
         $role = auth()->user()->namaRole();
@@ -237,6 +263,7 @@ class DasborUtama extends Component
             'tautanBaris' => $this->tautanSemuaBaris($daftarCapaian, $role),
             'ikuBelumTerisiTriwulanIni' => $this->ikuBelumTerisiTriwulanIni(),
             'triwulanBerjalan' => (int) ceil(now()->month / 3),
+            'peringatanStorage' => $role === 'Tim SAKIP' ? $this->peringatanStorage() : null,
         ]);
     }
 }

@@ -10,6 +10,13 @@
         <div class="page-sub">Progres capaian kinerja SAKIP — {{ $role === 'Tim SAKIP' ? 'klik baris untuk verifikasi' : 'klik baris untuk membuka halaman terkait' }}</div>
     </div>
 
+    @if ($peringatanStorage)
+        <div class="info red" style="margin-bottom:16px">
+            ⚠️ <b>{{ $peringatanStorage }}</b>
+            <a wire:navigate href="{{ route('storage-accounts.index') }}" style="margin-left:6px;text-decoration:underline">Buka Akun &amp; Storage →</a>
+        </div>
+    @endif
+
     <div class="grid grid-4" style="margin-bottom:16px">
         <x-stat-card icon="🎯" icon-class="ico-blue" :value="$ringkasan['total_iku']" label="Total IKU dipantau" />
         <x-stat-card icon="✅" icon-class="ico-teal" :value="$ringkasan['sudah_diverifikasi']" label="Sudah diverifikasi" />
