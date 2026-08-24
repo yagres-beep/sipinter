@@ -266,29 +266,36 @@
                             tidak terasa perlu diklik berkali-kali sebelum berubah warna. Begitu respons
                             server datang, render ulang dari status_verifikasi tetap jadi sumber
                             kebenaran akhir (fallback saat pendingMark masih null, mis. buka modal baru). --}}
-                        <div style="display:flex;gap:8px;margin-top:6px" x-data="{ pendingMark: null }">
-                            <button type="button" class="mark"
-                                :class="{ ok: pendingMark === 'ok' || (pendingMark === null && {{ $ks->status_verifikasi === 'terverifikasi' ? 'true' : 'false' }}) }"
-                                @click="pendingMark = 'ok'"
-                                wire:click="tandaiKendalaSesuai({{ $ks->id }})" wire:loading.attr="disabled" wire:target="tandaiKendalaSesuai({{ $ks->id }}),tandaiKendalaTolak({{ $ks->id }})">
-                                <span wire:loading.remove wire:target="tandaiKendalaSesuai({{ $ks->id }})">✓ Sesuai</span>
-                                <span wire:loading wire:target="tandaiKendalaSesuai({{ $ks->id }})"><i class="spin"></i></span>
-                            </button>
-                            <button type="button" class="mark"
-                                :class="{ no: pendingMark === 'no' || (pendingMark === null && {{ $ks->status_verifikasi === 'ditolak' ? 'true' : 'false' }}) }"
-                                @click="pendingMark = 'no'"
-                                wire:click="tandaiKendalaTolak({{ $ks->id }})" wire:loading.attr="disabled" wire:target="tandaiKendalaSesuai({{ $ks->id }}),tandaiKendalaTolak({{ $ks->id }})">
-                                <span wire:loading.remove wire:target="tandaiKendalaTolak({{ $ks->id }})">✕ Tidak Sesuai</span>
-                                <span wire:loading wire:target="tandaiKendalaTolak({{ $ks->id }})"><i class="spin"></i></span>
-                            </button>
-                        </div>
-                        <div class="field" style="margin-top:10px;margin-bottom:0">
-                            <label style="font-size:11.5px">Catatan (wajib bila tidak sesuai)</label>
-                            <textarea class="inp filled" style="height:auto;display:block;font-size:11.5px" rows="2"
-                                wire:model="catatanKendala.{{ $ks->id }}" placeholder="mis. Solusi belum konkret / tidak relevan dengan kendala"></textarea>
-                            @error('catatanKendala.'.$ks->id)
-                                <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-                            @enderror
+                        <div x-data="{ pendingMark: null }">
+                            <div style="display:flex;gap:8px;margin-top:6px">
+                                <button type="button" class="mark"
+                                    :class="{ ok: pendingMark === 'ok' || (pendingMark === null && {{ $ks->status_verifikasi === 'terverifikasi' ? 'true' : 'false' }}) }"
+                                    @click="pendingMark = 'ok'"
+                                    wire:click="tandaiKendalaSesuai({{ $ks->id }})" wire:loading.attr="disabled" wire:target="tandaiKendalaSesuai({{ $ks->id }}),tandaiKendalaTolak({{ $ks->id }})">
+                                    <span wire:loading.remove wire:target="tandaiKendalaSesuai({{ $ks->id }})">✓ Sesuai</span>
+                                    <span wire:loading wire:target="tandaiKendalaSesuai({{ $ks->id }})"><i class="spin"></i></span>
+                                </button>
+                                <button type="button" class="mark"
+                                    :class="{ no: pendingMark === 'no' || (pendingMark === null && {{ $ks->status_verifikasi === 'ditolak' ? 'true' : 'false' }}) }"
+                                    @click="pendingMark = 'no'"
+                                    wire:click="tandaiKendalaTolak({{ $ks->id }})" wire:loading.attr="disabled" wire:target="tandaiKendalaSesuai({{ $ks->id }}),tandaiKendalaTolak({{ $ks->id }})">
+                                    <span wire:loading.remove wire:target="tandaiKendalaTolak({{ $ks->id }})">✕ Tidak Sesuai</span>
+                                    <span wire:loading wire:target="tandaiKendalaTolak({{ $ks->id }})"><i class="spin"></i></span>
+                                </button>
+                            </div>
+                            <div class="field" style="margin-top:10px;margin-bottom:0">
+                                <label style="font-size:11.5px">Catatan (wajib bila tidak sesuai)</label>
+                                {{-- @blur menyusulkan ulang tandaiKendalaTolak() begitu catatan selesai
+                                    diisi (lihat catatan yang sama pada catatanBerkas di atas) — tanpa ini
+                                    klik "Tidak Sesuai" saat catatan kosong tampak "berhasil" (tombolnya
+                                    sudah merah lewat pendingMark optimistic) padahal belum tersimpan. --}}
+                                <textarea class="inp filled" style="height:auto;display:block;font-size:11.5px" rows="2"
+                                    wire:model="catatanKendala.{{ $ks->id }}" placeholder="mis. Solusi belum konkret / tidak relevan dengan kendala"
+                                    x-on:blur="if (pendingMark === 'no') $wire.tandaiKendalaTolak({{ $ks->id }})"></textarea>
+                                @error('catatanKendala.'.$ks->id)
+                                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                                @enderror
+                            </div>
                         </div>
                     @elseif ($ks->catatan)
                         <div class="field" style="margin-top:6px;margin-bottom:0">
@@ -390,9 +397,16 @@
                             </button>
                             <div class="field" style="margin-top:12px">
                                 <label style="font-size:11.5px">Catatan (wajib bila tidak sesuai)</label>
+                                {{-- Klik "Tidak Sesuai" saat catatan masih kosong ditolak validasi (lihat
+                                    tandaiTolak()) — tombolnya SUDAH terlanjur merah lewat pendingMark
+                                    optimistic di atas, jadi kalau berhenti di situ saja pengguna mengira
+                                    penandaannya sudah tersimpan padahal belum. @blur di sini menyusulkan
+                                    ulang tandaiTolak() begitu catatan selesai diisi (fokus pindah, termasuk
+                                    saat modal ditutup) supaya tidak perlu klik "Tidak Sesuai" dua kali. --}}
                                 <textarea class="inp filled" style="height:auto;display:block;min-height:56px;font-size:11.5px" rows="3"
                                     wire:model="catatanBerkas.{{ $file->id }}" placeholder="mis. Bukti belum menunjukkan tanggal pelaksanaan…"
-                                    :style="pendingMark === 'no' && {{ $file->status_verifikasi !== 'ditolak' ? 'true' : 'false' }} ? 'border-color:var(--red)' : ''"></textarea>
+                                    :style="pendingMark === 'no' && {{ $file->status_verifikasi !== 'ditolak' ? 'true' : 'false' }} ? 'border-color:var(--red)' : ''"
+                                    x-on:blur="if (pendingMark === 'no') $wire.tandaiTolak({{ $file->id }})"></textarea>
                                 @error('catatanBerkas.'.$file->id)
                                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                                 @enderror
