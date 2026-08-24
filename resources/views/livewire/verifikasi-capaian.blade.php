@@ -54,31 +54,26 @@
             @enderror
         </div>
 
+        {{-- Target Tahunan tidak lagi diedit dari sini — sekali per tahun per IKU,
+            diisi terpusat di tab "Target Tahunan" (Data Master & Konfigurasi) supaya
+            tidak perlu diketik ulang tiap sesi verifikasi bulanan. Di sini cukup
+            ditampilkan sebagai referensi. --}}
+        <div class="field">
+            <label>Target Tahunan <span class="muted" style="font-weight:400;font-size:10px">— sekali per tahun, berlaku untuk seluruh bulan IKU ini</span></label>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <span class="inp filled" style="background:var(--ro-bg);display:inline-block;width:auto;padding:8px 14px">
+                    @if ($capaian->masterIku->pakaiRasio())
+                        {{ $capaian->masterIku->deskripsi_x ?: 'X' }} {{ \App\Models\PengaturanCapaian::formatAngka($capaianTahunan->x_target) }} ÷ {{ $capaian->masterIku->deskripsi_y ?: 'Y' }} {{ \App\Models\PengaturanCapaian::formatAngka($capaianTahunan->y_target) }} = {{ $capaianTahunan->targetTahunan() }}%
+                    @else
+                        {{ \App\Models\PengaturanCapaian::formatAngka($capaianTahunan->target_tahunan) }} {{ $capaian->masterIku->satuan }}
+                    @endif
+                </span>
+                <a wire:navigate href="{{ route('master-iku.index') }}#target" class="btn btn-ghost btn-sm">✏️ Ubah di Target Tahunan</a>
+            </div>
+        </div>
         @if ($capaian->masterIku->pakaiRasio())
-            <div class="field">
-                <label>Target Tahunan <span class="muted" style="font-weight:400;font-size:10px">— {{ $capaian->masterIku->deskripsi_x ?: 'Pembilang (X)' }} ÷ {{ $capaian->masterIku->deskripsi_y ?: 'Penyebut (Y)' }}, sekali per tahun</span></label>
-                <div style="display:flex;gap:8px;align-items:center">
-                    <input type="number" step="0.01" class="inp filled" style="width:120px" wire:model.live="x_target" placeholder="X">
-                    <span class="muted">÷</span>
-                    <input type="number" step="0.01" class="inp filled" style="width:120px" wire:model.live="y_target" placeholder="Y">
-                    <span class="muted">= {{ $capaianTahunan->targetTahunan() }}%</span>
-                </div>
-                @error('x_target')
-                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-                @enderror
-                @error('y_target')
-                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-                @enderror
-            </div>
-            <div class="fhint" style="margin:10px 0 6px">Isi Pembilang (X) &amp; Penyebut (Y) TRIWULAN INI SAJA (bukan kumulatif, tidak perlu melihat isian triwulan sebelumnya) — kumulatif TW I s.d. TW berjalan &amp; persentasenya (X÷Y×100) dihitung otomatis di bawah.</div>
+            <div class="fhint" style="margin:10px 0 6px">Isi Pembilang (X) &amp; Penyebut (Y) Alokasi/Realisasi TRIWULAN INI SAJA (bukan kumulatif, tidak perlu melihat isian triwulan sebelumnya) — kumulatif TW I s.d. TW berjalan &amp; persentasenya (X÷Y×100) dihitung otomatis di bawah.</div>
         @else
-            <div class="field">
-                <label>Target Tahunan <span class="muted" style="font-weight:400;font-size:10px">({{ $capaian->masterIku->satuan }}) — sekali per tahun, dipakai di seluruh bulan IKU ini</span></label>
-                <input type="number" step="0.01" class="inp filled" style="width:100%;max-width:220px" wire:model.live="target_tahunan">
-                @error('target_tahunan')
-                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-                @enderror
-            </div>
             <div class="fhint" style="margin:10px 0 6px">Isi Alokasi Target &amp; Realisasi TRIWULAN INI SAJA (bukan kumulatif, tidak perlu melihat isian triwulan sebelumnya) — kumulatif TW I s.d. TW berjalan dihitung otomatis di bawah.</div>
         @endif
 
@@ -341,8 +336,19 @@
                             &lt;iframe&gt; ini diberi src langsung, browser akan diam-diam mengunduh
                             SEMUA berkas bukti di halaman ini sekaligus saat halaman dimuat,
                             meski modalnya masih tersembunyi (x-show cuma mengatur display:none,
-                            tidak mencegah iframe mulai memuat). --}}
+                            tidak mencegah iframe mulai memuat).
+
+                            wire:ignore WAJIB ada — tanpanya, tiap wire:click APA PUN di komponen
+                            ini (termasuk tandaiSesuai/tandaiTolak) membuat Livewire ikut me-morph
+                            elemen ini, dan menimpa iframe.src lewat JS SELALU memicu browser
+                            memuat ulang PDF dari awal walau ke URL yang sama persis — inilah
+                            sebabnya tombol Sesuai/Tidak Sesuai terasa jauh lebih lambat dibanding
+                            tombol lain yang tidak bersebelahan dengan iframe. wire:ignore membuat
+                            Livewire sama sekali tidak menyentuh elemen ini lagi setelah render
+                            pertama; reaktivitas x-bind:src terhadap modalBerkas tetap jalan
+                            normal karena itu urusan Alpine, bukan Livewire. --}}
                         <iframe
+                            wire:ignore
                             x-bind:src="modalBerkas === {{ $file->id }} ? @js(route('berkas.show', $file)) : null"
                             class="pdf-frame" title="Pratinjau {{ $file->nama_file }}"
                         ></iframe>

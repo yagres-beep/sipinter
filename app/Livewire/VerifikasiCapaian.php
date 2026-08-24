@@ -31,27 +31,18 @@ class VerifikasiCapaian extends Component
     public ?string $analisis_capaian = null;
 
     /**
-     * Nilai form Target Tahunan + Alokasi/Realisasi Triwulanan — diikat lewat
-     * wire:model (properti FLAT, bukan atribut model relasi, karena Livewire di sini
-     * tidak mendukung wire:model langsung ke atribut model — "Can't set model
-     * properties directly"), disinkronkan ke CapaianTahunan lewat
-     * capaianTahunanTerkini() sebelum ditampilkan/disimpan. Tim SAKIP cukup mengisi
-     * ini SEKALI per tahun, tidak diketik ulang tiap bulan seperti Target PK/Target
-     * TW lama.
+     * Nilai form Alokasi/Realisasi Triwulanan — diikat lewat wire:model (properti
+     * FLAT, bukan atribut model relasi, karena Livewire di sini tidak mendukung
+     * wire:model langsung ke atribut model — "Can't set model properties
+     * directly"), disinkronkan ke CapaianTahunan lewat capaianTahunanTerkini()
+     * sebelum ditampilkan/disimpan.
+     *
+     * Target Tahunan (target_tahunan/x_target/y_target) TIDAK LAGI diedit dari sini
+     * — sekali per tahun per IKU, diisi terpusat di App\Livewire\TargetTahunan
+     * (tab "Target Tahunan", Data Master & Konfigurasi) supaya tidak perlu diketik
+     * ulang tiap sesi verifikasi bulanan. Di sini nilainya dibaca APA ADANYA dari
+     * capaianTahunanTersimpan() (lihat blade, ditampilkan readonly + tautan).
      */
-    public $target_tahunan = null;
-
-    /**
-     * Pembilang (X)/Penyebut (Y) mentah Target Tahunan — HANYA dipakai bila
-     * MasterIku::pakaiRasio(), sebagai pengganti $target_tahunan di atas. Pasangan
-     * X/Y TERPISAH dari x_alokasi_tw1..4/y_alokasi_tw1..4 di bawah (Target Tahunan
-     * bukan sama dengan Alokasi Target TW IV — keduanya diisi independen oleh Tim
-     * SAKIP, lihat CapaianTahunan::targetTahunan()).
-     */
-    public $x_target = null;
-
-    public $y_target = null;
-
     public $alokasi_tw1 = null;
 
     public $alokasi_tw2 = null;
@@ -182,9 +173,6 @@ class VerifikasiCapaian extends Component
         $this->analisis_capaian = $capaian->analisis_capaian;
 
         $capaianTahunan = $this->capaianTahunanTersimpan();
-        $this->target_tahunan = $capaianTahunan->target_tahunan;
-        $this->x_target = $capaianTahunan->x_target;
-        $this->y_target = $capaianTahunan->y_target;
         $this->alokasi_tw1 = $capaianTahunan->alokasi_tw1;
         $this->alokasi_tw2 = $capaianTahunan->alokasi_tw2;
         $this->alokasi_tw3 = $capaianTahunan->alokasi_tw3;
@@ -498,9 +486,6 @@ class VerifikasiCapaian extends Component
             'koreksiKendala.*.kendala' => ['required', 'string'],
             'koreksiKendala.*.solusi' => ['nullable', 'string'],
             'koreksiRtlRealisasi.*' => ['nullable', 'string'],
-            'target_tahunan' => ['nullable', 'numeric', 'min:0'],
-            'x_target' => ['nullable', 'numeric', 'min:0'],
-            'y_target' => ['nullable', 'numeric', 'min:0'],
             'alokasi_tw1' => ['nullable', 'numeric', 'min:0'],
             'alokasi_tw2' => ['nullable', 'numeric', 'min:0'],
             'alokasi_tw3' => ['nullable', 'numeric', 'min:0'],
@@ -532,9 +517,6 @@ class VerifikasiCapaian extends Component
     {
         return [
             'analisis_capaian' => 'analisis capaian',
-            'target_tahunan' => 'Target Tahunan',
-            'x_target' => 'Pembilang (X) Target Tahunan',
-            'y_target' => 'Penyebut (Y) Target Tahunan',
             'alokasi_tw1' => 'Alokasi Target TW I',
             'alokasi_tw2' => 'Alokasi Target TW II',
             'alokasi_tw3' => 'Alokasi Target TW III',
@@ -606,20 +588,17 @@ class VerifikasiCapaian extends Component
      * dimanipulasi. Blade juga menyembunyikan/mengunci kolom TW lain sebagai
      * <input>, tapi pengecekan di sini tetap dipertahankan (defense in depth,
      * bukan cuma sembunyi UI — pola yang sama dipakai kegiatanBisaDikoreksi()).
-     * target_tahunan/x_target/y_target TETAP disinkronkan tanpa syarat karena
-     * keduanya bukan milik TW tertentu (sekali per tahun, lihat dokumentasi
-     * $target_tahunan di atas).
+     * target_tahunan/x_target/y_target SENGAJA TIDAK ikut fill() di sini —
+     * keduanya sudah tidak diedit dari halaman ini (lihat App\Livewire\
+     * TargetTahunan), jadi nilainya dibiarkan apa adanya dari
+     * capaianTahunanTersimpan().
      */
     protected function capaianTahunanTerkini(): CapaianTahunan
     {
         $model = $this->capaianTahunanTersimpan();
         $tw = (int) $this->capaian->periode->triwulan;
 
-        $fill = [
-            'target_tahunan' => $this->target_tahunan,
-            'x_target' => $this->x_target,
-            'y_target' => $this->y_target,
-        ];
+        $fill = [];
 
         foreach (['alokasi_tw', 'realisasi_tw', 'x_alokasi_tw', 'y_alokasi_tw', 'x_realisasi_tw', 'y_realisasi_tw'] as $prefix) {
             $fill["{$prefix}{$tw}"] = $this->{"{$prefix}{$tw}"};
