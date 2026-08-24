@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\PkoCalculatorService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -134,6 +135,12 @@ class Capaian extends Model
      * mengubah kode ini. Satuan IKU (persen/poin/dst., lihat MasterIku::satuan) TIDAK
      * mempengaruhi rumus ini — murni label tampilan, target & realisasi tetap
      * dibandingkan sebagai rasio apa pun satuannya.
+     *
+     * Rumus sesungguhnya ada di PkoCalculatorService::hitungCapaian() (dites
+     * terpisah, tanpa ketergantungan DB) — method ini hanya menjembatani tipe API
+     * lama: mixed→float, dan TIDAK_DINILAI ("-")→null (dipakai luas di seluruh kode
+     * sebagai penanda "belum ada capaian", lihat dataRekap()/rataRataPersentase()
+     * di App\Livewire\DasborCapaian).
      */
     public static function hitungPersentase(mixed $target, mixed $realisasi): ?float
     {
@@ -141,24 +148,11 @@ class Capaian extends Model
             return null;
         }
 
-        $target = (float) $target;
-        $realisasi = (float) $realisasi;
-
-        if ($realisasi <= 0.0) {
-            // Mencakup aturan (d) target=0&realisasi=0 dan (e) target>0&realisasi=0 —
-            // keduanya berarti belum ada capaian untuk dilaporkan (strip).
-            return null;
-        }
-
         $batas = (float) PengaturanCapaian::ambil()->batas_maksimal_persen;
 
-        if ($target <= 0.0) {
-            // Aturan (c): target=0, realisasi>0.
-            return $batas;
-        }
+        $hasil = PkoCalculatorService::hitungCapaian((float) $target, (float) $realisasi, $batas);
 
-        // Aturan (a)/(b): rasio realisasi/target, dibatasi maksimal $batas.
-        return min(round(($realisasi / $target) * 100, 2), $batas);
+        return $hasil === PkoCalculatorService::TIDAK_DINILAI ? null : round((float) $hasil, 2);
     }
 
     /**
@@ -168,30 +162,19 @@ class Capaian extends Model
      */
     public static function predikatSakip(float $nilaiSakip): string
     {
-        return match (true) {
-            $nilaiSakip > 90 => 'AA/Sangat Memuaskan',
-            $nilaiSakip > 80 => 'A/Memuaskan',
-            $nilaiSakip > 70 => 'BB/Sangat Baik',
-            $nilaiSakip > 60 => 'B/Baik',
-            $nilaiSakip > 50 => 'CC/Cukup (Memadai)',
-            $nilaiSakip > 30 => 'C/Kurang',
-            default => 'D/Sangat Kurang',
-        };
+        return PkoCalculatorService::predikatSakip($nilaiSakip);
     }
 
     /**
      * % koreksi Nilai Akhir Capaian PK berdasarkan Predikat SAKIP — dipakai SATU
-     * angka untuk SELURUH IKU (organisasi), bukan per-IKU.
+     * angka untuk SELURUH IKU (organisasi), bukan per-IKU. Dikembalikan dalam
+     * bentuk PERSEN (10.0 = 10%, bukan desimal 0.10) — beda representasi dari
+     * PkoCalculatorService::koreksiPredikat() supaya API lama (dipakai bersama
+     * nilaiAkhirCapaianPk() di bawah) tidak perlu ikut berubah.
      */
     public static function koreksiPredikat(string $predikat): float
     {
-        return match ($predikat) {
-            'AA/Sangat Memuaskan', 'A/Memuaskan' => 0.0,
-            'BB/Sangat Baik' => 10.0,
-            'B/Baik' => 15.0,
-            'CC/Cukup (Memadai)' => 20.0,
-            default => 30.0, // C/Kurang, D/Sangat Kurang
-        };
+        return PkoCalculatorService::koreksiPredikat($predikat) * 100;
     }
 
     /**
@@ -207,7 +190,9 @@ class Capaian extends Model
             return null;
         }
 
-        return min($capaianSetahunTw4, (float) PengaturanCapaian::ambil()->batas_normalisasi_pko);
+        $batas = (float) PengaturanCapaian::ambil()->batas_normalisasi_pko;
+
+        return (float) PkoCalculatorService::normalisasiCapaianPK($capaianSetahunTw4, $batas);
     }
 
     /**
@@ -217,7 +202,11 @@ class Capaian extends Model
      */
     public static function nilaiAkhirCapaianPk(?float $normalisasi, float $koreksiPersen): ?float
     {
-        return $normalisasi === null ? null : round($normalisasi * (1 - $koreksiPersen / 100), 2);
+        if ($normalisasi === null) {
+            return null;
+        }
+
+        return round(PkoCalculatorService::nilaiAkhirPK($normalisasi, $koreksiPersen / 100), 2);
     }
 
     /**

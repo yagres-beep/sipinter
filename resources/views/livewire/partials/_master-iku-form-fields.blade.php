@@ -97,7 +97,7 @@
             <option value="iku">IKU</option>
             <option value="proksi">Proksi</option>
         </select>
-        <div class="fhint">Sesuai kolom "Jenis (IKU atau Proksi)" Kertas Kerja resmi — label klasifikasi saja, tidak mengubah rumus.</div>
+        <div class="fhint">Sesuai kolom "Jenis (IKU atau Proksi)" Kertas Kerja resmi. "Proksi" DIKECUALIKAN dari Total/Rata-rata Capaian PK di Penilaian Kinerja Organisasi (PKO) — indikator pengganti/pendekatan sementara, bukan indikator inti yang dinilai penuh.</div>
         @error('jenisIku')
             <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
         @enderror

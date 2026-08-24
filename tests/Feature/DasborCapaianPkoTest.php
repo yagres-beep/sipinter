@@ -106,6 +106,34 @@ class DasborCapaianPkoTest extends TestCase
         $this->assertEqualsWithDelta(25.0, $pko['rata_rata_capaian_pk'], 0.01);
     }
 
+    public function test_hitung_pko_mengecualikan_iku_berjenis_proksi(): void
+    {
+        $this->loginSebagaiTimSakip();
+
+        $iku = MasterIku::create([
+            'kode' => '1134', 'indikator' => 'Uji PKO IKU', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
+            'jenis_iku' => MasterIku::JENIS_IKU,
+        ]);
+        $proksi = MasterIku::create([
+            'kode' => '1135', 'indikator' => 'Uji PKO Proksi', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
+            'jenis_iku' => MasterIku::JENIS_PROKSI,
+        ]);
+
+        // Kedua-duanya punya Capaian Setahun TW IV 100% (target=100, realisasi=100)
+        // supaya bedanya HANYA jenis_iku, bukan datanya.
+        CapaianTahunan::create(['iku_id' => $iku->id, 'tahun' => 2026, 'target_tahunan' => 100, 'realisasi_tw4' => 100]);
+        CapaianTahunan::create(['iku_id' => $proksi->id, 'tahun' => 2026, 'target_tahunan' => 100, 'realisasi_tw4' => 100]);
+
+        $component = Livewire::test(DasborCapaian::class)->set('tahun', 2026);
+        $pko = $component->viewData('pko');
+
+        // Hanya IKU "iku" yang dihitung -- Proksi sama sekali tidak ikut menyumbang
+        // Total/Rata-rata Capaian PK, walau datanya identik.
+        $this->assertSame(1, $pko['jumlah_iku_dihitung']);
+        $this->assertEqualsWithDelta(100.0, $pko['total_capaian_pk'], 0.01);
+        $this->assertEqualsWithDelta(100.0, $pko['rata_rata_capaian_pk'], 0.01);
+    }
+
     public function test_hitung_pko_melewati_iku_tanpa_capaian_setahun_tw4(): void
     {
         $this->loginSebagaiTimSakip();
@@ -121,5 +149,51 @@ class DasborCapaianPkoTest extends TestCase
         $this->assertNull($pko['rata_rata_capaian_pk']);
         $this->assertNull($pko['predikat_pko']);
         $this->assertSame(0, $pko['jumlah_iku_dihitung']);
+    }
+
+    public function test_capaian_kinerja_per_triwulan_rata_rata_iku_mengecualikan_proksi(): void
+    {
+        $this->loginSebagaiTimSakip();
+
+        $iku1 = MasterIku::create(['kode' => '1136', 'indikator' => 'Uji TW A', 'tim' => 'Uji', 'penanggung_jawab' => 'A', 'jenis_iku' => MasterIku::JENIS_IKU]);
+        $iku2 = MasterIku::create(['kode' => '1137', 'indikator' => 'Uji TW B', 'tim' => 'Uji', 'penanggung_jawab' => 'A', 'jenis_iku' => MasterIku::JENIS_IKU]);
+        $proksi = MasterIku::create(['kode' => '1138', 'indikator' => 'Uji TW Proksi', 'tim' => 'Uji', 'penanggung_jawab' => 'A', 'jenis_iku' => MasterIku::JENIS_PROKSI]);
+
+        // TW II: iku1 capaian 100% (alokasi=50,realisasi=50), iku2 capaian 50%
+        // (alokasi=100,realisasi=50). Proksi capaian 120% tapi HARUS diabaikan.
+        CapaianTahunan::create(['iku_id' => $iku1->id, 'tahun' => 2026, 'alokasi_tw2' => 50, 'realisasi_tw2' => 50]);
+        CapaianTahunan::create(['iku_id' => $iku2->id, 'tahun' => 2026, 'alokasi_tw2' => 100, 'realisasi_tw2' => 50]);
+        CapaianTahunan::create(['iku_id' => $proksi->id, 'tahun' => 2026, 'alokasi_tw2' => 10, 'realisasi_tw2' => 1000]);
+
+        $component = Livewire::test(DasborCapaian::class)->set('tahun', 2026);
+        $perTriwulan = $component->viewData('capaianKinerjaPerTriwulan');
+
+        // (100+50)/2 = 75, Proksi tidak ikut menyumbang.
+        $this->assertEqualsWithDelta(75.0, $perTriwulan[2], 0.01);
+        // TW I belum ada data sama sekali (alokasi & realisasi 0 untuk keduanya) -> "-".
+        $this->assertSame('-', $perTriwulan[1]);
+    }
+
+    public function test_capaian_per_sasaran_mengelompokkan_dan_mengecualikan_proksi(): void
+    {
+        $this->loginSebagaiTimSakip();
+
+        $ikuA = MasterIku::create(['kode' => '1139', 'indikator' => 'Uji Sasaran A1', 'tim' => 'Uji', 'penanggung_jawab' => 'A', 'sasaran' => 'Sasaran Satu', 'jenis_iku' => MasterIku::JENIS_IKU]);
+        $ikuB = MasterIku::create(['kode' => '1140', 'indikator' => 'Uji Sasaran A2', 'tim' => 'Uji', 'penanggung_jawab' => 'A', 'sasaran' => 'Sasaran Satu', 'jenis_iku' => MasterIku::JENIS_IKU]);
+        $ikuTanpaSasaran = MasterIku::create(['kode' => '1141', 'indikator' => 'Uji Tanpa Sasaran', 'tim' => 'Uji', 'penanggung_jawab' => 'A', 'jenis_iku' => MasterIku::JENIS_IKU]);
+        $proksi = MasterIku::create(['kode' => '1142', 'indikator' => 'Uji Sasaran Proksi', 'tim' => 'Uji', 'penanggung_jawab' => 'A', 'sasaran' => 'Sasaran Satu', 'jenis_iku' => MasterIku::JENIS_PROKSI]);
+
+        CapaianTahunan::create(['iku_id' => $ikuA->id, 'tahun' => 2026, 'alokasi_tw2' => 100, 'realisasi_tw2' => 100]); // 100%
+        CapaianTahunan::create(['iku_id' => $ikuB->id, 'tahun' => 2026, 'alokasi_tw2' => 100, 'realisasi_tw2' => 0]); // "-" (belum ada realisasi)
+        CapaianTahunan::create(['iku_id' => $ikuTanpaSasaran->id, 'tahun' => 2026, 'alokasi_tw2' => 100, 'realisasi_tw2' => 0]); // "-"
+        CapaianTahunan::create(['iku_id' => $proksi->id, 'tahun' => 2026, 'alokasi_tw2' => 10, 'realisasi_tw2' => 1000]);
+
+        $component = Livewire::test(DasborCapaian::class)->set('tahun', 2026)->set('triwulan', 2);
+        $perSasaran = $component->viewData('capaianPerSasaran');
+
+        // Sasaran Satu: hanya ikuA (100%) yang valid -- ikuB "-" diabaikan, Proksi dikecualikan.
+        $this->assertEqualsWithDelta(100.0, $perSasaran['Sasaran Satu'], 0.01);
+        // IKU tanpa sasaran terisi masuk label "Tanpa Sasaran"; capaiannya sendiri "-".
+        $this->assertSame('-', $perSasaran['Tanpa Sasaran']);
     }
 }

@@ -7,6 +7,7 @@ use App\Models\CapaianTahunan;
 use App\Models\Kegiatan;
 use App\Models\MasterIku;
 use App\Models\NilaiSakip;
+use App\Services\PkoCalculatorService;
 use Livewire\Component;
 
 /**
@@ -62,9 +63,15 @@ class DasborCapaian extends Component
      * Penilaian Kinerja Organisasi (PKO) — Nilai Akhir Capaian PK tiap IKU
      * (Capaian::nilaiAkhirCapaianPk(), dari basisCapaianPko() dibatasi
      * batas_normalisasi_pko lalu dikoreksi % sesuai Predikat SAKIP), dijumlah/
-     * dirata-ratakan untuk seluruh IKU pada tahun terpilih. IKU tanpa capaian pada
+     * dirata-ratakan lewat PkoCalculatorService::totalCapaianPK()/nkoRataRata()/
+     * predikatPKO() untuk seluruh IKU pada tahun terpilih. IKU tanpa capaian pada
      * basisnya (belum ada data) DILEWATI dari rata-rata (pola sama seperti
      * rataRataPersentase() di bawah), bukan dianggap 0.
+     *
+     * IKU berjenis Proksi (MasterIku::JENIS_PROKSI) DIKECUALIKAN sepenuhnya di sini
+     * — sesuai definisi "IKU (indikator inti, dihitung penuh ke PKO) vs Proksi
+     * (indikator pendukung/pengganti sementara)" pada App\Models\MasterIku, Proksi
+     * memang tidak ikut menyumbang skor PKO organisasi.
      *
      * @return array{nilai_sakip: ?float, predikat_sakip: ?string, koreksi_persen: float, total_capaian_pk: float, rata_rata_capaian_pk: ?float, predikat_pko: ?string, jumlah_iku_dihitung: int}
      */
@@ -74,31 +81,84 @@ class DasborCapaian extends Component
         $predikat = $nilaiSakip !== null ? Capaian::predikatSakip($nilaiSakip) : null;
         $koreksi = $predikat !== null ? Capaian::koreksiPredikat($predikat) : 0.0;
 
-        $nilaiAkhirPerIku = CapaianTahunan::where('tahun', $this->tahun)
+        $nilaiAkhirPerIku = CapaianTahunan::with('masterIku')
+            ->where('tahun', $this->tahun)
             ->get()
+            ->filter(fn (CapaianTahunan $ct) => $ct->masterIku?->jenis_iku === MasterIku::JENIS_IKU)
             ->map(fn (CapaianTahunan $ct) => Capaian::nilaiAkhirCapaianPk(
                 Capaian::normalisasiCapaianPk($this->basisCapaianPko($ct)),
                 $koreksi
             ))
-            ->filter(fn ($v) => $v !== null);
+            ->filter(fn ($v) => $v !== null)
+            ->values();
 
-        $rataRata = $nilaiAkhirPerIku->isNotEmpty() ? round((float) $nilaiAkhirPerIku->avg(), 2) : null;
+        $nilaiAkhirArray = $nilaiAkhirPerIku->all();
+        $rataRata = $nilaiAkhirPerIku->isNotEmpty() ? round(PkoCalculatorService::nkoRataRata($nilaiAkhirArray), 2) : null;
 
         return [
             'nilai_sakip' => $nilaiSakip,
             'predikat_sakip' => $predikat,
             'koreksi_persen' => $koreksi,
-            'total_capaian_pk' => round((float) $nilaiAkhirPerIku->sum(), 2),
+            'total_capaian_pk' => round(PkoCalculatorService::totalCapaianPK($nilaiAkhirArray), 2),
             'rata_rata_capaian_pk' => $rataRata,
-            'predikat_pko' => match (true) {
-                $rataRata === null => null,
-                $rataRata > 100 => 'ISTIMEWA',
-                $rataRata > 80 => 'BAIK',
-                $rataRata > 60 => 'BUTUH PERBAIKAN',
-                default => 'BURUK',
-            },
+            'predikat_pko' => $rataRata === null ? null : PkoCalculatorService::predikatPKO($rataRata),
             'jumlah_iku_dihitung' => $nilaiAkhirPerIku->count(),
         ];
+    }
+
+    /**
+     * Contoh pemanggilan PkoCalculatorService::capaianKinerjaIKU() — rata-rata
+     * Capaian Terhadap Target Triwulanan seluruh IKU (Proksi dikecualikan, sama
+     * seperti hitungPko()) pada KEEMPAT triwulan tahun terpilih sekaligus, supaya
+     * Tim SAKIP bisa membandingkan tren antar triwulan dalam satu tabel tanpa
+     * berpindah halaman — lihat kartu "Capaian Kinerja IKU per Triwulan" di view.
+     *
+     * @return array<int, float|string> triwulan (1-4) => rata-rata Capaian Kinerja IKU, atau "-" bila belum ada IKU yang bisa dinilai pada triwulan itu
+     */
+    protected function capaianKinerjaPerTriwulan(): array
+    {
+        $capaianTahunanIku = CapaianTahunan::with('masterIku')
+            ->where('tahun', $this->tahun)
+            ->get()
+            ->filter(fn (CapaianTahunan $ct) => $ct->masterIku?->jenis_iku === MasterIku::JENIS_IKU);
+
+        $hasil = [];
+
+        foreach ([1, 2, 3, 4] as $tw) {
+            $capaianList = $capaianTahunanIku
+                ->map(fn (CapaianTahunan $ct) => $ct->capaianTriwulanan($tw) ?? PkoCalculatorService::TIDAK_DINILAI)
+                ->all();
+
+            $hasil[$tw] = PkoCalculatorService::capaianKinerjaIKU($capaianList);
+        }
+
+        return $hasil;
+    }
+
+    /**
+     * Contoh pemanggilan PkoCalculatorService::capaianPerSasaran() — rata-rata
+     * Capaian Terhadap Target Triwulanan pada triwulan TERPILIH ($this->triwulan),
+     * dikelompokkan per MasterIku::sasaran (Proksi dikecualikan). IKU tanpa sasaran
+     * terisi dikelompokkan di bawah label "Tanpa Sasaran" supaya tetap terlihat,
+     * bukan diam-diam hilang dari tabel.
+     *
+     * @return \Illuminate\Support\Collection<string, float|string> sasaran => rata-rata Capaian Kinerja IKU
+     */
+    protected function capaianPerSasaran(): \Illuminate\Support\Collection
+    {
+        $perSasaran = CapaianTahunan::with('masterIku')
+            ->where('tahun', $this->tahun)
+            ->get()
+            ->filter(fn (CapaianTahunan $ct) => $ct->masterIku?->jenis_iku === MasterIku::JENIS_IKU)
+            ->groupBy(fn (CapaianTahunan $ct) => $ct->masterIku->sasaran ?: 'Tanpa Sasaran');
+
+        return $perSasaran->map(function ($group) {
+            $capaianList = $group
+                ->map(fn (CapaianTahunan $ct) => $ct->capaianTriwulanan($this->triwulan) ?? PkoCalculatorService::TIDAK_DINILAI)
+                ->all();
+
+            return PkoCalculatorService::capaianPerSasaran($capaianList);
+        })->sortKeys();
     }
 
     /**
@@ -281,6 +341,8 @@ class DasborCapaian extends Component
             'rekap' => $rekap,
             'rataRataPersentase' => $this->rataRataPersentase($rekap),
             'pko' => $this->hitungPko(),
+            'capaianKinerjaPerTriwulan' => $this->capaianKinerjaPerTriwulan(),
+            'capaianPerSasaran' => $this->capaianPerSasaran(),
         ]);
     }
 }

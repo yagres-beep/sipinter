@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\PkoCalculatorService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -156,7 +157,7 @@ class CapaianTahunan extends Model
         $x = (float) ($x ?? 0);
         $y = (float) ($y ?? 0);
 
-        return $y > 0 ? round($x / $y * 100, 2) : 0.0;
+        return round(PkoCalculatorService::hitungPersentase($x, $y), 2);
     }
 
     /**

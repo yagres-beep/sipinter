@@ -91,7 +91,52 @@
             </div>
         </div>
 
-        <div class="fhint" style="margin-top:10px">ℹ️ Normalisasi Capaian PK = min(Capaian % Setahun TW IV tiap IKU, batas — diatur di <a wire:navigate href="{{ route('master-iku.index') }}">Pengaturan Rumus Capaian</a>). Nilai Akhir = Normalisasi × (100% − Koreksi Predikat SAKIP). Total/Rata-rata dihitung dari seluruh IKU yang sudah punya Capaian Setahun TW IV pada tahun ini.</div>
+        <div class="fhint" style="margin-top:10px">ℹ️ Normalisasi Capaian PK = min(Capaian % Setahun TW IV tiap IKU, batas — diatur di <a wire:navigate href="{{ route('master-iku.index') }}">Pengaturan Rumus Capaian</a>). Nilai Akhir = Normalisasi × (100% − Koreksi Predikat SAKIP). Total/Rata-rata dihitung dari seluruh IKU (Proksi dikecualikan) yang sudah punya Capaian Setahun TW IV pada tahun ini.</div>
+    </div>
+
+    <div class="card">
+        <div class="card-h">📈 Capaian Kinerja IKU per Triwulan — {{ $tahun }}</div>
+        <div class="fhint" style="margin-bottom:10px">ℹ️ Rata-rata Capaian Terhadap Target Triwulanan seluruh IKU (Proksi dikecualikan) pada triwulan tsb — nilai "-" (belum ada IKU yang bisa dinilai) &amp; nilai 0 diabaikan dari rata-rata, supaya tidak menyeret turun IKU lain yang sudah tercapai.</div>
+        <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        @foreach (['I', 'II', 'III', 'IV'] as $tw)
+                            <th style="text-align:center">TW {{ $tw }}</th>
+                        @endforeach
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        @foreach ([1, 2, 3, 4] as $tw)
+                            <td style="text-align:center">{{ is_numeric($capaianKinerjaPerTriwulan[$tw]) ? round($capaianKinerjaPerTriwulan[$tw], 2).'%' : $capaianKinerjaPerTriwulan[$tw] }}</td>
+                        @endforeach
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        @if ($capaianPerSasaran->isNotEmpty())
+            <div class="card-h" style="margin-top:18px;font-size:13px">🎯 Capaian per Sasaran — Triwulan {{ ['I', 'II', 'III', 'IV'][$triwulan - 1] }} {{ $tahun }}</div>
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Sasaran</th>
+                            <th style="text-align:center">Rata-rata Capaian</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($capaianPerSasaran as $sasaran => $nilai)
+                            <tr>
+                                <td>{{ $sasaran }}</td>
+                                <td style="text-align:center">{{ is_numeric($nilai) ? round($nilai, 2).'%' : $nilai }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endif
     </div>
 
     <div class="card">
