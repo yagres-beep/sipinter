@@ -77,6 +77,35 @@ class DasborCapaianPkoTest extends TestCase
         $this->assertSame(1, $pko['jumlah_iku_dihitung']);
     }
 
+    public function test_hitung_pko_pakai_capaian_setahun_tw4_walau_iku_berjenis_triwulanan(): void
+    {
+        $this->loginSebagaiTimSakip();
+
+        // IKU berjenis "Triwulanan" — sesuai sheet resmi, kolom AJ (Normalisasi
+        // Capaian PK) TETAP merujuk Capaian Terhadap Target Setahun TW IV untuk
+        // jenis ini juga (bukan Capaian Terhadap Target Triwulanan berjalan).
+        $iku = MasterIku::create([
+            'kode' => '1133', 'indikator' => 'Uji PKO Triwulanan', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
+            'jenis_periode' => MasterIku::JENIS_PERIODE_TRIWULANAN,
+        ]);
+
+        CapaianTahunan::create([
+            'iku_id' => $iku->id, 'tahun' => 2026,
+            'target_tahunan' => 200,
+            'alokasi_tw1' => 20, 'alokasi_tw2' => 30,
+            'realisasi_tw1' => 20, 'realisasi_tw2' => 30,
+        ]);
+        // Capaian Terhadap Target Triwulanan TW II = 50/50*100 = 100% (kalau basisnya
+        // SALAH pakai ini, Normalisasi = 100). Capaian Terhadap Target Setahun TW IV =
+        // 50/200*100 = 25% (basis yang BENAR sesuai sheet resmi) -> Normalisasi = 25.
+
+        $component = Livewire::test(DasborCapaian::class)->set('tahun', 2026)->set('triwulan', 2);
+        $pko = $component->viewData('pko');
+
+        $this->assertSame(1, $pko['jumlah_iku_dihitung']);
+        $this->assertEqualsWithDelta(25.0, $pko['rata_rata_capaian_pk'], 0.01);
+    }
+
     public function test_hitung_pko_melewati_iku_tanpa_capaian_setahun_tw4(): void
     {
         $this->loginSebagaiTimSakip();

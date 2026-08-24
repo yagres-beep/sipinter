@@ -74,8 +74,7 @@ class DasborCapaian extends Component
         $predikat = $nilaiSakip !== null ? Capaian::predikatSakip($nilaiSakip) : null;
         $koreksi = $predikat !== null ? Capaian::koreksiPredikat($predikat) : 0.0;
 
-        $nilaiAkhirPerIku = CapaianTahunan::with('masterIku')
-            ->where('tahun', $this->tahun)
+        $nilaiAkhirPerIku = CapaianTahunan::where('tahun', $this->tahun)
             ->get()
             ->map(fn (CapaianTahunan $ct) => Capaian::nilaiAkhirCapaianPk(
                 Capaian::normalisasiCapaianPk($this->basisCapaianPko($ct)),
@@ -103,25 +102,17 @@ class DasborCapaian extends Component
     }
 
     /**
-     * Capaian yang jadi basis Normalisasi Capaian PK (1) satu IKU pada PKO, sesuai
-     * MasterIku::jenis_periode (kolom "Jenis (Triwulanan atau Tahunan)" Kertas Kerja
-     * Pengukuran Kinerja Triwulanan resmi):
-     * - 'triwulanan' pada triwulan berjalan I-III → Capaian Terhadap Target
-     *   Triwulanan triwulan itu (target IKU ini memang ditetapkan per-triwulan,
-     *   bukan akumulasi tahunan).
-     * - 'triwulanan' PADA TW IV, atau 'tahunan' (default) di triwulan mana pun →
-     *   Capaian Terhadap Target Setahun TW IV — TW IV selalu pakai basis
-     *   menyeluruh/komprehensif karena itu titik pelaporan kinerja tahunan resmi.
-     *
-     * ASUMSI aturan TW IV di atas BELUM dikonfirmasi persis dari Kertas Kerja resmi
-     * (lihat percakapan terkait) — tinjau ulang bila hasil PKO meleset dari sheet.
+     * Capaian yang jadi basis Normalisasi Capaian PK (1) satu IKU pada PKO — SELALU
+     * Capaian Terhadap Target Setahun TW IV (CapaianTahunan::capaianSetahun(4)), utk
+     * SEMUA IKU tanpa memandang MasterIku::jenis_periode: dikonfirmasi dari sheet
+     * resmi bahwa formula AJ (Normalisasi Capaian PK) selalu merujuk kolom AB
+     * (Terhadap Target Setahun TW IV), bahkan pada baris ber-Jenis "Triwulanan".
+     * Konsekuensinya: PKO organisasi baru bermakna setelah TW IV terisi — di TW I-III
+     * IKU tanpa realisasi_tw4 akan DILEWATI dari rata-rata (lihat hitungPko()), sama
+     * seperti sheet resmi yang kolom AJ-nya belum berarti apa-apa sebelum TW IV.
      */
     protected function basisCapaianPko(CapaianTahunan $ct): ?float
     {
-        if ($ct->masterIku?->pakaiTriwulanan() && $this->triwulan < 4) {
-            return $ct->capaianTriwulanan($this->triwulan);
-        }
-
         return $ct->capaianSetahun(4);
     }
 

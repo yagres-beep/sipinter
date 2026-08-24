@@ -56,14 +56,14 @@ class MasterIku extends Model
     public const JENIS_PROKSI = 'proksi';
 
     /**
-     * Basis Normalisasi Capaian PK (App\Models\Capaian::normalisasiCapaianPk(),
-     * dipakai App\Livewire\DasborCapaian::hitungPko()) sesuai kolom "Jenis
-     * (Triwulanan atau Tahunan)" Kertas Kerja resmi:
-     * - JENIS_PERIODE_TRIWULANAN: target IKU ditetapkan per-triwulan (bukan akumulasi
-     *   tahunan) → pakai Capaian Terhadap Target Triwulanan pada triwulan berjalan
-     *   (CapaianTahunan::capaianTriwulanan()).
-     * - JENIS_PERIODE_TAHUNAN (default): pakai Capaian Terhadap Target Setahun TW IV
-     *   (CapaianTahunan::capaianSetahun(4)), seperti perilaku lama sebelum kolom ini ada.
+     * Klasifikasi murni informasional, sesuai kolom "Jenis (Triwulanan atau Tahunan)"
+     * Kertas Kerja resmi — ditampilkan di Daftar Master IKU (lihat pakaiTriwulanan()
+     * dipakai di master-iku.blade.php), TIDAK mempengaruhi basis Penilaian Kinerja
+     * Organisasi (PKO): formula AJ (Normalisasi Capaian PK) pada sheet resmi SELALU
+     * merujuk kolom AB (Capaian Terhadap Target Setahun TW IV) untuk SEMUA IKU, apa
+     * pun nilai kolom ini — dikonfirmasi dari baris ber-Jenis "Triwulanan" pada sheet
+     * yang formulanya tetap memakai AB, bukan kolom berbasis triwulan (V/Z). Lihat
+     * App\Livewire\DasborCapaian::basisCapaianPko().
      */
     public const JENIS_PERIODE_TRIWULANAN = 'triwulanan';
 
