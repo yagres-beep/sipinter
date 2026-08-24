@@ -44,6 +44,20 @@ class MasterIku extends Component
      */
     public string $metodeCapaian = 'langsung';
 
+    /**
+     * 'iku': indikator inti (default). 'proksi': indikator pendukung/pengganti
+     * sementara — sesuai kolom "Jenis (IKU atau Proksi)" Kertas Kerja Pengukuran
+     * Kinerja Triwulanan resmi (App\Models\MasterIku::JENIS_IKU/JENIS_PROKSI).
+     */
+    public string $jenisIku = 'iku';
+
+    /**
+     * 'tahunan' (default): basis PKO-nya Capaian Setahun TW IV. 'triwulanan': basis
+     * PKO-nya Capaian Terhadap Target Triwulanan pada triwulan berjalan (lihat
+     * App\Models\MasterIku::pakaiTriwulanan(), App\Livewire\DasborCapaian::basisCapaianPko()).
+     */
+    public string $jenisPeriode = 'tahunan';
+
     public string $deskripsiX = '';
 
     public string $deskripsiY = '';
@@ -61,6 +75,8 @@ class MasterIku extends Component
             'sasaran' => ['nullable', 'string', 'max:255'],
             'satuan' => ['required', 'string', 'in:Persen,Poin'],
             'metodeCapaian' => ['required', 'string', 'in:langsung,rasio'],
+            'jenisIku' => ['required', 'string', 'in:iku,proksi'],
+            'jenisPeriode' => ['required', 'string', 'in:triwulanan,tahunan'],
             'deskripsiX' => ['nullable', 'string', 'max:255'],
             'deskripsiY' => ['nullable', 'string', 'max:255'],
         ];
@@ -76,6 +92,8 @@ class MasterIku extends Component
             'sasaran' => 'sasaran',
             'satuan' => 'satuan',
             'metodeCapaian' => 'metode perhitungan',
+            'jenisIku' => 'jenis IKU',
+            'jenisPeriode' => 'jenis periode',
             'deskripsiX' => 'label pembilang (X)',
             'deskripsiY' => 'label penyebut (Y)',
         ];
@@ -119,6 +137,8 @@ class MasterIku extends Component
         $this->sasaran = $iku->sasaran ?? '';
         $this->satuan = $iku->satuan;
         $this->metodeCapaian = $iku->metode_capaian;
+        $this->jenisIku = $iku->jenis_iku;
+        $this->jenisPeriode = $iku->jenis_periode;
         $this->deskripsiX = $iku->deskripsi_x ?? '';
         $this->deskripsiY = $iku->deskripsi_y ?? '';
     }
@@ -128,6 +148,8 @@ class MasterIku extends Component
         $this->reset(['editingId', 'kode', 'indikator', 'tim', 'penanggungJawab', 'sasaran', 'deskripsiX', 'deskripsiY']);
         $this->satuan = 'Persen';
         $this->metodeCapaian = 'langsung';
+        $this->jenisIku = 'iku';
+        $this->jenisPeriode = 'tahunan';
         $this->resetValidation();
     }
 
@@ -146,6 +168,8 @@ class MasterIku extends Component
             'sasaran' => $this->sasaran ?: null,
             'satuan' => $this->satuan,
             'metode_capaian' => $this->metodeCapaian,
+            'jenis_iku' => $this->jenisIku,
+            'jenis_periode' => $this->jenisPeriode,
             'deskripsi_x' => $this->deskripsiX ?: null,
             'deskripsi_y' => $this->deskripsiY ?: null,
         ];

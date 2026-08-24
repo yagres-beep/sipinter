@@ -22,6 +22,8 @@ class MasterIku extends Model
         'sasaran',
         'satuan',
         'metode_capaian',
+        'jenis_iku',
+        'jenis_periode',
         'deskripsi_x',
         'deskripsi_y',
     ];
@@ -42,6 +44,34 @@ class MasterIku extends Model
     public function pakaiRasio(): bool
     {
         return $this->metode_capaian === self::METODE_RASIO;
+    }
+
+    /**
+     * IKU (indikator inti, dihitung penuh ke PKO) vs Proksi (indikator pendukung/
+     * pengganti sementara) — sesuai kolom "Jenis (IKU atau Proksi)" Kertas Kerja
+     * Pengukuran Kinerja Triwulanan resmi.
+     */
+    public const JENIS_IKU = 'iku';
+
+    public const JENIS_PROKSI = 'proksi';
+
+    /**
+     * Basis Normalisasi Capaian PK (App\Models\Capaian::normalisasiCapaianPk(),
+     * dipakai App\Livewire\DasborCapaian::hitungPko()) sesuai kolom "Jenis
+     * (Triwulanan atau Tahunan)" Kertas Kerja resmi:
+     * - JENIS_PERIODE_TRIWULANAN: target IKU ditetapkan per-triwulan (bukan akumulasi
+     *   tahunan) → pakai Capaian Terhadap Target Triwulanan pada triwulan berjalan
+     *   (CapaianTahunan::capaianTriwulanan()).
+     * - JENIS_PERIODE_TAHUNAN (default): pakai Capaian Terhadap Target Setahun TW IV
+     *   (CapaianTahunan::capaianSetahun(4)), seperti perilaku lama sebelum kolom ini ada.
+     */
+    public const JENIS_PERIODE_TRIWULANAN = 'triwulanan';
+
+    public const JENIS_PERIODE_TAHUNAN = 'tahunan';
+
+    public function pakaiTriwulanan(): bool
+    {
+        return $this->jenis_periode === self::JENIS_PERIODE_TRIWULANAN;
     }
 
     /**

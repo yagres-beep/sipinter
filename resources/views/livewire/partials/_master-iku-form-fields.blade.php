@@ -90,6 +90,31 @@
     </div>
 </div>
 
+<div class="row2">
+    <div class="field">
+        <label>Jenis IKU <span class="req">*</span></label>
+        <select class="inp filled" wire:model="jenisIku">
+            <option value="iku">IKU</option>
+            <option value="proksi">Proksi</option>
+        </select>
+        <div class="fhint">Sesuai kolom "Jenis (IKU atau Proksi)" Kertas Kerja resmi — label klasifikasi saja, tidak mengubah rumus.</div>
+        @error('jenisIku')
+            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+        @enderror
+    </div>
+    <div class="field">
+        <label>Jenis Periode <span class="req">*</span></label>
+        <select class="inp filled" wire:model="jenisPeriode">
+            <option value="tahunan">Tahunan</option>
+            <option value="triwulanan">Triwulanan</option>
+        </select>
+        <div class="fhint">"Triwulanan" untuk IKU yang targetnya ditetapkan per-triwulan — basis Normalisasi Capaian PK di PKO memakai Capaian Terhadap Target Triwulanan pada triwulan berjalan (TW IV tetap memakai Capaian Setahun). "Tahunan" (default) selalu memakai Capaian Setahun TW IV.</div>
+        @error('jenisPeriode')
+            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+        @enderror
+    </div>
+</div>
+
 @if ($metodeCapaian === 'rasio')
     <div class="row2">
         <div class="field">

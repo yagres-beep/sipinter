@@ -106,6 +106,8 @@
                         <th>Sasaran</th>
                         <th>Satuan</th>
                         <th>Metode</th>
+                        <th>Jenis</th>
+                        <th>Periode</th>
                         <th>Penanggung Jawab</th>
                         <th style="text-align:right">Tindakan</th>
                     </tr>
@@ -125,6 +127,8 @@
                                     <span class="muted">Langsung</span>
                                 @endif
                             </td>
+                            <td class="muted">{{ $iku->jenis_iku === 'proksi' ? 'Proksi' : 'IKU' }}</td>
+                            <td class="muted">{{ $iku->pakaiTriwulanan() ? 'Triwulanan' : 'Tahunan' }}</td>
                             <td class="muted">{{ $iku->penanggung_jawab }}</td>
                             <td style="text-align:right;white-space:nowrap">
                                 <button type="button" class="btn btn-ghost btn-sm" wire:click="edit({{ $iku->id }})" wire:loading.attr="disabled" wire:target="edit({{ $iku->id }})">
@@ -139,7 +143,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" style="color:var(--muted)">Belum ada data Master IKU. Unggah Excel atau tambah manual di atas.</td>
+                            <td colspan="10" style="color:var(--muted)">Belum ada data Master IKU. Unggah Excel atau tambah manual di atas.</td>
                         </tr>
                     @endforelse
                 </tbody>

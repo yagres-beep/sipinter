@@ -60,10 +60,10 @@ class DasborCapaian extends Component
 
     /**
      * Penilaian Kinerja Organisasi (PKO) — Nilai Akhir Capaian PK tiap IKU
-     * (Capaian::nilaiAkhirCapaianPk(), dari Capaian Setahun TW IV dibatasi
+     * (Capaian::nilaiAkhirCapaianPk(), dari basisCapaianPko() dibatasi
      * batas_normalisasi_pko lalu dikoreksi % sesuai Predikat SAKIP), dijumlah/
-     * dirata-ratakan untuk seluruh IKU pada tahun terpilih. IKU tanpa Capaian
-     * Setahun TW IV (belum ada data) DILEWATI dari rata-rata (pola sama seperti
+     * dirata-ratakan untuk seluruh IKU pada tahun terpilih. IKU tanpa capaian pada
+     * basisnya (belum ada data) DILEWATI dari rata-rata (pola sama seperti
      * rataRataPersentase() di bawah), bukan dianggap 0.
      *
      * @return array{nilai_sakip: ?float, predikat_sakip: ?string, koreksi_persen: float, total_capaian_pk: float, rata_rata_capaian_pk: ?float, predikat_pko: ?string, jumlah_iku_dihitung: int}
@@ -78,7 +78,7 @@ class DasborCapaian extends Component
             ->where('tahun', $this->tahun)
             ->get()
             ->map(fn (CapaianTahunan $ct) => Capaian::nilaiAkhirCapaianPk(
-                Capaian::normalisasiCapaianPk($ct->capaianSetahun(4)),
+                Capaian::normalisasiCapaianPk($this->basisCapaianPko($ct)),
                 $koreksi
             ))
             ->filter(fn ($v) => $v !== null);
@@ -100,6 +100,29 @@ class DasborCapaian extends Component
             },
             'jumlah_iku_dihitung' => $nilaiAkhirPerIku->count(),
         ];
+    }
+
+    /**
+     * Capaian yang jadi basis Normalisasi Capaian PK (1) satu IKU pada PKO, sesuai
+     * MasterIku::jenis_periode (kolom "Jenis (Triwulanan atau Tahunan)" Kertas Kerja
+     * Pengukuran Kinerja Triwulanan resmi):
+     * - 'triwulanan' pada triwulan berjalan I-III → Capaian Terhadap Target
+     *   Triwulanan triwulan itu (target IKU ini memang ditetapkan per-triwulan,
+     *   bukan akumulasi tahunan).
+     * - 'triwulanan' PADA TW IV, atau 'tahunan' (default) di triwulan mana pun →
+     *   Capaian Terhadap Target Setahun TW IV — TW IV selalu pakai basis
+     *   menyeluruh/komprehensif karena itu titik pelaporan kinerja tahunan resmi.
+     *
+     * ASUMSI aturan TW IV di atas BELUM dikonfirmasi persis dari Kertas Kerja resmi
+     * (lihat percakapan terkait) — tinjau ulang bila hasil PKO meleset dari sheet.
+     */
+    protected function basisCapaianPko(CapaianTahunan $ct): ?float
+    {
+        if ($ct->masterIku?->pakaiTriwulanan() && $this->triwulan < 4) {
+            return $ct->capaianTriwulanan($this->triwulan);
+        }
+
+        return $ct->capaianSetahun(4);
     }
 
     protected function kegiatanTriwulanQuery()
