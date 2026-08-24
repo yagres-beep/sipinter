@@ -190,6 +190,18 @@ class GoogleDriveService
     }
 
     /**
+     * Unduh ISI (bytes) sebuah berkas dari Drive lewat ID-nya — dipakai
+     * BerkasDownloadController sebagai jalur cadangan saat salinan lokalnya
+     * sudah tidak ada (disk lokal server TIDAK persisten di Render free plan,
+     * terhapus tiap kali container di-deploy ulang; lihat catatan di controller).
+     * Sama seperti getFileLink(), tidak peduli akun mana yang sedang aktif.
+     */
+    public function downloadFileContent(string $fileId): string
+    {
+        return $this->drive()->files->get($fileId, ['alt' => 'media'])->getBody()->getContents();
+    }
+
+    /**
      * Tautan Drive ke sebuah FOLDER berdasarkan ID-nya — berbeda dari getFileLink(),
      * ini TIDAK perlu memanggil Drive API sama sekali (URL folder Drive selalu
      * mengikuti pola tetap ini), jadi aman & murah dipanggil berkali-kali (mis. satu
