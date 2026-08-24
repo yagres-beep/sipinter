@@ -46,7 +46,7 @@
                 </div>
                 <div class="auth-row">
                     <label class="chk"><input type="checkbox" name="remember" style="width:auto"> Ingat saya</label>
-                    <span>Lupa sandi?</span>
+                    <a wire:navigate href="{{ route('password.request') }}">Lupa sandi?</a>
                 </div>
                 <button type="submit" class="btn btn-primary auth-btn">Masuk →</button>
             </form>
