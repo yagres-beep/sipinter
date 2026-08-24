@@ -2,6 +2,7 @@
     x-data="{
         bisaDiisiTw: {{ $bulan % 3 === 0 ? 'true' : 'false' }},
         modalBerkas: null,
+        pendingHapus: null,
         toasts: [],
         toastSeq: 0,
         pushToast(type, message) {
@@ -264,7 +265,7 @@
                                     </span>
                                     <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file['id'] }}">🔍 Lihat</button>
                                     @if ($file['status_verifikasi'] === 'ditolak')
-                                        <span class="x" style="cursor:pointer" title="Hapus bukti yang ditolak ini" wire:click="hapusBuktiLama({{ $i }}, {{ $file['id'] }})" wire:confirm="Hapus bukti ini? Anda perlu mengunggah bukti pengganti sebelum mengajukan ulang." wire:loading.class="btn-busy" wire:target="hapusBuktiLama({{ $i }}, {{ $file['id'] }})">✕</span>
+                                        <span class="x" style="cursor:pointer" title="Hapus bukti yang ditolak ini" @click="pendingHapus = { method: 'hapusBuktiLama', args: [{{ $i }}, {{ $file['id'] }}] }" wire:loading.class="btn-busy" wire:target="hapusBuktiLama({{ $i }}, {{ $file['id'] }})">🗑️</span>
                                     @endif
                                 </div>
                             @endforeach
@@ -289,7 +290,7 @@
                                 @foreach ($block['bukti'] as $fi => $file)
                                     <div class="filechip ok">
                                         <span class="nm">📄 {{ $file->getClientOriginalName() }}</span>
-                                        <span class="x" style="cursor:pointer" wire:click="removeBuktiKegiatan({{ $i }}, {{ $fi }})" wire:loading.class="btn-busy" wire:target="removeBuktiKegiatan({{ $i }}, {{ $fi }})">✕</span>
+                                        <span class="x" style="cursor:pointer" title="Hapus bukti" wire:click="removeBuktiKegiatan({{ $i }}, {{ $fi }})" wire:loading.class="btn-busy" wire:target="removeBuktiKegiatan({{ $i }}, {{ $fi }})">🗑️</span>
                                     </div>
                                 @endforeach
                             </div>
@@ -462,7 +463,7 @@
                                         @endif
                                     </span>
                                     @if ($file->status_verifikasi === 'ditolak')
-                                        <span class="x" style="cursor:pointer" title="Hapus bukti yang ditolak ini" wire:click="hapusBuktiLamaEvaluasi({{ $poin->id }}, {{ $file->id }})" wire:confirm="Hapus bukti ini? Anda perlu mengunggah bukti pengganti sebelum mengajukan ulang." wire:loading.class="btn-busy" wire:target="hapusBuktiLamaEvaluasi({{ $poin->id }}, {{ $file->id }})">✕</span>
+                                        <span class="x" style="cursor:pointer" title="Hapus bukti yang ditolak ini" @click="pendingHapus = { method: 'hapusBuktiLamaEvaluasi', args: [{{ $poin->id }}, {{ $file->id }}] }" wire:loading.class="btn-busy" wire:target="hapusBuktiLamaEvaluasi({{ $poin->id }}, {{ $file->id }})">🗑️</span>
                                     @endif
                                 </div>
                             @endforeach
@@ -470,7 +471,7 @@
                             @foreach ($evaluasi[$poin->id]['bukti'] ?? [] as $fi => $file)
                                 <div class="filechip">
                                     <span class="nm">📄 {{ $file->getClientOriginalName() }}</span>
-                                    <span class="x" style="cursor:pointer" wire:click="removeBuktiEvaluasi({{ $poin->id }}, {{ $fi }})" wire:loading.class="btn-busy" wire:target="removeBuktiEvaluasi({{ $poin->id }}, {{ $fi }})">✕</span>
+                                    <span class="x" style="cursor:pointer" title="Hapus bukti" wire:click="removeBuktiEvaluasi({{ $poin->id }}, {{ $fi }})" wire:loading.class="btn-busy" wire:target="removeBuktiEvaluasi({{ $poin->id }}, {{ $fi }})">🗑️</span>
                                 </div>
                             @endforeach
                         </div>
@@ -607,6 +608,11 @@
                                         @if ($entri->berkas->isNotEmpty())
                                             <div class="filechip-grid">
                                                 @foreach ($entri->berkas as $file)
+                                                    {{-- Riwayat di sini hanya berisi poin yang SUDAH TERKUNCI (diajukan/diverifikasi/
+                                                         disetujui) atau milik triwulan sebelumnya — lihat pengecualian di
+                                                         riwayatBagianKustom(). Poin periode berjalan yang masih bisa diedit (termasuk
+                                                         menghapus bukti ditolak) tampil di form bawah lewat muatBagianKustomBlocks(),
+                                                         jadi tidak perlu tombol hapus di sini. --}}
                                                     <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}">
                                                         <span class="nm">
                                                             📄 {{ $file->nama_file }}
@@ -614,9 +620,6 @@
                                                                 <span class="sub" style="color:var(--red)">{{ $file->catatan }}</span>
                                                             @endif
                                                         </span>
-                                                        @if ($file->status_verifikasi === 'ditolak')
-                                                            <span class="x" style="cursor:pointer" title="Hapus bukti yang ditolak ini" wire:click="hapusBuktiLamaBagianKustom({{ $entri->id }}, {{ $file->id }})" wire:confirm="Hapus bukti ini? Anda perlu mengunggah bukti pengganti sebelum mengajukan ulang." wire:loading.class="btn-busy" wire:target="hapusBuktiLamaBagianKustom({{ $entri->id }}, {{ $file->id }})">✕</span>
-                                                        @endif
                                                     </div>
                                                 @endforeach
                                             </div>
@@ -668,7 +671,7 @@
                                                 @endif
                                             </span>
                                             @if ($file['status_verifikasi'] === 'ditolak')
-                                                <span class="x" style="cursor:pointer" title="Hapus bukti yang ditolak ini" wire:click="hapusBuktiLamaBagianKustom({{ $blok['id'] }}, {{ $file['id'] }})" wire:confirm="Hapus bukti ini? Anda perlu mengunggah bukti pengganti sebelum mengajukan ulang." wire:loading.class="btn-busy" wire:target="hapusBuktiLamaBagianKustom({{ $blok['id'] }}, {{ $file['id'] }})">✕</span>
+                                                <span class="x" style="cursor:pointer" title="Hapus bukti yang ditolak ini" @click="pendingHapus = { method: 'hapusBuktiLamaBagianKustom', args: [{{ $blok['id'] }}, {{ $file['id'] }}] }" wire:loading.class="btn-busy" wire:target="hapusBuktiLamaBagianKustom({{ $blok['id'] }}, {{ $file['id'] }})">🗑️</span>
                                             @endif
                                         </div>
                                     @endforeach
@@ -687,7 +690,7 @@
                                     @foreach ($blok['bukti'] as $fi => $file)
                                         <div class="filechip ok">
                                             <span class="nm">📄 {{ $file->getClientOriginalName() }}</span>
-                                            <span class="x" style="cursor:pointer" wire:click="removeBuktiBagianKustom({{ $bagian->id }}, {{ $i }}, {{ $fi }})" wire:loading.class="btn-busy" wire:target="removeBuktiBagianKustom({{ $bagian->id }}, {{ $i }}, {{ $fi }})">✕</span>
+                                            <span class="x" style="cursor:pointer" title="Hapus bukti" wire:click="removeBuktiBagianKustom({{ $bagian->id }}, {{ $i }}, {{ $fi }})" wire:loading.class="btn-busy" wire:target="removeBuktiBagianKustom({{ $bagian->id }}, {{ $i }}, {{ $fi }})">🗑️</span>
                                         </div>
                                     @endforeach
                                 </div>
@@ -758,7 +761,12 @@
                 <div class="modal-body">
                     <div class="pdf-view">
                         <div class="pmeta">{{ $file['nama_file'] }}</div>
+                        {{-- wire:ignore: tanpanya, wire:click APA PUN di komponen ini membuat
+                            Livewire ikut me-morph iframe ini, dan menimpa iframe.src lewat JS
+                            SELALU memicu browser memuat ulang PDF dari awal walau ke URL yang
+                            sama persis — lihat catatan sama di verifikasi-capaian.blade.php. --}}
                         <iframe
+                            wire:ignore
                             x-bind:src="modalBerkas === {{ $file['id'] }} ? @js(route('berkas.show', $file['id'])) : null"
                             class="pdf-frame" title="Pratinjau {{ $file['nama_file'] }}"
                         ></iframe>
@@ -768,6 +776,24 @@
             </div>
         </div>
     @endforeach
+
+    <div class="modal-overlay" x-show="pendingHapus" x-cloak style="display:none" @click.self="pendingHapus = null" @keydown.escape.window="pendingHapus = null">
+        <div class="modal" style="max-width:420px;height:auto">
+            <div class="modal-top">
+                <div class="mt-t">🗑️ Hapus Bukti Ditolak</div>
+                <button type="button" class="x" @click="pendingHapus = null">✕</button>
+            </div>
+            <div class="modal-body" style="flex-direction:column;padding:18px;gap:16px">
+                <p style="margin:0;font-size:13px;color:var(--ink);line-height:1.6">
+                    Bukti ini akan dihapus dan tidak bisa dikembalikan. Anda perlu mengunggah bukti pengganti sebelum mengajukan ulang.
+                </p>
+                <div style="display:flex;gap:10px;justify-content:flex-end">
+                    <button type="button" class="btn btn-ghost btn-sm" @click="pendingHapus = null">Batal</button>
+                    <button type="button" class="btn btn-red btn-sm" @click="$wire.call(pendingHapus.method, ...pendingHapus.args); pendingHapus = null">🗑️ Ya, Hapus</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <div class="toast-stack">
         <template x-for="toast in toasts" :key="toast.id">
