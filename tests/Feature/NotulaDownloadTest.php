@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\MasterIku;
 use App\Models\Notula;
 use App\Models\Periode;
 use App\Models\Role;
@@ -75,6 +76,26 @@ class NotulaDownloadTest extends TestCase
             ->assertHeader('content-disposition');
 
         $this->get(route('notula.template-bagian3'))
+            ->assertOk()
+            ->assertHeader('content-disposition');
+    }
+
+    public function test_tim_sakip_bisa_mengunduh_bagian1_sebagai_docx_terisi_otomatis(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        MasterIku::create([
+            'kode' => '1111',
+            'indikator' => 'Persentase Publikasi/Laporan Statistik Kependudukan Dan Ketenagakerjaan Yang Berkualitas',
+            'tim' => 'Tim Uji',
+            'penanggung_jawab' => 'Uji',
+            'sasaran' => 'Terwujudnya Penyediaan Data Dan Insight Statistik Kependudukan Dan Ketenagakerjaan Yang Berkualitas',
+        ]);
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $notula = Notula::create(['periode_id' => $periode->id, 'pimpinan_rapat' => 'Uji Pimpinan']);
+
+        $this->get(route('notula.unduh-bagian1-docx', $notula))
             ->assertOk()
             ->assertHeader('content-disposition');
     }
