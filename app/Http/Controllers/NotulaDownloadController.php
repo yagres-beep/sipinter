@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Notula;
+use App\Services\NotulaBagian1DocxService;
 use App\Services\NotulaService;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -74,6 +75,23 @@ class NotulaDownloadController extends Controller
         abort_unless($notula->bagian3_pdf, 404);
 
         return Storage::disk('local')->response($notula->bagian3_pdf, null, [], 'inline');
+    }
+
+    /**
+     * Unduh Bagian I sebagai .docx ASLI (bukan panduan statis) — template resmi
+     * bervariabel {{...}} (template_notula/SIPINTER_Template_Bagian_I_Mesin.docx)
+     * diisi otomatis dari data yang sama dipakai jalur PDF (lihat
+     * NotulaService::kumpulkanDataBagianSatu()), lewat NotulaBagian1DocxService.
+     * Digenerate on-the-fly ke berkas sementara lalu langsung dihapus setelah terkirim.
+     */
+    public function unduhBagian1Docx(Notula $notula, NotulaBagian1DocxService $docxService): BinaryFileResponse
+    {
+        $path = storage_path("app/private/notula/{$notula->id}/bagian1-mesin.docx");
+        $docxService->generate($notula, $path);
+
+        $namaUnduhan = "notula-bagian1-tw{$notula->periode->triwulan}-{$notula->periode->tahun}.docx";
+
+        return response()->download($path, $namaUnduhan)->deleteFileAfterSend();
     }
 
     /**

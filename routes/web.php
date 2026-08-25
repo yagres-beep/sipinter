@@ -63,6 +63,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/pratinjau', [NotulaDownloadController::class, 'pratinjau'])->name('pratinjau');
         Route::get('/pratinjau-bagian2', [NotulaDownloadController::class, 'pratinjauBagian2'])->name('pratinjau-bagian2');
         Route::get('/pratinjau-bagian3', [NotulaDownloadController::class, 'pratinjauBagian3'])->name('pratinjau-bagian3');
+        Route::get('/unduh-bagian1-docx', [NotulaDownloadController::class, 'unduhBagian1Docx'])->name('unduh-bagian1-docx');
     });
 
     // Unduh final (ber-TTD) juga dibuka untuk Ketua Tim — supaya bisa melihat hasil

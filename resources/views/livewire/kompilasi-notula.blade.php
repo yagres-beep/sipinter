@@ -186,7 +186,8 @@
             <span class="doc-bagian-badge">Bagian I</span> Capaian Kinerja
             <span class="st {{ $bagian1Siap ? 'ok' : 'no' }}" style="margin-left:auto">{{ $bagian1Siap ? '✓ Siap' : '✕ Belum lengkap' }}</span>
         </div>
-        <div style="margin-bottom:8px">
+        <div style="margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap">
+            <a href="{{ route('notula.unduh-bagian1-docx', $notula) }}" class="btn btn-teal btn-sm" style="text-decoration:none;display:inline-block">⬇ Unduh Bagian I (.docx, terisi otomatis)</a>
             <a href="{{ route('notula.template-bagian1') }}" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-block">⬇ Unduh Panduan Bagian I (referensi, tidak perlu diunggah balik)</a>
         </div>
 

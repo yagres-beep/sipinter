@@ -63,6 +63,25 @@ class NotulaService
      */
     public function susunBagianSatu(Notula $notula): string
     {
+        $data = $this->kumpulkanDataBagianSatu($notula);
+
+        $html = view('pdf.notula-bagian1-konten', $data)->render();
+
+        $notula->update(['bagian1_html' => $html]);
+
+        return $html;
+    }
+
+    /**
+     * Kumpulkan seluruh data siap-pakai untuk Bagian I (RF-42) — dipakai baik oleh
+     * susunBagianSatu() (jalur HTML/PDF via Blade) maupun NotulaBagian1DocxService
+     * (jalur .docx bervariabel {{...}}), supaya kedua jalur SELALU bersumber dari
+     * query yang sama persis dan tidak pernah berbeda datanya.
+     *
+     * @return array<string, mixed>
+     */
+    public function kumpulkanDataBagianSatu(Notula $notula): array
+    {
         $periode = $notula->periode;
         $tw = $periode->triwulan;
 
@@ -173,7 +192,7 @@ class NotulaService
         $rataCapaianTw = $this->rataRataCapaian($rekapPerIku, 'capaian_tw');
         $rataCapaianPk = $this->rataRataCapaian($rekapPerIku, 'capaian_pk');
 
-        $html = view('pdf.notula-bagian1-konten', [
+        return [
             'notula' => $notula,
             'periode' => $periode,
             'labelTriwulan' => ['I', 'II', 'III', 'IV'][$tw - 1] ?? $tw,
@@ -189,11 +208,7 @@ class NotulaService
             'linkFolderTwSebelumnyaPerIku' => $linkFolderTwSebelumnyaPerIku,
             'rataCapaianTw' => $rataCapaianTw,
             'rataCapaianPk' => $rataCapaianPk,
-        ])->render();
-
-        $notula->update(['bagian1_html' => $html]);
-
-        return $html;
+        ];
     }
 
     /**
