@@ -197,7 +197,7 @@
                         <span class="nlabel">Dasar Hitung dan Basis Data Realisasi IKU :</span><br>
                         @if ($iku->dasar_hitung || $iku->basis_data)
                             @if ($iku->dasar_hitung)
-                                {!! nl2br(e($iku->dasar_hitung)) !!}
+                                {!! nl2br(\App\Support\RumusMarkup::keHtml($iku->dasar_hitung)) !!}
                             @endif
                             @if ($iku->dasar_hitung && $iku->basis_data)<br>@endif
                             @if ($iku->basis_data)Basis Data: {{ $iku->basis_data }}@endif

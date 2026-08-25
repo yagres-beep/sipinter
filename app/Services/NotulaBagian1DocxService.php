@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Notula;
 use App\Models\PengaturanCapaian;
+use App\Support\RumusMarkup;
 use PhpOffice\PhpWord\TemplateProcessor;
 
 /**
@@ -178,7 +179,11 @@ class NotulaBagian1DocxService
             $this->set($p, "pic_rtl_{$kode}", $picRtl !== '' ? $picRtl : null);
             $this->set($p, "batas_waktu_rtl_{$kode}", $batasWaktuRtl?->translatedFormat('F Y'));
 
-            $dasarHitung = trim(($iku->dasar_hitung ?: '').($iku->basis_data ? ' Basis Data: '.$iku->basis_data : ''));
+            // [[a|b]] (pecahan bersusun di PDF, lihat App\Support\RumusMarkup) diratakan
+            // jadi notasi biasa "a/b" -- .docx tidak mendukung pecahan bersusun lewat
+            // penggantian teks biasa (TemplateProcessor::setValue).
+            $dasarHitungTeks = RumusMarkup::keTeksPolos($iku->dasar_hitung);
+            $dasarHitung = trim(($dasarHitungTeks ?: '').($iku->basis_data ? ' Basis Data: '.$iku->basis_data : ''));
             $this->set($p, "dasar_hitung_{$kode}", $dasarHitung !== '' ? $dasarHitung : null);
             $this->set($p, "bukti_realisasi_{$kode}", $linkFolder);
             $this->set($p, "bukti_rtl_sebelumnya_{$kode}", $rtlSebelumnyaIku->isNotEmpty() ? $linkFolderTwSebelumnya : null);

@@ -70,7 +70,7 @@
         <label>Dasar Hitung</label>
         <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model="dasarHitung"
             placeholder="Rumus/cara menghitung realisasi IKU ini"></textarea>
-        <div class="fhint">Ditampilkan pada baris "Dasar Hitung dan Basis Data Realisasi IKU" di Notula Bagian I.</div>
+        <div class="fhint">Ditampilkan pada baris "Dasar Hitung dan Basis Data Realisasi IKU" di Notula Bagian I. Untuk pecahan bersusun (mis. rumus persentase), ketik <code>[[pembilang|penyebut]]</code> — contoh: <code>y = [[n|N]] x 100%</code>. Tercetak sebagai pecahan bergaris di PDF; di unduhan .docx otomatis diratakan jadi "n/N".</div>
         @error('dasarHitung')
             <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
         @enderror
