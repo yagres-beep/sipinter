@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -28,22 +29,15 @@ class WhatsAppService
             return false;
         }
 
-        $apiUrl = config('services.whatsapp.api_url');
-        $apiToken = config('services.whatsapp.api_token');
-
-        if (blank($apiUrl) || blank($apiToken)) {
-            Log::warning('WhatsAppService: WHATSAPP_API_URL/WHATSAPP_API_TOKEN belum diset, pengiriman dilewati.');
-
+        if (! $this->terkonfigurasi()) {
             return false;
         }
 
         try {
-            $respons = Http::withToken($apiToken)
-                ->timeout(10)
-                ->post(rtrim($apiUrl, '/').'/send', [
-                    'nomor' => $nomor,
-                    'pesan' => $pesan,
-                ]);
+            $respons = $this->http()->post('/send', [
+                'nomor' => $nomor,
+                'pesan' => $pesan,
+            ]);
 
             if ($respons->failed()) {
                 Log::warning('WhatsAppService: gateway menolak pengiriman.', [
@@ -64,6 +58,78 @@ class WhatsAppService
 
             return false;
         }
+    }
+
+    /**
+     * Status koneksi gateway + QR (bila sedang menunggu discan), dipakai
+     * App\Livewire\WhatsAppGateway untuk menampilkan halaman kelola tautan
+     * WhatsApp langsung di SIPINTER. 'status' bernilai 'error' (bukan salah
+     * satu status asli gateway) bila gateway tidak terkonfigurasi/tidak
+     * bisa dihubungi sama sekali.
+     *
+     * @return array{status: string, qrDataUrl: ?string}
+     */
+    public function statusGateway(): array
+    {
+        if (! $this->terkonfigurasi()) {
+            return ['status' => 'error', 'qrDataUrl' => null];
+        }
+
+        try {
+            $respons = $this->http()->get('/qr-data');
+
+            if ($respons->failed()) {
+                return ['status' => 'error', 'qrDataUrl' => null];
+            }
+
+            return [
+                'status' => $respons->json('status', 'error'),
+                'qrDataUrl' => $respons->json('qrDataUrl'),
+            ];
+        } catch (\Throwable $e) {
+            Log::warning('WhatsAppService: gagal mengambil status gateway.', ['pesan_error' => $e->getMessage()]);
+
+            return ['status' => 'error', 'qrDataUrl' => null];
+        }
+    }
+
+    /**
+     * Putuskan nomor yang sedang tertaut & hapus sesi tersimpan di gateway,
+     * supaya QR baru bisa discan untuk menautkan nomor/perangkat lain.
+     */
+    public function resetGateway(): bool
+    {
+        if (! $this->terkonfigurasi()) {
+            return false;
+        }
+
+        try {
+            return $this->http()->post('/reset')->successful();
+        } catch (\Throwable $e) {
+            Log::warning('WhatsAppService: gagal reset sesi gateway.', ['pesan_error' => $e->getMessage()]);
+
+            return false;
+        }
+    }
+
+    protected function terkonfigurasi(): bool
+    {
+        if (blank(config('services.whatsapp.api_url')) || blank(config('services.whatsapp.api_token'))) {
+            Log::warning('WhatsAppService: WHATSAPP_API_URL/WHATSAPP_API_TOKEN belum diset.');
+
+            return false;
+        }
+
+        return true;
+    }
+
+    protected function http(): PendingRequest
+    {
+        $apiUrl = rtrim((string) config('services.whatsapp.api_url'), '/');
+
+        return Http::withToken(config('services.whatsapp.api_token'))
+            ->timeout(10)
+            ->baseUrl($apiUrl);
     }
 
     /**

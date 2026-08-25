@@ -109,6 +109,46 @@ app.get('/qr', cekToken, async (req, res) => {
   res.send(`<img src="${dataUrl}" alt="Scan QR WhatsApp" />`);
 });
 
+// Versi JSON dari /qr + /status digabung, dipakai SIPINTER (Laravel) untuk
+// menampilkan status & QR langsung di halaman admin tanpa membuka gateway
+// terpisah. Beda dari /status (publik, tanpa token) — endpoint ini butuh
+// token karena qrDataUrl bisa dipakai orang lain menautkan HP-nya sendiri.
+app.get('/qr-data', cekToken, async (req, res) => {
+  const respons = { status: connectionStatus, qrDataUrl: null };
+
+  if (connectionStatus === 'waiting_for_qr' && latestQr) {
+    respons.qrDataUrl = await qrcode.toDataURL(latestQr);
+  }
+
+  res.json(respons);
+});
+
+// Putuskan nomor yang sedang tertaut & hapus sesi tersimpan, lalu langsung
+// mulai ulang koneksi supaya QR baru bisa discan (untuk ganti nomor/perangkat
+// tanpa perlu masuk ke Supabase/restart service manual).
+app.post('/reset', cekToken, async (req, res) => {
+  try {
+    if (sock) {
+      try {
+        await sock.logout();
+      } catch (err) {
+        console.warn('Logout gagal (kemungkinan sesi sudah terputus), lanjut hapus data sesi.', err.message);
+      }
+    }
+
+    await pool.query('DELETE FROM wa_sessions');
+    connectionStatus = 'connecting';
+    latestQr = null;
+
+    await startSock();
+
+    res.json({ status: 'ok', pesan: 'Sesi lama dihapus. Menunggu QR baru.' });
+  } catch (err) {
+    console.error('Gagal reset sesi WhatsApp.', err);
+    res.status(500).json({ status: 'error', pesan: 'Gagal reset sesi.' });
+  }
+});
+
 app.post('/send', cekToken, async (req, res) => {
   const { nomor, pesan } = req.body || {};
 

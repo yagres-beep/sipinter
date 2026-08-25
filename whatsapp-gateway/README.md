@@ -50,11 +50,21 @@ WHATSAPP_API_URL=https://<url-render-anda>
 WHATSAPP_API_TOKEN=<token yang sama persis dengan langkah 2>
 ```
 
+## Ganti nomor/perangkat yang tertaut
+
+Paling gampang lewat SIPINTER sendiri: menu **Kelola Pengguna → tab "📱 Pengingat WA"** (Tim SAKIP) — ada tombol **Putus Tautan / Ganti Nomor** yang otomatis logout + hapus sesi lama, lalu halaman itu menampilkan QR baru begitu siap discan.
+
+Kalau mau manual lewat API langsung:
+1. `POST /reset` (header `Authorization: Bearer <token>`) — logout dari nomor lama & hapus sesi tersimpan.
+2. Buka `GET /qr?token=<token>`, scan dengan nomor/perangkat baru.
+
 ## Endpoint
 
-- `GET /status` — `{ "status": "connected" | "waiting_for_qr" | "disconnected" | "connecting" }`
-- `GET /qr?token=...` — halaman HTML menampilkan QR code (untuk setup awal)
+- `GET /status` — publik (dipakai Render health check), `{ "status": "connected" | "waiting_for_qr" | "disconnected" | "connecting" }`
+- `GET /qr?token=...` — halaman HTML menampilkan QR code (untuk setup awal/manual dari browser)
+- `GET /qr-data` — header `Authorization: Bearer <token>`, versi JSON `{ "status": "...", "qrDataUrl": "data:image/png;base64,..." | null }`, dipakai halaman "Pengingat WA" di SIPINTER
 - `POST /send` — header `Authorization: Bearer <token>`, body `{ "nomor": "628xxxxxxxxxx", "pesan": "..." }`
+- `POST /reset` — header `Authorization: Bearer <token>`, logout dari nomor yang tertaut + hapus sesi, lalu mulai ulang menunggu QR baru
 
 ## Troubleshooting instalasi
 

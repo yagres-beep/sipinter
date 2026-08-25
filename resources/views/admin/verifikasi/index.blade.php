@@ -19,6 +19,7 @@
                 <button type="button" class="subtab" :class="tab === 'verifikasi' ? 'on' : ''" @click="tab = 'verifikasi'">✅ Verifikasi &amp; Akun</button>
                 <button type="button" class="subtab" :class="tab === 'penugasan' ? 'on' : ''" @click="tab = 'penugasan'">📋 Penugasan IKU</button>
                 <button type="button" class="subtab" :class="tab === 'storage' ? 'on' : ''" @click="tab = 'storage'">☁️ Akun &amp; Storage</button>
+                <button type="button" class="subtab" :class="tab === 'whatsapp' ? 'on' : ''" @click="tab = 'whatsapp'">📱 Pengingat WA</button>
             </div>
         </div>
 
@@ -84,6 +85,10 @@
 
         <div x-show="tab === 'storage'" x-cloak>
             <livewire:storage-accounts />
+        </div>
+
+        <div x-show="tab === 'whatsapp'" x-cloak>
+            <livewire:whats-app-gateway />
         </div>
     </div>
 @endsection
