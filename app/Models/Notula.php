@@ -53,6 +53,8 @@ class Notula extends Model
         'nip_notulis',
         'kepala_satker',
         'nip_kepala_satker',
+        'kota_ttd',
+        'link_lampiran_basis_data',
         'bagian1_html',
         'bagian2_pdf',
         'bagian3_pdf',

@@ -54,6 +54,10 @@ class KompilasiNotula extends Component
 
     public string $nipKepalaSatker = '';
 
+    public string $kotaTtd = '';
+
+    public string $linkLampiranBasisData = '';
+
     /**
      * Cache dalam satu siklus request — notula() dipanggil di banyak method
      * (mount, render, tiap aksi) untuk tahun/triwulan yang sama; tanpa memoisasi
@@ -161,6 +165,8 @@ class KompilasiNotula extends Component
         $this->nipNotulis = $notula->nip_notulis ?? '';
         $this->kepalaSatker = $notula->kepala_satker ?? '';
         $this->nipKepalaSatker = $notula->nip_kepala_satker ?? '';
+        $this->kotaTtd = $notula->kota_ttd ?? '';
+        $this->linkLampiranBasisData = $notula->link_lampiran_basis_data ?? '';
     }
 
     public function simpanDetailRapat(): void
@@ -175,6 +181,8 @@ class KompilasiNotula extends Component
             'nipNotulis' => ['nullable', 'string', 'max:30'],
             'kepalaSatker' => ['nullable', 'string', 'max:255'],
             'nipKepalaSatker' => ['nullable', 'string', 'max:30'],
+            'kotaTtd' => ['nullable', 'string', 'max:255'],
+            'linkLampiranBasisData' => ['nullable', 'string', 'max:2048'],
         ]);
 
         $this->notula()->update([
@@ -187,6 +195,8 @@ class KompilasiNotula extends Component
             'nip_notulis' => $data['nipNotulis'],
             'kepala_satker' => $data['kepalaSatker'],
             'nip_kepala_satker' => $data['nipKepalaSatker'],
+            'kota_ttd' => $data['kotaTtd'],
+            'link_lampiran_basis_data' => $data['linkLampiranBasisData'],
         ]);
 
         session()->flash('status', 'Detail rapat berhasil disimpan.');

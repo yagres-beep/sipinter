@@ -117,6 +117,16 @@ class NotulaService
             ->get()
             ->groupBy('iku_id');
 
+        // RTL triwulan SEBELUMNYA (tahun yang sama) per IKU — dicetak sebagai narasi
+        // "RTL triwulan X yang telah dilaksanakan pada triwulan Y" di blok Dasar Hitung/
+        // Bukti Dukung, sesuai Template Notula resmi. Triwulan I tidak punya triwulan
+        // sebelumnya (tahun yang sama), jadi selalu kosong.
+        $rtlSebelumnyaPerIku = $tw > 1
+            ? RtlEvaluasi::whereHas('periode', fn ($q) => $q->where('tahun', $periode->tahun)->where('triwulan', $tw - 1))
+                ->get()
+                ->groupBy('iku_id')
+            : collect();
+
         // Bagian kustom (mis. Manajemen Risiko) — SEMUA bagian yang punya poin di
         // triwulan ini ikut ditampilkan, termasuk yang sudah dinonaktifkan Tim SAKIP
         // setelahnya, supaya data historis notula tidak pernah hilang dari catatan.
@@ -173,6 +183,7 @@ class NotulaService
             'kegiatanPerIku' => $kegiatanPerIku,
             'kendalaSolusiPerIku' => $kendalaSolusiPerIku,
             'rtlPerIku' => $rtlPerIku,
+            'rtlSebelumnyaPerIku' => $rtlSebelumnyaPerIku,
             'bagianKustomPerBagian' => $bagianKustomPerBagian,
             'linkFolderPerIku' => $linkFolderPerIku,
             'linkFolderTwSebelumnyaPerIku' => $linkFolderTwSebelumnyaPerIku,
@@ -211,7 +222,7 @@ class NotulaService
             'labelTriwulan' => ['I', 'II', 'III', 'IV'][$periode->triwulan - 1] ?? $periode->triwulan,
             'tahun' => $periode->tahun,
             'sertakanTtd' => $sertakanTtd,
-            'tempat' => $notula->tempat,
+            'kotaTtd' => $notula->kota_ttd,
             'tanggal' => $sertakanTtd ? $notula->disetujui_pada?->translatedFormat('d F Y') : null,
             'namaKepala' => $sertakanTtd ? $notula->disetujuiOleh?->nama : null,
             'namaNotulis' => $notula->notulis,

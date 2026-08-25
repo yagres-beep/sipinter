@@ -49,12 +49,12 @@
     <div class="ttd-blok">
       <div class="ttd-kolom kiri">
         Mengetahui,<br>
-        Kepala BPS Kabupaten Buton Utara
+        Kepala Badan Pusat Statistik Kabupaten Buton Utara
         <div class="ttd-spasi"></div>
         <b>{{ $namaKepala ?: '.......................................' }}</b>
       </div>
       <div class="ttd-kolom kanan">
-        {{ trim(($tempat ?: '').($tempat && $tanggal ? ', ' : '').($tanggal ?: '')) }}
+        {{ trim(($kotaTtd ?: '').($kotaTtd && $tanggal ? ', ' : '').($tanggal ?: '')) }}
         <div class="ttd-spasi"></div>
         Notulis,
         <div class="ttd-spasi"></div>

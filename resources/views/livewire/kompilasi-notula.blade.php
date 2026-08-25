@@ -185,6 +185,25 @@
             </div>
         </div>
 
+        <div class="fl-row" style="gap:16px;flex-wrap:wrap;margin-top:16px">
+            <div class="field" style="flex:1;min-width:200px">
+                <label>Kota (untuk TTD)</label>
+                <input type="text" class="inp filled" style="width:100%" wire:model="kotaTtd" placeholder="mis. Kulisusu">
+                <div class="fhint">Dicetak di blok tanda tangan notula final: "Kota, tanggal" — bisa berbeda dari Tempat rapat.</div>
+                @error('kotaTtd')
+                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                @enderror
+            </div>
+            <div class="field" style="flex:2;min-width:260px">
+                <label>Link Lampiran Basis Data IKU</label>
+                <input type="text" class="inp filled" style="width:100%" wire:model="linkLampiranBasisData" placeholder="mis. http://s.bps.go.id/7409_LampiranBasisDataIKU2026">
+                <div class="fhint">Dicetak di Bagian I pada tiap indikator, di bawah "Dasar Hitung dan Basis Data Realisasi IKU".</div>
+                @error('linkLampiranBasisData')
+                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                @enderror
+            </div>
+        </div>
+
         <div class="btn-row">
             <button type="button" class="btn btn-primary" wire:click="simpanDetailRapat" wire:loading.attr="disabled" wire:target="simpanDetailRapat">
                 <span wire:loading.remove wire:target="simpanDetailRapat">Simpan Detail Rapat</span>

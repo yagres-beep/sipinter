@@ -85,13 +85,18 @@
             $indikatorLower = mb_strtolower($iku->indikator);
             $isSakip = str_contains($indikatorLower, 'sakip');
             $isBerakhlak = str_contains($indikatorLower, 'berakhlak');
+            $rtlSebelumnyaIku = $rtlSebelumnyaPerIku->get($iku->id, collect());
         @endphp
         <div class="nrow" style="margin-top:16px"><span class="nlabel">{{ $iku->kode }} — {{ $iku->indikator }}</span></div>
 
-        <div class="nrow">
-            <span class="nlabel">Analisis Capaian Kinerja:</span>
-            <span class="ntxt">{{ $capaian?->analisis_capaian ?: '…' }}</span>
-        </div>
+        {{-- Analisis Capaian Kinerja: satu kotak berjudul, isinya teks bebas yang
+             ditulis Tim SAKIP (boleh berupa beberapa paragraf/daftar bernomor sesuai
+             Template Notula resmi) — nl2br supaya baris baru yang diketik tetap
+             tampil sebagai baris baru, bukan menyatu jadi satu baris panjang. --}}
+        <table style="width:100%">
+            <tr><th style="text-align:center">Analisis Capaian Kinerja</th></tr>
+            <tr><td>{!! nl2br(e($capaian?->analisis_capaian ?: '…')) !!}</td></tr>
+        </table>
 
         @if ($isSakip)
             <p><b>Jelaskan mengenai persentase monitoring capaian kinerja triwulanan yang terlaksana tepat waktu:</b></p>
@@ -122,77 +127,128 @@
             </table>
         @endif
 
+        @php
+            // Kumulatif TW1..TW berjalan (lihat NotulaService — RF-28), tapi dicetak
+            // sebagai SATU daftar bernomor mengalir tanpa label "TW X:" per Template
+            // Notula resmi — satu baris kendala/solusi = satu KendalaSolusi tersimpan.
+            $semuaKendalaSolusi = $kendalaSolusiTriwulan->flatten(1);
+            $daftarKendala = $semuaKendalaSolusi->pluck('kendala')->filter();
+            $daftarSolusi = $semuaKendalaSolusi->pluck('solusi')->filter();
+        @endphp
         <div class="nrow">
-            <span class="nlabel">Kendala:</span>
-            <span class="ntxt">
-                @forelse ($kendalaSolusiTriwulan as $twKe => $daftarKendala)
-                    <b>TW {{ $romawi[$twKe] ?? $twKe }}:</b>
-                    {{ $daftarKendala->pluck('kendala')->filter()->implode('; ') ?: '…' }}<br>
-                @empty
-                    …
-                @endforelse
-            </span>
+            <span class="nlabel">Kendala :</span>
+            @if ($daftarKendala->isEmpty())
+                <span class="ntxt">…</span>
+            @else
+                <ol style="margin:4px 0 0 18px;padding:0">
+                    @foreach ($daftarKendala as $teks)
+                        <li>{!! nl2br(e($teks)) !!}</li>
+                    @endforeach
+                </ol>
+            @endif
         </div>
         <div class="nrow">
-            <span class="nlabel">Solusi:</span>
-            <span class="ntxt">
-                @forelse ($kendalaSolusiTriwulan as $twKe => $daftarKendala)
-                    <b>TW {{ $romawi[$twKe] ?? $twKe }}:</b>
-                    {{ $daftarKendala->pluck('solusi')->filter()->implode('; ') ?: '…' }}<br>
-                @empty
-                    …
-                @endforelse
-            </span>
+            <span class="nlabel">Solusi :</span>
+            @if ($daftarSolusi->isEmpty())
+                <span class="ntxt">…</span>
+            @else
+                <ol style="margin:4px 0 0 18px;padding:0">
+                    @foreach ($daftarSolusi as $teks)
+                        <li>{!! nl2br(e($teks)) !!}</li>
+                    @endforeach
+                </ol>
+            @endif
         </div>
 
+        @php
+            // PIC & Batas Waktu dicetak SEKALI untuk seluruh daftar RTL indikator ini
+            // (bukan diulang per baris) — nama unik digabung, batas waktu memakai yang
+            // PALING JAUH (paling longgar) di antara seluruh poin RTL triwulan ini.
+            $picRtl = $rtlIku->pluck('pic')->filter()->unique()->implode(', ');
+            $batasWaktuRtl = $rtlIku->pluck('batas_waktu')->filter()->sort()->last();
+        @endphp
         <table style="width:100%">
-            <tr><th style="width:60%">Rencana Tindak Lanjut (RTL)</th><th>PIC Tindak Lanjut / Batas Waktu</th></tr>
-            @forelse ($rtlIku as $rtl)
-                <tr>
-                    <td>{{ $rtl->rtl_teks }}</td>
-                    <td>
-                        PIC: {{ $rtl->pic ?: '…' }}<br>
-                        Batas Waktu: {{ $rtl->batas_waktu?->translatedFormat('d F Y') ?: '…' }}
-                    </td>
-                </tr>
-            @empty
-                <tr><td>…</td><td>PIC: …<br>Batas Waktu: …</td></tr>
-            @endforelse
+            <tr><th style="width:60%">Rencana Tindak Lanjut (RTL)</th><th>PIC Tindak Lanjut</th></tr>
+            <tr>
+                <td>
+                    @if ($rtlIku->isEmpty())
+                        …
+                    @else
+                        <ol style="margin:0 0 0 18px;padding:0">
+                            @foreach ($rtlIku as $rtl)
+                                <li>{!! nl2br(e($rtl->rtl_teks)) !!}</li>
+                            @endforeach
+                        </ol>
+                    @endif
+                </td>
+                <td>
+                    <b>PIC Tindak Lanjut :</b><br>{{ $picRtl ?: '…' }}
+                    <br><br>
+                    <b>Batas Waktu Tindak Lanjut :</b><br>{{ $batasWaktuRtl?->translatedFormat('F Y') ?: '…' }}
+                </td>
+            </tr>
         </table>
 
-        <div class="nrow">
-            <span class="nlabel">Dasar Hitung dan Basis Data Realisasi IKU:</span>
-            <span class="ntxt">
-                @if ($iku->dasar_hitung || $iku->basis_data)
-                    @if ($iku->dasar_hitung)Dasar Hitung: {{ $iku->dasar_hitung }}@endif
-                    @if ($iku->dasar_hitung && $iku->basis_data)<br>@endif
-                    @if ($iku->basis_data)Basis Data: {{ $iku->basis_data }}@endif
-                @else
-                    …
-                @endif
-            </span>
-        </div>
-        <div class="nrow">
-            <span class="nlabel">Tautan Bukti Dukung Realisasi Target:</span>
-            <span class="ntxt">
-                @if ($linkFolder)
-                    <a href="{{ $linkFolder }}">{{ $linkFolder }}</a>
-                @else
-                    …
-                @endif
-            </span>
-        </div>
-        <div class="nrow">
-            <span class="nlabel">Tautan Bukti Dukung Tindak Lanjut Triwulan Sebelumnya:</span>
-            <span class="ntxt">
-                @if ($linkFolderTwSebelumnya)
-                    <a href="{{ $linkFolderTwSebelumnya }}">{{ $linkFolderTwSebelumnya }}</a>
-                @else
-                    …
-                @endif
-            </span>
-        </div>
-        <div class="nrow"><span class="nlabel">Penjelasan/pembahasan lainnya:</span> <span class="ntxt">{{ $capaian?->catatan ?: '…' }}</span></div>
+        <table style="width:100%">
+            <tr><th colspan="2" style="text-align:center">Dasar Hitung/Bukti Dukung/Lainnya</th></tr>
+            <tr>
+                <td colspan="2">
+                    <div class="nrow">
+                        <span class="nlabel">Dasar Hitung dan Basis Data Realisasi IKU :</span><br>
+                        @if ($iku->dasar_hitung || $iku->basis_data)
+                            @if ($iku->dasar_hitung)
+                                {!! nl2br(e($iku->dasar_hitung)) !!}
+                            @endif
+                            @if ($iku->dasar_hitung && $iku->basis_data)<br>@endif
+                            @if ($iku->basis_data)Basis Data: {{ $iku->basis_data }}@endif
+                        @else
+                            …
+                        @endif
+                    </div>
+
+                    @if ($notula->link_lampiran_basis_data)
+                        <div class="nrow">
+                            Lampiran Basis Data IKU dapat dilihat pada link
+                            <a href="{{ $notula->link_lampiran_basis_data }}">{{ $notula->link_lampiran_basis_data }}</a>
+                        </div>
+                    @endif
+
+                    <div class="nrow">
+                        <span class="nlabel">Tautan Bukti Dukung Realisasi Target :</span><br>
+                        @if ($linkFolder)
+                            <a href="{{ $linkFolder }}">{{ $linkFolder }}</a>
+                        @else
+                            …
+                        @endif
+                    </div>
+                    <div class="nrow">
+                        <span class="nlabel">Tautan Bukti Dukung Tindak Lanjut Triwulan Sebelumnya :</span><br>
+                        @if ($linkFolderTwSebelumnya)
+                            <a href="{{ $linkFolderTwSebelumnya }}">{{ $linkFolderTwSebelumnya }}</a>
+                        @else
+                            …
+                        @endif
+                    </div>
+
+                    @if ($rtlSebelumnyaIku->isNotEmpty())
+                        <div class="nrow">
+                            RTL triwulan {{ $romawi[$periode->triwulan - 1] ?? $periode->triwulan - 1 }} {{ $periode->tahun }} yang telah dilaksanakan
+                            pada triwulan {{ $labelTriwulan }} {{ $periode->tahun }} yaitu :
+                            <ol style="margin:4px 0 0 18px;padding:0">
+                                @foreach ($rtlSebelumnyaIku as $rtl)
+                                    <li>{!! nl2br(e($rtl->rtl_teks)) !!}</li>
+                                @endforeach
+                            </ol>
+                        </div>
+                    @endif
+
+                    <div class="nrow">
+                        <span class="nlabel">Penjelasan/pembahasan lainnya :</span><br>
+                        {!! nl2br(e($capaian?->catatan ?: '-')) !!}
+                    </div>
+                </td>
+            </tr>
+        </table>
     @endforeach
 @empty
     <p><em>Belum ada Master IKU dengan Sasaran terisi. Lengkapi kolom Sasaran di halaman Master IKU terlebih dahulu.</em></p>
