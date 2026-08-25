@@ -98,11 +98,8 @@ class KompilasiNotulaTest extends TestCase
             ->set('waktu', '09.00 - 11.00 WITA')
             ->set('tempat', 'Ruang Rapat BPS')
             ->set('pimpinanRapat', 'Kepala BPS')
-            ->set('nipPimpinanRapat', '196601011990031001')
             ->set('notulis', 'Notulis Uji')
-            ->set('nipNotulis', '198501012010012002')
             ->set('kepalaSatker', 'Kepala Satker Uji')
-            ->set('nipKepalaSatker', '197001011995031003')
             ->call('simpanDetailRapat')
             ->assertHasNoErrors();
 
@@ -111,11 +108,8 @@ class KompilasiNotulaTest extends TestCase
             'waktu' => '09.00 - 11.00 WITA',
             'tempat' => 'Ruang Rapat BPS',
             'pimpinan_rapat' => 'Kepala BPS',
-            'nip_pimpinan_rapat' => '196601011990031001',
             'notulis' => 'Notulis Uji',
-            'nip_notulis' => '198501012010012002',
             'kepala_satker' => 'Kepala Satker Uji',
-            'nip_kepala_satker' => '197001011995031003',
         ]);
 
         $component->call('susunUlangOtomatis');

@@ -83,6 +83,20 @@ class NotulaDownloadController extends Controller
      * seperti berkas arsip lain yang dikelola lewat TemplateNotula — file ini murni
      * bawaan aplikasi, bukan unggahan pengguna.
      */
+    /**
+     * Bagian I TIDAK diunggah balik (disusun otomatis, lihat NotulaService::susunBagianSatu())
+     * — berkas ini murni panduan/referensi supaya Tim SAKIP tahu isi apa yang perlu diketik
+     * di kolom Analisis Capaian Kinerja/Kendala/Solusi/RTL/Dasar Hitung agar hasil cetaknya
+     * mengikuti struktur resmi.
+     */
+    public function templateBagian1(): BinaryFileResponse
+    {
+        $path = base_path('template_notula/Panduan_Template_dan_Rekomendasi_BagianI.docx');
+        abort_unless(file_exists($path), 404);
+
+        return response()->download($path, 'Panduan_Bagian_I_Capaian_Kinerja.docx');
+    }
+
     public function templateBagian2(): BinaryFileResponse
     {
         $path = base_path('template_notula/SIPINTER_Template_Bagian_II_Prioritas.docx');

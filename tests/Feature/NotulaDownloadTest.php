@@ -62,9 +62,13 @@ class NotulaDownloadTest extends TestCase
         $this->get(route('notula.pratinjau-bagian2', $notula))->assertForbidden();
     }
 
-    public function test_tim_sakip_bisa_mengunduh_template_word_bagian2_dan_bagian3(): void
+    public function test_tim_sakip_bisa_mengunduh_template_word_bagian1_bagian2_dan_bagian3(): void
     {
         $this->loginSebagai('Tim SAKIP');
+
+        $this->get(route('notula.template-bagian1'))
+            ->assertOk()
+            ->assertHeader('content-disposition');
 
         $this->get(route('notula.template-bagian2'))
             ->assertOk()
