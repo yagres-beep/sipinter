@@ -82,14 +82,29 @@ class NotulaBagian1DocxService
     }
 
     /**
-     * Satu baris teks bebas: newline diratakan jadi "; " (TemplateProcessor::setValue
-     * tidak menyisipkan <w:br/> otomatis dari "\n" mentah), null jadi placeholder "…"
-     * sesuai konvensi yang sama dipakai jalur HTML (notula-bagian1-konten.blade.php).
+     * Satu nilai teks bebas -- newline TETAP newline asli (TemplateProcessor::setValue
+     * otomatis mengubahnya jadi <w:br/> lewat replaceCarriageReturns(), sudah diverifikasi
+     * lewat smoke test manual), null jadi placeholder "…" sesuai konvensi yang sama
+     * dipakai jalur HTML (notula-bagian1-konten.blade.php).
      */
     private function set(TemplateProcessor $p, string $nama, ?string $nilai): void
     {
-        $bersih = $nilai !== null ? trim(str_replace(["\r\n", "\n", "\r"], '; ', $nilai)) : '';
+        $bersih = $nilai !== null ? trim($nilai) : '';
         $p->setValue($nama, $bersih !== '' ? $bersih : '…', -1);
+    }
+
+    /**
+     * Susun daftar bernomor "1. ...\n2. ..." dari kumpulan teks -- dipakai untuk daftar
+     * kegiatan/kendala/solusi/RTL supaya formatnya sama seperti jalur PDF (<ol> bernomor).
+     */
+    private function daftarBernomor(iterable $items): ?string
+    {
+        $daftar = collect($items)->values();
+        if ($daftar->isEmpty()) {
+            return null;
+        }
+
+        return $daftar->map(fn ($teks, $i) => ($i + 1).'. '.$teks)->implode("\n");
     }
 
     private function isiHeader(TemplateProcessor $p, Notula $notula, array $data): void
@@ -106,6 +121,11 @@ class NotulaBagian1DocxService
         $this->set($p, 'pimpinan_rapat', $notula->pimpinan_rapat);
         $this->set($p, 'capaian_triwulanan_persen', $data['rataCapaianTw'] !== null ? (string) $data['rataCapaianTw'] : null);
         $this->set($p, 'capaian_pk_persen', $data['rataCapaianPk'] !== null ? (string) $data['rataCapaianPk'] : null);
+
+        // Satu token global dipakai berulang di setiap blok IKU (linknya sama untuk
+        // seluruh IKU pada triwulan yang sama) -- lihat row_lampiran_basis_data() di
+        // scratchpad buat_bagian1_variabel.py.
+        $this->set($p, 'lampiran_basis_data', $notula->link_lampiran_basis_data);
     }
 
     private function isiPerIku(TemplateProcessor $p, array $data): void
@@ -114,18 +134,30 @@ class NotulaBagian1DocxService
             $kode = $iku->kode;
             $rekap = $data['rekapPerIku']->get($iku->id, []);
             $capaian = $data['capaianPerIku']->get($iku->id);
+            $kegiatanIku = $data['kegiatanPerIku']->get($iku->id, collect());
             $kendalaSolusiTriwulan = $data['kendalaSolusiPerIku']->get($iku->id, collect());
             $rtlIku = $data['rtlPerIku']->get($iku->id, collect());
             $rtlSebelumnyaIku = $data['rtlSebelumnyaPerIku']->get($iku->id, collect());
             $linkFolder = $data['linkFolderPerIku'][$iku->id] ?? null;
             $linkFolderTwSebelumnya = $data['linkFolderTwSebelumnyaPerIku'][$iku->id] ?? null;
 
+            $this->set($p, "sasaran_{$kode}", $iku->sasaran);
             $this->set($p, "target_pk_{$kode}", PengaturanCapaian::formatAngka($rekap['target_pk'] ?? null));
             $this->set($p, "target_tw_{$kode}", PengaturanCapaian::formatAngka($rekap['target_tw'] ?? null));
             $this->set($p, "realisasi_tw_{$kode}", PengaturanCapaian::formatAngka($rekap['realisasi'] ?? null));
             $this->set($p, "capaian_tw_{$kode}", PengaturanCapaian::formatPersen($rekap['capaian_tw'] ?? null));
             $this->set($p, "capaian_pk_{$kode}", PengaturanCapaian::formatPersen($rekap['capaian_pk'] ?? null));
-            $this->set($p, "analisis_capaian_{$kode}", $capaian?->analisis_capaian);
+
+            // Analisis Capaian Kinerja: narasi bebas dari Tim SAKIP, DIIKUTI daftar
+            // bernomor kegiatan pendukung IKU ini pada triwulan berjalan (RF-37) --
+            // sama seperti pola "...disamping itu, terdapat beberapa kegiatan..." yang
+            // sudah dipakai Tim SAKIP di jalur PDF.
+            $analisis = trim((string) $capaian?->analisis_capaian);
+            $daftarKegiatan = $this->daftarBernomor($kegiatanIku->pluck('uraian_kegiatan')->filter());
+            $analisisLengkap = $analisis !== '' && $daftarKegiatan !== null
+                ? $analisis."\n\n".$daftarKegiatan
+                : ($analisis !== '' ? $analisis : $daftarKegiatan);
+            $this->set($p, "analisis_capaian_{$kode}", $analisisLengkap);
 
             if ($kode === '3241') {
                 $this->set($p, 'target_proksi_3241', null);
@@ -133,17 +165,16 @@ class NotulaBagian1DocxService
             }
 
             // Kendala & Solusi sebagai DUA variabel terpisah (mengikuti dua baris terpisah
-            // pada dokumen resmi), kumulatif TW1..TW berjalan digabung "; " per indikator.
+            // pada dokumen resmi), KUMULATIF TW1..TW berjalan (RF-28), disusun sebagai
+            // daftar bernomor per indikator -- sama seperti jalur PDF.
             $semuaKendalaSolusi = $kendalaSolusiTriwulan->flatten(1);
-            $daftarKendala = $semuaKendalaSolusi->pluck('kendala')->filter();
-            $daftarSolusi = $semuaKendalaSolusi->pluck('solusi')->filter();
-            $this->set($p, "kendala_{$kode}", $daftarKendala->isEmpty() ? null : $daftarKendala->implode('; '));
-            $this->set($p, "solusi_{$kode}", $daftarSolusi->isEmpty() ? null : $daftarSolusi->implode('; '));
+            $this->set($p, "kendala_{$kode}", $this->daftarBernomor($semuaKendalaSolusi->pluck('kendala')->filter()));
+            $this->set($p, "solusi_{$kode}", $this->daftarBernomor($semuaKendalaSolusi->pluck('solusi')->filter()));
 
-            $rtlTeks = $rtlIku->pluck('rtl_teks')->filter()->implode('; ');
+            $rtlTeks = $this->daftarBernomor($rtlIku->pluck('rtl_teks')->filter());
             $picRtl = $rtlIku->pluck('pic')->filter()->unique()->implode(', ');
             $batasWaktuRtl = $rtlIku->pluck('batas_waktu')->filter()->sort()->last();
-            $this->set($p, "rtl_{$kode}", $rtlTeks !== '' ? $rtlTeks : null);
+            $this->set($p, "rtl_{$kode}", $rtlTeks);
             $this->set($p, "pic_rtl_{$kode}", $picRtl !== '' ? $picRtl : null);
             $this->set($p, "batas_waktu_rtl_{$kode}", $batasWaktuRtl?->translatedFormat('F Y'));
 
@@ -166,10 +197,13 @@ class NotulaBagian1DocxService
         }
     }
 
+    /**
+     * {{bagian_2}} dan {{bagian_3}} SENGAJA dibiarkan sebagai kode mentah (tidak
+     * disubstitusi) -- keduanya jadi penanda tempat Tim SAKIP menempelkan/menggabungkan
+     * dokumen Bagian II dan III yang disusun terpisah di luar sistem.
+     */
     private function isiPenutup(TemplateProcessor $p, Notula $notula): void
     {
-        $this->set($p, 'bagian_2', 'Bagian II disusun terpisah di luar sistem, digabungkan manual setelah Bagian I ini.');
-        $this->set($p, 'bagian_3', 'Bagian III disusun terpisah di luar sistem.');
         $this->set($p, 'kota_tanggal_ttd', $notula->kota_ttd);
         $this->set($p, 'ttd_kepala', $notula->kepala_satker);
         $this->set($p, 'ttd_notulis', $notula->notulis);

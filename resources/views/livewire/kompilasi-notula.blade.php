@@ -78,9 +78,13 @@
             this.$refs[ref].value = teks;
             this.$refs[ref].dispatchEvent(new Event('input'));
         },
-        isiDariWaktu(hhmm, ref) {
-            if (! hhmm) return;
-            this.$refs[ref].value = hhmm.replace(':', '.');
+        waktuMulai: '', waktuSelesai: '', waktuZona: 'WITA',
+        isiDariWaktuRentang(ref) {
+            if (! this.waktuMulai) return;
+            const mulai = this.waktuMulai.replace(':', '.');
+            const selesai = this.waktuSelesai ? this.waktuSelesai.replace(':', '.') : '';
+            const teks = selesai ? `${mulai} - ${selesai} ${this.waktuZona}` : `${mulai} ${this.waktuZona}`;
+            this.$refs[ref].value = teks;
             this.$refs[ref].dispatchEvent(new Event('input'));
         },
     }">
@@ -102,11 +106,19 @@
                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                 @enderror
             </div>
-            <div class="field" style="flex:1;min-width:160px">
+            <div class="field" style="flex:1;min-width:260px">
                 <label>Waktu</label>
-                <input type="time" class="inp filled" style="width:100%;margin-bottom:6px"
-                    @change="isiDariWaktu($event.target.value, 'waktu')">
-                <input type="text" class="inp filled" style="width:100%" wire:model="waktu" x-ref="waktu" placeholder="Contoh: 09.00 WITA">
+                <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+                    <input type="time" class="inp filled" style="flex:1;min-width:0" x-model="waktuMulai" @change="isiDariWaktuRentang('waktu')">
+                    <span>-</span>
+                    <input type="time" class="inp filled" style="flex:1;min-width:0" x-model="waktuSelesai" @change="isiDariWaktuRentang('waktu')">
+                    <select class="inp filled" style="width:88px" x-model="waktuZona" @change="isiDariWaktuRentang('waktu')">
+                        <option value="WIB">WIB</option>
+                        <option value="WITA">WITA</option>
+                        <option value="WIT">WIT</option>
+                    </select>
+                </div>
+                <input type="text" class="inp filled" style="width:100%" wire:model="waktu" x-ref="waktu" placeholder="Contoh: 09.00 - 11.00 WITA">
                 @error('waktu')
                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                 @enderror
