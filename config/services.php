@@ -117,4 +117,28 @@ return [
         'pdftoppm_path' => env('POPPLER_PDFTOPPM_PATH', 'C:\\Program Files\\poppler\\Library\\bin\\pdftoppm.exe'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Gateway WhatsApp (Baileys, self-host gratis)
+    |--------------------------------------------------------------------------
+    |
+    | Bukan API WhatsApp Business resmi (berbayar) — melainkan gateway Node.js
+    | kecil (folder whatsapp-gateway/ di root repo, di-deploy terpisah, mis. ke
+    | Render free tier) yang login sebagai WhatsApp Web biasa lewat pustaka
+    | Baileys. Laravel memanggil endpoint POST {api_url}/send dengan header
+    | Authorization: Bearer {api_token} untuk mengirim pesan — lihat
+    | App\Services\WhatsAppService.
+    |
+    | - api_url: URL dasar gateway (mis. https://sipinter-wa.onrender.com),
+    |   TANPA garis miring di akhir.
+    | - api_token: token rahasia yang harus sama persis dengan WHATSAPP_API_TOKEN
+    |   yang diset di environment gateway (whatsapp-gateway/), supaya endpoint
+    |   /send tidak bisa dipakai sembarang orang.
+    |
+    */
+    'whatsapp' => [
+        'api_url' => env('WHATSAPP_API_URL'),
+        'api_token' => env('WHATSAPP_API_TOKEN'),
+    ],
+
 ];

@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Collection;
 
 class User extends Authenticatable
 {
@@ -93,5 +94,19 @@ class User extends Authenticatable
     public function namaTimList(): array
     {
         return $this->timList()->pluck('tim')->all();
+    }
+
+    /**
+     * Semua user dengan peran tertentu (mis. 'Tim SAKIP', 'Kepala') — dipakai
+     * untuk menentukan penerima pengingat WA per kejadian, lihat
+     * App\Listeners\KirimPengingatStatus* dan App\Console\Commands\Pengingat*.
+     *
+     * @return Collection<int, self>
+     */
+    public static function olehRole(string $namaRole): Collection
+    {
+        $roleId = array_search($namaRole, Role::semuaNama(), true);
+
+        return $roleId ? static::where('role_id', $roleId)->get() : collect();
     }
 }

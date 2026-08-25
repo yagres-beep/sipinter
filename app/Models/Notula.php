@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Events\NotulaStatusDiubah;
 use App\Exceptions\InvalidStatusTransitionException;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -122,6 +123,8 @@ class Notula extends Model
     public function kirimKePersetujuan(): void
     {
         $this->transitionTo(self::STATUS_MENUNGGU_PERSETUJUAN);
+
+        event(new NotulaStatusDiubah($this));
     }
 
     /**
@@ -147,6 +150,8 @@ class Notula extends Model
         $this->transitionTo(self::STATUS_DIKEMBALIKAN);
 
         $this->update(['catatan_pengembalian' => $catatan]);
+
+        event(new NotulaStatusDiubah($this));
     }
 
     /**

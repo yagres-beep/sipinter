@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Events\CapaianStatusDiubah;
 use App\Services\PkoCalculatorService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -112,11 +113,15 @@ class Capaian extends Model
     {
         $this->update(['status' => $status]);
 
-        return $this->riwayatStatus()->create([
+        $riwayat = $this->riwayatStatus()->create([
             'status' => $status,
             'user_id' => $user?->id,
             'catatan' => $catatan,
         ]);
+
+        event(new CapaianStatusDiubah($riwayat));
+
+        return $riwayat;
     }
 
     /**
