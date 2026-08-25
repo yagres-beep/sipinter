@@ -30,6 +30,10 @@
                     <input class="inp filled" type="text" name="nama" value="{{ old('nama', $user->nama) }}" required>
                 </div>
                 <div class="field">
+                    <label>NIP</label>
+                    <input class="inp filled" type="text" name="nip" value="{{ old('nip', $user->nip) }}" placeholder="Nomor Induk Pegawai">
+                </div>
+                <div class="field">
                     <label>Username <span class="req">*</span></label>
                     <input class="inp filled" type="text" name="username" value="{{ old('username', $user->username) }}" required>
                 </div>

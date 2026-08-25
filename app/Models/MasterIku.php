@@ -20,6 +20,8 @@ class MasterIku extends Model
         'tim',
         'penanggung_jawab',
         'sasaran',
+        'dasar_hitung',
+        'basis_data',
         'satuan',
         'metode_capaian',
         'jenis_iku',

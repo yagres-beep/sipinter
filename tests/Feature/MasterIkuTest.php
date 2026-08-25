@@ -131,4 +131,38 @@ class MasterIkuTest extends TestCase
             ->assertSet('deskripsiX', 'X uji')
             ->assertSet('deskripsiY', 'Y uji');
     }
+
+    public function test_iku_bisa_disimpan_dengan_dasar_hitung_dan_basis_data(): void
+    {
+        $this->loginSebagaiTimSakip();
+
+        Livewire::test(MasterIku::class)
+            ->set('kode', '9004')
+            ->set('indikator', 'Indikator uji dasar hitung')
+            ->set('tim', 'Tim Uji')
+            ->set('penanggungJawab', 'Petugas Uji')
+            ->set('dasarHitung', 'Jumlah realisasi dibagi target dikali 100')
+            ->set('basisData', 'Data internal BPS')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $iku = MasterIkuModel::where('kode', '9004')->first();
+        $this->assertSame('Jumlah realisasi dibagi target dikali 100', $iku->dasar_hitung);
+        $this->assertSame('Data internal BPS', $iku->basis_data);
+    }
+
+    public function test_edit_iku_memuat_dasar_hitung_dan_basis_data_yang_tersimpan(): void
+    {
+        $this->loginSebagaiTimSakip();
+
+        $iku = MasterIkuModel::create([
+            'kode' => '9007', 'indikator' => 'Indikator uji edit dasar hitung', 'tim' => 'Tim Uji',
+            'penanggung_jawab' => 'Petugas Uji', 'dasar_hitung' => 'Rumus uji', 'basis_data' => 'Sumber uji',
+        ]);
+
+        Livewire::test(MasterIku::class)
+            ->call('edit', $iku->id)
+            ->assertSet('dasarHitung', 'Rumus uji')
+            ->assertSet('basisData', 'Sumber uji');
+    }
 }

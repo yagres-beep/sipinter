@@ -52,10 +52,19 @@ class Kegiatan extends Model
         'uraian_kegiatan',
         'jenis',
         'tahapan_survei',
+        'volume_ro',
+        'progres_persen',
         'nama_folder_auto',
         'drive_folder_id',
         'status_dokumen',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'progres_persen' => 'decimal:2',
+        ];
+    }
 
     public function masterIku(): BelongsTo
     {

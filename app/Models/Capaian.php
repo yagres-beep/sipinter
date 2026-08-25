@@ -59,6 +59,7 @@ class Capaian extends Model
         'periode_id',
         'status',
         'analisis_capaian',
+        'catatan',
         'target_pk',
         'target_tw',
         'realisasi',

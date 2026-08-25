@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Notula;
 use App\Services\NotulaService;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -73,5 +74,28 @@ class NotulaDownloadController extends Controller
         abort_unless($notula->bagian3_pdf, 404);
 
         return Storage::disk('local')->response($notula->bagian3_pdf, null, [], 'inline');
+    }
+
+    /**
+     * F2.2: unduh template Word resmi Bagian II/III (bukan hasil generate — Tim SAKIP
+     * mengisinya di Word lalu mengunggahnya balik lewat Kompilasi Notula). Berkasnya
+     * disimpan sebagai arsip di root proyek (template_notula/, bukan storage), sama
+     * seperti berkas arsip lain yang dikelola lewat TemplateNotula — file ini murni
+     * bawaan aplikasi, bukan unggahan pengguna.
+     */
+    public function templateBagian2(): BinaryFileResponse
+    {
+        $path = base_path('template_notula/SIPINTER_Template_Bagian_II_Prioritas.docx');
+        abort_unless(file_exists($path), 404);
+
+        return response()->download($path, 'SIPINTER_Template_Bagian_II_Prioritas.docx');
+    }
+
+    public function templateBagian3(): BinaryFileResponse
+    {
+        $path = base_path('template_notula/SIPINTER_Template_Bagian_III_Anggaran.docx');
+        abort_unless(file_exists($path), 404);
+
+        return response()->download($path, 'SIPINTER_Template_Bagian_III_Anggaran.docx');
     }
 }

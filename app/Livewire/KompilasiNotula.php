@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Models\Kegiatan;
 use App\Models\MasterIku;
 use App\Models\Notula;
+use App\Models\User;
 use App\Services\NotulaService;
 use Illuminate\Support\Collection;
 use Livewire\Component;
@@ -43,7 +44,15 @@ class KompilasiNotula extends Component
 
     public string $pimpinanRapat = '';
 
+    public string $nipPimpinanRapat = '';
+
     public string $notulis = '';
+
+    public string $nipNotulis = '';
+
+    public string $kepalaSatker = '';
+
+    public string $nipKepalaSatker = '';
 
     /**
      * Cache dalam satu siklus request — notula() dipanggil di banyak method
@@ -147,7 +156,11 @@ class KompilasiNotula extends Component
         $this->waktu = $notula->waktu ?? '';
         $this->tempat = $notula->tempat ?? '';
         $this->pimpinanRapat = $notula->pimpinan_rapat ?? '';
+        $this->nipPimpinanRapat = $notula->nip_pimpinan_rapat ?? '';
         $this->notulis = $notula->notulis ?? '';
+        $this->nipNotulis = $notula->nip_notulis ?? '';
+        $this->kepalaSatker = $notula->kepala_satker ?? '';
+        $this->nipKepalaSatker = $notula->nip_kepala_satker ?? '';
     }
 
     public function simpanDetailRapat(): void
@@ -157,7 +170,11 @@ class KompilasiNotula extends Component
             'waktu' => ['nullable', 'string', 'max:255'],
             'tempat' => ['nullable', 'string', 'max:255'],
             'pimpinanRapat' => ['nullable', 'string', 'max:255'],
+            'nipPimpinanRapat' => ['nullable', 'string', 'max:30'],
             'notulis' => ['nullable', 'string', 'max:255'],
+            'nipNotulis' => ['nullable', 'string', 'max:30'],
+            'kepalaSatker' => ['nullable', 'string', 'max:255'],
+            'nipKepalaSatker' => ['nullable', 'string', 'max:30'],
         ]);
 
         $this->notula()->update([
@@ -165,10 +182,29 @@ class KompilasiNotula extends Component
             'waktu' => $data['waktu'],
             'tempat' => $data['tempat'],
             'pimpinan_rapat' => $data['pimpinanRapat'],
+            'nip_pimpinan_rapat' => $data['nipPimpinanRapat'],
             'notulis' => $data['notulis'],
+            'nip_notulis' => $data['nipNotulis'],
+            'kepala_satker' => $data['kepalaSatker'],
+            'nip_kepala_satker' => $data['nipKepalaSatker'],
         ]);
 
         session()->flash('status', 'Detail rapat berhasil disimpan.');
+    }
+
+    /**
+     * Nama & NIP seluruh pengguna, dipakai formulir Detail Rapat supaya Pimpinan
+     * Rapat/Notulis/Kepala Satker bisa dipilih dari daftar pengguna (dengan NIP
+     * ikut terisi otomatis) atau tetap diketik manual bila bukan pengguna terdaftar.
+     *
+     * @return Collection<int, array{nama: string, nip: ?string}>
+     */
+    protected function daftarPegawai(): Collection
+    {
+        return User::whereNotNull('nama')->where('nama', '!=', '')
+            ->orderBy('nama')
+            ->get(['nama', 'nip'])
+            ->map(fn (User $u) => ['nama' => $u->nama, 'nip' => $u->nip]);
     }
 
     public function susunUlangOtomatis(): void
@@ -263,6 +299,7 @@ class KompilasiNotula extends Component
             'semuaTerverifikasi' => app(NotulaService::class)->semuaBuktiTerverifikasi($notula->periode),
             'kesiapanSasaran' => $this->kesiapanPerSasaran(),
             'riwayatDisetujui' => $this->riwayatDisetujui($notula),
+            'daftarPegawai' => $this->daftarPegawai(),
         ]);
     }
 }

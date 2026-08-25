@@ -48,6 +48,8 @@ Route::middleware('auth')->group(function () {
         Route::view('/konfigurasi', 'folder-config.index')->name('folder-config.index');
         Route::view('/notula', 'notula.index')->name('notula.index');
         Route::view('/template-notula', 'template-notula.index')->name('template-notula.index');
+        Route::get('/notula/template-bagian2', [NotulaDownloadController::class, 'templateBagian2'])->name('notula.template-bagian2');
+        Route::get('/notula/template-bagian3', [NotulaDownloadController::class, 'templateBagian3'])->name('notula.template-bagian3');
     });
 
     Route::middleware('role:Kepala')->group(function () {

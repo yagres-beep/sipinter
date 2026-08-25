@@ -68,19 +68,53 @@
         </div>
     @endif
 
-    <div class="card">
+    <div class="card" x-data="{
+        petaNip: @js($daftarPegawai->filter(fn ($p) => filled($p['nip']))->pluck('nip', 'nama')),
+        namaHari: ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'],
+        namaBulan: ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'],
+        isiDariTanggal(iso, ref) {
+            if (! iso) return;
+            const d = new Date(iso + 'T00:00:00');
+            const teks = `${this.namaHari[d.getDay()]}, ${d.getDate()} ${this.namaBulan[d.getMonth()]} ${d.getFullYear()}`;
+            this.$refs[ref].value = teks;
+            this.$refs[ref].dispatchEvent(new Event('input'));
+        },
+        isiDariWaktu(hhmm, ref) {
+            if (! hhmm) return;
+            this.$refs[ref].value = hhmm.replace(':', '.');
+            this.$refs[ref].dispatchEvent(new Event('input'));
+        },
+        isiNip(nama, ref) {
+            const nip = this.petaNip[nama];
+            if (nip) {
+                this.$refs[ref].value = nip;
+                this.$refs[ref].dispatchEvent(new Event('input'));
+            }
+        },
+    }">
         <div class="sec"><span>Detail Rapat</span></div>
+
+        <datalist id="daftar-pegawai-nama">
+            @foreach ($daftarPegawai as $pegawai)
+                <option value="{{ $pegawai['nama'] }}"></option>
+            @endforeach
+        </datalist>
+
         <div class="fl-row" style="gap:16px;flex-wrap:wrap">
             <div class="field" style="flex:1;min-width:200px">
                 <label>Hari/Tanggal</label>
-                <input type="text" class="inp filled" style="width:100%" wire:model="hariTanggal">
+                <input type="date" class="inp filled" style="width:100%;margin-bottom:6px"
+                    @change="isiDariTanggal($event.target.value, 'hariTanggal')">
+                <input type="text" class="inp filled" style="width:100%" wire:model="hariTanggal" x-ref="hariTanggal" placeholder="Contoh: Senin, 12 Oktober 2026">
                 @error('hariTanggal')
                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                 @enderror
             </div>
             <div class="field" style="flex:1;min-width:160px">
                 <label>Waktu</label>
-                <input type="text" class="inp filled" style="width:100%" wire:model="waktu">
+                <input type="time" class="inp filled" style="width:100%;margin-bottom:6px"
+                    @change="isiDariWaktu($event.target.value, 'waktu')">
+                <input type="text" class="inp filled" style="width:100%" wire:model="waktu" x-ref="waktu" placeholder="Contoh: 09.00 WITA">
                 @error('waktu')
                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                 @enderror
@@ -92,21 +126,65 @@
                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                 @enderror
             </div>
-            <div class="field" style="flex:1;min-width:200px">
+        </div>
+
+        <div class="fl-row" style="gap:16px;flex-wrap:wrap;margin-top:16px">
+            <div class="field" style="flex:2;min-width:220px">
                 <label>Pimpinan Rapat</label>
-                <input type="text" class="inp filled" style="width:100%" wire:model="pimpinanRapat">
+                <input type="text" class="inp filled" style="width:100%" wire:model="pimpinanRapat"
+                    list="daftar-pegawai-nama" placeholder="Pilih dari daftar pengguna atau ketik manual"
+                    @change="isiNip($event.target.value, 'nipPimpinanRapat')">
                 @error('pimpinanRapat')
                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                 @enderror
             </div>
-            <div class="field" style="flex:1;min-width:200px">
-                <label>Notulis</label>
-                <input type="text" class="inp filled" style="width:100%" wire:model="notulis" placeholder="Nama penulis notula">
-                @error('notulis')
+            <div class="field" style="flex:1;min-width:160px">
+                <label>NIP Pimpinan Rapat</label>
+                <input type="text" class="inp filled" style="width:100%" wire:model="nipPimpinanRapat" x-ref="nipPimpinanRapat" placeholder="NIP">
+                @error('nipPimpinanRapat')
                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                 @enderror
             </div>
         </div>
+
+        <div class="fl-row" style="gap:16px;flex-wrap:wrap;margin-top:16px">
+            <div class="field" style="flex:2;min-width:220px">
+                <label>Notulis</label>
+                <input type="text" class="inp filled" style="width:100%" wire:model="notulis"
+                    list="daftar-pegawai-nama" placeholder="Pilih dari daftar pengguna atau ketik manual"
+                    @change="isiNip($event.target.value, 'nipNotulis')">
+                @error('notulis')
+                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                @enderror
+            </div>
+            <div class="field" style="flex:1;min-width:160px">
+                <label>NIP Notulis</label>
+                <input type="text" class="inp filled" style="width:100%" wire:model="nipNotulis" x-ref="nipNotulis" placeholder="NIP">
+                @error('nipNotulis')
+                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                @enderror
+            </div>
+        </div>
+
+        <div class="fl-row" style="gap:16px;flex-wrap:wrap;margin-top:16px">
+            <div class="field" style="flex:2;min-width:220px">
+                <label>Kepala Satker</label>
+                <input type="text" class="inp filled" style="width:100%" wire:model="kepalaSatker"
+                    list="daftar-pegawai-nama" placeholder="Pilih dari daftar pengguna atau ketik manual"
+                    @change="isiNip($event.target.value, 'nipKepalaSatker')">
+                @error('kepalaSatker')
+                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                @enderror
+            </div>
+            <div class="field" style="flex:1;min-width:160px">
+                <label>NIP Kepala Satker</label>
+                <input type="text" class="inp filled" style="width:100%" wire:model="nipKepalaSatker" x-ref="nipKepalaSatker" placeholder="NIP">
+                @error('nipKepalaSatker')
+                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                @enderror
+            </div>
+        </div>
+
         <div class="btn-row">
             <button type="button" class="btn btn-primary" wire:click="simpanDetailRapat" wire:loading.attr="disabled" wire:target="simpanDetailRapat">
                 <span wire:loading.remove wire:target="simpanDetailRapat">Simpan Detail Rapat</span>
@@ -327,6 +405,9 @@
             <span class="doc-bagian-badge">Bagian II</span> Peran BPS dalam Prioritas Nasional &amp; Isu Strategis
             <span class="st {{ $bagian2Siap ? 'ok' : 'no' }}" style="margin-left:auto">{{ $bagian2Siap ? '✓ Siap' : '✕ Belum lengkap' }}</span>
         </div>
+        <div style="margin-bottom:8px">
+            <a href="{{ route('notula.template-bagian2') }}" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-block">⬇ Unduh Template Word Bagian II</a>
+        </div>
 
         @if ($bagian2Siap)
             <div class="doc-preview-frame">
@@ -361,6 +442,9 @@
         <div class="doc-bagian-head" style="margin-top:28px">
             <span class="doc-bagian-badge">Bagian III</span> Realisasi Anggaran &amp; Upaya Efisiensi
             <span class="st {{ $bagian3Siap ? 'ok' : 'no' }}" style="margin-left:auto">{{ $bagian3Siap ? '✓ Siap' : '✕ Belum lengkap' }}</span>
+        </div>
+        <div style="margin-bottom:8px">
+            <a href="{{ route('notula.template-bagian3') }}" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-block">⬇ Unduh Template Word Bagian III</a>
         </div>
 
         @if ($bagian3Siap)

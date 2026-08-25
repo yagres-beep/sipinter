@@ -67,6 +67,25 @@
 
 <div class="row2">
     <div class="field">
+        <label>Dasar Hitung</label>
+        <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model="dasarHitung"
+            placeholder="Rumus/cara menghitung realisasi IKU ini"></textarea>
+        <div class="fhint">Ditampilkan pada baris "Dasar Hitung dan Basis Data Realisasi IKU" di Notula Bagian I.</div>
+        @error('dasarHitung')
+            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+        @enderror
+    </div>
+    <div class="field">
+        <label>Basis Data</label>
+        <input type="text" class="inp filled" wire:model="basisData" placeholder="mis. Data internal BPS, hasil survei">
+        @error('basisData')
+            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+        @enderror
+    </div>
+</div>
+
+<div class="row2">
+    <div class="field">
         <label>Satuan <span class="req">*</span></label>
         <select class="inp filled" wire:model="satuan">
             <option value="Persen">Persen</option>

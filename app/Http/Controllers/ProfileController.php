@@ -22,6 +22,7 @@ class ProfileController extends Controller
 
         $validated = $request->validateWithBag('updateProfile', [
             'nama' => ['required', 'string', 'max:255'],
+            'nip' => ['nullable', 'string', 'max:30'],
             'username' => ['required', 'string', 'max:255', 'alpha_dash', 'unique:users,username,'.$user->id],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email,'.$user->id],
             'nomor_telepon' => ['required', 'string', 'max:20'],

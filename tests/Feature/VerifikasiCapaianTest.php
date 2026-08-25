@@ -706,6 +706,28 @@ class VerifikasiCapaianTest extends TestCase
         $this->assertEquals(3, $capaianTahunan->y_alokasi_tw3);
     }
 
+    public function test_realisasi_volume_ro_progres_dan_catatan_tersimpan_saat_verifikasi_selesai(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+
+        Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
+            ->set("realisasiVolumeRo.{$data['kegiatan1']->id}", '2 publikasi')
+            ->set("realisasiProgresPersen.{$data['kegiatan1']->id}", 80)
+            ->set('catatan', 'Penjelasan tambahan dari Tim SAKIP')
+            ->call('tandaiSesuai', $data['berkas1']->id)
+            ->call('tandaiSesuai', $data['berkas2']->id)
+            ->set('alokasi_tw3', 50)
+            ->set('realisasi_tw3', 45)
+            ->call('verifikasiSelesai')
+            ->assertHasNoErrors();
+
+        $kegiatan1 = $data['kegiatan1']->fresh();
+        $this->assertSame('2 publikasi', $kegiatan1->volume_ro);
+        $this->assertEquals(80, $kegiatan1->progres_persen);
+        $this->assertSame('Penjelasan tambahan dari Tim SAKIP', $data['capaian']->fresh()->catatan);
+    }
+
     public function test_route_verifikasi_ditolak_untuk_peran_selain_tim_sakip(): void
     {
         $peranKetuaTim = Role::create(['nama' => 'Ketua Tim']);

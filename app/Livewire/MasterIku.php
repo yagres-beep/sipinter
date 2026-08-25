@@ -33,6 +33,10 @@ class MasterIku extends Component
 
     public string $sasaran = '';
 
+    public string $dasarHitung = '';
+
+    public string $basisData = '';
+
     public string $satuan = 'Persen';
 
     /**
@@ -73,6 +77,8 @@ class MasterIku extends Component
             'tim' => ['required', 'string', 'max:255'],
             'penanggungJawab' => ['required', 'string', 'max:255'],
             'sasaran' => ['nullable', 'string', 'max:255'],
+            'dasarHitung' => ['nullable', 'string'],
+            'basisData' => ['nullable', 'string', 'max:255'],
             'satuan' => ['required', 'string', 'in:Persen,Poin'],
             'metodeCapaian' => ['required', 'string', 'in:langsung,rasio'],
             'jenisIku' => ['required', 'string', 'in:iku,proksi'],
@@ -90,6 +96,8 @@ class MasterIku extends Component
             'tim' => 'tim',
             'penanggungJawab' => 'penanggung jawab',
             'sasaran' => 'sasaran',
+            'dasarHitung' => 'dasar hitung',
+            'basisData' => 'basis data',
             'satuan' => 'satuan',
             'metodeCapaian' => 'metode perhitungan',
             'jenisIku' => 'jenis IKU',
@@ -135,6 +143,8 @@ class MasterIku extends Component
         $this->tim = $iku->tim;
         $this->penanggungJawab = $iku->penanggung_jawab;
         $this->sasaran = $iku->sasaran ?? '';
+        $this->dasarHitung = $iku->dasar_hitung ?? '';
+        $this->basisData = $iku->basis_data ?? '';
         $this->satuan = $iku->satuan;
         $this->metodeCapaian = $iku->metode_capaian;
         $this->jenisIku = $iku->jenis_iku;
@@ -145,7 +155,7 @@ class MasterIku extends Component
 
     public function cancelEdit(): void
     {
-        $this->reset(['editingId', 'kode', 'indikator', 'tim', 'penanggungJawab', 'sasaran', 'deskripsiX', 'deskripsiY']);
+        $this->reset(['editingId', 'kode', 'indikator', 'tim', 'penanggungJawab', 'sasaran', 'dasarHitung', 'basisData', 'deskripsiX', 'deskripsiY']);
         $this->satuan = 'Persen';
         $this->metodeCapaian = 'langsung';
         $this->jenisIku = 'iku';
@@ -166,6 +176,8 @@ class MasterIku extends Component
             'tim' => $this->tim,
             'penanggung_jawab' => $this->penanggungJawab,
             'sasaran' => $this->sasaran ?: null,
+            'dasar_hitung' => $this->dasarHitung ?: null,
+            'basis_data' => $this->basisData ?: null,
             'satuan' => $this->satuan,
             'metode_capaian' => $this->metodeCapaian,
             'jenis_iku' => $this->jenisIku,

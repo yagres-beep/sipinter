@@ -142,6 +142,20 @@ class NotulaService
             return [$ikuId => $this->folder->linkBuktiDukungIku($periode, $daftarKegiatan->first()->masterIku)];
         });
 
+        // Tautan bukti dukung RTL triwulan SEBELUMNYA (F1.3) — periode sebelumnya dibuat
+        // sebagai instance Periode SEMENTARA (tidak disimpan), karena linkBuktiDukungIku()
+        // hanya membaca tahun/triwulan-nya untuk menyusun path folder, bukan query DB
+        // lewat periode itu sendiri — supaya lookup ini tidak diam-diam membuat baris
+        // periode baru untuk triwulan yang mungkin belum pernah tersentuh. Triwulan I
+        // tidak punya triwulan sebelumnya (tahun yang sama), jadi selalu kosong.
+        $linkFolderTwSebelumnyaPerIku = $tw > 1
+            ? $kegiatanPerIku->mapWithKeys(function ($daftarKegiatan, $ikuId) use ($periode, $tw) {
+                $periodeSebelumnya = new Periode(['tahun' => $periode->tahun, 'triwulan' => $tw - 1]);
+
+                return [$ikuId => $this->folder->linkBuktiDukungIku($periodeSebelumnya, $daftarKegiatan->first()->masterIku)];
+            })
+            : collect();
+
         // Ringkasan capaian pada paragraf pembuka (RF-42): rata-rata capaian_tw/capaian_pk
         // HANYA atas IKU yang punya nilai — IKU strip "-" (belum dinilai, lihat
         // Capaian::hitungPersentase()) dikecualikan supaya tidak menurunkan rata-rata,
@@ -161,6 +175,7 @@ class NotulaService
             'rtlPerIku' => $rtlPerIku,
             'bagianKustomPerBagian' => $bagianKustomPerBagian,
             'linkFolderPerIku' => $linkFolderPerIku,
+            'linkFolderTwSebelumnyaPerIku' => $linkFolderTwSebelumnyaPerIku,
             'rataCapaianTw' => $rataCapaianTw,
             'rataCapaianPk' => $rataCapaianPk,
         ])->render();

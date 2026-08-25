@@ -31,6 +31,28 @@ class VerifikasiCapaian extends Component
     public ?string $analisis_capaian = null;
 
     /**
+     * Penjelasan/pembahasan lainnya (opsional) — tampil di Bagian I Notula pada baris
+     * "Penjelasan/pembahasan lainnya" milik IKU ini, terpisah dari Analisis Capaian
+     * Kinerja di atas.
+     */
+    public ?string $catatan = null;
+
+    /**
+     * Realisasi Volume RO & Progres Pelaksanaan Kegiatan (%) per kegiatan, dikunci
+     * pada id kegiatan — sama seperti $koreksiKegiatan, hanya terisi Tim SAKIP saat
+     * IKU-nya BELUM punya realisasi triwulan berjalan (lihat notula-bagian1-konten
+     * blade: tabel ini hanya tampil bila $rekap['realisasi'] masih kosong).
+     *
+     * @var array<int, string|null>
+     */
+    public array $realisasiVolumeRo = [];
+
+    /**
+     * @var array<int, string|null>
+     */
+    public array $realisasiProgresPersen = [];
+
+    /**
      * Nilai form Alokasi/Realisasi Triwulanan — diikat lewat wire:model (properti
      * FLAT, bukan atribut model relasi, karena Livewire di sini tidak mendukung
      * wire:model langsung ke atribut model — "Can't set model properties
@@ -171,6 +193,7 @@ class VerifikasiCapaian extends Component
         $this->capaian = $capaian->load(['masterIku', 'periode']);
 
         $this->analisis_capaian = $capaian->analisis_capaian;
+        $this->catatan = $capaian->catatan;
 
         $capaianTahunan = $this->capaianTahunanTersimpan();
         $this->alokasi_tw1 = $capaianTahunan->alokasi_tw1;
@@ -204,6 +227,8 @@ class VerifikasiCapaian extends Component
 
         foreach ($this->kegiatanList() as $kegiatan) {
             $this->koreksiKegiatan[$kegiatan->id] = $kegiatan->uraian_kegiatan;
+            $this->realisasiVolumeRo[$kegiatan->id] = $kegiatan->volume_ro;
+            $this->realisasiProgresPersen[$kegiatan->id] = $kegiatan->progres_persen;
         }
 
         foreach ($this->kendalaSolusiList() as $ks) {
@@ -482,7 +507,10 @@ class VerifikasiCapaian extends Component
     {
         return [
             'analisis_capaian' => ['nullable', 'string'],
+            'catatan' => ['nullable', 'string'],
             'koreksiKegiatan.*' => ['required', 'string', 'max:1000'],
+            'realisasiVolumeRo.*' => ['nullable', 'string', 'max:255'],
+            'realisasiProgresPersen.*' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'koreksiKendala.*.kendala' => ['required', 'string'],
             'koreksiKendala.*.solusi' => ['nullable', 'string'],
             'koreksiRtlRealisasi.*' => ['nullable', 'string'],
@@ -517,6 +545,9 @@ class VerifikasiCapaian extends Component
     {
         return [
             'analisis_capaian' => 'analisis capaian',
+            'catatan' => 'penjelasan/pembahasan lainnya',
+            'realisasiVolumeRo.*' => 'realisasi volume RO',
+            'realisasiProgresPersen.*' => 'progres pelaksanaan kegiatan (%)',
             'alokasi_tw1' => 'Alokasi Target TW I',
             'alokasi_tw2' => 'Alokasi Target TW II',
             'alokasi_tw3' => 'Alokasi Target TW III',
@@ -643,7 +674,11 @@ class VerifikasiCapaian extends Component
                 continue;
             }
 
-            $kegiatan->update(['uraian_kegiatan' => $teks]);
+            $kegiatan->update([
+                'uraian_kegiatan' => $teks,
+                'volume_ro' => $this->realisasiVolumeRo[$id] ?: null,
+                'progres_persen' => filled($this->realisasiProgresPersen[$id] ?? null) ? $this->realisasiProgresPersen[$id] : null,
+            ]);
         }
 
         foreach ($this->koreksiKendala as $id => $data) {
@@ -673,7 +708,7 @@ class VerifikasiCapaian extends Component
         $this->validate();
 
         DB::transaction(function () {
-            $this->capaian->update(['analisis_capaian' => $this->analisis_capaian]);
+            $this->capaian->update(['analisis_capaian' => $this->analisis_capaian, 'catatan' => $this->catatan]);
             $this->capaianTahunanTerkini()->save();
             $this->simpanKoreksiTeks();
         });
@@ -701,7 +736,7 @@ class VerifikasiCapaian extends Component
         $this->validate();
 
         DB::transaction(function () {
-            $this->capaian->update(['analisis_capaian' => $this->analisis_capaian]);
+            $this->capaian->update(['analisis_capaian' => $this->analisis_capaian, 'catatan' => $this->catatan]);
             $this->capaianTahunanTerkini()->save();
             $this->simpanKoreksiTeks();
 
@@ -738,7 +773,7 @@ class VerifikasiCapaian extends Component
 
         try {
             DB::transaction(function () {
-                $this->capaian->update(['analisis_capaian' => $this->analisis_capaian]);
+                $this->capaian->update(['analisis_capaian' => $this->analisis_capaian, 'catatan' => $this->catatan]);
                 $this->capaianTahunanTerkini()->save();
                 $this->simpanKoreksiTeks();
 
@@ -797,7 +832,7 @@ class VerifikasiCapaian extends Component
 
         try {
             DB::transaction(function () {
-                $this->capaian->update(['analisis_capaian' => $this->analisis_capaian]);
+                $this->capaian->update(['analisis_capaian' => $this->analisis_capaian, 'catatan' => $this->catatan]);
                 $this->capaianTahunanTerkini()->save();
                 $this->simpanKoreksiTeks();
 

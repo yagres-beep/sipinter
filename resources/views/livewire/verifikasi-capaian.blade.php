@@ -54,6 +54,15 @@
             @enderror
         </div>
 
+        <div class="field">
+            <label>Penjelasan/Pembahasan Lainnya</label>
+            <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model="catatan"
+                placeholder="Opsional — tampil di Notula Bagian I pada baris Penjelasan/pembahasan lainnya"></textarea>
+            @error('catatan')
+                <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+            @enderror
+        </div>
+
         {{-- Target Tahunan tidak lagi diedit dari sini — sekali per tahun per IKU,
             diisi terpusat di tab "Target Tahunan" (Data Master & Konfigurasi) supaya
             tidak perlu diketik ulang tiap sesi verifikasi bulanan. Di sini cukup
@@ -220,6 +229,23 @@
                 @error("koreksiKegiatan.{$kegiatan->id}")
                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                 @enderror
+
+                <div class="row2" style="margin-top:6px">
+                    <div class="field">
+                        <label>Realisasi Volume RO</label>
+                        <input type="text" class="inp filled" wire:model="realisasiVolumeRo.{{ $kegiatan->id }}" @readonly(!$bisaDikoreksi) placeholder="mis. 1 publikasi">
+                        @error("realisasiVolumeRo.{$kegiatan->id}")
+                            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                        @enderror
+                    </div>
+                    <div class="field">
+                        <label>Progres Pelaksanaan Kegiatan (%)</label>
+                        <input type="number" step="0.01" min="0" max="100" class="inp filled" wire:model="realisasiProgresPersen.{{ $kegiatan->id }}" @readonly(!$bisaDikoreksi) placeholder="mis. 100">
+                        @error("realisasiProgresPersen.{$kegiatan->id}")
+                            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                        @enderror
+                    </div>
+                </div>
 
                 @forelse ($berkasKegiatan as $file)
                     <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}" style="margin-top:8px" wire:key="berkas-{{ $file->id }}">
