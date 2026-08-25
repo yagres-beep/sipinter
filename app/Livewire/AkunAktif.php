@@ -6,6 +6,7 @@ use App\Models\MasterIku;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\UserTim;
+use Illuminate\Support\Str;
 use Livewire\Component;
 
 /**
@@ -95,6 +96,22 @@ class AkunAktif extends Component
         UserTim::whereKey($userTimId)->delete();
 
         session()->flash('status', 'Keanggotaan tim dihapus.');
+    }
+
+    /**
+     * Reset manual oleh Tim SAKIP — dibutuhkan terutama untuk akun yang belum
+     * punya email (lihat EnsureEmailIsComplete) sehingga tidak bisa memakai
+     * "lupa kata sandi" sendiri. Password baru ditampilkan sekali ke Tim SAKIP
+     * untuk disampaikan langsung ke pengguna.
+     */
+    public function resetPassword(int $userId): void
+    {
+        $user = User::findOrFail($userId);
+        $passwordBaru = Str::password(10, symbols: false);
+
+        $user->update(['password' => $passwordBaru]);
+
+        session()->flash('status', "Kata sandi {$user->nama} direset menjadi: {$passwordBaru} — sampaikan ke pengguna secara langsung, lalu minta segera menggantinya di halaman Profil.");
     }
 
     public function render()

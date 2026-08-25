@@ -19,7 +19,7 @@
         <div class="auth-form">
             <div class="amini">📊 SIPINTER</div>
             <h2>Buat kata sandi baru</h2>
-            <p class="asub">Masukkan kata sandi baru untuk akun Anda.</p>
+            <p class="asub">Silakan buat kata sandi baru untuk akun Anda. Gunakan kombinasi yang aman dan mudah diingat.</p>
 
             @if ($errors->any())
                 <div class="badge b-tunggu" style="display:block;margin-bottom:14px">{{ $errors->first() }}</div>

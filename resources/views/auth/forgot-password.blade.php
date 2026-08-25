@@ -19,7 +19,8 @@
         <div class="auth-form">
             <div class="amini">📊 SIPINTER</div>
             <h2>Lupa kata sandi?</h2>
-            <p class="asub">Masukkan email akun Anda, kami akan mengirimkan tautan untuk membuat kata sandi baru.</p>
+            <p class="asub">Masukkan alamat email yang terdaftar pada akun Anda. Tautan untuk membuat kata sandi baru akan kami kirimkan ke alamat tersebut.</p>
+            <p class="asub" style="margin-top:-6px">Belum sempat mengisi email pada akun Anda? Hubungi Tim SAKIP untuk mengatur ulang kata sandi secara manual.</p>
 
             @if (session('status'))
                 <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>

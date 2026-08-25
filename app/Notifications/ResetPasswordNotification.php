@@ -31,11 +31,13 @@ class ResetPasswordNotification extends Notification implements ShouldQueue
         ], false));
 
         return (new MailMessage)
-            ->subject('Reset Kata Sandi — SIPINTER')
-            ->greeting('Halo, '.$notifiable->nama)
-            ->line('Anda menerima email ini karena kami menerima permintaan reset kata sandi untuk akun Anda.')
+            ->subject('Permintaan Reset Kata Sandi — SIPINTER BPS Kabupaten Buton Utara')
+            ->greeting('Yth. Bapak/Ibu '.$notifiable->nama.',')
+            ->line('Kami menerima permintaan reset kata sandi untuk akun SIPINTER (Sistem Informasi Pelaporan Kinerja Terpadu) Bapak/Ibu pada BPS Kabupaten Buton Utara.')
+            ->line('Untuk melanjutkan, silakan klik tombol di bawah ini untuk membuat kata sandi baru.')
             ->action('Reset Kata Sandi', $url)
-            ->line('Tautan reset ini akan kedaluwarsa dalam 60 menit.')
-            ->line('Jika Anda tidak meminta reset kata sandi, abaikan email ini.');
+            ->line('Tautan ini berlaku selama 60 menit sejak email ini dikirim dan hanya dapat digunakan satu kali.')
+            ->line('Apabila Bapak/Ibu tidak pernah mengajukan permintaan ini, mohon abaikan email ini. Kata sandi akun Bapak/Ibu tidak akan berubah tanpa mengakses tautan di atas.')
+            ->salutation("Hormat kami,\nTim SAKIP BPS Kabupaten Buton Utara");
     }
 }

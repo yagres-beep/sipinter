@@ -9,8 +9,8 @@
                     <th style="width:13%">Username</th>
                     <th style="width:11%">Status</th>
                     <th style="width:15%">Peran</th>
-                    <th style="width:35%">Tim</th>
-                    <th style="width:10%;text-align:right">Aksi</th>
+                    <th style="width:29%">Tim</th>
+                    <th style="width:16%;text-align:right">Aksi</th>
                 </tr>
             </thead>
             <tbody x-ref="tbody">
@@ -58,6 +58,12 @@
                                 wire:loading.attr="disabled" wire:target="updateRole({{ $user->id }})">
                                 <span wire:loading.remove wire:target="updateRole({{ $user->id }})">Simpan</span>
                                 <span wire:loading wire:target="updateRole({{ $user->id }})"><i class="spin"></i></span>
+                            </button>
+                            <button type="button" class="btn btn-ghost btn-sm" wire:click="resetPassword({{ $user->id }})"
+                                wire:confirm="Reset kata sandi {{ $user->nama }}? Kata sandi baru akan dibuat acak dan ditampilkan sekali di sini."
+                                wire:loading.attr="disabled" wire:target="resetPassword({{ $user->id }})">
+                                <span wire:loading.remove wire:target="resetPassword({{ $user->id }})">🔑 Reset</span>
+                                <span wire:loading wire:target="resetPassword({{ $user->id }})"><i class="spin"></i></span>
                             </button>
                         </td>
                     </tr>
