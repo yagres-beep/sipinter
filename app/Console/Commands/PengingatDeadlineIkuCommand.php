@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Jobs\KirimPengingatWhatsAppJob;
+use App\Jobs\KirimPengingatEmailJob;
 use App\Models\Capaian;
 use App\Models\PengaturanPengingat;
 use App\Models\PengaturanPenerimaPengingat;
@@ -56,20 +56,24 @@ class PengingatDeadlineIkuCommand extends Command
                 continue;
             }
 
+            $jenis = $lewatTenggat ? 'deadline_iku_lewat' : 'deadline_iku_akan_tiba';
+
             $pesan = $lewatTenggat
-                ? PengaturanTemplatePengingat::render('deadline_iku_lewat', [
+                ? PengaturanTemplatePengingat::render($jenis, [
                     'indikator' => $capaian->masterIku->indikator,
                     'bulan_tenggat' => $akhirBulan->translatedFormat('F Y'),
                 ])
-                : PengaturanTemplatePengingat::render('deadline_iku_akan_tiba', [
+                : PengaturanTemplatePengingat::render($jenis, [
                     'indikator' => $capaian->masterIku->indikator,
                     'tanggal_tenggat' => $akhirBulan->translatedFormat('d F Y'),
                 ]);
 
+            $subjek = 'SIPINTER — '.PengaturanTemplatePengingat::JENIS[$jenis]['label'];
+
             $penerima = PengaturanPenerimaPengingat::resolveUsers('deadline_iku', $capaian->masterIku->semuaPenanggungJawab());
 
             foreach ($penerima as $user) {
-                KirimPengingatWhatsAppJob::dispatch($user->nomor_telepon, $pesan);
+                KirimPengingatEmailJob::dispatch($user->email, $subjek, $pesan);
             }
         }
 

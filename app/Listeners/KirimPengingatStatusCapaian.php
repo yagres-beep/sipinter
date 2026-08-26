@@ -3,7 +3,7 @@
 namespace App\Listeners;
 
 use App\Events\CapaianStatusDiubah;
-use App\Jobs\KirimPengingatWhatsAppJob;
+use App\Jobs\KirimPengingatEmailJob;
 use App\Models\Capaian;
 use App\Models\PengaturanPenerimaPengingat;
 use App\Models\PengaturanTemplatePengingat;
@@ -41,8 +41,10 @@ class KirimPengingatStatusCapaian implements ShouldQueue
             'periode' => $this->labelPeriode($capaian),
         ]);
 
+        $subjek = 'SIPINTER — '.PengaturanTemplatePengingat::JENIS['iku_diajukan']['label'];
+
         foreach (PengaturanPenerimaPengingat::resolveUsers('iku_diajukan') as $user) {
-            KirimPengingatWhatsAppJob::dispatch($user->nomor_telepon, $pesan);
+            KirimPengingatEmailJob::dispatch($user->email, $subjek, $pesan);
         }
     }
 
@@ -53,10 +55,12 @@ class KirimPengingatStatusCapaian implements ShouldQueue
             'periode' => $this->labelPeriode($capaian),
         ]).($catatan ? "\nCatatan: {$catatan}" : '');
 
+        $subjek = 'SIPINTER — '.PengaturanTemplatePengingat::JENIS['iku_dikembalikan']['label'];
+
         $penerima = PengaturanPenerimaPengingat::resolveUsers('iku_dikembalikan', $capaian->masterIku->semuaPenanggungJawab());
 
         foreach ($penerima as $user) {
-            KirimPengingatWhatsAppJob::dispatch($user->nomor_telepon, $pesan);
+            KirimPengingatEmailJob::dispatch($user->email, $subjek, $pesan);
         }
     }
 

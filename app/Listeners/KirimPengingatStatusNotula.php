@@ -3,7 +3,7 @@
 namespace App\Listeners;
 
 use App\Events\NotulaStatusDiubah;
-use App\Jobs\KirimPengingatWhatsAppJob;
+use App\Jobs\KirimPengingatEmailJob;
 use App\Models\Notula;
 use App\Models\PengaturanPenerimaPengingat;
 use App\Models\PengaturanTemplatePengingat;
@@ -33,8 +33,10 @@ class KirimPengingatStatusNotula implements ShouldQueue
             'triwulan_label' => $this->labelTriwulan($notula),
         ]);
 
+        $subjek = 'SIPINTER — '.PengaturanTemplatePengingat::JENIS['notula_menunggu_persetujuan']['label'];
+
         foreach (PengaturanPenerimaPengingat::resolveUsers('notula_menunggu_persetujuan') as $user) {
-            KirimPengingatWhatsAppJob::dispatch($user->nomor_telepon, $pesan);
+            KirimPengingatEmailJob::dispatch($user->email, $subjek, $pesan);
         }
     }
 
@@ -44,8 +46,10 @@ class KirimPengingatStatusNotula implements ShouldQueue
             'triwulan_label' => $this->labelTriwulan($notula),
         ]).($notula->catatan_pengembalian ? "\nCatatan: {$notula->catatan_pengembalian}" : '');
 
+        $subjek = 'SIPINTER — '.PengaturanTemplatePengingat::JENIS['notula_dikembalikan']['label'];
+
         foreach (PengaturanPenerimaPengingat::resolveUsers('notula_dikembalikan') as $user) {
-            KirimPengingatWhatsAppJob::dispatch($user->nomor_telepon, $pesan);
+            KirimPengingatEmailJob::dispatch($user->email, $subjek, $pesan);
         }
     }
 

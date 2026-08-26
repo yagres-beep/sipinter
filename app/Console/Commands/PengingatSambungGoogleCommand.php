@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Jobs\KirimPengingatWhatsAppJob;
+use App\Jobs\KirimPengingatEmailJob;
 use App\Models\PengaturanPenerimaPengingat;
 use App\Models\PengaturanTemplatePengingat;
 use App\Models\StorageAccount;
@@ -28,6 +28,7 @@ class PengingatSambungGoogleCommand extends Command
         }
 
         $penerima = PengaturanPenerimaPengingat::resolveUsers('google_reconnect');
+        $subjek = 'SIPINTER — '.PengaturanTemplatePengingat::JENIS['google_reconnect']['label'];
 
         foreach ($akunPerluHubungUlang as $akun) {
             $pesan = PengaturanTemplatePengingat::render('google_reconnect', [
@@ -35,7 +36,7 @@ class PengingatSambungGoogleCommand extends Command
             ]);
 
             foreach ($penerima as $user) {
-                KirimPengingatWhatsAppJob::dispatch($user->nomor_telepon, $pesan);
+                KirimPengingatEmailJob::dispatch($user->email, $subjek, $pesan);
             }
         }
 

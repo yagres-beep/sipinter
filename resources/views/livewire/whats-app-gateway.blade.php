@@ -1,7 +1,7 @@
 <div wire:poll.3s>
     <div class="page-head">
-        <div class="page-title">Pengingat WhatsApp</div>
-        <div class="page-sub">Kelola nomor WhatsApp yang dipakai gateway untuk mengirim pengingat otomatis (tenggat IKU, verifikasi, notula, dsb).</div>
+        <div class="page-title">Pengingat</div>
+        <div class="page-sub">Pengingat otomatis (tenggat IKU, verifikasi, notula, dsb) sekarang dikirim lewat email. Bagian WhatsApp di bawah bersifat legacy/manual saja — gateway WA tidak resmi (Baileys) di hosting gratis sering tidur/putus sendiri, sehingga pengingat otomatis dialihkan ke email.</div>
     </div>
 
     @if (session('status'))
@@ -11,8 +11,10 @@
         <div class="info red" style="margin-bottom:14px">⚠️ {{ session('error') }}</div>
     @endif
 
+    <livewire:pengingat-email />
+
     <div class="card">
-        <div class="card-h">📱 Status Tautan</div>
+        <div class="card-h">📱 Status Tautan WhatsApp <span class="muted" style="font-weight:400;font-size:12px">(legacy, tidak dipakai pengingat otomatis lagi)</span></div>
 
         @if ($gatewayStatus === 'connected')
             <div class="info" style="border-color:var(--teal, #0d9488)">

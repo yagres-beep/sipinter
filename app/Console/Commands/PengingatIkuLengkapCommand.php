@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Jobs\KirimPengingatWhatsAppJob;
+use App\Jobs\KirimPengingatEmailJob;
 use App\Models\Notula;
 use App\Models\PengaturanPenerimaPengingat;
 use App\Models\PengaturanTemplatePengingat;
@@ -43,8 +43,10 @@ class PengingatIkuLengkapCommand extends Command
             'tahun' => (string) $periode->tahun,
         ]);
 
+        $subjek = 'SIPINTER — '.PengaturanTemplatePengingat::JENIS['iku_lengkap']['label'];
+
         foreach (PengaturanPenerimaPengingat::resolveUsers('iku_lengkap') as $user) {
-            KirimPengingatWhatsAppJob::dispatch($user->nomor_telepon, $pesan);
+            KirimPengingatEmailJob::dispatch($user->email, $subjek, $pesan);
         }
 
         return self::SUCCESS;
