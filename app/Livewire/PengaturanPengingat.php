@@ -44,11 +44,11 @@ class PengaturanPengingat extends Component
     }
 
     /**
-     * Jam kirim disimpan & dipakai apa adanya oleh Schedule::dailyAt() di
-     * routes/console.php, yang berjalan di timezone app (config('app.timezone') =
-     * UTC, tidak diubah ke Asia/Jakarta) — jadi jam yang diisi di sini sebenarnya
-     * jam UTC, bukan WIB. Hint ini menampilkan padanannya di WIB/WITA/WIT supaya
-     * Tim SAKIP tidak salah kira.
+     * Jam yang diisi Tim SAKIP di sini adalah jam WITA (Asia/Makassar) — server
+     * sendiri berjalan di UTC, tapi routes/console.php sudah menandai jadwalnya
+     * dengan ->timezone('Asia/Makassar') supaya Schedule::dailyAt() menerjemahkan
+     * jam WITA ini ke UTC yang benar. Hint di bawah cuma menampilkan padanannya
+     * di WIB/WIT untuk Tim SAKIP yang berada di luar zona WITA.
      */
     public function konversiJam(): ?string
     {
@@ -56,13 +56,12 @@ class PengaturanPengingat extends Component
             return null;
         }
 
-        $utc = Carbon::createFromFormat('H:i', $this->jamKirim, 'UTC');
+        $wita = Carbon::createFromFormat('H:i', $this->jamKirim, 'Asia/Makassar');
 
         return sprintf(
-            '%s WIB · %s WITA · %s WIT',
-            $utc->copy()->setTimezone('Asia/Jakarta')->format('H:i'),
-            $utc->copy()->setTimezone('Asia/Makassar')->format('H:i'),
-            $utc->copy()->setTimezone('Asia/Jayapura')->format('H:i'),
+            '%s WIB · %s WIT',
+            $wita->copy()->setTimezone('Asia/Jakarta')->format('H:i'),
+            $wita->copy()->setTimezone('Asia/Jayapura')->format('H:i'),
         );
     }
 

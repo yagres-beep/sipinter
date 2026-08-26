@@ -39,12 +39,12 @@ class PengaturanPengingatTest extends TestCase
             ->assertOk();
     }
 
-    public function test_konversi_jam_menampilkan_padanan_wib_wita_wit(): void
+    public function test_konversi_jam_menampilkan_padanan_wib_wit(): void
     {
         $component = new PengaturanPengingat;
-        $component->jamKirim = '01:00';
+        $component->jamKirim = '09:00';
 
-        $this->assertSame('08:00 WIB · 09:00 WITA · 10:00 WIT', $component->konversiJam());
+        $this->assertSame('08:00 WIB · 10:00 WIT', $component->konversiJam());
     }
 
     public function test_konversi_jam_null_bila_format_belum_valid(): void

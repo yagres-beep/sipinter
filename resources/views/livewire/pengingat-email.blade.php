@@ -69,7 +69,7 @@
                     <tbody>
                         @foreach ($riwayat as $baris)
                             <tr wire:key="riwayat-email-{{ $baris->id }}">
-                                <td class="muted" style="white-space:nowrap">{{ $baris->created_at->format('d/m/y H:i') }}</td>
+                                <td class="muted" style="white-space:nowrap">{{ $baris->created_at->wita()->format('d/m/y H:i') }} WITA</td>
                                 <td>{{ $baris->email }}</td>
                                 <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ $baris->pesan }}">{{ $baris->subjek }}</td>
                                 <td>

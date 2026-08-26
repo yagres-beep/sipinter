@@ -26,6 +26,9 @@ try {
     $jamPengingat = '08:00';
 }
 
-Schedule::command('pengingat:deadline-iku')->dailyAt($jamPengingat);
-Schedule::command('pengingat:iku-lengkap')->dailyAt($jamPengingat);
-Schedule::command('pengingat:google-reconnect')->dailyAt($jamPengingat);
+// Jam yang diisi Tim SAKIP di halaman Pengingat adalah jam WITA (lihat
+// App\Livewire\PengaturanPengingat::konversiJam), sedangkan server berjalan
+// di UTC — ->timezone() di sini yang menerjemahkannya, bukan jam mentahnya.
+Schedule::command('pengingat:deadline-iku')->dailyAt($jamPengingat)->timezone('Asia/Makassar');
+Schedule::command('pengingat:iku-lengkap')->dailyAt($jamPengingat)->timezone('Asia/Makassar');
+Schedule::command('pengingat:google-reconnect')->dailyAt($jamPengingat)->timezone('Asia/Makassar');

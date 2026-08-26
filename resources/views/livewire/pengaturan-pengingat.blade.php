@@ -7,10 +7,10 @@
     <div class="info">ℹ️ Berlaku untuk pengingat yang dicek otomatis tiap hari: tenggat pengajuan IKU, IKU lengkap siap disusun jadi Notula, dan akun Google yang perlu disambungkan ulang. Pengingat saat status diajukan/dikembalikan/disetujui terkirim langsung saat itu juga, tidak dipengaruhi pengaturan ini.</div>
 
     <div class="field" style="max-width:220px">
-        <label>Jam Pengecekan Harian <span class="req">*</span></label>
+        <label>Jam Pengecekan Harian (WITA) <span class="req">*</span></label>
         <input type="time" class="inp filled" style="width:100%" wire:model.live="jamKirim">
         @if ($konversi = $this->konversiJam())
-            <div class="fhint">🌐 Jam di atas adalah waktu server (UTC) — setara {{ $konversi }}.</div>
+            <div class="fhint">🌐 Jam di atas adalah WITA — setara {{ $konversi }}.</div>
         @endif
         @error('jamKirim')
             <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
