@@ -20,7 +20,7 @@ class LakinDetail extends Component
     public Lakin $lakin;
 
     /**
-     * @var array<int, array{sasaran: ?string, indikator: string, target: ?string, realisasi: ?string, capaian_persen: ?string}>
+     * @var array<int, array{sasaran: ?string, indikator: string, target: ?string, realisasi: ?string, kegiatan: ?string, solusi_kendala: ?string, rtl: ?string, pic: ?string, batas_waktu_tindak_lanjut: ?string, link_bukti_dukung_kinerja: ?string, link_rtl_sebelumnya: ?string}>
      */
     public array $edit = [];
 
@@ -31,6 +31,20 @@ class LakinDetail extends Component
     public string $targetBaru = '';
 
     public string $realisasiBaru = '';
+
+    public string $kegiatanBaru = '';
+
+    public string $solusiKendalaBaru = '';
+
+    public string $rtlBaru = '';
+
+    public string $picBaru = '';
+
+    public string $batasWaktuTindakLanjutBaru = '';
+
+    public string $linkBuktiDukungKinerjaBaru = '';
+
+    public string $linkRtlSebelumnyaBaru = '';
 
     /**
      * IKU yang dicentang Tim SAKIP di checklist "Tambah dari Data Capaian" — id
@@ -74,6 +88,13 @@ class LakinDetail extends Component
                 'indikator' => $baris->indikator,
                 'target' => $baris->target !== null ? (string) $baris->target : '',
                 'realisasi' => $baris->realisasi !== null ? (string) $baris->realisasi : '',
+                'kegiatan' => $baris->kegiatan,
+                'solusi_kendala' => $baris->solusi_kendala,
+                'rtl' => $baris->rtl,
+                'pic' => $baris->pic,
+                'batas_waktu_tindak_lanjut' => $baris->batas_waktu_tindak_lanjut?->format('Y-m-d'),
+                'link_bukti_dukung_kinerja' => $baris->link_bukti_dukung_kinerja,
+                'link_rtl_sebelumnya' => $baris->link_rtl_sebelumnya,
             ];
         }
     }
@@ -115,6 +136,13 @@ class LakinDetail extends Component
             'target' => is_numeric($data['target']) ? $data['target'] : null,
             'realisasi' => is_numeric($data['realisasi']) ? $data['realisasi'] : null,
             'capaian_persen' => $this->hitungCapaianPersen($data['target'] ?? null, $data['realisasi'] ?? null),
+            'kegiatan' => trim($data['kegiatan'] ?? '') ?: null,
+            'solusi_kendala' => trim($data['solusi_kendala'] ?? '') ?: null,
+            'rtl' => trim($data['rtl'] ?? '') ?: null,
+            'pic' => trim($data['pic'] ?? '') ?: null,
+            'batas_waktu_tindak_lanjut' => ($data['batas_waktu_tindak_lanjut'] ?? '') !== '' ? $data['batas_waktu_tindak_lanjut'] : null,
+            'link_bukti_dukung_kinerja' => trim($data['link_bukti_dukung_kinerja'] ?? '') ?: null,
+            'link_rtl_sebelumnya' => trim($data['link_rtl_sebelumnya'] ?? '') ?: null,
         ]);
 
         $this->lakin->load('baris');
@@ -131,6 +159,7 @@ class LakinDetail extends Component
             'indikatorBaru' => ['required', 'string'],
             'targetBaru' => ['nullable', 'numeric'],
             'realisasiBaru' => ['nullable', 'numeric'],
+            'batasWaktuTindakLanjutBaru' => ['nullable', 'date'],
         ], [], ['indikatorBaru' => 'indikator']);
 
         $urutanBaru = ((int) $this->lakin->baris->max('urutan')) + 1;
@@ -142,10 +171,21 @@ class LakinDetail extends Component
             'target' => $this->targetBaru !== '' ? $this->targetBaru : null,
             'realisasi' => $this->realisasiBaru !== '' ? $this->realisasiBaru : null,
             'capaian_persen' => $this->hitungCapaianPersen($this->targetBaru, $this->realisasiBaru),
+            'kegiatan' => trim($this->kegiatanBaru) ?: null,
+            'solusi_kendala' => trim($this->solusiKendalaBaru) ?: null,
+            'rtl' => trim($this->rtlBaru) ?: null,
+            'pic' => trim($this->picBaru) ?: null,
+            'batas_waktu_tindak_lanjut' => $this->batasWaktuTindakLanjutBaru !== '' ? $this->batasWaktuTindakLanjutBaru : null,
+            'link_bukti_dukung_kinerja' => trim($this->linkBuktiDukungKinerjaBaru) ?: null,
+            'link_rtl_sebelumnya' => trim($this->linkRtlSebelumnyaBaru) ?: null,
             'urutan' => $urutanBaru,
         ]);
 
-        $this->reset(['sasaranBaru', 'indikatorBaru', 'targetBaru', 'realisasiBaru']);
+        $this->reset([
+            'sasaranBaru', 'indikatorBaru', 'targetBaru', 'realisasiBaru',
+            'kegiatanBaru', 'solusiKendalaBaru', 'rtlBaru', 'picBaru',
+            'batasWaktuTindakLanjutBaru', 'linkBuktiDukungKinerjaBaru', 'linkRtlSebelumnyaBaru',
+        ]);
 
         $this->lakin->load('baris');
         $this->muatEdit();

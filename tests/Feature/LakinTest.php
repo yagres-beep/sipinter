@@ -199,6 +199,45 @@ class LakinTest extends TestCase
         $this->assertDatabaseCount('lakin_baris', 0);
     }
 
+    public function test_tim_sakip_bisa_mengisi_kolom_tindak_lanjut_lewat_baris_custom(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+        $lakin = Lakin::create(['tahun' => 2026]);
+
+        Livewire::test(LakinDetail::class, ['lakin' => $lakin])
+            ->set('indikatorBaru', 'Indikator custom')
+            ->set('kegiatanBaru', 'Rapat koordinasi')
+            ->set('solusiKendalaBaru', 'Kendala anggaran, solusinya realokasi')
+            ->set('rtlBaru', 'Susun ulang jadwal')
+            ->set('picBaru', 'Budi')
+            ->set('batasWaktuTindakLanjutBaru', '2026-12-31')
+            ->set('linkBuktiDukungKinerjaBaru', 'https://contoh.test/bukti')
+            ->set('linkRtlSebelumnyaBaru', 'https://contoh.test/rtl-lama')
+            ->call('tambahBaris')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('lakin_baris', [
+            'lakin_id' => $lakin->id,
+            'indikator' => 'Indikator custom',
+            'kegiatan' => 'Rapat koordinasi',
+            'solusi_kendala' => 'Kendala anggaran, solusinya realokasi',
+            'rtl' => 'Susun ulang jadwal',
+            'pic' => 'Budi',
+            'batas_waktu_tindak_lanjut' => '2026-12-31 00:00:00',
+            'link_bukti_dukung_kinerja' => 'https://contoh.test/bukti',
+            'link_rtl_sebelumnya' => 'https://contoh.test/rtl-lama',
+        ]);
+
+        $baris = LakinBaris::where('lakin_id', $lakin->id)->first();
+
+        Livewire::test(LakinDetail::class, ['lakin' => $lakin])
+            ->set("edit.{$baris->id}.pic", 'Ani')
+            ->call('simpanBaris', $baris->id)
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('lakin_baris', ['id' => $baris->id, 'pic' => 'Ani']);
+    }
+
     public function test_kepala_tidak_bisa_menambah_baris(): void
     {
         $this->loginSebagai('Kepala');

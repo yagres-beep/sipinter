@@ -25,6 +25,13 @@ class LakinBaris extends Model
         'target',
         'realisasi',
         'capaian_persen',
+        'kegiatan',
+        'solusi_kendala',
+        'rtl',
+        'pic',
+        'batas_waktu_tindak_lanjut',
+        'link_bukti_dukung_kinerja',
+        'link_rtl_sebelumnya',
         'urutan',
     ];
 
@@ -34,6 +41,7 @@ class LakinBaris extends Model
             'target' => 'decimal:2',
             'realisasi' => 'decimal:2',
             'capaian_persen' => 'decimal:2',
+            'batas_waktu_tindak_lanjut' => 'date',
         ];
     }
 

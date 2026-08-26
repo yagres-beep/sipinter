@@ -78,6 +78,13 @@
                             <th style="text-align:right;width:110px">Target</th>
                             <th style="text-align:right;width:110px">Realisasi</th>
                             <th style="text-align:right;width:90px">Capaian %</th>
+                            <th style="min-width:180px">Kegiatan</th>
+                            <th style="min-width:180px">Solusi &amp; Kendala</th>
+                            <th style="min-width:180px">RTL</th>
+                            <th style="min-width:120px">PIC</th>
+                            <th style="min-width:140px">Batas Waktu Tindak Lanjut</th>
+                            <th style="min-width:160px">Link Bukti Dukung Kinerja</th>
+                            <th style="min-width:160px">Link RTL Sebelumnya</th>
                             @if ($this->isTimSakip())
                                 <th style="width:70px"></th>
                             @endif
@@ -86,7 +93,7 @@
                     <tbody>
                         @foreach ($barisPerSasaran as $sasaran => $daftarBaris)
                             <tr>
-                                <td colspan="{{ $this->isTimSakip() ? 5 : 4 }}" style="background:var(--bg);font-size:11px;font-weight:700;color:var(--blue-600);text-transform:uppercase;letter-spacing:.5px;padding:8px 12px">
+                                <td colspan="{{ $this->isTimSakip() ? 12 : 11 }}" style="background:var(--bg);font-size:11px;font-weight:700;color:var(--blue-600);text-transform:uppercase;letter-spacing:.5px;padding:8px 12px">
                                     {{ $sasaran }}
                                 </td>
                             </tr>
@@ -105,6 +112,13 @@
                                         <td style="text-align:right">
                                             <span class="badge {{ $badgeCapaian($baris->capaian_persen) }}">{{ $formatPersen($baris->capaian_persen) }}</span>
                                         </td>
+                                        <td><textarea class="inp filled" style="height:auto;font-size:12.5px" rows="1" wire:model="edit.{{ $baris->id }}.kegiatan"></textarea></td>
+                                        <td><textarea class="inp filled" style="height:auto;font-size:12.5px" rows="1" wire:model="edit.{{ $baris->id }}.solusi_kendala"></textarea></td>
+                                        <td><textarea class="inp filled" style="height:auto;font-size:12.5px" rows="1" wire:model="edit.{{ $baris->id }}.rtl"></textarea></td>
+                                        <td><input type="text" class="inp filled" style="font-size:12.5px" wire:model="edit.{{ $baris->id }}.pic"></td>
+                                        <td><input type="date" class="inp filled" style="font-size:12.5px" wire:model="edit.{{ $baris->id }}.batas_waktu_tindak_lanjut"></td>
+                                        <td><input type="text" class="inp filled" style="font-size:12.5px" placeholder="https://…" wire:model="edit.{{ $baris->id }}.link_bukti_dukung_kinerja"></td>
+                                        <td><input type="text" class="inp filled" style="font-size:12.5px" placeholder="https://…" wire:model="edit.{{ $baris->id }}.link_rtl_sebelumnya"></td>
                                         <td style="text-align:right;white-space:nowrap">
                                             <button type="button" class="btn btn-ghost btn-sm" title="Simpan" wire:click="simpanBaris({{ $baris->id }})" wire:loading.attr="disabled" wire:target="simpanBaris({{ $baris->id }}),hapusBaris({{ $baris->id }})">
                                                 <span wire:loading.remove wire:target="simpanBaris({{ $baris->id }})">💾</span>
@@ -122,6 +136,13 @@
                                         <td style="text-align:right">
                                             <span class="badge {{ $badgeCapaian($baris->capaian_persen) }}">{{ $formatPersen($baris->capaian_persen) }}</span>
                                         </td>
+                                        <td>{{ $baris->kegiatan }}</td>
+                                        <td>{{ $baris->solusi_kendala }}</td>
+                                        <td>{{ $baris->rtl }}</td>
+                                        <td>{{ $baris->pic }}</td>
+                                        <td>{{ $baris->batas_waktu_tindak_lanjut?->format('d-m-Y') }}</td>
+                                        <td>@if ($baris->link_bukti_dukung_kinerja)<a href="{{ $baris->link_bukti_dukung_kinerja }}" target="_blank" rel="noopener">Buka tautan</a>@endif</td>
+                                        <td>@if ($baris->link_rtl_sebelumnya)<a href="{{ $baris->link_rtl_sebelumnya }}" target="_blank" rel="noopener">Buka tautan</a>@endif</td>
                                     @endif
                                 </tr>
                             @endforeach
@@ -187,6 +208,37 @@
                 <div class="field">
                     <label>Realisasi (opsional)</label>
                     <input type="number" step="0.01" class="inp filled" wire:model="realisasiBaru">
+                </div>
+                <div class="field">
+                    <label>Kegiatan (opsional)</label>
+                    <textarea class="inp filled" rows="2" wire:model="kegiatanBaru"></textarea>
+                </div>
+                <div class="field">
+                    <label>Solusi &amp; Kendala (opsional)</label>
+                    <textarea class="inp filled" rows="2" wire:model="solusiKendalaBaru"></textarea>
+                </div>
+                <div class="field">
+                    <label>RTL / Rencana Tindak Lanjut (opsional)</label>
+                    <textarea class="inp filled" rows="2" wire:model="rtlBaru"></textarea>
+                </div>
+                <div class="field">
+                    <label>PIC (opsional)</label>
+                    <input type="text" class="inp filled" wire:model="picBaru">
+                </div>
+                <div class="field">
+                    <label>Batas Waktu Tindak Lanjut (opsional)</label>
+                    <input type="date" class="inp filled" wire:model="batasWaktuTindakLanjutBaru">
+                    @error('batasWaktuTindakLanjutBaru')
+                        <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                    @enderror
+                </div>
+                <div class="field">
+                    <label>Link Bukti Dukung Kinerja (opsional)</label>
+                    <input type="text" class="inp filled" placeholder="https://…" wire:model="linkBuktiDukungKinerjaBaru">
+                </div>
+                <div class="field">
+                    <label>Link RTL Sebelumnya (opsional)</label>
+                    <input type="text" class="inp filled" placeholder="https://…" wire:model="linkRtlSebelumnyaBaru">
                 </div>
             </div>
             <div class="btn-row">

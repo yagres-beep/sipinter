@@ -30,12 +30,23 @@ class LakinExport implements FromCollection, WithColumnWidths, WithHeadings, Wit
             PengaturanCapaian::formatAngka($baris->target),
             PengaturanCapaian::formatAngka($baris->realisasi),
             PengaturanCapaian::formatPersen($baris->capaian_persen),
+            $baris->kegiatan,
+            $baris->solusi_kendala,
+            $baris->rtl,
+            $baris->pic,
+            $baris->batas_waktu_tindak_lanjut?->format('d-m-Y'),
+            $baris->link_bukti_dukung_kinerja,
+            $baris->link_rtl_sebelumnya,
         ]);
     }
 
     public function headings(): array
     {
-        return ['Sasaran', 'Kode IKU', 'Indikator Kinerja', 'Target', 'Realisasi', 'Capaian %'];
+        return [
+            'Sasaran', 'Kode IKU', 'Indikator Kinerja', 'Target', 'Realisasi', 'Capaian %',
+            'Kegiatan', 'Solusi & Kendala', 'RTL', 'PIC', 'Batas Waktu Tindak Lanjut',
+            'Link Bukti Dukung Kinerja', 'Link RTL Sebelumnya',
+        ];
     }
 
     public function columnWidths(): array
@@ -47,6 +58,13 @@ class LakinExport implements FromCollection, WithColumnWidths, WithHeadings, Wit
             'D' => 14,
             'E' => 14,
             'F' => 12,
+            'G' => 30,
+            'H' => 30,
+            'I' => 30,
+            'J' => 16,
+            'K' => 18,
+            'L' => 30,
+            'M' => 30,
         ];
     }
 
