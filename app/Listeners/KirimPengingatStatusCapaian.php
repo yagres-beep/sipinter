@@ -5,7 +5,7 @@ namespace App\Listeners;
 use App\Events\CapaianStatusDiubah;
 use App\Jobs\KirimPengingatWhatsAppJob;
 use App\Models\Capaian;
-use App\Models\User;
+use App\Models\PengaturanPenerimaPengingat;
 use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 
@@ -41,7 +41,7 @@ class KirimPengingatStatusCapaian implements ShouldQueue
             $this->labelPeriode($capaian)
         );
 
-        foreach (User::olehRole('Tim SAKIP') as $user) {
+        foreach (PengaturanPenerimaPengingat::resolveUsers('iku_diajukan') as $user) {
             KirimPengingatWhatsAppJob::dispatch($user->nomor_telepon, $pesan);
         }
     }
@@ -55,7 +55,9 @@ class KirimPengingatStatusCapaian implements ShouldQueue
             $catatan ? "\nCatatan: {$catatan}" : ''
         );
 
-        foreach ($capaian->masterIku->semuaPenanggungJawab() as $user) {
+        $penerima = PengaturanPenerimaPengingat::resolveUsers('iku_dikembalikan', $capaian->masterIku->semuaPenanggungJawab());
+
+        foreach ($penerima as $user) {
             KirimPengingatWhatsAppJob::dispatch($user->nomor_telepon, $pesan);
         }
     }

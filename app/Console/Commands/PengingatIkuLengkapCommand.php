@@ -4,8 +4,8 @@ namespace App\Console\Commands;
 
 use App\Jobs\KirimPengingatWhatsAppJob;
 use App\Models\Notula;
+use App\Models\PengaturanPenerimaPengingat;
 use App\Models\Periode;
-use App\Models\User;
 use App\Services\NotulaService;
 use Illuminate\Console\Command;
 
@@ -43,7 +43,7 @@ class PengingatIkuLengkapCommand extends Command
             $periode->tahun
         );
 
-        foreach (User::olehRole('Tim SAKIP') as $user) {
+        foreach (PengaturanPenerimaPengingat::resolveUsers('iku_lengkap') as $user) {
             KirimPengingatWhatsAppJob::dispatch($user->nomor_telepon, $pesan);
         }
 

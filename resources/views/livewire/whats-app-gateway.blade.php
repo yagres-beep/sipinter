@@ -43,4 +43,6 @@
     </div>
 
     <livewire:pengaturan-pengingat />
+
+    <livewire:pengaturan-penerima-pengingat />
 </div>

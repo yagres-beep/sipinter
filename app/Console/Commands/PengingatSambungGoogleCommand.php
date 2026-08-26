@@ -3,8 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Jobs\KirimPengingatWhatsAppJob;
+use App\Models\PengaturanPenerimaPengingat;
 use App\Models\StorageAccount;
-use App\Models\User;
 use Illuminate\Console\Command;
 
 /**
@@ -26,7 +26,7 @@ class PengingatSambungGoogleCommand extends Command
             return self::SUCCESS;
         }
 
-        $penerima = User::olehRole('Tim SAKIP');
+        $penerima = PengaturanPenerimaPengingat::resolveUsers('google_reconnect');
 
         foreach ($akunPerluHubungUlang as $akun) {
             $pesan = sprintf(

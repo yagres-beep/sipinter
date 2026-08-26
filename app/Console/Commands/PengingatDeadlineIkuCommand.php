@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Jobs\KirimPengingatWhatsAppJob;
 use App\Models\Capaian;
 use App\Models\PengaturanPengingat;
+use App\Models\PengaturanPenerimaPengingat;
 use App\Models\Periode;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
@@ -66,7 +67,9 @@ class PengingatDeadlineIkuCommand extends Command
                     $akhirBulan->translatedFormat('d F Y')
                 );
 
-            foreach ($capaian->masterIku->semuaPenanggungJawab() as $user) {
+            $penerima = PengaturanPenerimaPengingat::resolveUsers('deadline_iku', $capaian->masterIku->semuaPenanggungJawab());
+
+            foreach ($penerima as $user) {
                 KirimPengingatWhatsAppJob::dispatch($user->nomor_telepon, $pesan);
             }
         }

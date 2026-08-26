@@ -5,7 +5,7 @@ namespace App\Listeners;
 use App\Events\NotulaStatusDiubah;
 use App\Jobs\KirimPengingatWhatsAppJob;
 use App\Models\Notula;
-use App\Models\User;
+use App\Models\PengaturanPenerimaPengingat;
 use Illuminate\Contracts\Queue\ShouldQueue;
 
 /**
@@ -33,7 +33,7 @@ class KirimPengingatStatusNotula implements ShouldQueue
             $this->labelTriwulan($notula)
         );
 
-        foreach (User::olehRole('Kepala') as $user) {
+        foreach (PengaturanPenerimaPengingat::resolveUsers('notula_menunggu_persetujuan') as $user) {
             KirimPengingatWhatsAppJob::dispatch($user->nomor_telepon, $pesan);
         }
     }
@@ -46,7 +46,7 @@ class KirimPengingatStatusNotula implements ShouldQueue
             $notula->catatan_pengembalian ? "\nCatatan: {$notula->catatan_pengembalian}" : ''
         );
 
-        foreach (User::olehRole('Tim SAKIP') as $user) {
+        foreach (PengaturanPenerimaPengingat::resolveUsers('notula_dikembalikan') as $user) {
             KirimPengingatWhatsAppJob::dispatch($user->nomor_telepon, $pesan);
         }
     }
