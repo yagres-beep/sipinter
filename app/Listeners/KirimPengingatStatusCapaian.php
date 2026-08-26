@@ -11,8 +11,7 @@ use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 
 /**
- * Pengingat WA real-time untuk 2 kejadian alur verifikasi IKU (lihat plan
- * "Pengingat WhatsApp Gratis untuk SIPINTER"):
+ * Pengingat email real-time untuk 2 kejadian alur verifikasi IKU:
  * - diajukan     -> Tim SAKIP perlu memeriksa.
  * - dikembalikan -> Ketua Tim penanggung jawab IKU tsb perlu memperbaiki.
  */

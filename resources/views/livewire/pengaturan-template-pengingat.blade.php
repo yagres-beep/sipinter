@@ -1,3 +1,7 @@
+@if (session('status'))
+    <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>
+@endif
+
 <div class="card">
     <div class="sec"><span>✏️ Format Pesan Tiap Jenis Pengingat</span> <span class="badge b-tunggu">bisa diubah</span></div>
     <div class="info">ℹ️ Tulis dalam kurung kurawal seperti <code>{indikator}</code> untuk diisi otomatis saat pesan dikirim — daftar token yang tersedia ada di bawah tiap kotak. Untuk jenis yang punya catatan (IKU/Notula dikembalikan), baris "Catatan: ..." selalu ditambahkan otomatis setelah pesan ini, tidak perlu ditulis manual.</div>

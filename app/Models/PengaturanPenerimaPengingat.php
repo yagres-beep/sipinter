@@ -8,8 +8,8 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 
 /**
- * Daftar penerima tiap jenis pengingat WA (satu baris per jenis) yang bisa diubah
- * Tim SAKIP lewat halaman Pengingat WA — dipakai App\Console\Commands\Pengingat*
+ * Daftar penerima tiap jenis pengingat email (satu baris per jenis) yang bisa
+ * diubah Tim SAKIP lewat halaman Pengingat — dipakai App\Console\Commands\Pengingat*
  * dan App\Listeners\KirimPengingatStatus* lewat resolveUsers(), menggantikan
  * daftar penerima yang tadinya dikodekan langsung (mis. selalu "Tim SAKIP").
  *

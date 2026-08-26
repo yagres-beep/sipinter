@@ -7,8 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
 
 /**
- * Waktu pengingat WA terjadwal (satu baris, id=1) yang bisa diubah Tim SAKIP lewat
- * halaman Pengingat WA — dipakai routes/console.php (jam_kirim, jadwal harian
+ * Waktu pengingat terjadwal (satu baris, id=1) yang bisa diubah Tim SAKIP lewat
+ * halaman Pengingat — dipakai routes/console.php (jam_kirim, jadwal harian
  * pengingat:deadline-iku/iku-lengkap/google-reconnect) dan
  * PengingatDeadlineIkuCommand (deadline_h_minus, mulai berapa hari sebelum tenggat
  * pengajuan IKU diingatkan) supaya tidak dikodekan langsung.

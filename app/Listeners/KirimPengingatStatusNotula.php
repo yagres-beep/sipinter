@@ -10,7 +10,7 @@ use App\Models\PengaturanTemplatePengingat;
 use Illuminate\Contracts\Queue\ShouldQueue;
 
 /**
- * Pengingat WA real-time untuk 2 kejadian alur persetujuan Notula:
+ * Pengingat email real-time untuk 2 kejadian alur persetujuan Notula:
  * - menunggu_persetujuan -> Kepala perlu menandatangani/menyetujui.
  * - dikembalikan         -> Tim SAKIP perlu memperbaiki.
  */

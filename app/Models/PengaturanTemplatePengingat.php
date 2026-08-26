@@ -8,8 +8,8 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 
 /**
- * Format pesan tiap jenis pengingat WA (satu baris per jenis) yang bisa diubah
- * Tim SAKIP lewat halaman Pengingat WA — dipakai App\Console\Commands\Pengingat*
+ * Format pesan tiap jenis pengingat email (satu baris per jenis) yang bisa
+ * diubah Tim SAKIP lewat halaman Pengingat — dipakai App\Console\Commands\Pengingat*
  * dan App\Listeners\KirimPengingatStatus* lewat render(), menggantikan string
  * pesan yang tadinya dikodekan langsung (sprintf) di tiap Command/Listener.
  *

@@ -128,7 +128,7 @@
                 </div>
                 <div style="padding:18px">
                     <p style="font-size:13px;color:var(--ink);line-height:1.6;margin:0 0 14px">
-                        Ubah email &amp; nomor telepon <b>{{ $userList->firstWhere('id', $pendingEditId)?->nama }}</b> — dipakai untuk lupa kata sandi &amp; pengingat WhatsApp.
+                        Ubah email &amp; nomor telepon <b>{{ $userList->firstWhere('id', $pendingEditId)?->nama }}</b> — email dipakai untuk lupa kata sandi &amp; pengingat otomatis.
                     </p>
                     <div class="field">
                         <label>Email <span class="req">*</span></label>

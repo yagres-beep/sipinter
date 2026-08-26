@@ -14,7 +14,7 @@ use Illuminate\Console\Command;
 /**
  * Cek harian: IKU yang tenggat pengajuannya (akhir bulan periode berjalan)
  * sudah dekat (H- sesuai PengaturanPengingat::deadline_h_minus, bisa diubah Tim
- * SAKIP lewat halaman Pengingat WA) s.d. hari-H, atau sudah lewat tapi belum
+ * SAKIP lewat halaman Pengingat) s.d. hari-H, atau sudah lewat tapi belum
  * diajukan.
  *
  * Catatan lingkup: hanya melihat baris Capaian yang SUDAH ADA untuk periode

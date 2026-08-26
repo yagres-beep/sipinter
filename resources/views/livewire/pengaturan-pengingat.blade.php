@@ -1,10 +1,17 @@
+@if (session('status'))
+    <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>
+@endif
+
 <div class="card">
     <div class="sec"><span>⏰ Waktu Pengingat Terjadwal</span> <span class="badge b-tunggu">bisa diubah</span></div>
     <div class="info">ℹ️ Berlaku untuk pengingat yang dicek otomatis tiap hari: tenggat pengajuan IKU, IKU lengkap siap disusun jadi Notula, dan akun Google yang perlu disambungkan ulang. Pengingat saat status diajukan/dikembalikan/disetujui terkirim langsung saat itu juga, tidak dipengaruhi pengaturan ini.</div>
 
     <div class="field" style="max-width:220px">
         <label>Jam Pengecekan Harian <span class="req">*</span></label>
-        <input type="time" class="inp filled" style="width:100%" wire:model="jamKirim">
+        <input type="time" class="inp filled" style="width:100%" wire:model.live="jamKirim">
+        @if ($konversi = $this->konversiJam())
+            <div class="fhint">🌐 Jam di atas adalah waktu server (UTC) — setara {{ $konversi }}.</div>
+        @endif
         @error('jamKirim')
             <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
         @enderror

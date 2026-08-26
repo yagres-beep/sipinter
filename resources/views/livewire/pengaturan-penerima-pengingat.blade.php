@@ -1,6 +1,10 @@
+@if (session('status'))
+    <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>
+@endif
+
 <div class="card">
     <div class="sec"><span>👥 Penerima Tiap Jenis Pengingat</span> <span class="badge b-tunggu">bisa diubah</span></div>
-    <div class="info">ℹ️ Tentukan siapa yang menerima tiap jenis pengingat WA. Kalau tidak ada yang dicentang pada satu jenis, pengingat jenis itu tidak dikirim ke siapa pun.</div>
+    <div class="info">ℹ️ Tentukan siapa yang menerima tiap jenis pengingat email. Kalau tidak ada yang dicentang pada satu jenis, pengingat jenis itu tidak dikirim ke siapa pun.</div>
 
     @foreach ($jenisList as $jenis => $meta)
         <div class="field" style="border-bottom:1px solid var(--line2);padding-bottom:14px;margin-bottom:14px">
