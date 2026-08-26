@@ -17,13 +17,27 @@ class WhatsAppGateway extends Component
 
     public string $pesanTes = 'Tes pengingat WhatsApp SIPINTER.';
 
+    public bool $showResetConfirm = false;
+
     public function mount(): void
     {
         $this->nomorTes = (string) (auth()->user()->nomor_telepon ?? '');
     }
 
+    public function bukaKonfirmasiReset(): void
+    {
+        $this->showResetConfirm = true;
+    }
+
+    public function batalkanReset(): void
+    {
+        $this->showResetConfirm = false;
+    }
+
     public function resetSesi(): void
     {
+        $this->showResetConfirm = false;
+
         $berhasil = app(WhatsAppService::class)->resetGateway();
 
         session()->flash(

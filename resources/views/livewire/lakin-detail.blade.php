@@ -38,7 +38,7 @@
                 <span wire:loading wire:target="unduhExcel"><i class="spin"></i> Menyiapkan…</span>
             </button>
             @if ($this->isTimSakip())
-                <button type="button" class="btn btn-ghost btn-sm" wire:click="segarkanAngka" wire:confirm="Segarkan angka baris yang sudah ada dari data capaian terbaru? Baris custom tidak berubah, dan ini tidak menambah baris baru." wire:loading.attr="disabled" wire:target="segarkanAngka">
+                <button type="button" class="btn btn-ghost btn-sm" wire:click="bukaKonfirmasiSegarkan" wire:loading.attr="disabled" wire:target="segarkanAngka">
                     <span wire:loading.remove wire:target="segarkanAngka">↻ Segarkan Angka</span>
                     <span wire:loading wire:target="segarkanAngka"><i class="spin"></i> Menyegarkan…</span>
                 </button>
@@ -110,9 +110,9 @@
                                                 <span wire:loading.remove wire:target="simpanBaris({{ $baris->id }})">💾</span>
                                                 <span wire:loading wire:target="simpanBaris({{ $baris->id }})"><i class="spin"></i></span>
                                             </button>
-                                            <button type="button" class="btn btn-red btn-sm" title="Hapus" wire:click="hapusBaris({{ $baris->id }})" wire:confirm="Hapus baris ini?" wire:loading.attr="disabled" wire:target="simpanBaris({{ $baris->id }}),hapusBaris({{ $baris->id }})">
-                                                <span wire:loading.remove wire:target="hapusBaris({{ $baris->id }})">🗑</span>
-                                                <span wire:loading wire:target="hapusBaris({{ $baris->id }})"><i class="spin"></i></span>
+                                            <button type="button" class="btn btn-red btn-sm" title="Hapus" wire:click="confirmHapusBaris({{ $baris->id }})" wire:loading.attr="disabled" wire:target="simpanBaris({{ $baris->id }}),confirmHapusBaris({{ $baris->id }})">
+                                                <span wire:loading.remove wire:target="confirmHapusBaris({{ $baris->id }})">🗑</span>
+                                                <span wire:loading wire:target="confirmHapusBaris({{ $baris->id }})"><i class="spin"></i></span>
                                             </button>
                                         </td>
                                     @else
@@ -197,4 +197,21 @@
             </div>
         </div>
     @endif
+
+    <x-confirm-modal :show="$showSegarkanConfirm" title="Segarkan Angka?" :danger="false"
+        message="Segarkan angka baris yang sudah ada dari data capaian terbaru? Baris custom tidak berubah, dan ini tidak menambah baris baru.">
+        <button type="button" class="btn btn-ghost" wire:click="batalkanSegarkan" wire:loading.attr="disabled" wire:target="segarkanAngka">Batal</button>
+        <button type="button" class="btn btn-primary" wire:click="segarkanAngka" wire:loading.attr="disabled" wire:target="segarkanAngka">
+            <span wire:loading.remove wire:target="segarkanAngka">Segarkan</span>
+            <span wire:loading wire:target="segarkanAngka"><i class="spin"></i> Menyegarkan…</span>
+        </button>
+    </x-confirm-modal>
+
+    <x-confirm-modal :show="$pendingHapusBarisId !== null" title="Hapus Baris?" message="Hapus baris ini?">
+        <button type="button" class="btn btn-ghost" wire:click="batalkanHapusBaris" wire:loading.attr="disabled" wire:target="hapusBaris">Batal</button>
+        <button type="button" class="btn btn-red" wire:click="hapusBaris" wire:loading.attr="disabled" wire:target="hapusBaris">
+            <span wire:loading.remove wire:target="hapusBaris">Hapus</span>
+            <span wire:loading wire:target="hapusBaris"><i class="spin"></i> Menghapus…</span>
+        </button>
+    </x-confirm-modal>
 </div>

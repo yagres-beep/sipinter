@@ -132,7 +132,8 @@ class BagianKustomTest extends TestCase
         BagianKustomPoin::create(['bagian_kustom_id' => $bagian->id, 'iku_id' => $iku->id, 'periode_id' => $periode->id, 'teks' => 'Risiko A']);
 
         Livewire::test(BagianKustomManager::class)
-            ->call('hapus', $bagian->id)
+            ->call('confirmHapus', $bagian->id)
+            ->call('hapus')
             ->assertHasErrors(['hapus']);
 
         $this->assertDatabaseHas('bagian_kustom', ['id' => $bagian->id]);

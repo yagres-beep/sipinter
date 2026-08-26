@@ -97,9 +97,9 @@
                     <button type="button" class="btn btn-ghost btn-sm" wire:click="toggleAktif({{ $bagian->id }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="toggleAktif({{ $bagian->id }})">{{ $bagian->aktif ? 'Nonaktifkan' : 'Aktifkan' }}</button>
                     <button type="button" class="btn btn-ghost btn-sm" wire:click="togglePratinjau({{ $bagian->id }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="togglePratinjau({{ $bagian->id }})">{{ $pratinjauId === $bagian->id ? '✕ Tutup Pratinjau' : '👁 Pratinjau' }}</button>
                     @if ($bagian->poin_count === 0)
-                        <button type="button" class="btn btn-red btn-sm" wire:click="hapus({{ $bagian->id }})" wire:confirm="Hapus bagian ini?" wire:loading.attr="disabled" wire:target="hapus({{ $bagian->id }})">
-                            <span wire:loading.remove wire:target="hapus({{ $bagian->id }})">🗑 Hapus</span>
-                            <span wire:loading wire:target="hapus({{ $bagian->id }})"><i class="spin"></i> Menghapus…</span>
+                        <button type="button" class="btn btn-red btn-sm" wire:click="confirmHapus({{ $bagian->id }})" wire:loading.attr="disabled" wire:target="confirmHapus({{ $bagian->id }})">
+                            <span wire:loading.remove wire:target="confirmHapus({{ $bagian->id }})">🗑 Hapus</span>
+                            <span wire:loading wire:target="confirmHapus({{ $bagian->id }})"><i class="spin"></i></span>
                         </button>
                     @endif
                 </div>
@@ -169,4 +169,12 @@
             <p style="color:var(--muted);font-size:13px">Belum ada bagian kustom. Tambahkan lewat form di atas.</p>
         @endforelse
     </div>
+
+    <x-confirm-modal :show="$pendingHapusId !== null" title="Hapus Bagian?" :message="'Hapus bagian \''.$pendingHapusNama.'\'?'">
+        <button type="button" class="btn btn-ghost" wire:click="batalkanHapus" wire:loading.attr="disabled" wire:target="hapus">Batal</button>
+        <button type="button" class="btn btn-red" wire:click="hapus" wire:loading.attr="disabled" wire:target="hapus">
+            <span wire:loading.remove wire:target="hapus">Hapus</span>
+            <span wire:loading wire:target="hapus"><i class="spin"></i> Menghapus…</span>
+        </button>
+    </x-confirm-modal>
 </div>

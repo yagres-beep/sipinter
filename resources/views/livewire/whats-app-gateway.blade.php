@@ -20,11 +20,19 @@
             </div>
 
             <div class="btn-row">
-                <button type="button" class="btn btn-red" wire:click="resetSesi"
-                        wire:confirm="Putuskan nomor yang sedang tertaut? Pengingat WA berhenti terkirim sampai nomor baru discan.">
+                <button type="button" class="btn btn-red" wire:click="bukaKonfirmasiReset">
                     🔌 Putus Tautan / Ganti Nomor
                 </button>
             </div>
+
+            <x-confirm-modal :show="$showResetConfirm" title="Putus Tautan?"
+                message="Putuskan nomor yang sedang tertaut? Pengingat WA berhenti terkirim sampai nomor baru discan.">
+                <button type="button" class="btn btn-ghost" wire:click="batalkanReset" wire:loading.attr="disabled" wire:target="resetSesi">Batal</button>
+                <button type="button" class="btn btn-red" wire:click="resetSesi" wire:loading.attr="disabled" wire:target="resetSesi">
+                    <span wire:loading.remove wire:target="resetSesi">Putus Tautan</span>
+                    <span wire:loading wire:target="resetSesi"><i class="spin"></i> Memutus…</span>
+                </button>
+            </x-confirm-modal>
         @elseif ($gatewayStatus === 'waiting_for_qr' && $qrDataUrl)
             <div class="info">📷 Scan QR ini pakai WhatsApp di HP yang ingin dipakai mengirim pengingat: <b>Setelan → Perangkat Tertaut → Tautkan Perangkat</b>.</div>
 

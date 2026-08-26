@@ -40,6 +40,10 @@ class LakinDetail extends Component
      */
     public array $ikuTerpilihUntukTambah = [];
 
+    public bool $showSegarkanConfirm = false;
+
+    public ?int $pendingHapusBarisId = null;
+
     public function mount(Lakin $lakin): void
     {
         $this->lakin = $lakin->load('baris');
@@ -149,12 +153,30 @@ class LakinDetail extends Component
         session()->flash('status', 'Baris baru ditambahkan.');
     }
 
-    public function hapusBaris(int $id): void
+    public function confirmHapusBaris(int $id): void
     {
         $this->pastikanSakip();
 
-        LakinBaris::whereKey($id)->delete();
-        unset($this->edit[$id]);
+        $this->pendingHapusBarisId = $id;
+    }
+
+    public function batalkanHapusBaris(): void
+    {
+        $this->pendingHapusBarisId = null;
+    }
+
+    public function hapusBaris(): void
+    {
+        $this->pastikanSakip();
+
+        if (! $this->pendingHapusBarisId) {
+            return;
+        }
+
+        LakinBaris::whereKey($this->pendingHapusBarisId)->delete();
+        unset($this->edit[$this->pendingHapusBarisId]);
+
+        $this->pendingHapusBarisId = null;
 
         $this->lakin->load('baris');
 
@@ -189,9 +211,23 @@ class LakinDetail extends Component
      * capaian terbaru — TIDAK menambah baris baru (itu lewat tambahDariCapaian())
      * dan tidak menyentuh baris custom.
      */
+    public function bukaKonfirmasiSegarkan(): void
+    {
+        $this->pastikanSakip();
+
+        $this->showSegarkanConfirm = true;
+    }
+
+    public function batalkanSegarkan(): void
+    {
+        $this->showSegarkanConfirm = false;
+    }
+
     public function segarkanAngka(): void
     {
         $this->pastikanSakip();
+
+        $this->showSegarkanConfirm = false;
 
         app(LakinBuilderService::class)->segarkanBaris($this->lakin);
 

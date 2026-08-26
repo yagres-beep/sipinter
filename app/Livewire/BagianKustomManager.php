@@ -33,6 +33,10 @@ class BagianKustomManager extends Component
      */
     public ?int $pratinjauId = null;
 
+    public ?int $pendingHapusId = null;
+
+    public string $pendingHapusNama = '';
+
     public function mount(): void
     {
         foreach ($this->daftar() as $bagian) {
@@ -184,22 +188,43 @@ class BagianKustomManager extends Component
         BagianKustom::lupakanCache();
     }
 
+    public function confirmHapus(int $id): void
+    {
+        $bagian = BagianKustom::findOrFail($id);
+
+        $this->pendingHapusId = $bagian->id;
+        $this->pendingHapusNama = $bagian->nama;
+    }
+
+    public function batalkanHapus(): void
+    {
+        $this->pendingHapusId = null;
+        $this->pendingHapusNama = '';
+    }
+
     /**
      * Hapus permanen HANYA bila belum ada satu pun poin tersimpan untuk bagian ini —
      * bila sudah ada isian, nonaktifkan saja (toggleAktif) supaya data historis tidak hilang.
      */
-    public function hapus(int $id): void
+    public function hapus(): void
     {
-        $bagian = BagianKustom::withCount('poin')->findOrFail($id);
+        if (! $this->pendingHapusId) {
+            return;
+        }
+
+        $bagian = BagianKustom::withCount('poin')->findOrFail($this->pendingHapusId);
 
         if ($bagian->poin_count > 0) {
+            $this->batalkanHapus();
             $this->addError('hapus', 'Bagian "'.$bagian->nama.'" sudah punya isian tersimpan — nonaktifkan saja, jangan dihapus, supaya data lama tidak hilang.');
 
             return;
         }
 
         $bagian->delete();
-        unset($this->edit[$id]);
+        unset($this->edit[$bagian->id]);
+
+        $this->batalkanHapus();
 
         BagianKustom::lupakanCache();
         session()->flash('status', 'Bagian kustom dihapus.');

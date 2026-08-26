@@ -194,7 +194,7 @@ class LakinTest extends TestCase
 
         $baris = LakinBaris::where('lakin_id', $lakin->id)->first();
 
-        $component->call('hapusBaris', $baris->id);
+        $component->call('confirmHapusBaris', $baris->id)->call('hapusBaris');
 
         $this->assertDatabaseCount('lakin_baris', 0);
     }
