@@ -62,7 +62,9 @@ class MasterIkuTest extends TestCase
         ]));
 
         $this->assertSame([], $import->errors);
-        $this->assertSame('Sasaran Uji', MasterIkuModel::where('kode', 'IKU-2000')->value('sasaran'));
+        // Kode disimpan dinormalisasi tanpa prefix non-digit (lihat MasterIkuImport::collection()),
+        // sama seperti "IKU-2000" -> "2000" -- query di sini harus ikut memakai bentuk tersimpan.
+        $this->assertSame('Sasaran Uji', MasterIkuModel::where('kode', '2000')->value('sasaran'));
     }
 
     protected function loginSebagaiTimSakip(): User
