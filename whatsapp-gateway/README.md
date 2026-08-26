@@ -65,6 +65,7 @@ Kalau mau manual lewat API langsung:
 - `GET /qr-data` — header `Authorization: Bearer <token>`, versi JSON `{ "status": "...", "qrDataUrl": "data:image/png;base64,..." | null }`, dipakai halaman "Pengingat WA" di SIPINTER
 - `POST /send` — header `Authorization: Bearer <token>`, body `{ "nomor": "628xxxxxxxxxx", "pesan": "..." }`
 - `POST /reset` — header `Authorization: Bearer <token>`, logout dari nomor yang tertaut + hapus sesi, lalu mulai ulang menunggu QR baru
+- `POST /reconnect` — header `Authorization: Bearer <token>`, coba sambungkan ulang sesi yang nyangkut di `connecting`/`disconnected` TANPA menghapus sesi tersimpan (beda dari `/reset`). Dipakai tombol "Coba Sambungkan Ulang" di SIPINTER saat gateway bisa dihubungi tapi statusnya belum `connected`/`waiting_for_qr`.
 
 ## Troubleshooting instalasi
 
@@ -78,6 +79,6 @@ Ini memaksa git memakai HTTPS (tanpa perlu SSH key) untuk clone dependency tsb. 
 
 ## Catatan
 
-- Render free tier akan sleep setelah idle ~15 menit lalu bangun lagi saat ada request masuk — koneksi WhatsApp akan otomatis reconnect (sesi tetap ada di Postgres), tapi ada jeda beberapa detik/menit pertama setelah bangun sebelum siap mengirim. Untuk pengingat yang harus real-time, pertimbangkan plan Render berbayar (tidak sleep) atau layanan *keep-alive* ping ke `/status` tiap beberapa menit.
+- Render free tier akan sleep setelah idle ~15 menit lalu bangun lagi saat ada request masuk — koneksi WhatsApp akan otomatis reconnect (sesi tetap ada di Postgres), tapi ada jeda beberapa detik/menit pertama setelah bangun sebelum siap mengirim. Kalau halaman "Pengingat WA" di SIPINTER menampilkan status error/nyangkut karena ini, klik tombol **"Coba Sambungkan Ulang"** di halaman itu — cukup dari web, tidak perlu buka Render/Supabase. Untuk pengingat yang harus real-time, pertimbangkan plan Render berbayar (tidak sleep) atau layanan *keep-alive* ping ke `/status` tiap beberapa menit.
 - Jangan bagikan `WHATSAPP_API_TOKEN` — siapa pun yang memilikinya bisa mengirim pesan WA atas nama nomor yang terhubung.
 - Ini API tidak resmi (reverse-engineered dari WhatsApp Web) — ada risiko kecil nomor terkena batasan dari WhatsApp bila mengirim pesan dalam volume sangat besar/berulang ke banyak nomor asing. Untuk pengingat internal ke pegawai sendiri dalam jumlah wajar, risikonya rendah.

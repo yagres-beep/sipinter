@@ -167,6 +167,28 @@ app.post('/reset', cekToken, async (req, res) => {
   }
 });
 
+// Coba sambungkan ulang sesi WhatsApp yang nyangkut di 'connecting'/
+// 'disconnected' TANPA menghapus sesi tersimpan (beda dari /reset yang
+// selalu logout & minta QR baru). Dipakai tombol "Coba Sambungkan Ulang"
+// di SIPINTER saat gateway bisa dihubungi tapi Baileys-nya belum siap.
+app.post('/reconnect', cekToken, async (req, res) => {
+  if (connectionStatus === 'connected') {
+    return res.json({ status: 'ok', pesan: 'Gateway sudah terhubung.' });
+  }
+
+  if (connectionStatus !== 'connecting') {
+    connectionStatus = 'connecting';
+    latestQr = null;
+
+    startSock().catch((err) => {
+      console.error('Gagal menyambungkan ulang.', err);
+      connectionStatus = 'disconnected';
+    });
+  }
+
+  res.json({ status: 'ok', pesan: 'Sedang mencoba menyambungkan ulang.' });
+});
+
 app.post('/send', cekToken, async (req, res) => {
   const { nomor, pesan } = req.body || {};
 

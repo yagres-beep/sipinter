@@ -45,8 +45,23 @@
             <div class="info red">
                 ⚠️ Tidak bisa menghubungi gateway WhatsApp. Pastikan <code>WHATSAPP_API_URL</code>/<code>WHATSAPP_API_TOKEN</code> sudah diisi benar di konfigurasi server dan gateway sedang menyala.
             </div>
+            <p style="color:var(--muted);font-size:12.5px;margin:8px 0 0">Kalau gateway pakai hosting gratis (mis. Render), server bisa "tidur" setelah lama tidak dipakai dan butuh sampai ±1 menit untuk bangun lagi. Klik tombol di bawah untuk mencoba membangunkan &amp; menyambungkan ulang tanpa keluar dari halaman ini.</p>
+
+            <div class="btn-row" style="margin-top:10px">
+                <button type="button" class="btn btn-primary" wire:click="sambungkanUlang" wire:loading.attr="disabled" wire:target="sambungkanUlang">
+                    <span wire:loading.remove wire:target="sambungkanUlang">🔄 Coba Sambungkan Ulang</span>
+                    <span wire:loading wire:target="sambungkanUlang"><i class="spin"></i> Menyambungkan (bisa sampai 1 menit)…</span>
+                </button>
+            </div>
         @else
             <div class="info">⏳ Menyambungkan ke gateway, mohon tunggu… (status: <code>{{ $gatewayStatus }}</code>)</div>
+
+            <div class="btn-row" style="margin-top:10px">
+                <button type="button" class="btn btn-primary" wire:click="sambungkanUlang" wire:loading.attr="disabled" wire:target="sambungkanUlang">
+                    <span wire:loading.remove wire:target="sambungkanUlang">🔄 Coba Sambungkan Ulang</span>
+                    <span wire:loading wire:target="sambungkanUlang"><i class="spin"></i> Menyambungkan…</span>
+                </button>
+            </div>
         @endif
     </div>
 

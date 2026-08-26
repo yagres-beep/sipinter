@@ -34,6 +34,36 @@ class WhatsAppGateway extends Component
         $this->showResetConfirm = false;
     }
 
+    /**
+     * Tombol "Coba Sambungkan Ulang" — dipakai saat gateway tidak bisa
+     * dihubungi sama sekali (mis. Render free tier sedang tidur karena
+     * idle, butuh puluhan detik untuk bangun) atau sesi WA-nya nyangkut
+     * di 'connecting'/'disconnected'. Satu klik menutupi kedua kasus tanpa
+     * perlu keluar dari halaman ini:
+     *  1. Ping gateway dengan timeout panjang supaya sempat "bangun" kalau
+     *     sedang tidur, sebelum dianggap benar-benar gagal.
+     *  2. Kalau sudah bisa dihubungi tapi belum connected/waiting_for_qr,
+     *     minta gateway coba sambungkan ulang sesinya (tanpa hapus sesi).
+     */
+    public function sambungkanUlang(): void
+    {
+        $layanan = app(WhatsAppService::class);
+
+        $status = $layanan->statusGateway(45);
+
+        if ($status['status'] === 'error') {
+            session()->flash('error', 'Masih gagal menghubungi gateway setelah menunggu ±45 detik. Kalau gateway pakai hosting gratis yang bisa tidur (mis. Render), coba klik sekali lagi — proses bangun dari tidur kadang butuh beberapa kali percobaan. Kalau tetap gagal, cek apakah service gateway sedang berjalan.');
+
+            return;
+        }
+
+        if (! in_array($status['status'], ['connected', 'waiting_for_qr'], true)) {
+            $layanan->reconnectGateway();
+        }
+
+        session()->flash('status', 'Berhasil menghubungi gateway. Status di bawah akan diperbarui otomatis.');
+    }
+
     public function resetSesi(): void
     {
         $this->showResetConfirm = false;

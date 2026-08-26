@@ -105,16 +105,24 @@ class WhatsAppService
      * satu status asli gateway) bila gateway tidak terkonfigurasi/tidak
      * bisa dihubungi sama sekali.
      *
+     * $timeoutDetik dibuat bisa diatur karena gateway di-hosting di Render
+     * free tier yang "tidur" setelah idle & butuh puluhan detik untuk
+     * bangun saat menerima request pertama — polling otomatis (wire:poll)
+     * pakai timeout pendek (default) supaya halaman tetap responsif, tapi
+     * aksi manual "Coba Sambungkan Ulang" (lihat sambungkanUlang() di
+     * WhatsAppGateway) butuh timeout panjang supaya sempat menunggu gateway
+     * selesai bangun sebelum dianggap gagal.
+     *
      * @return array{status: string, qrDataUrl: ?string}
      */
-    public function statusGateway(): array
+    public function statusGateway(int $timeoutDetik = 10): array
     {
         if (! $this->terkonfigurasi()) {
             return ['status' => 'error', 'qrDataUrl' => null];
         }
 
         try {
-            $respons = $this->http()->get('/qr-data');
+            $respons = $this->http($timeoutDetik)->get('/qr-data');
 
             if ($respons->failed()) {
                 return ['status' => 'error', 'qrDataUrl' => null];
@@ -128,6 +136,28 @@ class WhatsAppService
             Log::warning('WhatsAppService: gagal mengambil status gateway.', ['pesan_error' => $e->getMessage()]);
 
             return ['status' => 'error', 'qrDataUrl' => null];
+        }
+    }
+
+    /**
+     * Minta gateway mencoba menyambungkan ulang sesi WhatsApp yang nyangkut
+     * di status 'connecting'/'disconnected' TANPA menghapus sesi tersimpan
+     * (beda dari resetGateway() yang selalu logout + minta QR baru). Dipakai
+     * tombol "Coba Sambungkan Ulang" saat gateway sudah bisa dihubungi tapi
+     * belum 'connected'/'waiting_for_qr'.
+     */
+    public function reconnectGateway(): bool
+    {
+        if (! $this->terkonfigurasi()) {
+            return false;
+        }
+
+        try {
+            return $this->http(45)->post('/reconnect')->successful();
+        } catch (\Throwable $e) {
+            Log::warning('WhatsAppService: gagal menyambungkan ulang gateway.', ['pesan_error' => $e->getMessage()]);
+
+            return false;
         }
     }
 
@@ -161,12 +191,12 @@ class WhatsAppService
         return true;
     }
 
-    protected function http(): PendingRequest
+    protected function http(int $timeoutDetik = 10): PendingRequest
     {
         $apiUrl = rtrim((string) config('services.whatsapp.api_url'), '/');
 
         return Http::withToken(config('services.whatsapp.api_token'))
-            ->timeout(10)
+            ->timeout($timeoutDetik)
             ->baseUrl($apiUrl);
     }
 
