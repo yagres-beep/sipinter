@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Jobs\KirimPengingatWhatsAppJob;
 use App\Models\Notula;
 use App\Models\PengaturanPenerimaPengingat;
+use App\Models\PengaturanTemplatePengingat;
 use App\Models\Periode;
 use App\Services\NotulaService;
 use Illuminate\Console\Command;
@@ -37,11 +38,10 @@ class PengingatIkuLengkapCommand extends Command
             return self::SUCCESS;
         }
 
-        $pesan = sprintf(
-            "Pengingat SIPINTER:\nSeluruh IKU Triwulan %d Tahun %d sudah lengkap (terverifikasi), silakan susun Notula.",
-            $periode->triwulan,
-            $periode->tahun
-        );
+        $pesan = PengaturanTemplatePengingat::render('iku_lengkap', [
+            'triwulan' => (string) $periode->triwulan,
+            'tahun' => (string) $periode->tahun,
+        ]);
 
         foreach (PengaturanPenerimaPengingat::resolveUsers('iku_lengkap') as $user) {
             KirimPengingatWhatsAppJob::dispatch($user->nomor_telepon, $pesan);

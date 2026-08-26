@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\RiwayatPengirimanWa;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -23,14 +24,28 @@ class WhatsAppService
      */
     public function kirim(?string $nomorTelepon, string $pesan): bool
     {
+        return $this->kirimDenganAlasan($nomorTelepon, $pesan)['berhasil'];
+    }
+
+    /**
+     * Sama seperti kirim(), tapi juga mengembalikan alasan gagal & mencatat
+     * setiap percobaan (berhasil maupun gagal) ke tabel riwayat_pengiriman_wa
+     * — dipakai fitur "Kirim Pesan Tes" & kartu "Riwayat Pengiriman" di
+     * halaman Pengingat WA supaya Tim SAKIP tahu persis apa yang terjadi,
+     * bukan cuma "gagal" tanpa detail.
+     *
+     * @return array{berhasil: bool, alasan: ?string}
+     */
+    public function kirimDenganAlasan(?string $nomorTelepon, string $pesan): array
+    {
         $nomor = $this->normalisasiNomor($nomorTelepon);
 
         if ($nomor === null) {
-            return false;
+            return $this->catat($nomorTelepon ?? '', $pesan, false, 'Nomor telepon kosong/tidak valid.');
         }
 
         if (! $this->terkonfigurasi()) {
-            return false;
+            return $this->catat($nomor, $pesan, false, 'Gateway belum dikonfigurasi (WHATSAPP_API_URL/WHATSAPP_API_TOKEN belum diisi di server).');
         }
 
         try {
@@ -46,18 +61,41 @@ class WhatsAppService
                     'body' => $respons->body(),
                 ]);
 
-                return false;
+                $alasan = $respons->json('pesan') ?: "Gateway menolak permintaan (HTTP {$respons->status()}).";
+
+                return $this->catat($nomor, $pesan, false, $alasan);
             }
 
-            return true;
+            return $this->catat($nomor, $pesan, true, null);
         } catch (\Throwable $e) {
             Log::warning('WhatsAppService: gagal menghubungi gateway.', [
                 'nomor' => $nomor,
                 'pesan_error' => $e->getMessage(),
             ]);
 
-            return false;
+            return $this->catat($nomor, $pesan, false, 'Tidak bisa menghubungi gateway: '.$e->getMessage());
         }
+    }
+
+    /**
+     * @return array{berhasil: bool, alasan: ?string}
+     */
+    protected function catat(string $nomor, string $pesan, bool $berhasil, ?string $alasan): array
+    {
+        try {
+            RiwayatPengirimanWa::create([
+                'nomor_telepon' => $nomor,
+                'pesan' => $pesan,
+                'berhasil' => $berhasil,
+                'alasan_gagal' => $alasan,
+            ]);
+        } catch (\Throwable $e) {
+            // Riwayat cuma catatan tambahan — gagal mencatat tidak boleh mengubah
+            // hasil pengiriman yang sesungguhnya.
+            Log::warning('WhatsAppService: gagal mencatat riwayat pengiriman.', ['pesan_error' => $e->getMessage()]);
+        }
+
+        return ['berhasil' => $berhasil, 'alasan' => $alasan];
     }
 
     /**

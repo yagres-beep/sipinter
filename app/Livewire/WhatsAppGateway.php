@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Models\RiwayatPengirimanWa;
 use App\Services\WhatsAppService;
 use Livewire\Component;
 
@@ -46,13 +47,13 @@ class WhatsAppGateway extends Component
             'pesanTes' => ['required', 'string', 'max:500'],
         ], [], ['nomorTes' => 'nomor telepon', 'pesanTes' => 'isi pesan']);
 
-        $berhasil = app(WhatsAppService::class)->kirim($this->nomorTes, $this->pesanTes);
+        $hasil = app(WhatsAppService::class)->kirimDenganAlasan($this->nomorTes, $this->pesanTes);
 
         session()->flash(
-            $berhasil ? 'status' : 'error',
-            $berhasil
+            $hasil['berhasil'] ? 'status' : 'error',
+            $hasil['berhasil']
                 ? "Pesan tes berhasil dikirim ke {$this->nomorTes}."
-                : 'Gagal mengirim pesan tes — pastikan gateway berstatus "terhubung" & format nomornya benar (mis. 08xxxxxxxxxx).'
+                : "Gagal mengirim pesan tes: {$hasil['alasan']}"
         );
     }
 
@@ -63,6 +64,7 @@ class WhatsAppGateway extends Component
         return view('livewire.whats-app-gateway', [
             'gatewayStatus' => $gateway['status'],
             'qrDataUrl' => $gateway['qrDataUrl'],
+            'riwayat' => RiwayatPengirimanWa::latest()->limit(20)->get(),
         ]);
     }
 }

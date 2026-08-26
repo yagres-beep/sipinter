@@ -6,6 +6,7 @@ use App\Jobs\KirimPengingatWhatsAppJob;
 use App\Models\Capaian;
 use App\Models\PengaturanPengingat;
 use App\Models\PengaturanPenerimaPengingat;
+use App\Models\PengaturanTemplatePengingat;
 use App\Models\Periode;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
@@ -56,16 +57,14 @@ class PengingatDeadlineIkuCommand extends Command
             }
 
             $pesan = $lewatTenggat
-                ? sprintf(
-                    "Pengingat SIPINTER:\nIKU \"%s\" belum diisi padahal tenggat pengajuan (akhir %s) sudah lewat.",
-                    $capaian->masterIku->indikator,
-                    $akhirBulan->translatedFormat('F Y')
-                )
-                : sprintf(
-                    "Pengingat SIPINTER:\nTenggat pengajuan IKU \"%s\" tanggal %s, segera ajukan.",
-                    $capaian->masterIku->indikator,
-                    $akhirBulan->translatedFormat('d F Y')
-                );
+                ? PengaturanTemplatePengingat::render('deadline_iku_lewat', [
+                    'indikator' => $capaian->masterIku->indikator,
+                    'bulan_tenggat' => $akhirBulan->translatedFormat('F Y'),
+                ])
+                : PengaturanTemplatePengingat::render('deadline_iku_akan_tiba', [
+                    'indikator' => $capaian->masterIku->indikator,
+                    'tanggal_tenggat' => $akhirBulan->translatedFormat('d F Y'),
+                ]);
 
             $penerima = PengaturanPenerimaPengingat::resolveUsers('deadline_iku', $capaian->masterIku->semuaPenanggungJawab());
 

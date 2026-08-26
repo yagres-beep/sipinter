@@ -6,6 +6,7 @@ use App\Events\NotulaStatusDiubah;
 use App\Jobs\KirimPengingatWhatsAppJob;
 use App\Models\Notula;
 use App\Models\PengaturanPenerimaPengingat;
+use App\Models\PengaturanTemplatePengingat;
 use Illuminate\Contracts\Queue\ShouldQueue;
 
 /**
@@ -28,10 +29,9 @@ class KirimPengingatStatusNotula implements ShouldQueue
 
     protected function kirimKeKepala(Notula $notula): void
     {
-        $pesan = sprintf(
-            "Pengingat SIPINTER:\nNotula %s sudah digabungkan Tim SAKIP dan siap ditandatangani/disetujui.",
-            $this->labelTriwulan($notula)
-        );
+        $pesan = PengaturanTemplatePengingat::render('notula_menunggu_persetujuan', [
+            'triwulan_label' => $this->labelTriwulan($notula),
+        ]);
 
         foreach (PengaturanPenerimaPengingat::resolveUsers('notula_menunggu_persetujuan') as $user) {
             KirimPengingatWhatsAppJob::dispatch($user->nomor_telepon, $pesan);
@@ -40,11 +40,9 @@ class KirimPengingatStatusNotula implements ShouldQueue
 
     protected function kirimKeTimSakip(Notula $notula): void
     {
-        $pesan = sprintf(
-            "Pengingat SIPINTER:\nNotula %s dikembalikan Kepala, perlu diperbaiki.%s",
-            $this->labelTriwulan($notula),
-            $notula->catatan_pengembalian ? "\nCatatan: {$notula->catatan_pengembalian}" : ''
-        );
+        $pesan = PengaturanTemplatePengingat::render('notula_dikembalikan', [
+            'triwulan_label' => $this->labelTriwulan($notula),
+        ]).($notula->catatan_pengembalian ? "\nCatatan: {$notula->catatan_pengembalian}" : '');
 
         foreach (PengaturanPenerimaPengingat::resolveUsers('notula_dikembalikan') as $user) {
             KirimPengingatWhatsAppJob::dispatch($user->nomor_telepon, $pesan);

@@ -70,7 +70,48 @@
         </div>
     </div>
 
+    <div class="card">
+        <div class="card-h">📜 Riwayat Pengiriman</div>
+        <div class="info">ℹ️ 20 pengiriman terakhir (tes maupun pengingat otomatis), dengan alasan kalau gagal. Halaman ini otomatis memperbarui diri tiap beberapa detik.</div>
+
+        @if ($riwayat->isEmpty())
+            <p class="muted" style="font-size:12.5px">Belum ada pengiriman.</p>
+        @else
+            <div class="table-scroll" style="max-height:360px">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Waktu</th>
+                            <th>Nomor</th>
+                            <th>Pesan</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($riwayat as $baris)
+                            <tr wire:key="riwayat-wa-{{ $baris->id }}">
+                                <td class="muted" style="white-space:nowrap">{{ $baris->created_at->format('d/m/y H:i') }}</td>
+                                <td>{{ $baris->nomor_telepon }}</td>
+                                <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ $baris->pesan }}">{{ $baris->pesan }}</td>
+                                <td>
+                                    @if ($baris->berhasil)
+                                        <span class="badge b-approve">✓ Berhasil</span>
+                                    @else
+                                        <span class="badge b-tolak" title="{{ $baris->alasan_gagal }}">✕ Gagal</span>
+                                        <div class="muted" style="font-size:11px;margin-top:3px">{{ $baris->alasan_gagal }}</div>
+                                    @endif
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endif
+    </div>
+
     <livewire:pengaturan-pengingat />
 
     <livewire:pengaturan-penerima-pengingat />
+
+    <livewire:pengaturan-template-pengingat />
 </div>

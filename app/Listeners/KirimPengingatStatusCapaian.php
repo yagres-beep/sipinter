@@ -6,6 +6,7 @@ use App\Events\CapaianStatusDiubah;
 use App\Jobs\KirimPengingatWhatsAppJob;
 use App\Models\Capaian;
 use App\Models\PengaturanPenerimaPengingat;
+use App\Models\PengaturanTemplatePengingat;
 use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 
@@ -35,11 +36,10 @@ class KirimPengingatStatusCapaian implements ShouldQueue
 
     protected function kirimKeTimSakip(Capaian $capaian): void
     {
-        $pesan = sprintf(
-            "Pengingat SIPINTER:\nIKU \"%s\" (%s) sudah diajukan Ketua Tim, perlu diperiksa.",
-            $capaian->masterIku->indikator,
-            $this->labelPeriode($capaian)
-        );
+        $pesan = PengaturanTemplatePengingat::render('iku_diajukan', [
+            'indikator' => $capaian->masterIku->indikator,
+            'periode' => $this->labelPeriode($capaian),
+        ]);
 
         foreach (PengaturanPenerimaPengingat::resolveUsers('iku_diajukan') as $user) {
             KirimPengingatWhatsAppJob::dispatch($user->nomor_telepon, $pesan);
@@ -48,12 +48,10 @@ class KirimPengingatStatusCapaian implements ShouldQueue
 
     protected function kirimKePenanggungJawab(Capaian $capaian, ?string $catatan): void
     {
-        $pesan = sprintf(
-            "Pengingat SIPINTER:\nIKU \"%s\" (%s) dikembalikan Tim SAKIP, perlu diperbaiki.%s",
-            $capaian->masterIku->indikator,
-            $this->labelPeriode($capaian),
-            $catatan ? "\nCatatan: {$catatan}" : ''
-        );
+        $pesan = PengaturanTemplatePengingat::render('iku_dikembalikan', [
+            'indikator' => $capaian->masterIku->indikator,
+            'periode' => $this->labelPeriode($capaian),
+        ]).($catatan ? "\nCatatan: {$catatan}" : '');
 
         $penerima = PengaturanPenerimaPengingat::resolveUsers('iku_dikembalikan', $capaian->masterIku->semuaPenanggungJawab());
 
