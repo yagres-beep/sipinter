@@ -177,6 +177,7 @@ class KompilasiNotulaTest extends TestCase
             'uraian_kegiatan' => 'Kegiatan uji Bagian I',
             'jenis' => 'bukan_survei_sensus',
             'status_dokumen' => Kegiatan::STATUS_DIVERIFIKASI,
+            'rincian_output' => 'Publikasi/Laporan Statistik Uji',
             'volume_ro' => '3 publikasi',
             'progres_persen' => 75,
         ]);
@@ -190,12 +191,36 @@ class KompilasiNotulaTest extends TestCase
         $notula = app(NotulaService::class)->untukTriwulan(2026, 2);
         $html = app(NotulaService::class)->susunBagianSatu($notula);
 
-        $this->assertStringContainsString($kegiatan->uraian_kegiatan, $html);
+        $this->assertStringContainsString('Publikasi/Laporan Statistik Uji', $html);
         $this->assertStringContainsString('3 publikasi', $html);
         $this->assertStringContainsString('75,00%', $html);
         $this->assertStringContainsString('Jumlah publikasi tepat waktu dibagi jumlah seluruh publikasi', $html);
         $this->assertStringContainsString('Data internal Fungsi Statistik', $html);
         $this->assertStringContainsString('Penjelasan tambahan hasil rapat', $html);
+    }
+
+    public function test_bagian1_pakai_uraian_kegiatan_sebagai_rincian_output_bila_belum_diisi_tim_sakip(): void
+    {
+        $iku = MasterIku::create([
+            'kode' => '9005a', 'indikator' => 'Uji IKU Lima A', 'sasaran' => 'Sasaran Uji', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
+        ]);
+
+        $periode = Periode::create([
+            'tahun' => 2026, 'bulan' => 4, 'triwulan' => 2, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false,
+        ]);
+
+        Kegiatan::create([
+            'iku_id' => $iku->id,
+            'periode_id' => $periode->id,
+            'uraian_kegiatan' => 'Kegiatan uji tanpa rincian output',
+            'jenis' => 'bukan_survei_sensus',
+            'status_dokumen' => Kegiatan::STATUS_DIVERIFIKASI,
+        ]);
+
+        $notula = app(NotulaService::class)->untukTriwulan(2026, 2);
+        $html = app(NotulaService::class)->susunBagianSatu($notula);
+
+        $this->assertStringContainsString('Kegiatan uji tanpa rincian output', $html);
     }
 
     public function test_bagian1_tw_pertama_tidak_mencoba_tautan_bukti_dukung_tw_sebelumnya(): void

@@ -712,6 +712,7 @@ class VerifikasiCapaianTest extends TestCase
         $data = $this->siapkanIkuDenganDuaKegiatan();
 
         Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
+            ->set("rincianOutput.{$data['kegiatan1']->id}", 'Publikasi/Laporan Statistik')
             ->set("realisasiVolumeRo.{$data['kegiatan1']->id}", '2 publikasi')
             ->set("realisasiProgresPersen.{$data['kegiatan1']->id}", 80)
             ->set('catatan', 'Penjelasan tambahan dari Tim SAKIP')
@@ -723,6 +724,7 @@ class VerifikasiCapaianTest extends TestCase
             ->assertHasNoErrors();
 
         $kegiatan1 = $data['kegiatan1']->fresh();
+        $this->assertSame('Publikasi/Laporan Statistik', $kegiatan1->rincian_output);
         $this->assertSame('2 publikasi', $kegiatan1->volume_ro);
         $this->assertEquals(80, $kegiatan1->progres_persen);
         $this->assertSame('Penjelasan tambahan dari Tim SAKIP', $data['capaian']->fresh()->catatan);
