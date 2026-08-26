@@ -3,10 +3,11 @@
 namespace App\Livewire;
 
 use App\Models\PengaturanPengingat as PengaturanPengingatModel;
+use Carbon\Carbon;
 use Livewire\Component;
 
 /**
- * Pengaturan waktu pengingat WA terjadwal (Tim SAKIP) — jam pengecekan harian &
+ * Pengaturan waktu pengingat email terjadwal (Tim SAKIP) — jam pengecekan harian &
  * H-berapa hari sebelum tenggat pengajuan IKU mulai diingatkan, tanpa dikodekan
  * langsung (lihat routes/console.php & PengingatDeadlineIkuCommand), supaya Tim
  * SAKIP bisa menyesuaikan sendiri tanpa rilis kode baru. Hanya berlaku untuk
@@ -40,6 +41,29 @@ class PengaturanPengingat extends Component
             'jamKirim' => 'jam pengecekan harian',
             'deadlineHMinus' => 'H- pengingat tenggat',
         ];
+    }
+
+    /**
+     * Jam kirim disimpan & dipakai apa adanya oleh Schedule::dailyAt() di
+     * routes/console.php, yang berjalan di timezone app (config('app.timezone') =
+     * UTC, tidak diubah ke Asia/Jakarta) — jadi jam yang diisi di sini sebenarnya
+     * jam UTC, bukan WIB. Hint ini menampilkan padanannya di WIB/WITA/WIT supaya
+     * Tim SAKIP tidak salah kira.
+     */
+    public function konversiJam(): ?string
+    {
+        if (! preg_match('/^\d{2}:\d{2}$/', $this->jamKirim)) {
+            return null;
+        }
+
+        $utc = Carbon::createFromFormat('H:i', $this->jamKirim, 'UTC');
+
+        return sprintf(
+            '%s WIB · %s WITA · %s WIT',
+            $utc->copy()->setTimezone('Asia/Jakarta')->format('H:i'),
+            $utc->copy()->setTimezone('Asia/Makassar')->format('H:i'),
+            $utc->copy()->setTimezone('Asia/Jayapura')->format('H:i'),
+        );
     }
 
     public function simpan(): void
