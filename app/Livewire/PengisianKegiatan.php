@@ -597,14 +597,27 @@ class PengisianKegiatan extends Component
             $triwulanSekarang = $this->triwulanDari($this->bulan);
             $periodeSaatIni = $this->periodeSaatIni();
 
+            // Pasangan periode INI SENDIRI yang sudah "terverifikasi" biasanya boleh ikut
+            // tampil di sini (sudah pindah dari kendalaBlocks yang editable ke riwayat
+            // hanya-baca). TAPI hanya bila verifikasiTerlihat() — kalau Tim SAKIP baru
+            // menandainya di tengah pemeriksaan (Capaian masih "diajukan"/"sedang
+            // ditangani"), pasangan itu TETAP dianggap belum final dan harus tetap
+            // muncul di kendalaBlocks (lihat muatKendalaBlocks()), bukan di sini —
+            // supaya tidak bocor sebagai "sudah diterima" sebelum benar-benar final.
+            $verifikasiTerlihat = $this->verifikasiTerlihat();
+
             return KendalaSolusiModel::with('periode')
                 ->where('iku_id', $this->iku_id)
                 ->whereHas('periode', function ($q) use ($triwulanSekarang) {
                     $q->where('tahun', $this->tahun)->where('triwulan', '<=', $triwulanSekarang);
                 })
-                ->when($periodeSaatIni, function ($q) use ($periodeSaatIni) {
-                    $q->where(fn ($q2) => $q2->where('periode_id', '!=', $periodeSaatIni->id)
-                        ->orWhere('status_verifikasi', 'terverifikasi'));
+                ->when($periodeSaatIni, function ($q) use ($periodeSaatIni, $verifikasiTerlihat) {
+                    if ($verifikasiTerlihat) {
+                        $q->where(fn ($q2) => $q2->where('periode_id', '!=', $periodeSaatIni->id)
+                            ->orWhere('status_verifikasi', 'terverifikasi'));
+                    } else {
+                        $q->where('periode_id', '!=', $periodeSaatIni->id);
+                    }
                 })
                 ->get()
                 ->sortBy(fn ($item) => $item->periode->triwulan)
@@ -626,7 +639,7 @@ class PengisianKegiatan extends Component
             return collect();
         }
 
-        return Cache::remember($this->cacheKeyPeriodeIku("riwayat-bagian-{$bagian->id}"), self::CACHE_TTL_DETIK, function () use ($bagian) {
+        $daftar = Cache::remember($this->cacheKeyPeriodeIku("riwayat-bagian-{$bagian->id}"), self::CACHE_TTL_DETIK, function () use ($bagian) {
             $triwulanSekarang = $this->triwulanDari($this->bulan);
             $periodeSaatIni = $this->periodeSaatIni();
             $terkunci = in_array($this->statusCapaianSaatIni(), self::STATUS_KEGIATAN_TERKUNCI, true);
@@ -648,6 +661,26 @@ class PengisianKegiatan extends Component
                 ->sortBy(fn ($item) => $item->periode->triwulan)
                 ->groupBy(fn ($item) => $item->periode->triwulan);
         });
+
+        // Kasus di atas ($terkunci tapi status masih "diajukan"/"sedang_ditangani",
+        // BELUM verifikasiTerlihat()) tetap menyertakan poin periode ini di riwayat —
+        // masking di sini (SETELAH Cache::remember, bukan di dalamnya, supaya nilai
+        // asli tetap yang disimpan ke cache) mencegah status_verifikasi/catatan
+        // Tim SAKIP yang masih berjalan ikut bocor lewat jalur riwayat ini.
+        if (! $this->verifikasiTerlihat() && ($periodeSaatIni = $this->periodeSaatIni())) {
+            foreach ($daftar->flatten() as $poin) {
+                if ($poin->periode_id !== $periodeSaatIni->id) {
+                    continue;
+                }
+
+                foreach ($poin->berkas as $berkas) {
+                    $berkas->status_verifikasi = 'menunggu';
+                    $berkas->catatan = null;
+                }
+            }
+        }
+
+        return $daftar;
     }
 
     /**
@@ -664,7 +697,11 @@ class PengisianKegiatan extends Component
     {
         $periode = $this->iku_id ? $this->periodeSaatIni() : null;
 
-        if (! $periode) {
+        // Banner ini merangkum ALASAN penolakan Tim SAKIP — baru boleh tampil setelah
+        // siklus pemeriksaannya benar-benar final (lihat verifikasiTerlihat()), supaya
+        // tidak menampilkan alasan yang masih bisa berubah selagi Tim SAKIP masih
+        // memeriksa (belum tentu jadi "Kembalikan ke Ketua Tim" beneran).
+        if (! $periode || ! $this->verifikasiTerlihat()) {
             return collect();
         }
 
@@ -798,6 +835,54 @@ class PengisianKegiatan extends Component
     }
 
     /**
+     * Tim SAKIP menandai berkas/kendala Sesuai/Tidak Sesuai satu per satu SELAGI
+     * masih memeriksa (lihat App\Livewire\VerifikasiCapaian::tandaiSesuai() dkk.) —
+     * itu langsung mengubah status_verifikasi & catatan di DB pada saat itu juga,
+     * SEBELUM Tim SAKIP menekan "Verifikasi Selesai"/"Kembalikan ke Ketua Tim".
+     * Tanpa gerbang ini, Ketua Tim yang membuka halaman ini di tengah proses
+     * pemeriksaan akan melihat tanda "Tidak Sesuai"+catatan yang masih berubah-ubah
+     * (bisa saja belum final, Tim SAKIP masih bisa menandainya ulang) — membingungkan
+     * karena badge status besar Capaian sendiri masih "Diajukan"/belum dikembalikan.
+     *
+     * Hasil pemeriksaan Tim SAKIP baru boleh terlihat Ketua Tim setelah SATU siklus
+     * pemeriksaan benar-benar selesai (allow-list eksplisit, bukan daftar
+     * kecuali — status baru di masa depan default TERSEMBUNYI sampai ditambahkan
+     * sengaja ke sini): "dikembalikan" (perlu diperbaiki), "diverifikasi"/"disetujui"
+     * (diterima). Dipakai bersama maskBerkas() di seluruh method muat*()/riwayat*()
+     * di bawah supaya satu aturan ini konsisten di semua tempat status_verifikasi/
+     * catatan ditampilkan ke Ketua Tim.
+     */
+    protected function verifikasiTerlihat(): bool
+    {
+        return in_array($this->statusCapaianSaatIni(), [
+            Capaian::STATUS_DIKEMBALIKAN,
+            Capaian::STATUS_DIVERIFIKASI,
+            Capaian::STATUS_DISETUJUI,
+        ], true);
+    }
+
+    /**
+     * Sembunyikan status_verifikasi & catatan satu berkas (array bentuk existing_bukti,
+     * lihat muatBlocksKegiatan()/muatBagianKustomBlocks()) selagi verifikasiTerlihat()
+     * masih false — dipakai supaya seluruh tempat yang menyusun existing_bukti tidak
+     * perlu mengulang pengecekan yang sama.
+     *
+     * @param  array{id: int, nama_file: string, status_verifikasi: string, catatan: ?string}  $berkas
+     * @return array{id: int, nama_file: string, status_verifikasi: string, catatan: ?string}
+     */
+    protected function maskBerkas(array $berkas): array
+    {
+        if ($this->verifikasiTerlihat()) {
+            return $berkas;
+        }
+
+        $berkas['status_verifikasi'] = 'menunggu';
+        $berkas['catatan'] = null;
+
+        return $berkas;
+    }
+
+    /**
      * Sekali Capaian berstatus "disetujui" (sudah masuk notula final yang
      * ditandatangani Kepala), isian ini dikunci TOTAL — Ketua Tim tidak bisa lagi
      * menambah kegiatan maupun menyimpan draf/mengajukan lewat form ini sama sekali,
@@ -868,12 +953,12 @@ class PengisianKegiatan extends Component
             'jenis' => $kegiatan->jenis,
             'tahapan_survei' => $kegiatan->tahapan_survei ?? '',
             'bukti' => [],
-            'existing_bukti' => $kegiatan->berkas->map(fn (Berkas $b) => [
+            'existing_bukti' => $kegiatan->berkas->map(fn (Berkas $b) => $this->maskBerkas([
                 'id' => $b->id,
                 'nama_file' => $b->nama_file,
                 'status_verifikasi' => $b->status_verifikasi,
                 'catatan' => $b->catatan,
-            ])->all(),
+            ]))->all(),
         ])->values()->all();
     }
 
@@ -885,6 +970,13 @@ class PengisianKegiatan extends Component
      * riwayatKendalaSolusi() sebagai riwayat hanya-baca. Dipanggil sejajar dengan
      * muatBlocksKegiatan() supaya isian lama (draft/ditolak) tetap ada saat form
      * dibuka ulang, bukan selalu kosong.
+     *
+     * Pengecualian: selagi verifikasiTerlihat() masih false (Tim SAKIP belum
+     * menyelesaikan SATU siklus pemeriksaan penuh untuk periode ini), pasangan yang
+     * SUDAH ditandai "terverifikasi" di tengah jalan TETAP ikut dimuat ke sini
+     * (bukan pindah ke riwayat dulu) dengan status_verifikasi/catatan disamarkan
+     * jadi "menunggu"/null — supaya Ketua Tim tidak melihat hasil tandaan Tim SAKIP
+     * yang masih bisa berubah sebelum benar-benar final (lihat verifikasiTerlihat()).
      */
     protected function muatKendalaBlocks(): void
     {
@@ -896,11 +988,20 @@ class PengisianKegiatan extends Component
             return;
         }
 
-        $daftar = KendalaSolusiModel::where('iku_id', $this->iku_id)
-            ->where('periode_id', $periode->id)
-            ->where('status_verifikasi', '!=', 'terverifikasi')
-            ->orderBy('id')
-            ->get();
+        // Selagi verifikasiTerlihat() masih false (Tim SAKIP belum menyelesaikan siklus
+        // pemeriksaan ini), SELURUH pasangan periode ini dimuat sebagai blok — termasuk
+        // yang sudah diam-diam ditandai "terverifikasi" Tim SAKIP di tengah jalan —
+        // supaya tidak ada pasangan yang tiba-tiba "menghilang" dari sini (lalu muncul
+        // di riwayatKendalaSolusi() sebagai sudah diterima) sebelum pemeriksaannya
+        // benar-benar final. Begitu verifikasiTerlihat() true, kembali ke perilaku
+        // semula: yang sudah "terverifikasi" pindah ke riwayat (hanya-baca).
+        $query = KendalaSolusiModel::where('iku_id', $this->iku_id)->where('periode_id', $periode->id);
+
+        if ($this->verifikasiTerlihat()) {
+            $query->where('status_verifikasi', '!=', 'terverifikasi');
+        }
+
+        $daftar = $query->orderBy('id')->get();
 
         if ($daftar->isEmpty()) {
             $this->kendalaBlocks = [$this->emptyKendalaBlock()];
@@ -912,8 +1013,8 @@ class PengisianKegiatan extends Component
             'id' => $ks->id,
             'kendala' => $ks->kendala,
             'solusi' => $ks->solusi ?? '',
-            'status_verifikasi' => $ks->status_verifikasi,
-            'catatan' => $ks->catatan,
+            'status_verifikasi' => $this->verifikasiTerlihat() ? $ks->status_verifikasi : 'menunggu',
+            'catatan' => $this->verifikasiTerlihat() ? $ks->catatan : null,
         ])->values()->all();
     }
 
@@ -961,12 +1062,12 @@ class PengisianKegiatan extends Component
                 'id' => $poin->id,
                 'teks' => $poin->teks,
                 'bukti' => [],
-                'existing_bukti' => $poin->berkas->map(fn (Berkas $b) => [
+                'existing_bukti' => $poin->berkas->map(fn (Berkas $b) => $this->maskBerkas([
                     'id' => $b->id,
                     'nama_file' => $b->nama_file,
                     'status_verifikasi' => $b->status_verifikasi,
                     'catatan' => $b->catatan,
-                ])->all(),
+                ]))->all(),
             ])->values()->all();
         }
     }
@@ -993,7 +1094,7 @@ class PengisianKegiatan extends Component
             return $this->cacheRtlBerjalan = collect();
         }
 
-        return $this->cacheRtlBerjalan = Cache::remember(
+        $rtlBerjalan = Cache::remember(
             $this->cacheKeyPeriodeIku('rtl-berjalan'),
             self::CACHE_TTL_DETIK,
             function () {
@@ -1005,6 +1106,21 @@ class PengisianKegiatan extends Component
                     ->get();
             }
         );
+
+        // Bukti realisasi RTL diperiksa Tim SAKIP bersamaan dengan siklus verifikasi
+        // IKU+periode berjalan (lihat VerifikasiCapaian::rtlEvaluasiSebelumnya()) —
+        // masking di sini SETELAH Cache::remember (bukan di dalamnya) supaya nilai asli
+        // tetap disimpan ke cache, sama seperti pola di riwayatBagianKustom() di atas.
+        if (! $this->verifikasiTerlihat()) {
+            foreach ($rtlBerjalan as $poin) {
+                foreach ($poin->berkas as $berkas) {
+                    $berkas->status_verifikasi = 'menunggu';
+                    $berkas->catatan = null;
+                }
+            }
+        }
+
+        return $this->cacheRtlBerjalan = $rtlBerjalan;
     }
 
     /**

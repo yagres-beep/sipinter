@@ -327,7 +327,7 @@
                                     <button type="button" class="btn btn-ghost btn-sm"
                                         x-on:click="(pendingMark === 'no' || (pendingMark === null && {{ $ks->status_verifikasi === 'ditolak' ? 'true' : 'false' }})) ? $wire.tandaiKendalaTolak({{ $ks->id }}) : $wire.tandaiKendalaSesuai({{ $ks->id }})"
                                         wire:loading.attr="disabled" wire:target="tandaiKendalaSesuai({{ $ks->id }}),tandaiKendalaTolak({{ $ks->id }})">
-                                        <span wire:loading.remove wire:target="tandaiKendalaSesuai({{ $ks->id }}),tandaiKendalaTolak({{ $ks->id }})">💾 Simpan Catatan</span>
+                                        <span wire:loading.remove wire:target="tandaiKendalaSesuai({{ $ks->id }}),tandaiKendalaTolak({{ $ks->id }})">💾 Simpan Verifikasi</span>
                                         <span wire:loading wire:target="tandaiKendalaSesuai({{ $ks->id }}),tandaiKendalaTolak({{ $ks->id }})"><i class="spin"></i> Menyimpan…</span>
                                     </button>
                                     @if ($ks->status_verifikasi !== 'menunggu' && !$errors->has('catatanKendala.'.$ks->id))
@@ -450,19 +450,22 @@
                                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                                 @enderror
 
-                                {{-- Tombol simpan eksplisit untuk catatan — @blur di atas sudah
-                                    menyusulkan simpan otomatis, tapi pengguna tidak selalu sadar itu
-                                    terjadi (mis. langsung menutup modal setelah mengetik). Tombol ini
-                                    memicu penyimpanan yang sama secara eksplisit, dan label "✓
-                                    Tersimpan" di sampingnya (dibaca langsung dari status_verifikasi,
-                                    bukan state Alpine) memberi kepastian nyata bahwa penandaan +
-                                    catatan sudah ada di database, bukan cuma tampak begitu. --}}
+                                {{-- Tombol simpan eksplisit untuk penandaan Sesuai/Tidak Sesuai
+                                    beserta catatannya — @blur di atas sudah menyusulkan simpan
+                                    otomatis, tapi pengguna tidak selalu sadar itu terjadi (mis.
+                                    langsung menutup modal setelah mengetik). Tombol ini memicu
+                                    penyimpanan yang sama secara eksplisit, dan label "✓ Tersimpan"
+                                    di sampingnya (dibaca langsung dari status_verifikasi, bukan
+                                    state Alpine) memberi kepastian nyata bahwa penandaan + catatan
+                                    sudah ada di database, bukan cuma tampak begitu. Catatan hanya
+                                    relevan untuk "Tidak Sesuai" — tandaiSesuai() di komponen
+                                    SELALU mengosongkannya (lihat catatan di sana). --}}
                                 <div style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"
                                     x-show="pendingMark !== null || {{ $file->status_verifikasi !== 'menunggu' ? 'true' : 'false' }}">
                                     <button type="button" class="btn btn-ghost btn-sm"
                                         x-on:click="(pendingMark === 'no' || (pendingMark === null && {{ $file->status_verifikasi === 'ditolak' ? 'true' : 'false' }})) ? $wire.tandaiTolak({{ $file->id }}) : $wire.tandaiSesuai({{ $file->id }})"
                                         wire:loading.attr="disabled" wire:target="tandaiSesuai({{ $file->id }}),tandaiTolak({{ $file->id }})">
-                                        <span wire:loading.remove wire:target="tandaiSesuai({{ $file->id }}),tandaiTolak({{ $file->id }})">💾 Simpan Catatan</span>
+                                        <span wire:loading.remove wire:target="tandaiSesuai({{ $file->id }}),tandaiTolak({{ $file->id }})">💾 Simpan Verifikasi</span>
                                         <span wire:loading wire:target="tandaiSesuai({{ $file->id }}),tandaiTolak({{ $file->id }})"><i class="spin"></i> Menyimpan…</span>
                                     </button>
                                     @if ($file->status_verifikasi !== 'menunggu' && !$errors->has('catatanBerkas.'.$file->id))

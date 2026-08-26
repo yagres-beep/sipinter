@@ -245,10 +245,18 @@ class VerifikasiCapaian extends Component
      * Seluruh kegiatan pendukung IKU pada periode ini (RF-37), ditarik otomatis
      * dari isian ketua tim — Tim SAKIP tidak perlu mengetik ulang.
      */
+    /**
+     * status_dokumen "draft" SENGAJA dikecualikan — kegiatan itu baru tersimpan lewat
+     * "Simpan Draft" Ketua Tim (lihat App\Livewire\PengisianKegiatan::simpanDraft()),
+     * belum pernah diajukan ke Tim SAKIP sama sekali. Tanpa filter ini, kegiatan draft
+     * yang ditambahkan Ketua Tim pada IKU+periode yang SUDAH terlanjur diajukan
+     * (lewat kegiatan lain) akan ikut bocor tampil di sini walau belum "dikirim".
+     */
     public function kegiatanList()
     {
         return $this->cacheKegiatanList ??= Kegiatan::where('iku_id', $this->capaian->iku_id)
             ->where('periode_id', $this->capaian->periode_id)
+            ->where('status_dokumen', '!=', Kegiatan::STATUS_DRAFT)
             ->orderBy('id')
             ->get();
     }
@@ -428,15 +436,24 @@ class VerifikasiCapaian extends Component
         return ! $kegiatan || $this->kegiatanBisaDikoreksi($kegiatan);
     }
 
+    /**
+     * Catatan SELALU dikosongkan di sini — berkas "Sesuai" tidak pernah punya catatan
+     * (kolom itu khusus alasan penolakan, lihat label "Catatan (wajib bila tidak
+     * sesuai)" di blade). $this->catatanBerkas[$berkasId] ikut dikosongkan (bukan
+     * cuma kolom DB) supaya textarea-nya di form langsung ikut kosong pada render
+     * berikutnya — wire:model membaca dari properti ini, bukan dari kolom DB.
+     */
     public function tandaiSesuai(int $berkasId): void
     {
         if (! $this->berkasBisaDiverifikasi($berkasId)) {
             return;
         }
 
+        $this->catatanBerkas[$berkasId] = null;
+
         Berkas::whereKey($berkasId)->update([
             'status_verifikasi' => 'terverifikasi',
-            'catatan' => $this->catatanBerkas[$berkasId] ?? null,
+            'catatan' => null,
         ]);
     }
 
@@ -471,15 +488,21 @@ class VerifikasiCapaian extends Component
         return $this->bisaDiverifikasi() && $this->kendalaSolusiList()->contains('id', $kendalaId);
     }
 
+    /**
+     * Catatan SELALU dikosongkan di sini — sama seperti tandaiSesuai() untuk berkas
+     * di atas, lihat penjelasan di sana.
+     */
     public function tandaiKendalaSesuai(int $kendalaId): void
     {
         if (! $this->kendalaBisaDiverifikasi($kendalaId)) {
             return;
         }
 
+        $this->catatanKendala[$kendalaId] = null;
+
         KendalaSolusi::whereKey($kendalaId)->update([
             'status_verifikasi' => 'terverifikasi',
-            'catatan' => $this->catatanKendala[$kendalaId] ?? null,
+            'catatan' => null,
         ]);
     }
 

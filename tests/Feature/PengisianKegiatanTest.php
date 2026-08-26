@@ -913,6 +913,14 @@ class PengisianKegiatanTest extends TestCase
         $iku = MasterIku::create(['kode' => 'UJI-KENDALA', 'indikator' => 'Indikator uji kendala', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji']);
         $periode = Periode::create(['tahun' => 2026, 'bulan' => 8, 'triwulan' => 3, 'bulan_ke' => 2, 'flag_bulan_terlewat' => false]);
 
+        // Capaian dibuat sejajar berstatus "dikembalikan" — di alur nyata, kendala
+        // baru bisa berstatus "ditolak" setelah Tim SAKIP menyelesaikan pemeriksaan
+        // lewat kembalikanKeKetuaTim() (lihat App\Livewire\VerifikasiCapaian), yang
+        // SELALU menarik status Capaian ini bersamaan. Tanpa baris ini,
+        // PengisianKegiatan::verifikasiTerlihat() menganggap pemeriksaan belum final
+        // (Capaian::status null) dan menyamarkan catatan penolakannya.
+        Capaian::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'status' => Capaian::STATUS_DIKEMBALIKAN]);
+
         $ks = KendalaSolusi::create([
             'iku_id' => $iku->id, 'periode_id' => $periode->id,
             'kendala' => 'Kendala lama', 'solusi' => 'Solusi lama',
@@ -960,6 +968,11 @@ class PengisianKegiatanTest extends TestCase
 
         $iku = MasterIku::create(['kode' => 'UJI-KENDALA-2', 'indikator' => 'Indikator uji kendala 2', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji']);
         $periode = Periode::create(['tahun' => 2026, 'bulan' => 8, 'triwulan' => 3, 'bulan_ke' => 2, 'flag_bulan_terlewat' => false]);
+
+        // Sejajar dengan catatan di test sebelumnya — kendala baru berstatus
+        // "terverifikasi" setelah Tim SAKIP menyelesaikan verifikasiSelesai(), yang
+        // menarik Capaian ini ke "diverifikasi" bersamaan.
+        Capaian::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'status' => Capaian::STATUS_DIVERIFIKASI]);
 
         KendalaSolusi::create([
             'iku_id' => $iku->id, 'periode_id' => $periode->id,
