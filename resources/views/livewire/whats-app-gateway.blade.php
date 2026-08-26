@@ -24,15 +24,6 @@
                     🔌 Putus Tautan / Ganti Nomor
                 </button>
             </div>
-
-            <x-confirm-modal :show="$showResetConfirm" title="Putus Tautan?"
-                message="Putuskan nomor yang sedang tertaut? Pengingat WA berhenti terkirim sampai nomor baru discan.">
-                <button type="button" class="btn btn-ghost" wire:click="batalkanReset" wire:loading.attr="disabled" wire:target="resetSesi">Batal</button>
-                <button type="button" class="btn btn-red" wire:click="resetSesi" wire:loading.attr="disabled" wire:target="resetSesi">
-                    <span wire:loading.remove wire:target="resetSesi">Putus Tautan</span>
-                    <span wire:loading wire:target="resetSesi"><i class="spin"></i> Memutus…</span>
-                </button>
-            </x-confirm-modal>
         @elseif ($gatewayStatus === 'waiting_for_qr' && $qrDataUrl)
             <div class="info">📷 Scan QR ini pakai WhatsApp di HP yang ingin dipakai mengirim pengingat: <b>Setelan → Perangkat Tertaut → Tautkan Perangkat</b>.</div>
 
@@ -45,24 +36,40 @@
             <div class="info red">
                 ⚠️ Tidak bisa menghubungi gateway WhatsApp. Pastikan <code>WHATSAPP_API_URL</code>/<code>WHATSAPP_API_TOKEN</code> sudah diisi benar di konfigurasi server dan gateway sedang menyala.
             </div>
-            <p style="color:var(--muted);font-size:12.5px;margin:8px 0 0">Kalau gateway pakai hosting gratis (mis. Render), server bisa "tidur" setelah lama tidak dipakai dan butuh sampai ±1 menit untuk bangun lagi. Klik tombol di bawah untuk mencoba membangunkan &amp; menyambungkan ulang tanpa keluar dari halaman ini.</p>
+            <p style="color:var(--muted);font-size:12.5px;margin:8px 0 0">Kalau gateway pakai hosting gratis (mis. Render), server bisa "tidur" setelah lama tidak dipakai dan butuh sampai ±1 menit untuk bangun lagi. Klik "Coba Sambungkan Ulang" dulu untuk mencoba membangunkannya. Kalau nomornya baru saja di-logout dari HP (bukan lewat web), pakai "Putus Tautan / Ganti Nomor" supaya sesi lama dihapus dan QR baru bisa discan.</p>
 
             <div class="btn-row" style="margin-top:10px">
                 <button type="button" class="btn btn-primary" wire:click="sambungkanUlang" wire:loading.attr="disabled" wire:target="sambungkanUlang">
                     <span wire:loading.remove wire:target="sambungkanUlang">🔄 Coba Sambungkan Ulang</span>
                     <span wire:loading wire:target="sambungkanUlang"><i class="spin"></i> Menyambungkan (bisa sampai 1 menit)…</span>
                 </button>
+                <button type="button" class="btn btn-red" wire:click="bukaKonfirmasiReset">
+                    🔌 Putus Tautan / Ganti Nomor
+                </button>
             </div>
         @else
             <div class="info">⏳ Menyambungkan ke gateway, mohon tunggu… (status: <code>{{ $gatewayStatus }}</code>)</div>
+            <p style="color:var(--muted);font-size:12.5px;margin:8px 0 0">Kalau statusnya bolak-balik terus & tidak kunjung <code>connected</code>/<code>waiting_for_qr</code> — biasanya karena nomornya baru di-logout dari HP (bukan lewat web) sehingga sesi lama tersimpan sudah tidak valid. Pakai "Putus Tautan / Ganti Nomor" supaya sesi lama dihapus dan QR baru bisa discan.</p>
 
             <div class="btn-row" style="margin-top:10px">
                 <button type="button" class="btn btn-primary" wire:click="sambungkanUlang" wire:loading.attr="disabled" wire:target="sambungkanUlang">
                     <span wire:loading.remove wire:target="sambungkanUlang">🔄 Coba Sambungkan Ulang</span>
                     <span wire:loading wire:target="sambungkanUlang"><i class="spin"></i> Menyambungkan…</span>
                 </button>
+                <button type="button" class="btn btn-red" wire:click="bukaKonfirmasiReset">
+                    🔌 Putus Tautan / Ganti Nomor
+                </button>
             </div>
         @endif
+
+        <x-confirm-modal :show="$showResetConfirm" title="Putus Tautan?"
+            message="Putuskan nomor yang sedang tertaut & hapus sesi lama? Pengingat WA berhenti terkirim sampai nomor baru discan.">
+            <button type="button" class="btn btn-ghost" wire:click="batalkanReset" wire:loading.attr="disabled" wire:target="resetSesi">Batal</button>
+            <button type="button" class="btn btn-red" wire:click="resetSesi" wire:loading.attr="disabled" wire:target="resetSesi">
+                <span wire:loading.remove wire:target="resetSesi">Putus Tautan</span>
+                <span wire:loading wire:target="resetSesi"><i class="spin"></i> Memutus…</span>
+            </button>
+        </x-confirm-modal>
     </div>
 
     <div class="card">
