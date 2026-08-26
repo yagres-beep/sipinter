@@ -41,4 +41,6 @@
             <div class="info">⏳ Menyambungkan ke gateway, mohon tunggu… (status: <code>{{ $gatewayStatus }}</code>)</div>
         @endif
     </div>
+
+    <livewire:pengaturan-pengingat />
 </div>

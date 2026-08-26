@@ -4,13 +4,16 @@ namespace App\Console\Commands;
 
 use App\Jobs\KirimPengingatWhatsAppJob;
 use App\Models\Capaian;
+use App\Models\PengaturanPengingat;
 use App\Models\Periode;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 
 /**
  * Cek harian: IKU yang tenggat pengajuannya (akhir bulan periode berjalan)
- * sudah dekat (H-3 s.d. hari-H) atau sudah lewat tapi belum diajukan.
+ * sudah dekat (H- sesuai PengaturanPengingat::deadline_h_minus, bisa diubah Tim
+ * SAKIP lewat halaman Pengingat WA) s.d. hari-H, atau sudah lewat tapi belum
+ * diajukan.
  *
  * Catatan lingkup: hanya melihat baris Capaian yang SUDAH ADA untuk periode
  * berjalan (dibuat otomatis saat Ketua Tim mulai mengisi, lihat
@@ -35,8 +38,9 @@ class PengingatDeadlineIkuCommand extends Command
         $akhirBulan = Carbon::create($periode->tahun, $periode->bulan, 1)->endOfMonth()->startOfDay()->locale('id');
         $lewatTenggat = $hariIni->gt($akhirBulan);
         $sisaHari = $hariIni->diffInDays($akhirBulan);
+        $hMinus = PengaturanPengingat::ambil()->deadline_h_minus;
 
-        if (! $lewatTenggat && $sisaHari > 3) {
+        if (! $lewatTenggat && $sisaHari > $hMinus) {
             return self::SUCCESS;
         }
 
