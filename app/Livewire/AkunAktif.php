@@ -6,7 +6,8 @@ use App\Models\MasterIku;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\UserTim;
-use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 use Livewire\Component;
 
 /**
@@ -35,6 +36,28 @@ class AkunAktif extends Component
      * @var array<int, string>
      */
     public array $timBaru = [];
+
+    /**
+     * Id pengguna yang sedang dikonfirmasi reset kata sandinya — mengontrol
+     * tampil/tidaknya modal reset (lihat pola x-confirm-modal, tapi di sini
+     * butuh input teks jadi modalnya ditulis manual).
+     */
+    public ?int $pendingResetId = null;
+
+    /** Kata sandi baru yang diketik Tim SAKIP untuk pengguna $pendingResetId. */
+    public string $passwordBaru = '';
+
+    /**
+     * Id pengguna yang sedang diubah email/nomor teleponnya — dibutuhkan
+     * karena tidak semua pengguna sempat/bisa melengkapi datanya sendiri
+     * lewat halaman Profil (lihat EnsureEmailIsComplete), jadi Tim SAKIP
+     * bisa membetulkannya langsung dari sini.
+     */
+    public ?int $pendingEditId = null;
+
+    public string $emailBaru = '';
+
+    public string $nomorTeleponBaru = '';
 
     public function mount(): void
     {
@@ -101,17 +124,87 @@ class AkunAktif extends Component
     /**
      * Reset manual oleh Tim SAKIP — dibutuhkan terutama untuk akun yang belum
      * punya email (lihat EnsureEmailIsComplete) sehingga tidak bisa memakai
-     * "lupa kata sandi" sendiri. Password baru ditampilkan sekali ke Tim SAKIP
-     * untuk disampaikan langsung ke pengguna.
+     * "lupa kata sandi" sendiri. Tim SAKIP sendiri yang menentukan kata sandi
+     * barunya (bukan diacak) supaya bisa langsung disampaikan dan diingat
+     * pengguna, lalu modal minta ini muncul dulu untuk menuliskannya.
      */
-    public function resetPassword(int $userId): void
+    public function confirmReset(int $userId): void
+    {
+        $this->pendingResetId = $userId;
+        $this->passwordBaru = '';
+        $this->resetErrorBag();
+    }
+
+    public function cancelReset(): void
+    {
+        $this->pendingResetId = null;
+        $this->passwordBaru = '';
+        $this->resetErrorBag();
+    }
+
+    public function resetPassword(): void
+    {
+        if (! $this->pendingResetId) {
+            return;
+        }
+
+        $this->validate([
+            'passwordBaru' => ['required', 'string', Password::defaults()],
+        ], [], ['passwordBaru' => 'kata sandi baru']);
+
+        $user = User::findOrFail($this->pendingResetId);
+        $user->update(['password' => $this->passwordBaru]);
+
+        session()->flash('status', "Kata sandi {$user->nama} berhasil direset. Sampaikan kata sandi baru ke pengguna secara langsung, lalu minta segera menggantinya di halaman Profil.");
+
+        $this->pendingResetId = null;
+        $this->passwordBaru = '';
+    }
+
+    /**
+     * Buka modal ubah email/nomor telepon, diisi otomatis dengan nilai
+     * pengguna saat ini supaya Tim SAKIP hanya membetulkan yang perlu.
+     */
+    public function confirmEdit(int $userId): void
     {
         $user = User::findOrFail($userId);
-        $passwordBaru = Str::password(10, symbols: false);
 
-        $user->update(['password' => $passwordBaru]);
+        $this->pendingEditId = $userId;
+        $this->emailBaru = (string) $user->email;
+        $this->nomorTeleponBaru = (string) $user->nomor_telepon;
+        $this->resetErrorBag();
+    }
 
-        session()->flash('status', "Kata sandi {$user->nama} direset menjadi: {$passwordBaru} — sampaikan ke pengguna secara langsung, lalu minta segera menggantinya di halaman Profil.");
+    public function cancelEdit(): void
+    {
+        $this->pendingEditId = null;
+        $this->emailBaru = '';
+        $this->nomorTeleponBaru = '';
+        $this->resetErrorBag();
+    }
+
+    public function simpanProfil(): void
+    {
+        if (! $this->pendingEditId) {
+            return;
+        }
+
+        $this->validate([
+            'emailBaru' => ['required', 'string', 'email', 'max:255', Rule::unique('users', 'email')->ignore($this->pendingEditId)],
+            'nomorTeleponBaru' => ['required', 'string', 'max:20'],
+        ], [], ['emailBaru' => 'email', 'nomorTeleponBaru' => 'nomor telepon']);
+
+        $user = User::findOrFail($this->pendingEditId);
+        $user->update([
+            'email' => $this->emailBaru,
+            'nomor_telepon' => $this->nomorTeleponBaru,
+        ]);
+
+        session()->flash('status', "Email & nomor telepon {$user->nama} berhasil diperbarui.");
+
+        $this->pendingEditId = null;
+        $this->emailBaru = '';
+        $this->nomorTeleponBaru = '';
     }
 
     public function render()

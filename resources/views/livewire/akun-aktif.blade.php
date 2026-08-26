@@ -9,8 +9,8 @@
                     <th style="width:13%">Username</th>
                     <th style="width:11%">Status</th>
                     <th style="width:15%">Peran</th>
-                    <th style="width:29%">Tim</th>
-                    <th style="width:16%;text-align:right">Aksi</th>
+                    <th style="width:23%">Tim</th>
+                    <th style="width:22%;text-align:right">Aksi</th>
                 </tr>
             </thead>
             <tbody x-ref="tbody">
@@ -59,11 +59,11 @@
                                 <span wire:loading.remove wire:target="updateRole({{ $user->id }})">Simpan</span>
                                 <span wire:loading wire:target="updateRole({{ $user->id }})"><i class="spin"></i></span>
                             </button>
-                            <button type="button" class="btn btn-ghost btn-sm" wire:click="resetPassword({{ $user->id }})"
-                                wire:confirm="Reset kata sandi {{ $user->nama }}? Kata sandi baru akan dibuat acak dan ditampilkan sekali di sini."
-                                wire:loading.attr="disabled" wire:target="resetPassword({{ $user->id }})">
-                                <span wire:loading.remove wire:target="resetPassword({{ $user->id }})">🔑 Reset</span>
-                                <span wire:loading wire:target="resetPassword({{ $user->id }})"><i class="spin"></i></span>
+                            <button type="button" class="btn btn-ghost btn-sm" wire:click="confirmEdit({{ $user->id }})">
+                                ✎ Profil
+                            </button>
+                            <button type="button" class="btn btn-ghost btn-sm" wire:click="confirmReset({{ $user->id }})">
+                                🔑 Reset
                             </button>
                         </td>
                     </tr>
@@ -82,4 +82,77 @@
             <option value="{{ $tim }}"></option>
         @endforeach
     </datalist>
+
+    @if ($pendingResetId)
+        <div class="modal-overlay" style="z-index:70">
+            <div class="modal" style="max-width:420px;height:auto" x-data="{ show: false }">
+                <div class="modal-top">
+                    <div class="mt-t">🔑 Reset Kata Sandi</div>
+                    <button type="button" class="x" wire:click="cancelReset" wire:loading.attr="disabled" wire:target="resetPassword" title="Tutup">✕</button>
+                </div>
+                <div style="padding:18px">
+                    <p style="font-size:13px;color:var(--ink);line-height:1.6;margin:0 0 14px">
+                        Tentukan kata sandi baru untuk <b>{{ $userList->firstWhere('id', $pendingResetId)?->nama }}</b>, lalu sampaikan langsung ke pengguna dan minta segera menggantinya di halaman Profil.
+                    </p>
+                    <div class="field" style="margin-bottom:4px">
+                        <label>Kata Sandi Baru <span class="req">*</span></label>
+                        <div class="pw-wrap">
+                            <input class="inp filled" :type="show ? 'text' : 'password'" wire:model="passwordBaru"
+                                wire:keydown.enter="resetPassword" placeholder="Minimal 8 karakter" autofocus>
+                            <button type="button" class="eye" @click="show = !show" tabindex="-1">
+                                <span x-text="show ? '🙈' : '👁'"></span>
+                            </button>
+                        </div>
+                        @error('passwordBaru')
+                            <div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>
+                        @enderror
+                    </div>
+                    <div class="btn-row" style="justify-content:flex-end">
+                        <button type="button" class="btn btn-ghost" wire:click="cancelReset" wire:loading.attr="disabled" wire:target="resetPassword">Batal</button>
+                        <button type="button" class="btn btn-primary" wire:click="resetPassword" wire:loading.attr="disabled" wire:target="resetPassword">
+                            <span wire:loading.remove wire:target="resetPassword">Reset Kata Sandi</span>
+                            <span wire:loading wire:target="resetPassword"><i class="spin"></i> Menyimpan…</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    @if ($pendingEditId)
+        <div class="modal-overlay" style="z-index:70">
+            <div class="modal" style="max-width:420px;height:auto">
+                <div class="modal-top">
+                    <div class="mt-t">✎ Ubah Email &amp; Nomor Telepon</div>
+                    <button type="button" class="x" wire:click="cancelEdit" wire:loading.attr="disabled" wire:target="simpanProfil" title="Tutup">✕</button>
+                </div>
+                <div style="padding:18px">
+                    <p style="font-size:13px;color:var(--ink);line-height:1.6;margin:0 0 14px">
+                        Ubah email &amp; nomor telepon <b>{{ $userList->firstWhere('id', $pendingEditId)?->nama }}</b> — dipakai untuk lupa kata sandi &amp; pengingat WhatsApp.
+                    </p>
+                    <div class="field">
+                        <label>Email <span class="req">*</span></label>
+                        <input class="inp filled" type="email" wire:model="emailBaru" placeholder="nama@bps.go.id" autofocus>
+                        @error('emailBaru')
+                            <div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>
+                        @enderror
+                    </div>
+                    <div class="field" style="margin-bottom:4px">
+                        <label>Nomor Telepon <span class="req">*</span></label>
+                        <input class="inp filled" type="text" wire:model="nomorTeleponBaru" wire:keydown.enter="simpanProfil" placeholder="08xxxxxxxxxx">
+                        @error('nomorTeleponBaru')
+                            <div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>
+                        @enderror
+                    </div>
+                    <div class="btn-row" style="justify-content:flex-end">
+                        <button type="button" class="btn btn-ghost" wire:click="cancelEdit" wire:loading.attr="disabled" wire:target="simpanProfil">Batal</button>
+                        <button type="button" class="btn btn-primary" wire:click="simpanProfil" wire:loading.attr="disabled" wire:target="simpanProfil">
+                            <span wire:loading.remove wire:target="simpanProfil">Simpan</span>
+                            <span wire:loading wire:target="simpanProfil"><i class="spin"></i> Menyimpan…</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
 </div>
