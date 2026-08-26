@@ -17,10 +17,11 @@ use Livewire\Component;
  * Memilih bulan tertentu = filter BULANAN; membiarkan bulan kosong ("semua bulan
  * triwulan ini") = filter TRIWULANAN yang merekap ketiga bulan sekaligus (RF-48).
  *
- * Default status TETAP "diajukan" saat halaman dibuka (worklist verifikasi
- * sehari-hari) — status lain (sedang ditangani/diverifikasi/dikembalikan/
- * disetujui) cuma untuk menelusuri riwayat, dipilih manual lewat filter, tidak
- * pernah jadi default.
+ * Default status TETAP "diajukan" + "sedang ditangani" saat halaman dibuka (worklist
+ * verifikasi sehari-hari — kedua status ini sama-sama masih butuh perhatian Tim
+ * SAKIP) — status lain (diverifikasi/dikembalikan/disetujui) cuma untuk menelusuri
+ * riwayat, dipilih manual lewat filter, tidak pernah jadi default. Filter status
+ * bisa memilih lebih dari satu sekaligus (RF-48 lanjutan).
  */
 class VerifikasiList extends Component
 {
@@ -31,11 +32,14 @@ class VerifikasiList extends Component
     public $bulan = '';
 
     /**
-     * String kosong = "Semua Status" (gabungan 5 status di statusTersedia(), TIDAK
+     * Array kosong = "Semua Status" (gabungan 5 status di statusTersedia(), TIDAK
      * termasuk "draft" karena itu belum diajukan Ketua Tim sama sekali — di luar
-     * lingkup pemantauan Tim SAKIP).
+     * lingkup pemantauan Tim SAKIP). Multi-pilih: checkbox di toolbar berbagi
+     * wire:model="status" yang sama, Livewire otomatis mengumpulkannya jadi array.
+     *
+     * @var array<int, string>
      */
-    public string $status = Capaian::STATUS_DIAJUKAN;
+    public array $status = [Capaian::STATUS_DIAJUKAN, Capaian::STATUS_SEDANG_DITANGANI];
 
     public string $cari = '';
 
@@ -101,7 +105,7 @@ class VerifikasiList extends Component
         $this->bulan = '';
         $this->tahun = (int) now()->year;
         $this->triwulan = (int) ceil(((int) now()->month) / 3);
-        $this->status = Capaian::STATUS_DIAJUKAN;
+        $this->status = [Capaian::STATUS_DIAJUKAN, Capaian::STATUS_SEDANG_DITANGANI];
         $this->urutanKolom = 'periode';
         $this->urutanArah = 'asc';
     }
@@ -111,9 +115,11 @@ class VerifikasiList extends Component
      */
     protected function daftarCapaian()
     {
-        // Status kosong ("Semua Status") mencakup kelima status alur verifikasi
-        // sekaligus (bukan tanpa syarat sama sekali) — draft sengaja dikecualikan
-        // karena belum diajukan Ketua Tim, di luar lingkup pemantauan Tim SAKIP.
+        // Status kosong ("Semua Status", tidak ada checkbox tercentang) mencakup
+        // kelima status alur verifikasi sekaligus (bukan tanpa syarat sama sekali) —
+        // draft sengaja dikecualikan karena belum diajukan Ketua Tim, di luar lingkup
+        // pemantauan Tim SAKIP. Selain itu, $this->status adalah array multi-pilih
+        // (lihat properti di atas) — langsung dipakai apa adanya di whereIn().
         //
         // Difilter langsung dari Capaian::status (SATU status per IKU+bulan, lihat
         // App\Models\Capaian) — bukan lagi menyimpulkan pasangan iku_id+periode_id
@@ -121,7 +127,7 @@ class VerifikasiList extends Component
         // kegiatan bisa berbeda-beda dalam satu Capaian yang sama (kegiatan diajukan
         // bertahap) sehingga query lama bisa salah menampilkan Capaian di status yang
         // tidak sedang dicari.
-        $statusDicari = filled($this->status) ? [$this->status] : self::statusTersedia();
+        $statusDicari = filled($this->status) ? $this->status : self::statusTersedia();
 
         $daftar = Capaian::with(['masterIku', 'periode'])
             ->whereIn('status', $statusDicari)

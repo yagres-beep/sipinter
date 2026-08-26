@@ -62,7 +62,7 @@ class VerifikasiListTest extends TestCase
         Livewire::test(VerifikasiList::class)
             ->set('tahun', 2026)
             ->set('triwulan', 3)
-            ->set('status', Capaian::STATUS_SEDANG_DITANGANI)
+            ->set('status', [Capaian::STATUS_SEDANG_DITANGANI])
             ->assertSee('GAMMA-3');
     }
 
@@ -144,7 +144,7 @@ class VerifikasiListTest extends TestCase
         Livewire::test(VerifikasiList::class)
             ->set('tahun', 2026)
             ->set('triwulan', 3)
-            ->set('status', 'dikembalikan')
+            ->set('status', ['dikembalikan'])
             ->assertSee('5 kegiatan')
             ->assertSee('3 Diverifikasi')
             ->assertSee('2 Dikembalikan');
@@ -177,7 +177,7 @@ class VerifikasiListTest extends TestCase
         Livewire::test(VerifikasiList::class)
             ->set('tahun', 2026)
             ->set('triwulan', 3)
-            ->set('status', 'diajukan')
+            ->set('status', ['diajukan'])
             ->assertSee('5 kegiatan')
             ->assertSee('4 Diverifikasi')
             ->assertSee('1 Diajukan');

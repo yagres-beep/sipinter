@@ -1,15 +1,21 @@
 @php
     $namaBulan = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+    $statusWorklist = [\App\Models\Capaian::STATUS_DIAJUKAN, \App\Models\Capaian::STATUS_SEDANG_DITANGANI];
+    $isWorklistDefault = empty(array_diff($status, $statusWorklist)) && empty(array_diff($statusWorklist, $status));
 @endphp
 
 <div>
     <div class="page-head">
         <div class="page-title">Verifikasi Bukti &amp; Angka Capaian</div>
         <div class="page-sub">
-            @if ($status === '')
+            @if (empty($status))
                 Menampilkan isian dari SEMUA status — pilih status tertentu di filter untuk mempersempit.
             @else
-                Daftar isian berstatus <x-badge-status :status="$status" /> — pilih status lain di filter untuk menelusuri riwayat.
+                Daftar isian berstatus
+                @foreach ($status as $s)
+                    <x-badge-status :status="$s" />
+                @endforeach
+                — pilih status lain di filter untuk menelusuri riwayat.
             @endif
         </div>
     </div>
@@ -20,12 +26,17 @@
 
     <x-filter-periode :tahun="$tahun" :triwulan="$triwulan" :bulan="$bulan" mode="lengkap" />
 
-    @if ($status === 'diajukan')
+    @if ($isWorklistDefault)
         <div class="info teal">✅ Isi analisis capaian &amp; angka, verifikasi tiap berkas, beri catatan bila tidak sesuai.</div>
-    @elseif ($status === '')
-        <div class="info">ℹ️ Menampilkan riwayat SEMUA status sekaligus — bukan worklist verifikasi. Pilih "Diajukan" di filter untuk kembali ke daftar yang perlu diperiksa.</div>
+    @elseif (empty($status))
+        <div class="info">ℹ️ Menampilkan riwayat SEMUA status sekaligus — bukan worklist verifikasi. Pilih "Diajukan"/"Sedang Ditangani" di filter untuk kembali ke daftar yang perlu diperiksa.</div>
     @else
-        <div class="info">ℹ️ Menampilkan riwayat isian berstatus <x-badge-status :status="$status" /> — bukan worklist verifikasi. Buka "Reset" atau pilih "Diajukan" untuk kembali ke daftar yang perlu diperiksa.</div>
+        <div class="info">ℹ️ Menampilkan riwayat isian berstatus
+            @foreach ($status as $s)
+                <x-badge-status :status="$s" />
+            @endforeach
+            — bukan worklist verifikasi. Buka "Reset" untuk kembali ke daftar yang perlu diperiksa.
+        </div>
     @endif
 
     <div class="card">
@@ -35,12 +46,28 @@
                 <input type="text" wire:model.live.debounce.300ms="cari" placeholder="Cari kode, indikator, atau tim…">
                 <span wire:loading wire:target="cari" class="muted" style="font-size:11px"><i class="spin"></i> mencari…</span>
             </div>
-            <select class="filter-sel" wire:model.live="status" wire:loading.attr="disabled" wire:target="status,bulan,triwulan,tahun,cari,urutkan,resetFilter">
-                <option value="">Semua Status</option>
-                @foreach ($statusTersedia as $opsi)
-                    <option value="{{ $opsi }}">{{ ucwords(str_replace('_', ' ', $opsi)) }}</option>
-                @endforeach
-            </select>
+            <div class="filter-multi" x-data="{ open: false }" @click.outside="open = false" @keydown.escape.window="open = false">
+                <button type="button" class="filter-sel filter-sel-btn" @click="open = !open" :aria-expanded="open" wire:loading.attr="disabled" wire:target="status,bulan,triwulan,tahun,cari,urutkan,resetFilter">
+                    @if (empty($status))
+                        Semua Status
+                    @elseif (count($status) === 1)
+                        {{ ucwords(str_replace('_', ' ', $status[0])) }}
+                    @else
+                        {{ count($status) }} Status Dipilih
+                    @endif
+                    <span class="fm-caret">▾</span>
+                </button>
+
+                <div class="filter-multi-panel" x-show="open" x-cloak x-transition>
+                    @foreach ($statusTersedia as $opsi)
+                        <label class="fm-item">
+                            <input type="checkbox" value="{{ $opsi }}" wire:model.live="status">
+                            {{ ucwords(str_replace('_', ' ', $opsi)) }}
+                        </label>
+                    @endforeach
+                    <button type="button" class="fm-clear" wire:click="$set('status', [])" wire:loading.attr="disabled">Semua Status</button>
+                </div>
+            </div>
             <button type="button" class="btn btn-ghost btn-sm" wire:click="resetFilter" wire:loading.attr="disabled" wire:target="status,bulan,triwulan,tahun,cari,urutkan,resetFilter">↺ Reset</button>
             <span wire:loading wire:target="status,bulan,triwulan,tahun,cari,urutkan,resetFilter" class="muted" style="font-size:11px"><i class="spin"></i> memuat…</span>
         </div>
@@ -79,7 +106,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" style="color:var(--muted)">Tidak ada isian {{ $status === '' ? '' : 'berstatus '.ucfirst($status).' ' }}pada periode/kata kunci ini.</td>
+                            <td colspan="7" style="color:var(--muted)">Tidak ada isian {{ empty($status) ? '' : 'berstatus '.implode(', ', array_map(fn ($s) => ucwords(str_replace('_', ' ', $s)), $status)).' ' }}pada periode/kata kunci ini.</td>
                         </tr>
                     @endforelse
                 </tbody>
