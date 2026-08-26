@@ -42,6 +42,34 @@
         @endif
     </div>
 
+    <div class="card">
+        <div class="card-h">🧪 Kirim Pesan Tes</div>
+        <div class="info">ℹ️ Kirim satu pesan langsung (tidak lewat antrean pengingat) untuk memastikan nomor yang tertaut benar-benar bisa mengirim.</div>
+
+        <div class="field" style="max-width:260px">
+            <label>Nomor Telepon Tujuan <span class="req">*</span></label>
+            <input type="text" class="inp filled" style="width:100%" wire:model="nomorTes" placeholder="08xxxxxxxxxx">
+            @error('nomorTes')
+                <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+            @enderror
+        </div>
+
+        <div class="field" style="max-width:420px;margin-bottom:4px">
+            <label>Isi Pesan <span class="req">*</span></label>
+            <textarea class="inp filled" style="width:100%;min-height:70px" wire:model="pesanTes"></textarea>
+            @error('pesanTes')
+                <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+            @enderror
+        </div>
+
+        <div class="btn-row">
+            <button type="button" class="btn btn-primary" wire:click="kirimTes" wire:loading.attr="disabled" wire:target="kirimTes">
+                <span wire:loading.remove wire:target="kirimTes">📤 Kirim Tes</span>
+                <span wire:loading wire:target="kirimTes"><i class="spin"></i> Mengirim…</span>
+            </button>
+        </div>
+    </div>
+
     <livewire:pengaturan-pengingat />
 
     <livewire:pengaturan-penerima-pengingat />
