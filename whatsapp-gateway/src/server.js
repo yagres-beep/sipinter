@@ -39,6 +39,10 @@ async function startSock() {
     auth: state,
     logger: pino({ level: 'warn' }),
     printQRInTerminal: false,
+    // Gateway ini cuma kirim pesan pengingat, tidak pernah baca riwayat chat —
+    // matikan sync riwayat penuh supaya query berat ke server WhatsApp saat
+    // connect (yang pernah timeout & bikin proses crash) tidak perlu dipanggil.
+    syncFullHistory: false,
   });
 
   sock.ev.on('creds.update', saveCreds);
@@ -71,6 +75,20 @@ async function startSock() {
 }
 
 startSock();
+
+// Query internal Baileys (mis. sync riwayat chat setelah connect) kadang
+// timeout ke server WhatsApp dan menolak lewat promise yang tidak tertangkap
+// di kode ini — tanpa pengaman ini, satu timeout begitu bisa mematikan
+// seluruh proses (Node keluar sendiri kena unhandled rejection), padahal
+// koneksi WhatsApp-nya sendiri baik-baik saja. Cukup dicatat, jangan matikan
+// server — status/reconnect tetap ditangani oleh connection.update di atas.
+process.on('unhandledRejection', (err) => {
+  console.error('unhandledRejection (ditelan, server tetap jalan):', err);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('uncaughtException (ditelan, server tetap jalan):', err);
+});
 
 const app = express();
 app.use(express.json());
