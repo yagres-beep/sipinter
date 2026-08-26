@@ -176,15 +176,24 @@ app.post('/reconnect', cekToken, async (req, res) => {
     return res.json({ status: 'ok', pesan: 'Gateway sudah terhubung.' });
   }
 
-  if (connectionStatus !== 'connecting') {
-    connectionStatus = 'connecting';
-    latestQr = null;
-
-    startSock().catch((err) => {
-      console.error('Gagal menyambungkan ulang.', err);
-      connectionStatus = 'disconnected';
-    });
+  // Lepas listener socket lama dulu supaya event 'close'-nya tidak ikut
+  // memicu startSock() sendiri di luar yang kita panggil di bawah (kalau
+  // tidak, bisa muncul dua proses connect berjalan bersamaan). Selalu coba
+  // startSock() lagi di sini walau status sudah 'connecting' — status itu
+  // sendiri sering yang nyangkut (mis. query ke Postgres/WhatsApp tidak
+  // pernah selesai), jadi menahan diri untuk tidak restart justru membuat
+  // tombol "Coba Sambungkan Ulang" tidak melakukan apa-apa.
+  if (sock) {
+    sock.ev.removeAllListeners();
   }
+
+  connectionStatus = 'connecting';
+  latestQr = null;
+
+  startSock().catch((err) => {
+    console.error('Gagal menyambungkan ulang.', err);
+    connectionStatus = 'disconnected';
+  });
 
   res.json({ status: 'ok', pesan: 'Sedang mencoba menyambungkan ulang.' });
 });
