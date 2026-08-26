@@ -174,6 +174,28 @@ class VerifikasiCapaian extends Component
     public array $koreksiRtlRealisasi = [];
 
     /**
+     * Catatan penolakan uraian kegiatan, dikunci pada id kegiatan — pola sama
+     * persis dengan $catatanBerkas/$catatanKendala.
+     *
+     * @var array<int, string|null>
+     */
+    public array $catatanUraian = [];
+
+    /**
+     * Catatan penolakan teks poin Bagian Kustom, dikunci pada id bagian_kustom_poin.
+     *
+     * @var array<int, string|null>
+     */
+    public array $catatanBagianKustom = [];
+
+    /**
+     * Catatan penolakan teks realisasi RTL, dikunci pada id rtl_evaluasi.
+     *
+     * @var array<int, string|null>
+     */
+    public array $catatanRtl = [];
+
+    /**
      * Cache dalam satu siklus request (di-reset otomatis tiap request baru) — DB
      * remote (Supabase, Seoul) makan ~400ms per query, dan tiap koleksi ini dipakai
      * ulang di banyak tempat (mount, render, verifikasiSelesai, kembalikanKeKetuaTim)
@@ -239,6 +261,7 @@ class VerifikasiCapaian extends Component
 
         foreach ($this->kegiatanList() as $kegiatan) {
             $this->koreksiKegiatan[$kegiatan->id] = $kegiatan->uraian_kegiatan;
+            $this->catatanUraian[$kegiatan->id] = $kegiatan->catatan_uraian;
             $this->rincianOutput[$kegiatan->id] = $kegiatan->rincian_output;
             $this->realisasiVolumeRo[$kegiatan->id] = $kegiatan->volume_ro;
             $this->realisasiProgresPersen[$kegiatan->id] = $kegiatan->progres_persen;
@@ -249,8 +272,13 @@ class VerifikasiCapaian extends Component
             $this->catatanKendala[$ks->id] = $ks->catatan;
         }
 
+        foreach ($this->bagianKustomList() as $poin) {
+            $this->catatanBagianKustom[$poin->id] = $poin->catatan;
+        }
+
         foreach ($this->rtlEvaluasiSebelumnya() as $poin) {
             $this->koreksiRtlRealisasi[$poin->id] = $poin->realisasi;
+            $this->catatanRtl[$poin->id] = $poin->catatan;
         }
     }
 
@@ -542,6 +570,150 @@ class VerifikasiCapaian extends Component
         ]);
     }
 
+    /**
+     * Uraian kegiatan boleh ditandai ulang Tim SAKIP dengan syarat sama persis
+     * dengan bukti kegiatan (kegiatanBisaDikoreksi()) — keduanya bagian dari
+     * kegiatan yang sama, jadi mengikuti status_dokumen kegiatan itu sendiri, bukan
+     * hanya status besar Capaian.
+     */
+    public function uraianBisaDiverifikasi(int $kegiatanId): bool
+    {
+        $kegiatan = $this->kegiatanList()->firstWhere('id', $kegiatanId);
+
+        return $kegiatan && $this->kegiatanBisaDikoreksi($kegiatan);
+    }
+
+    public function tandaiUraianSesuai(int $kegiatanId): void
+    {
+        if (! $this->uraianBisaDiverifikasi($kegiatanId)) {
+            return;
+        }
+
+        $this->catatanUraian[$kegiatanId] = null;
+
+        Kegiatan::whereKey($kegiatanId)->update([
+            'status_verifikasi_uraian' => 'terverifikasi',
+            'catatan_uraian' => null,
+        ]);
+    }
+
+    public function tandaiUraianTolak(int $kegiatanId): void
+    {
+        if (! $this->uraianBisaDiverifikasi($kegiatanId)) {
+            return;
+        }
+
+        $catatan = trim((string) ($this->catatanUraian[$kegiatanId] ?? ''));
+
+        if ($catatan === '') {
+            $this->addError('catatanUraian.'.$kegiatanId, 'Catatan wajib diisi saat menandai uraian kegiatan "Tidak Sesuai" — supaya Ketua Tim tahu apa yang perlu diperbaiki.');
+            $this->dispatch('notify', type: 'error', message: 'Catatan wajib diisi saat menandai uraian kegiatan "Tidak Sesuai".');
+
+            return;
+        }
+
+        Kegiatan::whereKey($kegiatanId)->update([
+            'status_verifikasi_uraian' => 'ditolak',
+            'catatan_uraian' => $catatan,
+        ]);
+    }
+
+    /**
+     * Poin Bagian Kustom boleh ditandai ulang Tim SAKIP hanya selagi Capaian-nya
+     * masih "diajukan"/"sedang ditangani" — sama seperti kendalaBisaDiverifikasi(),
+     * poin ini tidak punya status_dokumen sendiri seperti kegiatan.
+     */
+    public function bagianKustomBisaDiverifikasi(int $poinId): bool
+    {
+        return $this->bisaDiverifikasi() && $this->bagianKustomList()->contains('id', $poinId);
+    }
+
+    public function tandaiBagianKustomSesuai(int $poinId): void
+    {
+        if (! $this->bagianKustomBisaDiverifikasi($poinId)) {
+            return;
+        }
+
+        $this->catatanBagianKustom[$poinId] = null;
+
+        BagianKustomPoin::whereKey($poinId)->update([
+            'status_verifikasi' => 'terverifikasi',
+            'catatan' => null,
+        ]);
+    }
+
+    public function tandaiBagianKustomTolak(int $poinId): void
+    {
+        if (! $this->bagianKustomBisaDiverifikasi($poinId)) {
+            return;
+        }
+
+        $catatan = trim((string) ($this->catatanBagianKustom[$poinId] ?? ''));
+
+        if ($catatan === '') {
+            $this->addError('catatanBagianKustom.'.$poinId, 'Catatan wajib diisi saat menandai poin ini "Tidak Sesuai" — supaya Ketua Tim tahu apa yang perlu diperbaiki.');
+            $this->dispatch('notify', type: 'error', message: 'Catatan wajib diisi saat menandai poin Bagian Kustom "Tidak Sesuai".');
+
+            return;
+        }
+
+        BagianKustomPoin::whereKey($poinId)->update([
+            'status_verifikasi' => 'ditolak',
+            'catatan' => $catatan,
+        ]);
+    }
+
+    /**
+     * Realisasi RTL hanya bisa diverifikasi bila sudah dilaporkan Ketua Tim
+     * (realisasi tidak kosong) — poin yang belum dilaporkan ("— belum dilaporkan —"
+     * di blade) tidak punya apa pun untuk diperiksa.
+     */
+    public function rtlBisaDiverifikasi(int $rtlId): bool
+    {
+        if (! $this->bisaDiverifikasi()) {
+            return false;
+        }
+
+        $poin = $this->rtlEvaluasiSebelumnya()->firstWhere('id', $rtlId);
+
+        return $poin && filled($poin->realisasi);
+    }
+
+    public function tandaiRtlSesuai(int $rtlId): void
+    {
+        if (! $this->rtlBisaDiverifikasi($rtlId)) {
+            return;
+        }
+
+        $this->catatanRtl[$rtlId] = null;
+
+        RtlEvaluasi::whereKey($rtlId)->update([
+            'status_verifikasi' => 'terverifikasi',
+            'catatan' => null,
+        ]);
+    }
+
+    public function tandaiRtlTolak(int $rtlId): void
+    {
+        if (! $this->rtlBisaDiverifikasi($rtlId)) {
+            return;
+        }
+
+        $catatan = trim((string) ($this->catatanRtl[$rtlId] ?? ''));
+
+        if ($catatan === '') {
+            $this->addError('catatanRtl.'.$rtlId, 'Catatan wajib diisi saat menandai realisasi RTL ini "Tidak Sesuai" — supaya Ketua Tim tahu apa yang perlu diperbaiki.');
+            $this->dispatch('notify', type: 'error', message: 'Catatan wajib diisi saat menandai realisasi RTL "Tidak Sesuai".');
+
+            return;
+        }
+
+        RtlEvaluasi::whereKey($rtlId)->update([
+            'status_verifikasi' => 'ditolak',
+            'catatan' => $catatan,
+        ]);
+    }
+
     protected function rules(): array
     {
         return [
@@ -800,17 +972,32 @@ class VerifikasiCapaian extends Component
 
         $berkas = $this->berkasList();
         $kendala = $this->kendalaSolusiList();
+        $kegiatanList = $this->kegiatanList();
+        $bagianKustom = $this->bagianKustomList();
+        $rtl = $this->rtlEvaluasiSebelumnya()->filter(fn ($p) => filled($p->realisasi));
 
-        if ($berkas->contains(fn ($b) => $b->status_verifikasi === 'menunggu') || $kendala->contains(fn ($k) => $k->status_verifikasi === 'menunggu')) {
-            $this->addError('berkas', 'Seluruh berkas dan pasangan kendala & solusi harus ditandai "Sesuai" atau "Tidak Sesuai" terlebih dahulu.');
-            $this->dispatch('notify', type: 'error', message: 'Seluruh berkas dan pasangan kendala & solusi harus ditandai terlebih dahulu.');
+        if (
+            $berkas->contains(fn ($b) => $b->status_verifikasi === 'menunggu')
+            || $kendala->contains(fn ($k) => $k->status_verifikasi === 'menunggu')
+            || $kegiatanList->contains(fn ($k) => $k->status_verifikasi_uraian === 'menunggu')
+            || $bagianKustom->contains(fn ($p) => $p->status_verifikasi === 'menunggu')
+            || $rtl->contains(fn ($p) => $p->status_verifikasi === 'menunggu')
+        ) {
+            $this->addError('berkas', 'Seluruh isian (berkas, uraian kegiatan, kendala & solusi, Bagian Kustom, dan realisasi RTL) harus ditandai "Sesuai" atau "Tidak Sesuai" terlebih dahulu.');
+            $this->dispatch('notify', type: 'error', message: 'Seluruh isian harus ditandai terlebih dahulu.');
 
             return;
         }
 
-        if ($berkas->contains(fn ($b) => $b->status_verifikasi === 'ditolak') || $kendala->contains(fn ($k) => $k->status_verifikasi === 'ditolak')) {
-            $this->addError('berkas', 'Terdapat berkas atau pasangan kendala & solusi yang ditolak — gunakan tombol "Kembalikan ke Ketua Tim", bukan "Verifikasi Selesai".');
-            $this->dispatch('notify', type: 'error', message: 'Ada berkas/kendala yang ditolak — gunakan "Kembalikan ke Ketua Tim".');
+        if (
+            $berkas->contains(fn ($b) => $b->status_verifikasi === 'ditolak')
+            || $kendala->contains(fn ($k) => $k->status_verifikasi === 'ditolak')
+            || $kegiatanList->contains(fn ($k) => $k->status_verifikasi_uraian === 'ditolak')
+            || $bagianKustom->contains(fn ($p) => $p->status_verifikasi === 'ditolak')
+            || $rtl->contains(fn ($p) => $p->status_verifikasi === 'ditolak')
+        ) {
+            $this->addError('berkas', 'Terdapat isian yang ditolak — gunakan tombol "Kembalikan ke Ketua Tim", bukan "Verifikasi Selesai".');
+            $this->dispatch('notify', type: 'error', message: 'Ada isian yang ditolak — gunakan "Kembalikan ke Ketua Tim".');
 
             return;
         }
@@ -862,20 +1049,32 @@ class VerifikasiCapaian extends Component
 
         $berkas = $this->berkasList();
         $kendala = $this->kendalaSolusiList();
+        $kegiatanList = $this->kegiatanList();
+        $bagianKustom = $this->bagianKustomList();
+        $rtl = $this->rtlEvaluasiSebelumnya()->filter(fn ($p) => filled($p->realisasi));
 
-        if ($berkas->contains(fn ($b) => $b->status_verifikasi === 'menunggu') || $kendala->contains(fn ($k) => $k->status_verifikasi === 'menunggu')) {
-            $this->addError('berkas', 'Seluruh berkas dan pasangan kendala & solusi harus ditandai "Sesuai" atau "Tidak Sesuai" terlebih dahulu.');
-            $this->dispatch('notify', type: 'error', message: 'Seluruh berkas dan pasangan kendala & solusi harus ditandai terlebih dahulu.');
+        if (
+            $berkas->contains(fn ($b) => $b->status_verifikasi === 'menunggu')
+            || $kendala->contains(fn ($k) => $k->status_verifikasi === 'menunggu')
+            || $kegiatanList->contains(fn ($k) => $k->status_verifikasi_uraian === 'menunggu')
+            || $bagianKustom->contains(fn ($p) => $p->status_verifikasi === 'menunggu')
+            || $rtl->contains(fn ($p) => $p->status_verifikasi === 'menunggu')
+        ) {
+            $this->addError('berkas', 'Seluruh isian (berkas, uraian kegiatan, kendala & solusi, Bagian Kustom, dan realisasi RTL) harus ditandai "Sesuai" atau "Tidak Sesuai" terlebih dahulu.');
+            $this->dispatch('notify', type: 'error', message: 'Seluruh isian harus ditandai terlebih dahulu.');
 
             return;
         }
 
         $adaBerkasDitolak = $berkas->contains(fn ($b) => $b->status_verifikasi === 'ditolak');
         $adaKendalaDitolak = $kendala->contains(fn ($k) => $k->status_verifikasi === 'ditolak');
+        $adaUraianDitolak = $kegiatanList->contains(fn ($k) => $k->status_verifikasi_uraian === 'ditolak');
+        $adaBagianKustomDitolak = $bagianKustom->contains(fn ($p) => $p->status_verifikasi === 'ditolak');
+        $adaRtlDitolak = $rtl->contains(fn ($p) => $p->status_verifikasi === 'ditolak');
 
-        if (! $adaBerkasDitolak && ! $adaKendalaDitolak) {
-            $this->addError('berkas', 'Tandai minimal satu berkas atau pasangan kendala & solusi sebagai "Tidak Sesuai" beserta catatan sebelum mengembalikan isian.');
-            $this->dispatch('notify', type: 'error', message: 'Tandai minimal satu berkas/kendala "Tidak Sesuai" sebelum mengembalikan isian.');
+        if (! $adaBerkasDitolak && ! $adaKendalaDitolak && ! $adaUraianDitolak && ! $adaBagianKustomDitolak && ! $adaRtlDitolak) {
+            $this->addError('berkas', 'Tandai minimal satu isian sebagai "Tidak Sesuai" beserta catatan sebelum mengembalikan isian.');
+            $this->dispatch('notify', type: 'error', message: 'Tandai minimal satu isian "Tidak Sesuai" sebelum mengembalikan isian.');
 
             return;
         }
@@ -892,7 +1091,8 @@ class VerifikasiCapaian extends Component
                     }
 
                     $berkasKegiatanIni = $this->berkasUntukKegiatan($kegiatan->id);
-                    $buktiSendiriDitolak = $berkasKegiatanIni->contains(fn ($b) => $b->status_verifikasi === 'ditolak');
+                    $buktiSendiriDitolak = $berkasKegiatanIni->contains(fn ($b) => $b->status_verifikasi === 'ditolak')
+                        || $kegiatan->status_verifikasi_uraian === 'ditolak';
 
                     if ($buktiSendiriDitolak) {
                         $kegiatan->kembalikan();
@@ -901,13 +1101,16 @@ class VerifikasiCapaian extends Component
                     }
                 }
 
-                // Catatan riwayat mengambil alasan penolakan dari berkas MAUPUN pasangan
-                // kendala & solusi yang ditandai "Tolak" — sudah divalidasi minimal satu
-                // ada (di salah satu keduanya) sebelum sampai di sini.
+                // Catatan riwayat mengambil alasan penolakan dari berkas, uraian kegiatan,
+                // kendala & solusi, Bagian Kustom, MAUPUN realisasi RTL yang ditandai
+                // "Tolak" — sudah divalidasi minimal satu ada sebelum sampai di sini.
                 $catatan = $this->berkasList()
                     ->where('status_verifikasi', 'ditolak')
                     ->pluck('catatan')
                     ->concat($this->kendalaSolusiList()->where('status_verifikasi', 'ditolak')->pluck('catatan'))
+                    ->concat($this->kegiatanList()->where('status_verifikasi_uraian', 'ditolak')->pluck('catatan_uraian'))
+                    ->concat($this->bagianKustomList()->where('status_verifikasi', 'ditolak')->pluck('catatan'))
+                    ->concat($this->rtlEvaluasiSebelumnya()->where('status_verifikasi', 'ditolak')->pluck('catatan'))
                     ->filter()
                     ->unique()
                     ->implode(' | ');

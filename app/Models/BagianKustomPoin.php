@@ -23,6 +23,8 @@ class BagianKustomPoin extends Model
         'iku_id',
         'periode_id',
         'teks',
+        'status_verifikasi',
+        'catatan',
     ];
 
     public function bagianKustom(): BelongsTo

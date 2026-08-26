@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Livewire\VerifikasiCapaian;
+use App\Models\BagianKustom;
+use App\Models\BagianKustomPoin;
 use App\Models\Berkas;
 use App\Models\Capaian;
 use App\Models\Kegiatan;
@@ -95,6 +97,8 @@ class VerifikasiCapaianTest extends TestCase
         Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
             ->call('tandaiSesuai', $data['berkas1']->id)
             ->call('tandaiSesuai', $data['berkas2']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan1']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan2']->id)
             ->set('alokasi_tw3', 50)
             ->set('realisasi_tw3', 45)
             ->call('verifikasiSelesai')
@@ -117,6 +121,8 @@ class VerifikasiCapaianTest extends TestCase
             ->set("koreksiKegiatan.{$data['kegiatan1']->id}", 'Kegiatan pertama (dikoreksi Tim SAKIP)')
             ->call('tandaiSesuai', $data['berkas1']->id)
             ->call('tandaiSesuai', $data['berkas2']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan1']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan2']->id)
             ->set('alokasi_tw3', 50)
             ->set('realisasi_tw3', 45)
             ->call('verifikasiSelesai')
@@ -151,6 +157,8 @@ class VerifikasiCapaianTest extends TestCase
             ->set('catatanBerkas.'.$data['berkas1']->id, 'Bukti tidak jelas')
             ->call('tandaiTolak', $data['berkas1']->id)
             ->call('tandaiSesuai', $data['berkas2']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan1']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan2']->id)
             ->call('kembalikanKeKetuaTim')
             ->assertHasNoErrors();
 
@@ -254,6 +262,8 @@ class VerifikasiCapaianTest extends TestCase
         Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']->fresh()])
             ->call('tandaiSesuai', $data['berkas1']->id)
             ->call('tandaiSesuai', $data['berkas2']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan1']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan2']->id)
             ->set('alokasi_tw3', 50)
             ->set('realisasi_tw3', 45)
             ->call('verifikasiSelesai')
@@ -298,6 +308,8 @@ class VerifikasiCapaianTest extends TestCase
         Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
             ->call('tandaiSesuai', $data['berkas1']->id)
             ->call('tandaiSesuai', $data['berkas2']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan1']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan2']->id)
             ->set('catatanKendala.'.$ks->id, 'Solusi tidak relevan')
             ->call('tandaiKendalaTolak', $ks->id)
             ->call('kembalikanKeKetuaTim')
@@ -328,6 +340,192 @@ class VerifikasiCapaianTest extends TestCase
             ->assertHasErrors(['berkas']);
 
         $this->assertSame('diajukan', $data['capaian']->fresh()->status);
+    }
+
+    public function test_tandai_uraian_sesuai_menandai_terverifikasi(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+
+        Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
+            ->call('tandaiUraianSesuai', $data['kegiatan1']->id)
+            ->assertHasNoErrors();
+
+        $this->assertSame('terverifikasi', $data['kegiatan1']->fresh()->status_verifikasi_uraian);
+    }
+
+    public function test_tandai_uraian_tolak_wajib_catatan(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+
+        Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
+            ->call('tandaiUraianTolak', $data['kegiatan1']->id)
+            ->assertHasErrors(['catatanUraian.'.$data['kegiatan1']->id]);
+
+        $this->assertSame('menunggu', $data['kegiatan1']->fresh()->status_verifikasi_uraian);
+    }
+
+    public function test_kembalikan_ke_ketua_tim_bisa_dipicu_uraian_ditolak_tanpa_berkas_ditolak(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+
+        Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
+            ->call('tandaiSesuai', $data['berkas1']->id)
+            ->call('tandaiSesuai', $data['berkas2']->id)
+            ->set('catatanUraian.'.$data['kegiatan1']->id, 'Uraian belum menjelaskan output')
+            ->call('tandaiUraianTolak', $data['kegiatan1']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan2']->id)
+            ->call('kembalikanKeKetuaTim')
+            ->assertHasNoErrors();
+
+        // Uraiannya sendiri ditolak (biarpun buktinya sesuai) -> kegiatan1 tetap
+        // dikembalikan; kegiatan2 (uraian & bukti sama-sama sesuai) ikut diverifikasi.
+        $this->assertSame('dikembalikan', $data['kegiatan1']->fresh()->status_dokumen);
+        $this->assertSame('diverifikasi', $data['kegiatan2']->fresh()->status_dokumen);
+
+        $riwayat = $data['capaian']->fresh()->riwayatStatus->first();
+        $this->assertSame('Uraian belum menjelaskan output', $riwayat->catatan);
+    }
+
+    protected function siapkanBagianKustomPoin(array $data): BagianKustomPoin
+    {
+        $bagian = BagianKustom::create(['nama' => 'Manajemen Risiko']);
+
+        return BagianKustomPoin::create([
+            'bagian_kustom_id' => $bagian->id,
+            'iku_id' => $data['iku']->id,
+            'periode_id' => $data['periode']->id,
+            'teks' => 'Poin manajemen risiko uji',
+        ]);
+    }
+
+    public function test_tandai_bagian_kustom_sesuai_menandai_terverifikasi(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+        $poin = $this->siapkanBagianKustomPoin($data);
+
+        Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
+            ->call('tandaiBagianKustomSesuai', $poin->id)
+            ->assertHasNoErrors();
+
+        $this->assertSame('terverifikasi', $poin->fresh()->status_verifikasi);
+    }
+
+    public function test_tandai_bagian_kustom_tolak_wajib_catatan(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+        $poin = $this->siapkanBagianKustomPoin($data);
+
+        Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
+            ->call('tandaiBagianKustomTolak', $poin->id)
+            ->assertHasErrors(['catatanBagianKustom.'.$poin->id]);
+
+        $this->assertSame('menunggu', $poin->fresh()->status_verifikasi);
+    }
+
+    public function test_verifikasi_selesai_gagal_bila_bagian_kustom_masih_menunggu(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+        $this->siapkanBagianKustomPoin($data);
+
+        Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
+            ->call('tandaiSesuai', $data['berkas1']->id)
+            ->call('tandaiSesuai', $data['berkas2']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan1']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan2']->id)
+            ->set('alokasi_tw3', 50)
+            ->set('realisasi_tw3', 45)
+            ->call('verifikasiSelesai')
+            ->assertHasErrors(['berkas']);
+
+        $this->assertSame('diajukan', $data['capaian']->fresh()->status);
+    }
+
+    protected function siapkanRtlDenganRealisasi(array $data): RtlEvaluasi
+    {
+        $periodeRtl = Periode::create([
+            'tahun' => 2026,
+            'bulan' => 7,
+            'triwulan' => 3,
+            'bulan_ke' => 1,
+            'flag_bulan_terlewat' => false,
+        ]);
+
+        return RtlEvaluasi::create([
+            'iku_id' => $data['iku']->id,
+            'periode_id' => $periodeRtl->id,
+            'rtl_teks' => 'RTL triwulan sebelumnya',
+            'realisasi' => 'Sudah dilaksanakan sesuai rencana',
+        ]);
+    }
+
+    public function test_tandai_rtl_sesuai_menandai_terverifikasi(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+        $rtl = $this->siapkanRtlDenganRealisasi($data);
+
+        Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
+            ->call('tandaiRtlSesuai', $rtl->id)
+            ->assertHasNoErrors();
+
+        $this->assertSame('terverifikasi', $rtl->fresh()->status_verifikasi);
+    }
+
+    public function test_tandai_rtl_tolak_wajib_catatan(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+        $rtl = $this->siapkanRtlDenganRealisasi($data);
+
+        Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
+            ->call('tandaiRtlTolak', $rtl->id)
+            ->assertHasErrors(['catatanRtl.'.$rtl->id]);
+
+        $this->assertSame('menunggu', $rtl->fresh()->status_verifikasi);
+    }
+
+    public function test_rtl_belum_dilaporkan_tidak_bisa_diverifikasi_dan_tidak_menghalangi_verifikasi_selesai(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+
+        $periodeRtl = Periode::create([
+            'tahun' => 2026,
+            'bulan' => 7,
+            'triwulan' => 3,
+            'bulan_ke' => 1,
+            'flag_bulan_terlewat' => false,
+        ]);
+
+        $rtl = RtlEvaluasi::create([
+            'iku_id' => $data['iku']->id,
+            'periode_id' => $periodeRtl->id,
+            'rtl_teks' => 'RTL triwulan sebelumnya',
+            'realisasi' => null,
+        ]);
+
+        $component = Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']]);
+
+        $this->assertFalse($component->instance()->rtlBisaDiverifikasi($rtl->id));
+
+        // Poin RTL yang belum dilaporkan (realisasi kosong) tidak ikut menghalangi
+        // "Verifikasi Selesai" — tidak ada apa pun untuk diperiksa di poin itu.
+        $component->call('tandaiSesuai', $data['berkas1']->id)
+            ->call('tandaiSesuai', $data['berkas2']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan1']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan2']->id)
+            ->set('alokasi_tw3', 50)
+            ->set('realisasi_tw3', 45)
+            ->call('verifikasiSelesai')
+            ->assertHasNoErrors();
+
+        $this->assertSame('menunggu', $rtl->fresh()->status_verifikasi);
     }
 
     public function test_berkas_list_menggabungkan_bukti_capaian_dan_rtl(): void
@@ -384,6 +582,8 @@ class VerifikasiCapaianTest extends TestCase
         Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
             ->call('tandaiSesuai', $data['berkas1']->id)
             ->call('tandaiSesuai', $data['berkas2']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan1']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan2']->id)
             ->set('alokasi_tw3', 50)
             ->set('realisasi_tw3', 45)
             ->call('verifikasiSelesai')
@@ -408,6 +608,8 @@ class VerifikasiCapaianTest extends TestCase
             ->set('catatanBerkas.'.$data['berkas1']->id, 'Bukti tidak jelas')
             ->call('tandaiTolak', $data['berkas1']->id)
             ->call('tandaiSesuai', $data['berkas2']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan1']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan2']->id)
             ->call('kembalikanKeKetuaTim')
             ->assertHasNoErrors();
 
@@ -429,6 +631,8 @@ class VerifikasiCapaianTest extends TestCase
         Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
             ->call('tandaiSesuai', $data['berkas1']->id)
             ->call('tandaiSesuai', $data['berkas2']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan1']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan2']->id)
             ->set('alokasi_tw3', 50)
             ->set('realisasi_tw3', 45)
             ->call('verifikasiSelesai')
@@ -463,6 +667,7 @@ class VerifikasiCapaianTest extends TestCase
         Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']->fresh()])
             ->set('catatanBerkas.'.$berkas3->id, 'Bukti kegiatan tambahan tidak sesuai')
             ->call('tandaiTolak', $berkas3->id)
+            ->call('tandaiUraianSesuai', $kegiatan3->id)
             ->call('kembalikanKeKetuaTim')
             ->assertHasNoErrors();
 
@@ -488,6 +693,8 @@ class VerifikasiCapaianTest extends TestCase
         Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
             ->call('tandaiSesuai', $data['berkas1']->id)
             ->call('tandaiSesuai', $data['berkas2']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan1']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan2']->id)
             ->set('alokasi_tw3', 50)
             ->set('realisasi_tw3', 45)
             ->call('verifikasiSelesai')
@@ -527,6 +734,7 @@ class VerifikasiCapaianTest extends TestCase
             ->set("koreksiKegiatan.{$data['kegiatan3']->id}", 'Kegiatan tambahan (dikoreksi)')
             ->set('catatanBerkas.'.$data['berkas3']->id, 'Bukti kegiatan tambahan tidak sesuai')
             ->call('tandaiTolak', $data['berkas3']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan3']->id)
             ->call('kembalikanKeKetuaTim')
             ->assertHasNoErrors();
 
@@ -718,6 +926,8 @@ class VerifikasiCapaianTest extends TestCase
             ->set('catatan', 'Penjelasan tambahan dari Tim SAKIP')
             ->call('tandaiSesuai', $data['berkas1']->id)
             ->call('tandaiSesuai', $data['berkas2']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan1']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan2']->id)
             ->set('alokasi_tw3', 50)
             ->set('realisasi_tw3', 45)
             ->call('verifikasiSelesai')

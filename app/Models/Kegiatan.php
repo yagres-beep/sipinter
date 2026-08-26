@@ -50,6 +50,8 @@ class Kegiatan extends Model
         'rtl_evaluasi_id',
         'periode_id',
         'uraian_kegiatan',
+        'status_verifikasi_uraian',
+        'catatan_uraian',
         'jenis',
         'tahapan_survei',
         'rincian_output',

@@ -39,6 +39,8 @@ class RtlEvaluasi extends Model
         'batas_waktu',
         'realisasi',
         'status_cocok',
+        'status_verifikasi',
+        'catatan',
     ];
 
     protected function casts(): array
