@@ -83,7 +83,7 @@
             if (! this.waktuMulai) return;
             const mulai = this.waktuMulai.replace(':', '.');
             const selesai = this.waktuSelesai ? this.waktuSelesai.replace(':', '.') : '';
-            const teks = selesai ? `${mulai} - ${selesai} ${this.waktuZona}` : `${mulai} ${this.waktuZona}`;
+            const teks = selesai ? `${mulai} - ${selesai} ${this.waktuZona}` : `${mulai} ${this.waktuZona} - selesai`;
             this.$refs[ref].value = teks;
             this.$refs[ref].dispatchEvent(new Event('input'));
         },
@@ -118,7 +118,7 @@
                         <option value="WIT">WIT</option>
                     </select>
                 </div>
-                <input type="text" class="inp filled" style="width:100%" wire:model="waktu" x-ref="waktu" placeholder="Contoh: 09.00 - 11.00 WITA">
+                <input type="text" class="inp filled" style="width:100%" wire:model="waktu" x-ref="waktu" placeholder="Contoh: 09.00 - 11.00 WITA atau 13.30 WITA - selesai">
                 @error('waktu')
                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                 @enderror

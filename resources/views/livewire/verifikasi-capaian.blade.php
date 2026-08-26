@@ -230,6 +230,14 @@
                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                 @enderror
 
+                <div class="field" style="margin-top:6px">
+                    <label>Rincian Output (RO)</label>
+                    <input type="text" class="inp filled" wire:model="rincianOutput.{{ $kegiatan->id }}" @readonly(!$bisaDikoreksi) placeholder="mis. Publikasi/Laporan Statistik Sumber Daya Mineral dan Konstruksi">
+                    @error("rincianOutput.{$kegiatan->id}")
+                        <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                    @enderror
+                </div>
+
                 <div class="row2" style="margin-top:6px">
                     <div class="field">
                         <label>Realisasi Volume RO</label>

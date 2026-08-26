@@ -38,6 +38,18 @@ class VerifikasiCapaian extends Component
     public ?string $catatan = null;
 
     /**
+     * Nama Rincian Output (RO) resmi per kegiatan, dikunci pada id kegiatan — TERPISAH
+     * dari $koreksiKegiatan (uraian_kegiatan bebas-teks yang ditulis petugas) karena
+     * penamaan RO resmi tidak selalu sama dengan uraian kegiatan yang diketik petugas.
+     * Diisi Tim SAKIP di sini supaya tabel "Realisasi Volume RO dan Progres
+     * Pelaksanaan Kegiatan" di notula (lihat notula-bagian1-konten blade) menampilkan
+     * nama RO yang benar, bukan uraian_kegiatan apa adanya.
+     *
+     * @var array<int, string|null>
+     */
+    public array $rincianOutput = [];
+
+    /**
      * Realisasi Volume RO & Progres Pelaksanaan Kegiatan (%) per kegiatan, dikunci
      * pada id kegiatan — sama seperti $koreksiKegiatan, hanya terisi Tim SAKIP saat
      * IKU-nya BELUM punya realisasi triwulan berjalan (lihat notula-bagian1-konten
@@ -227,6 +239,7 @@ class VerifikasiCapaian extends Component
 
         foreach ($this->kegiatanList() as $kegiatan) {
             $this->koreksiKegiatan[$kegiatan->id] = $kegiatan->uraian_kegiatan;
+            $this->rincianOutput[$kegiatan->id] = $kegiatan->rincian_output;
             $this->realisasiVolumeRo[$kegiatan->id] = $kegiatan->volume_ro;
             $this->realisasiProgresPersen[$kegiatan->id] = $kegiatan->progres_persen;
         }
@@ -532,6 +545,7 @@ class VerifikasiCapaian extends Component
             'analisis_capaian' => ['nullable', 'string'],
             'catatan' => ['nullable', 'string'],
             'koreksiKegiatan.*' => ['required', 'string', 'max:1000'],
+            'rincianOutput.*' => ['nullable', 'string', 'max:255'],
             'realisasiVolumeRo.*' => ['nullable', 'string', 'max:255'],
             'realisasiProgresPersen.*' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'koreksiKendala.*.kendala' => ['required', 'string'],
@@ -569,6 +583,7 @@ class VerifikasiCapaian extends Component
         return [
             'analisis_capaian' => 'analisis capaian',
             'catatan' => 'penjelasan/pembahasan lainnya',
+            'rincianOutput.*' => 'rincian output',
             'realisasiVolumeRo.*' => 'realisasi volume RO',
             'realisasiProgresPersen.*' => 'progres pelaksanaan kegiatan (%)',
             'alokasi_tw1' => 'Alokasi Target TW I',
@@ -699,6 +714,7 @@ class VerifikasiCapaian extends Component
 
             $kegiatan->update([
                 'uraian_kegiatan' => $teks,
+                'rincian_output' => $this->rincianOutput[$id] ?: null,
                 'volume_ro' => $this->realisasiVolumeRo[$id] ?: null,
                 'progres_persen' => filled($this->realisasiProgresPersen[$id] ?? null) ? $this->realisasiProgresPersen[$id] : null,
             ]);

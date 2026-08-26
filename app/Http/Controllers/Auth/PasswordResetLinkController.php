@@ -24,9 +24,15 @@ class PasswordResetLinkController extends Controller
 
         $status = Password::sendResetLink($request->only('email'));
 
+        if ($status === Password::RESET_THROTTLED) {
+            throw ValidationException::withMessages([
+                'email' => 'Tautan reset baru saja dikirim. Mohon tunggu sebentar sebelum meminta lagi.',
+            ]);
+        }
+
         if ($status !== Password::RESET_LINK_SENT) {
             throw ValidationException::withMessages([
-                'email' => 'Email tidak terdaftar atau belum bisa dikirimi tautan reset saat ini.',
+                'email' => 'Email tidak terdaftar. Hubungi Tim SAKIP untuk mengatur ulang kata sandi secara manual.',
             ]);
         }
 

@@ -52,6 +52,7 @@ class Kegiatan extends Model
         'uraian_kegiatan',
         'jenis',
         'tahapan_survei',
+        'rincian_output',
         'volume_ro',
         'progres_persen',
         'nama_folder_auto',

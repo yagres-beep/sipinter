@@ -14,6 +14,7 @@
         "livewire/livewire": "^4.3",
         "maatwebsite/excel": "^3.1",
         "phpoffice/phpword": "^1.4",
+        "resend/resend-php": "*",
         "setasign/fpdi": "^2.6",
         "setasign/fpdi-fpdf": "^2.3"
     },

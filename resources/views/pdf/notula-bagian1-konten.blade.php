@@ -117,7 +117,7 @@
                 <tr><th>Rincian Output</th><th>Realisasi Volume RO</th><th>Progres Pelaksanaan Kegiatan (%)</th></tr>
                 @forelse ($kegiatanIku as $kegiatan)
                     <tr>
-                        <td>{{ $kegiatan->uraian_kegiatan }}</td>
+                        <td>{{ $kegiatan->rincian_output ?: $kegiatan->uraian_kegiatan }}</td>
                         <td>{{ $kegiatan->volume_ro ?: '…' }}</td>
                         <td>{{ $fmtProgres($kegiatan->progres_persen) }}</td>
                     </tr>
