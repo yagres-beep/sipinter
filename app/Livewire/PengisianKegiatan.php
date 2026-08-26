@@ -184,12 +184,19 @@ class PengisianKegiatan extends Component
      * tidak menimpa data yang sedang/sudah diverifikasi. Hanya 'draft' & 'dikembalikan'
      * yang tetap bisa diedit/diajukan ulang lewat form ini.
      *
+     * Juga dipakai untuk mengunci blok Bagian Kustom lewat statusCapaianSaatIni()
+     * (lihat muatBagianKustomBlocks()/riwayatBagianKustom()) — makanya
+     * Capaian::STATUS_SEDANG_DITANGANI ikut disertakan di sini walau bukan nilai
+     * status_dokumen Kegiatan, supaya Bagian Kustom tetap terkunci selama Tim
+     * SAKIP masih menangani (bukan cuma saat sudah 'diajukan').
+     *
      * @var list<string>
      */
     protected const STATUS_KEGIATAN_TERKUNCI = [
         Kegiatan::STATUS_DIAJUKAN,
         Kegiatan::STATUS_DIVERIFIKASI,
         Kegiatan::STATUS_DISETUJUI,
+        Capaian::STATUS_SEDANG_DITANGANI,
     ];
 
     protected function emptyKendalaBlock(): array

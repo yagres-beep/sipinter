@@ -1084,6 +1084,29 @@ class PengisianKegiatanTest extends TestCase
         $this->assertTrue($ditemukan);
     }
 
+    public function test_bagian_kustom_terkunci_saat_capaian_sedang_ditangani(): void
+    {
+        $data = $this->siapkanBagianKustomDikembalikan();
+        Capaian::where('iku_id', $data['iku']->id)->update(['status' => Capaian::STATUS_SEDANG_DITANGANI]);
+
+        $this->actingAs($data['ketua']);
+
+        $component = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $data['iku']->id);
+
+        // Tim SAKIP sedang menangani (belum selesai) — poin lama TIDAK boleh
+        // dimuat sebagai blok editable, supaya Ketua Tim tidak bisa menimpa
+        // data yang sedang diproses.
+        $component->assertSet("bagianKustomBlocks.{$data['bagian']->id}.0.id", null)
+            ->assertSet("bagianKustomBlocks.{$data['bagian']->id}.0.teks", '');
+
+        $riwayat = $component->viewData('riwayatBagianKustom')[$data['bagian']->id];
+        $ditemukan = collect($riwayat->get(3))->contains(fn ($item) => $item->teks === 'Risiko lama');
+        $this->assertTrue($ditemukan);
+    }
+
     public function test_hapus_bukti_lama_bagian_kustom_menghapus_berkas_yang_ditolak(): void
     {
         \Illuminate\Support\Facades\Storage::fake('local');
