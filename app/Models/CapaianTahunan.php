@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\Services\PkoCalculatorService;
+use App\Services\CapaianCalculatorService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -83,7 +83,7 @@ class CapaianTahunan extends Model
     }
 
     /**
-     * Alokasi Target Kumulatif dari TW I s.d. triwulan $tw (1-4), sesuai kolom
+     * Rumus 2.0 (Kumulatif, running sum) — Alokasi Target Kumulatif dari TW I s.d. triwulan $tw (1-4), sesuai kolom
      * "Alokasi Target (Kumulatif)" pada Kertas Kerja Pengukuran Kinerja Triwulanan
      * resmi — DIJUMLAHKAN dari nilai mentah per-TW (lihat docblock kelas ini: Tim
      * SAKIP hanya mengisi kontribusi triwulan berjalan, kumulatifnya dihitung di
@@ -105,7 +105,7 @@ class CapaianTahunan extends Model
     }
 
     /**
-     * Realisasi Kumulatif dari TW I s.d. triwulan $tw — sesuai kolom "Realisasi
+     * Rumus 2.0 (Kumulatif, running sum) — Realisasi Kumulatif dari TW I s.d. triwulan $tw — sesuai kolom "Realisasi
      * (Kumulatif)" pada kertas kerja resmi. Dijumlahkan dari nilai mentah per-TW,
      * cabang 'rasio'/'langsung' sama seperti alokasiKumulatif() di atas.
      */
@@ -120,7 +120,7 @@ class CapaianTahunan extends Model
     }
 
     /**
-     * Target Tahunan IKU ini — DIISI SEKALI untuk satu tahun penuh (bukan per-TW,
+     * Rumus 2.2 (Nilai Tampil — targetTampil) — Target Tahunan IKU ini — DIISI SEKALI untuk satu tahun penuh (bukan per-TW,
      * boleh diperbarui kapan pun), TIDAK dijumlahkan seperti alokasi/realisasi di
      * atas. Untuk 'rasio' (IKU bertipe %) dihitung dari x_target/y_target (pasangan
      * X/Y TERPISAH dari X/Y per-TW manapun). Untuk 'langsung', nilai target_tahunan
@@ -149,22 +149,23 @@ class CapaianTahunan extends Model
     }
 
     /**
-     * X÷Y×100 — dipakai targetTahunan() (langsung, tanpa jumlah) dan rasioKumulatif()
-     * (setelah dijumlahkan) untuk IKU bertipe %.
+     * Rumus 2.2 (Nilai Tampil — toPersen) — X÷Y×100 — dipakai targetTahunan()
+     * (langsung, tanpa jumlah) dan rasioKumulatif() (setelah dijumlahkan) untuk
+     * IKU bertipe %.
      */
     protected function rasioNilai(mixed $x, mixed $y): float
     {
         $x = (float) ($x ?? 0);
         $y = (float) ($y ?? 0);
 
-        return round(PkoCalculatorService::hitungPersentase($x, $y), 2);
+        return round(CapaianCalculatorService::hitungPersentase($x, $y), 2);
     }
 
     /**
-     * Capaian Kinerja Terhadap Target Triwulanan pada triwulan $tw — Realisasi
-     * Kumulatif ÷ Alokasi Target Kumulatif TW itu sendiri, lewat rumus resmi
-     * Capaian::hitungPersentase() (batas maksimal, aturan strip "-", dst. tidak
-     * diduplikasi di sini).
+     * Rumus 2.3 (Capaian Kinerja Terhadap Target Triwulanan) pada triwulan $tw —
+     * Realisasi Kumulatif ÷ Alokasi Target Kumulatif TW itu sendiri, lewat rumus
+     * resmi Capaian::hitungPersentase() (batas maksimal, aturan strip "-", dst.
+     * tidak diduplikasi di sini).
      */
     public function capaianTriwulanan(int $tw): ?float
     {
@@ -172,8 +173,8 @@ class CapaianTahunan extends Model
     }
 
     /**
-     * Capaian Kinerja Terhadap Target Setahun pada triwulan $tw — Realisasi
-     * Kumulatif TW itu ÷ Target Tahunan penuh.
+     * Rumus 2.4 (Capaian Kinerja Terhadap Target Setahun) pada triwulan $tw —
+     * Realisasi Kumulatif TW itu ÷ Target Tahunan penuh.
      */
     public function capaianSetahun(int $tw): ?float
     {

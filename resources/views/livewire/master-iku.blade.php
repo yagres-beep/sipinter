@@ -12,11 +12,11 @@
         <div class="info red" style="margin-bottom:14px">⚠️ {{ session('error') }}</div>
     @endif
 
-    @if (session('excelErrors'))
+    @if ($pratinjauErrorStruktural)
         <div class="card card-red" style="margin-bottom:16px">
-            <div class="sec"><span>✕ Unggahan Ditolak</span></div>
+            <div class="sec"><span>✕ Berkas Ditolak</span></div>
             <ul style="margin:0;padding-left:18px;color:var(--red);font-size:13px;line-height:1.8">
-                @foreach (session('excelErrors') as $error)
+                @foreach ($pratinjauErrorStruktural as $error)
                     <li>{{ $error }}</li>
                 @endforeach
             </ul>
@@ -27,53 +27,153 @@
         <div style="display:flex;align-items:center;gap:12px">
             <div class="ico ico-teal" style="width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:19px">📥</div>
             <div>
-                <div style="font-weight:700;color:var(--ink);font-size:13px">Template Data IKU (.xlsx)</div>
-                <div class="fhint" style="margin-top:2px">Kolom: Kode, Indikator, Tim, Penanggung Jawab, Sasaran · ada baris contoh, petunjuk, &amp; sheet Daftar Nama untuk disalin ke kolom Penanggung Jawab. Jangan hapus baris contoh (baris 2) &amp; petunjuk (baris 3).</div>
+                <div style="font-weight:700;color:var(--ink);font-size:13px">Template Sheet Master_IKU (.xlsx)</div>
+                <div class="fhint" style="margin-top:2px">Kolom: Kode/Nama Tujuan, Kode/Nama Sasaran, Kode Indikator, Indikator Kinerja, Jenis Indikator, Jenis Periode, Jenis Nilai (%/Non %), Satuan, Target Tahunan, Deskripsi &amp; Target X/Y (khusus "%"), Alokasi Target TW I-IV. Tim/Penanggung Jawab diisi belakangan lewat form manual (lihat sheet "Daftar Nama" untuk saran nama). Jangan hapus baris contoh (baris 2-3) &amp; petunjuk (baris 4).</div>
             </div>
         </div>
         <button type="button" class="btn btn-teal" wire:click="downloadTemplate">⬇ Unduh Template (.xlsx)</button>
     </div>
 
-    <div class="card">
-        <div class="sec"><span>Unggah Data IKU (Excel)</span></div>
+    @if ($pratinjau === null)
+        <div class="card">
+            <div class="sec"><span>Unggah Data IKU (Excel)</span></div>
 
-        <div class="field" x-data="{ pendingExcelName: '' }">
-            <label>Berkas Excel (.xlsx) <span class="req">*</span></label>
-
-            @if ($excelFile)
-                <div class="filechip">
-                    <span class="nm">📄 {{ $excelFile->getClientOriginalName() }}</span>
-                    <span class="x" style="cursor:pointer" wire:click="$set('excelFile', null)">✕</span>
+            <div class="row2">
+                <div class="field">
+                    <label>Tahun Alokasi Target <span class="req">*</span></label>
+                    <input type="number" class="inp filled" wire:model="tahunImpor" min="2000" max="2100">
+                    <div class="fhint">Target Tahunan &amp; Alokasi TW I-IV dari file disimpan untuk tahun ini (berkas Excel tidak punya kolom Tahun).</div>
+                    @error('tahunImpor')
+                        <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                    @enderror
                 </div>
-            @else
-                <label class="upload" style="cursor:pointer;display:block">
-                    <div class="big">📤</div>
-                    Klik untuk memilih berkas Excel (.xlsx) yang sudah diisi sesuai template
-                    <input type="file" wire:model="excelFile" accept=".xlsx" style="display:none"
-                        @change="pendingExcelName = $event.target.files[0]?.name || ''">
-                </label>
+                <div class="field">
+                    <label>Mode Import <span class="req">*</span></label>
+                    <select class="inp filled" wire:model="modeImpor">
+                        <option value="insert">Insert baru (tolak Kode Indikator yang sudah ada)</option>
+                        <option value="upsert">Upsert (perbarui Kode Indikator yang sudah ada)</option>
+                    </select>
+                    @error('modeImpor')
+                        <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                    @enderror
+                </div>
+            </div>
 
-                {{-- Tampil SEKETIKA berkas dipilih (dari File API browser via @change di
-                     atas) — tidak menunggu unggahannya ke server benar-benar dimulai
-                     dulu baru terlihat, supaya tidak terasa seperti tidak terjadi
-                     apa-apa selama jeda antara memilih berkas dan unggahan mulai jalan. --}}
-                <div x-show="pendingExcelName !== ''" x-cloak style="font-size:11.5px;color:var(--muted);margin-top:6px">
-                    📄 <span x-text="pendingExcelName"></span> — mengunggah…
+            <div class="field" x-data="{ pendingExcelName: '' }">
+                <label>Berkas Excel (.xlsx) <span class="req">*</span></label>
+
+                @if ($excelFile)
+                    <div class="filechip">
+                        <span class="nm">📄 {{ $excelFile->getClientOriginalName() }}</span>
+                        <span class="x" style="cursor:pointer" wire:click="$set('excelFile', null)">✕</span>
+                    </div>
+                @else
+                    <label class="upload" style="cursor:pointer;display:block">
+                        <div class="big">📤</div>
+                        Klik untuk memilih berkas Excel (.xlsx) yang sudah diisi sesuai template
+                        <input type="file" wire:model="excelFile" accept=".xlsx" style="display:none"
+                            @change="pendingExcelName = $event.target.files[0]?.name || ''">
+                    </label>
+
+                    {{-- Tampil SEKETIKA berkas dipilih (dari File API browser via @change di
+                         atas) — tidak menunggu unggahannya ke server benar-benar dimulai
+                         dulu baru terlihat, supaya tidak terasa seperti tidak terjadi
+                         apa-apa selama jeda antara memilih berkas dan unggahan mulai jalan. --}}
+                    <div x-show="pendingExcelName !== ''" x-cloak style="font-size:11.5px;color:var(--muted);margin-top:6px">
+                        📄 <span x-text="pendingExcelName"></span> — mengunggah…
+                    </div>
+                @endif
+
+                @error('excelFile')
+                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                @enderror
+            </div>
+
+            <div class="btn-row">
+                <button type="button" class="btn btn-primary" wire:click="pratinjauExcel" wire:loading.attr="disabled" wire:target="pratinjauExcel">
+                    <span wire:loading.remove wire:target="pratinjauExcel">Pratinjau</span>
+                    <span wire:loading wire:target="pratinjauExcel"><i class="spin"></i> Memproses…</span>
+                </button>
+            </div>
+        </div>
+    @else
+        <div class="card">
+            <div class="sec">
+                <span>Pratinjau Import — Tahun {{ $tahunImpor }}</span>
+                <span class="badge b-approve">{{ $jumlahValid }} valid</span>
+                @if ($jumlahError > 0)
+                    <span class="badge b-tolak">{{ $jumlahError }} error</span>
+                @endif
+            </div>
+
+            <div class="field" style="max-width:420px">
+                <label class="fl-row" style="cursor:pointer;gap:8px">
+                    <input type="checkbox" wire:model="batalkanSemuaBilaError">
+                    <span>Batalkan semua bila ada error <span class="muted" style="font-weight:400">(tidak menyimpan satu pun baris jika masih ada baris error)</span></span>
+                </label>
+            </div>
+
+            @if ($jumlahValid > 0)
+                <div class="card-h" style="font-size:13px">✓ Baris Valid ({{ $jumlahValid }})</div>
+                <div class="table-scroll" style="max-height:260px">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Baris</th><th>Kode</th><th>Indikator</th><th>Tipe</th><th style="text-align:right">Target</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($pratinjau as $baris)
+                                @continue(! $baris['valid'])
+                                <tr>
+                                    <td class="muted">{{ $baris['baris'] }}</td>
+                                    <td><b>{{ $baris['data']['kode'] }}</b></td>
+                                    <td>{{ $baris['data']['master_iku']['indikator'] }}</td>
+                                    <td class="muted">{{ $baris['data']['master_iku']['metode_capaian'] === 'rasio' ? '%' : 'Non %' }}</td>
+                                    <td style="text-align:right" class="muted">
+                                        @if ($baris['data']['master_iku']['metode_capaian'] === 'rasio')
+                                            {{ $baris['data']['capaian_tahunan']['x_target'] }} / {{ $baris['data']['capaian_tahunan']['y_target'] }}
+                                        @else
+                                            {{ $baris['data']['capaian_tahunan']['target_tahunan'] }}
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
                 </div>
             @endif
 
-            @error('excelFile')
-                <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-            @enderror
-        </div>
+            @if ($jumlahError > 0)
+                <div class="card-h" style="font-size:13px;margin-top:16px">✕ Baris Error ({{ $jumlahError }})</div>
+                <div class="table-scroll" style="max-height:260px">
+                    <table>
+                        <thead>
+                            <tr><th>Baris</th><th>Alasan</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($pratinjau as $baris)
+                                @continue($baris['valid'])
+                                <tr>
+                                    <td class="muted">{{ $baris['baris'] }}</td>
+                                    <td style="color:var(--red)">{{ implode(' · ', $baris['errors']) }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
 
-        <div class="btn-row">
-            <button type="button" class="btn btn-primary" wire:click="uploadExcel" wire:loading.attr="disabled" wire:target="uploadExcel">
-                <span wire:loading.remove wire:target="uploadExcel">Unggah &amp; Proses</span>
-                <span wire:loading wire:target="uploadExcel"><i class="spin"></i> Memproses…</span>
-            </button>
+            <div class="btn-row" style="margin-top:16px">
+                <button type="button" class="btn btn-primary" wire:click="konfirmasiImpor" wire:loading.attr="disabled" wire:target="konfirmasiImpor"
+                    @disabled($jumlahValid === 0 || ($batalkanSemuaBilaError && $jumlahError > 0))>
+                    <span wire:loading.remove wire:target="konfirmasiImpor">✓ Konfirmasi Import</span>
+                    <span wire:loading wire:target="konfirmasiImpor"><i class="spin"></i> Menyimpan…</span>
+                </button>
+                <button type="button" class="btn btn-ghost" wire:click="batalkanPratinjau" wire:loading.attr="disabled" wire:target="batalkanPratinjau">Batalkan</button>
+            </div>
         </div>
-    </div>
+    @endif
 
     @unless ($editingId)
         <div class="card">

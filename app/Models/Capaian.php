@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use App\Events\CapaianStatusDiubah;
-use App\Services\PkoCalculatorService;
+use App\Services\CapaianCalculatorService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -125,8 +125,8 @@ class Capaian extends Model
     }
 
     /**
-     * Rumus capaian kinerja triwulanan resmi (Kertas Kerja Pengukuran Kinerja
-     * Triwulanan, perubahan Triwulan II 2026), dipakai baik di VerifikasiCapaian
+     * Rumus 2.3/2.4 (Capaian Kinerja Terhadap Target Triwulanan / Setahun) resmi
+     * (Kertas Kerja Pengukuran Kinerja Triwulanan), dipakai baik di VerifikasiCapaian
      * (per IKU+bulan) maupun DasborCapaian (agregat per IKU+triwulan):
      *
      * a. target>0, realisasi>0, rasio<=batas  → capaian = rasio (realisasi/target)
@@ -142,7 +142,7 @@ class Capaian extends Model
      * mempengaruhi rumus ini — murni label tampilan, target & realisasi tetap
      * dibandingkan sebagai rasio apa pun satuannya.
      *
-     * Rumus sesungguhnya ada di PkoCalculatorService::hitungCapaian() (dites
+     * Rumus sesungguhnya ada di CapaianCalculatorService::hitungCapaian() (dites
      * terpisah, tanpa ketergantungan DB) — method ini hanya menjembatani tipe API
      * lama: mixed→float, dan TIDAK_DINILAI ("-")→null (dipakai luas di seluruh kode
      * sebagai penanda "belum ada capaian", lihat dataRekap()/rataRataPersentase()
@@ -156,63 +156,21 @@ class Capaian extends Model
 
         $batas = (float) PengaturanCapaian::ambil()->batas_maksimal_persen;
 
-        $hasil = PkoCalculatorService::hitungCapaian((float) $target, (float) $realisasi, $batas);
+        $hasil = CapaianCalculatorService::hitungCapaian((float) $target, (float) $realisasi, $batas);
 
-        return $hasil === PkoCalculatorService::TIDAK_DINILAI ? null : round((float) $hasil, 2);
+        return $hasil === CapaianCalculatorService::TIDAK_DINILAI ? null : round((float) $hasil, 2);
     }
 
     /**
-     * Predikat SAKIP dari Nilai SAKIP (angka dari Inspektorat, App\Models\NilaiSakip)
-     * — sesuai Kertas Kerja Pengukuran Kinerja Triwulanan, dipakai untuk menentukan
-     * % koreksi pada rumus Penilaian Kinerja Organisasi (PKO) di bawah.
+     * Rumus 2.1 (Predikat SAKIP) dari Nilai SAKIP (angka dari Inspektorat,
+     * App\Models\NilaiSakip) — sesuai Kertas Kerja Pengukuran Kinerja Triwulanan,
+     * ditampilkan sebagai info di header Dasbor Capaian SAJA. TIDAK dipakai dalam
+     * perhitungan capaian apa pun (rumus Penilaian Kinerja Organisasi yang dulu
+     * memakainya untuk % koreksi sudah dihapus dari cakupan aplikasi ini).
      */
     public static function predikatSakip(float $nilaiSakip): string
     {
-        return PkoCalculatorService::predikatSakip($nilaiSakip);
-    }
-
-    /**
-     * % koreksi Nilai Akhir Capaian PK berdasarkan Predikat SAKIP — dipakai SATU
-     * angka untuk SELURUH IKU (organisasi), bukan per-IKU. Dikembalikan dalam
-     * bentuk PERSEN (10.0 = 10%, bukan desimal 0.10) — beda representasi dari
-     * PkoCalculatorService::koreksiPredikat() supaya API lama (dipakai bersama
-     * nilaiAkhirCapaianPk() di bawah) tidak perlu ikut berubah.
-     */
-    public static function koreksiPredikat(string $predikat): float
-    {
-        return PkoCalculatorService::koreksiPredikat($predikat) * 100;
-    }
-
-    /**
-     * Normalisasi Capaian PK (1) — Capaian Setahun TW IV satu IKU (CapaianTahunan::
-     * capaianSetahun(4)) dibatasi maksimal PengaturanCapaian::batas_normalisasi_pko
-     * (default 110, TERPISAH dari batas_maksimal_persen 120 yang dipakai
-     * hitungPersentase()) — null bila belum ada Capaian Setahun TW IV sama sekali
-     * (strip "-", bukan dianggap 0).
-     */
-    public static function normalisasiCapaianPk(?float $capaianSetahunTw4): ?float
-    {
-        if ($capaianSetahunTw4 === null) {
-            return null;
-        }
-
-        $batas = (float) PengaturanCapaian::ambil()->batas_normalisasi_pko;
-
-        return (float) PkoCalculatorService::normalisasiCapaianPK($capaianSetahunTw4, $batas);
-    }
-
-    /**
-     * Nilai Akhir Capaian PK satu IKU = Normalisasi (1) × (100% − Koreksi Predikat
-     * SAKIP (2)) — dijumlah/dirata-ratakan seluruh IKU di App\Livewire\DasborCapaian::
-     * hitungPko() untuk menghasilkan Total/Rata-rata Capaian PK (NKO) organisasi.
-     */
-    public static function nilaiAkhirCapaianPk(?float $normalisasi, float $koreksiPersen): ?float
-    {
-        if ($normalisasi === null) {
-            return null;
-        }
-
-        return round(PkoCalculatorService::nilaiAkhirPK($normalisasi, $koreksiPersen / 100), 2);
+        return CapaianCalculatorService::predikatSakip($nilaiSakip);
     }
 
     /**

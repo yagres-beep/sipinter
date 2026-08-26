@@ -11,8 +11,10 @@ use Illuminate\Support\Facades\Cache;
  * SAKIP lewat halaman Pengaturan Rumus Capaian — dipakai Capaian::hitungPersentase()
  * supaya batas capaian (saat ini 120%, sesuai Kertas Kerja Pengukuran Kinerja
  * Triwulanan) tidak dikodekan langsung dan bisa menyesuaikan bila rumus resmi berubah.
- * batas_normalisasi_pko (default 110) adalah batas TERPISAH, dipakai
- * Capaian::normalisasiCapaianPk() untuk rumus Penilaian Kinerja Organisasi (PKO).
+ *
+ * Kolom `batas_normalisasi_pko` masih ada di tabel (data lama) tapi TIDAK dipakai
+ * lagi di mana pun — rumus Penilaian Kinerja Organisasi (PKO) yang dulu memakainya
+ * sudah dihapus dari cakupan aplikasi ini.
  */
 class PengaturanCapaian extends Model
 {

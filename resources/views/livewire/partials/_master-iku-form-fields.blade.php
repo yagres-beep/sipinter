@@ -27,6 +27,46 @@
     </div>
 </div>
 
+<div class="row2">
+    <div class="field">
+        <label>Kode Tujuan</label>
+        <input type="text" class="inp filled" wire:model="kodeTujuan" placeholder="mis. T01">
+        @error('kodeTujuan')
+            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+        @enderror
+    </div>
+    <div class="field">
+        <label>Nama Tujuan</label>
+        <input type="text" class="inp filled" wire:model="namaTujuan" placeholder="mis. Meningkatnya kualitas statistik">
+        @error('namaTujuan')
+            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+        @enderror
+    </div>
+</div>
+
+<div class="row2">
+    <div class="field">
+        <label>Kode Sasaran</label>
+        <input type="text" class="inp filled" wire:model="kodeSasaran" placeholder="mis. S01">
+        @error('kodeSasaran')
+            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+        @enderror
+    </div>
+    <div class="field">
+        <label>Nama Sasaran</label>
+        <input type="text" class="inp filled" list="daftar-sasaran" wire:model="sasaran" placeholder="mis. Statistik Kesejahteraan Rakyat">
+        <datalist id="daftar-sasaran">
+            @foreach ($daftarSasaran as $opsi)
+                <option value="{{ $opsi }}"></option>
+            @endforeach
+        </datalist>
+        <div class="fhint">Untuk mengelompokkan tabel "Kesiapan per Sasaran" di halaman Kompilasi Notula &amp; Dasbor Capaian. Boleh dikosongkan.</div>
+        @error('sasaran')
+            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+        @enderror
+    </div>
+</div>
+
 <div class="field">
     <label>Indikator <span class="req">*</span></label>
     <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model="indikator"
@@ -36,33 +76,18 @@
     @enderror
 </div>
 
-<div class="row2">
-    <div class="field">
-        <label>Penanggung Jawab <span class="req">*</span></label>
-        <input type="text" class="inp filled" list="daftar-pj" wire:model="penanggungJawab" placeholder="Nama petugas/pejabat">
-        <datalist id="daftar-pj">
-            @foreach ($daftarPenanggungJawab as $opsi)
-                <option value="{{ $opsi }}"></option>
-            @endforeach
-        </datalist>
-        <div class="fhint">Saran diambil dari pengguna terverifikasi &amp; isian sebelumnya, atau ketik nama lain.</div>
-        @error('penanggungJawab')
-            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-        @enderror
-    </div>
-    <div class="field">
-        <label>Sasaran</label>
-        <input type="text" class="inp filled" list="daftar-sasaran" wire:model="sasaran" placeholder="mis. Statistik Kesejahteraan Rakyat">
-        <datalist id="daftar-sasaran">
-            @foreach ($daftarSasaran as $opsi)
-                <option value="{{ $opsi }}"></option>
-            @endforeach
-        </datalist>
-        <div class="fhint">Untuk mengelompokkan tabel "Kesiapan per Sasaran" di halaman Kompilasi Notula. Boleh dikosongkan.</div>
-        @error('sasaran')
-            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-        @enderror
-    </div>
+<div class="field">
+    <label>Penanggung Jawab <span class="req">*</span></label>
+    <input type="text" class="inp filled" list="daftar-pj" wire:model="penanggungJawab" placeholder="Nama petugas/pejabat">
+    <datalist id="daftar-pj">
+        @foreach ($daftarPenanggungJawab as $opsi)
+            <option value="{{ $opsi }}"></option>
+        @endforeach
+    </datalist>
+    <div class="fhint">Saran diambil dari pengguna terverifikasi &amp; isian sebelumnya, atau ketik nama lain. Wajib diisi di sini walau kosong pada indikator hasil import Excel (yang tidak memuat kolom Tim/Penanggung Jawab).</div>
+    @error('penanggungJawab')
+        <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+    @enderror
 </div>
 
 <div class="row2">
@@ -116,7 +141,7 @@
             <option value="iku">IKU</option>
             <option value="proksi">Proksi</option>
         </select>
-        <div class="fhint">Sesuai kolom "Jenis (IKU atau Proksi)" Kertas Kerja resmi. "Proksi" DIKECUALIKAN dari Total/Rata-rata Capaian PK di Penilaian Kinerja Organisasi (PKO) — indikator pengganti/pendekatan sementara, bukan indikator inti yang dinilai penuh.</div>
+        <div class="fhint">Sesuai kolom "Jenis (IKU atau Proksi)" Kertas Kerja resmi. "Proksi" DIKECUALIKAN dari perhitungan Capaian Kinerja &amp; rekap di Dasbor Capaian — indikator pengganti/pendekatan sementara, bukan indikator inti yang dinilai penuh.</div>
         @error('jenisIku')
             <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
         @enderror
@@ -127,7 +152,7 @@
             <option value="tahunan">Tahunan</option>
             <option value="triwulanan">Triwulanan</option>
         </select>
-        <div class="fhint">"Triwulanan" untuk IKU yang targetnya ditetapkan per-triwulan — basis Normalisasi Capaian PK di PKO memakai Capaian Terhadap Target Triwulanan pada triwulan berjalan (TW IV tetap memakai Capaian Setahun). "Tahunan" (default) selalu memakai Capaian Setahun TW IV.</div>
+        <div class="fhint">Sesuai kolom "Jenis (Triwulanan atau Tahunan)" Kertas Kerja resmi — murni informasional, tidak mengubah rumus Capaian Kinerja (Capaian Terhadap Target Triwulanan &amp; Setahun tetap dihitung untuk semua IKU apa pun jenis periodenya).</div>
         @error('jenisPeriode')
             <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
         @enderror

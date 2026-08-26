@@ -188,7 +188,7 @@ class NotulaService
         // Ringkasan capaian pada paragraf pembuka (RF-42): rata-rata capaian_tw/capaian_pk
         // HANYA atas IKU yang punya nilai — IKU strip "-" (belum dinilai, lihat
         // Capaian::hitungPersentase()) dikecualikan supaya tidak menurunkan rata-rata,
-        // sama seperti pola PkoCalculatorService::capaianKinerjaIKU().
+        // sama seperti pola CapaianCalculatorService::rataRataCapaianTriwulanan().
         $rataCapaianTw = $this->rataRataCapaian($rekapPerIku, 'capaian_tw');
         $rataCapaianPk = $this->rataRataCapaian($rekapPerIku, 'capaian_pk');
 

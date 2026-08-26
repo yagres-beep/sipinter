@@ -3,18 +3,20 @@
 namespace App\Imports;
 
 use App\Models\MasterIku;
+use App\Services\MasterIkuImportValidator;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\ToCollection;
 
 /**
- * Mengurai berkas Excel Master IKU (RF-06, RF-07).
+ * Mengurai berkas Excel Master IKU (spek bagian 6).
  *
- * Memvalidasi bahwa header, baris contoh (baris 2), dan baris petunjuk (baris 3)
- * dari template resmi masih utuh sebelum mengurai baris data (baris 4 dst.) ke
- * tabel master_ikus. Bila salah satu bagian template hilang/berubah, seluruh
- * berkas ditolak dan $errors berisi alasannya.
+ * Memvalidasi bahwa header, DUA baris contoh (baris 2-3), dan baris petunjuk
+ * (baris 4) dari template resmi masih utuh, lalu mendelegasikan setiap baris data
+ * (baris 5 dst.) ke App\Services\MasterIkuImportValidator — HANYA membaca &
+ * mengurai, TIDAK PERNAH menulis ke DB sendiri (itu tugas tahap konfirmasi di
+ * App\Livewire\MasterIku::konfirmasiImpor(), lihat $hasilValidasi di sini).
  *
- * Template resmi (lihat MasterIkuTemplateExport) berisi DUA sheet: "Master IKU"
+ * Template resmi (lihat MasterIkuTemplateExport) berisi DUA sheet: "Master_IKU"
  * (data yang diproses di sini) dan "Daftar Nama" (referensi, ikut terunggah balik
  * tanpa diubah pengguna). Tanpa WithMultipleSheets, Maatwebsite Excel memanggil
  * collection() untuk SETIAP sheet pada berkas — sheet "Daftar Nama" dikenali lewat
@@ -22,18 +24,34 @@ use Maatwebsite\Excel\Concerns\ToCollection;
  */
 class MasterIkuImport implements ToCollection
 {
-    public const EXPECTED_HEADER = ['Kode', 'Indikator', 'Tim', 'Penanggung Jawab', 'Sasaran'];
+    public const EXPECTED_HEADER = [
+        'No.', 'Kode Tujuan', 'Nama Tujuan', 'Kode Sasaran', 'Nama Sasaran',
+        'Kode Indikator', 'Indikator Kinerja', 'Jenis Indikator', 'Jenis Periode', 'Jenis Nilai', 'Satuan',
+        'Target Tahunan', 'Deskripsi X (Pembilang)', 'Target X (Pembilang)', 'Deskripsi Y (Penyebut)', 'Target Y (Penyebut)',
+        'Alokasi Target TW I', 'Alokasi Target TW II', 'Alokasi Target TW III', 'Alokasi Target TW IV',
+        'Cek Total Alokasi', 'Target Acuan', 'Status',
+    ];
 
     public const HEADER_SHEET_REFERENSI = ['Nama', 'Peran', 'Tim'];
 
-    /** @var list<string> */
+    /** @var list<string> pesan error struktural (header/baris contoh/petunjuk hilang) — berkas ditolak SELURUHNYA bila terisi */
     public array $errors = [];
 
-    public int $imported = 0;
+    /**
+     * Hasil validasi per baris data (lihat MasterIkuImportValidator::validasiSemua()),
+     * kosong bila $errors terisi (berkas ditolak sebelum sampai baris data).
+     *
+     * @var list<array{baris: int, valid: bool, data: array|null, errors: list<string>}>
+     */
+    public array $hasilValidasi = [];
+
+    public function __construct(
+        protected bool $modeUpsert = false,
+    ) {}
 
     public function collection(Collection $rows): void
     {
-        $header = $this->normalizeRow($rows->get(0));
+        $header = $this->normalizeRow($rows->get(0), count(self::EXPECTED_HEADER));
 
         if (array_slice($header, 0, 3) === self::HEADER_SHEET_REFERENSI) {
             // Sheet referensi "Daftar Nama" bawaan template — bukan data untuk diimpor.
@@ -41,76 +59,60 @@ class MasterIkuImport implements ToCollection
         }
 
         if ($header !== self::EXPECTED_HEADER) {
-            $this->errors[] = 'Format kolom tidak sesuai template resmi. Kolom yang diharapkan: Kode, Indikator, Tim, Penanggung Jawab, Sasaran.';
+            $this->errors[] = 'Format kolom tidak sesuai template resmi Master_IKU. Unduh ulang template terbaru dan jangan mengubah baris header.';
 
             return;
         }
 
-        $contoh = $this->normalizeRow($rows->get(1));
+        $contohPersen = $this->rowToArray($rows->get(1));
+        $contohNonPersen = $this->rowToArray($rows->get(2));
 
-        if ($contoh === ['', '', '', '', '']) {
-            $this->errors[] = 'Baris contoh (baris ke-2) pada template tidak boleh dihapus.';
-
-            return;
-        }
-
-        $petunjuk = $this->normalizeRow($rows->get(2));
-
-        if (! str_contains($petunjuk[0] ?? '', 'Petunjuk')) {
-            $this->errors[] = 'Baris petunjuk (baris ke-3) pada template tidak boleh dihapus atau diubah.';
+        if ($this->rowKosong($contohPersen) || $this->rowKosong($contohNonPersen)) {
+            $this->errors[] = 'Baris contoh (baris ke-2 dan ke-3) pada template tidak boleh dihapus.';
 
             return;
         }
 
-        foreach ($rows->slice(3) as $i => $row) {
-            $baris = $i + 4;
+        $petunjuk = trim((string) (collect($rows->get(3) ?? [])->get(0) ?? ''));
 
-            // Kode dinormalisasi ke angka/kodenya saja (tanpa awalan "IKU-") sama
-            // seperti App\Livewire\MasterIku::save() — supaya baris yang diimpor lewat
-            // Excel konsisten dengan yang ditambah/diubah manual lewat form.
-            $kode = preg_replace('/^\D+/', '', trim((string) ($row[0] ?? ''))) ?: trim((string) ($row[0] ?? ''));
-            $indikator = trim((string) ($row[1] ?? ''));
-            $tim = trim((string) ($row[2] ?? ''));
-            $penanggungJawab = trim((string) ($row[3] ?? ''));
-            $sasaran = trim((string) ($row[4] ?? ''));
+        if (! str_contains($petunjuk, 'Petunjuk')) {
+            $this->errors[] = 'Baris petunjuk (baris ke-4) pada template tidak boleh dihapus atau diubah.';
 
-            if ($kode === '' && $indikator === '' && $tim === '' && $penanggungJawab === '' && $sasaran === '') {
-                continue;
-            }
-
-            if ($kode === '' || $indikator === '' || $tim === '' || $penanggungJawab === '') {
-                $this->errors[] = "Baris {$baris}: kolom Kode, Indikator, Tim, dan Penanggung Jawab wajib diisi.";
-
-                continue;
-            }
-
-            MasterIku::updateOrCreate(
-                ['kode' => $kode],
-                [
-                    'indikator' => $indikator,
-                    'tim' => $tim,
-                    'penanggung_jawab' => $penanggungJawab,
-                    'sasaran' => $sasaran ?: null,
-                ]
-            );
-
-            $this->imported++;
+            return;
         }
+
+        $barisData = $rows->slice(4)->map(fn ($row) => $this->rowToArray($row))->values()->all();
+
+        $kodeSudahAdaDiDb = MasterIku::pluck('kode');
+
+        $this->hasilValidasi = MasterIkuImportValidator::validasiSemua($barisData, 5, $this->modeUpsert, $kodeSudahAdaDiDb);
     }
 
     /**
-     * @return array{0: string, 1: string, 2: string, 3: string, 4: string}
+     * @return array<int, mixed>
      */
-    protected function normalizeRow(mixed $row): array
+    protected function rowToArray(mixed $row): array
+    {
+        return collect($row ?? [])->values()->all();
+    }
+
+    /**
+     * @param  array<int, mixed>  $row
+     */
+    protected function rowKosong(array $row): bool
+    {
+        return collect($row)->filter(fn ($v) => trim((string) $v) !== '')->isEmpty();
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function normalizeRow(mixed $row, int $panjang): array
     {
         $row = collect($row ?? []);
 
-        return [
-            trim((string) ($row->get(0) ?? '')),
-            trim((string) ($row->get(1) ?? '')),
-            trim((string) ($row->get(2) ?? '')),
-            trim((string) ($row->get(3) ?? '')),
-            trim((string) ($row->get(4) ?? '')),
-        ];
+        return collect(range(0, $panjang - 1))
+            ->map(fn ($i) => trim((string) ($row->get($i) ?? '')))
+            ->all();
     }
 }

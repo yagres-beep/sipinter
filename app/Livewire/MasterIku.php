@@ -4,8 +4,10 @@ namespace App\Livewire;
 
 use App\Exports\MasterIkuTemplateExport;
 use App\Imports\MasterIkuImport;
+use App\Models\CapaianTahunan;
 use App\Models\MasterIku as MasterIkuModel;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel as ExcelFacade;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -16,6 +18,39 @@ class MasterIku extends Component
 
     public $excelFile = null;
 
+    /**
+     * Tahun yang dipakai untuk menyimpan Target Tahunan/Alokasi TW I-IV hasil
+     * import ke App\Models\CapaianTahunan (satu baris per iku_id+tahun) — file
+     * Excel sendiri tidak punya kolom "Tahun", jadi dipilih di sini sebelum upload
+     * (sama seperti pola di App\Livewire\TargetTahunan).
+     */
+    public int $tahunImpor;
+
+    /**
+     * 'insert': Kode Indikator yang sudah ada di database DITOLAK (baris error).
+     * 'upsert': Kode Indikator yang sudah ada di database DIPERBARUI.
+     */
+    public string $modeImpor = 'insert';
+
+    /**
+     * true (default): bila ADA satu saja baris error di pratinjau, konfirmasiImpor()
+     * menolak SELURUHNYA (tidak menyimpan baris yang valid sekalipun). false: baris
+     * valid tetap disimpan, baris error dilewati.
+     */
+    public bool $batalkanSemuaBilaError = true;
+
+    /**
+     * Hasil pratinjauExcel() — daftar baris {baris, valid, data, errors} dari
+     * App\Services\MasterIkuImportValidator, ditampilkan SEBELUM konfirmasiImpor()
+     * benar-benar menyimpan apa pun. Null berarti belum ada pratinjau berjalan.
+     *
+     * @var list<array{baris: int, valid: bool, data: array|null, errors: list<string>}>|null
+     */
+    public ?array $pratinjau = null;
+
+    /** @var list<string> pesan error struktural (header/baris contoh/petunjuk template rusak) */
+    public array $pratinjauErrorStruktural = [];
+
     public ?int $editingId = null;
 
     public ?int $pendingDeleteId = null;
@@ -24,6 +59,12 @@ class MasterIku extends Component
     public ?array $alasanTidakBisaHapus = null;
 
     public string $kode = '';
+
+    public string $kodeTujuan = '';
+
+    public string $namaTujuan = '';
+
+    public string $kodeSasaran = '';
 
     public string $indikator = '';
 
@@ -56,15 +97,20 @@ class MasterIku extends Component
     public string $jenisIku = 'iku';
 
     /**
-     * 'tahunan' (default): basis PKO-nya Capaian Setahun TW IV. 'triwulanan': basis
-     * PKO-nya Capaian Terhadap Target Triwulanan pada triwulan berjalan (lihat
-     * App\Models\MasterIku::pakaiTriwulanan(), App\Livewire\DasborCapaian::basisCapaianPko()).
+     * 'tahunan' (default) | 'triwulanan' — sesuai kolom "Jenis (Triwulanan atau
+     * Tahunan)" Kertas Kerja resmi, murni informasional (lihat
+     * App\Models\MasterIku::pakaiTriwulanan()).
      */
     public string $jenisPeriode = 'tahunan';
 
     public string $deskripsiX = '';
 
     public string $deskripsiY = '';
+
+    public function mount(): void
+    {
+        $this->tahunImpor = (int) now()->year;
+    }
 
     protected function rules(): array
     {
@@ -73,6 +119,9 @@ class MasterIku extends Component
                 'required', 'string', 'max:50',
                 'unique:master_iku,kode,'.($this->editingId ?? 'NULL').',id',
             ],
+            'kodeTujuan' => ['nullable', 'string', 'max:50'],
+            'namaTujuan' => ['nullable', 'string', 'max:255'],
+            'kodeSasaran' => ['nullable', 'string', 'max:50'],
             'indikator' => ['required', 'string'],
             'tim' => ['required', 'string', 'max:255'],
             'penanggungJawab' => ['required', 'string', 'max:255'],
@@ -92,6 +141,9 @@ class MasterIku extends Component
     {
         return [
             'kode' => 'kode',
+            'kodeTujuan' => 'kode tujuan',
+            'namaTujuan' => 'nama tujuan',
+            'kodeSasaran' => 'kode sasaran',
             'indikator' => 'indikator',
             'tim' => 'tim',
             'penanggungJawab' => 'penanggung jawab',
@@ -112,25 +164,83 @@ class MasterIku extends Component
         return ExcelFacade::download(new MasterIkuTemplateExport, 'template-master-iku.xlsx');
     }
 
-    public function uploadExcel(): void
+    /**
+     * Tahap 1/2 alur import (spek 6.3) — mengurai & memvalidasi berkas, TIDAK
+     * menyimpan apa pun ke DB. Hasilnya ditampilkan sebagai pratinjau (baris valid
+     * vs error) lewat $pratinjau, Tim SAKIP menekan "Konfirmasi Import" (lihat
+     * konfirmasiImpor()) untuk benar-benar menyimpan.
+     */
+    public function pratinjauExcel(): void
     {
         $this->validate([
             'excelFile' => ['required', 'file', 'mimes:xlsx', 'max:5120'],
+            'tahunImpor' => ['required', 'integer', 'min:2000', 'max:2100'],
+            'modeImpor' => ['required', 'in:insert,upsert'],
         ]);
 
-        $import = new MasterIkuImport;
+        $import = new MasterIkuImport($this->modeImpor === 'upsert');
 
         ExcelFacade::import($import, $this->excelFile);
 
-        MasterIkuModel::lupakanCache();
-
-        if ($import->errors) {
-            session()->flash('excelErrors', $import->errors);
-        } else {
-            session()->flash('status', "Berhasil mengunggah {$import->imported} baris data IKU.");
-        }
+        $this->pratinjauErrorStruktural = $import->errors;
+        $this->pratinjau = $import->errors ? null : $import->hasilValidasi;
 
         $this->reset('excelFile');
+    }
+
+    public function batalkanPratinjau(): void
+    {
+        $this->reset(['pratinjau', 'pratinjauErrorStruktural']);
+    }
+
+    /**
+     * Tahap 2/2 alur import — menyimpan baris valid ke MasterIku + CapaianTahunan
+     * (tahun $tahunImpor) dalam SATU transaksi. Bila batalkanSemuaBilaError aktif
+     * DAN masih ada baris error di pratinjau, TIDAK ADA yang disimpan sama sekali
+     * (rollback penuh, sesuai spek 6.4 "Import harus transaksional").
+     */
+    public function konfirmasiImpor(): void
+    {
+        if ($this->pratinjau === null) {
+            return;
+        }
+
+        $baris = collect($this->pratinjau);
+        $barisValid = $baris->where('valid', true);
+
+        if ($barisValid->isEmpty()) {
+            session()->flash('error', 'Tidak ada baris valid untuk disimpan.');
+
+            return;
+        }
+
+        if ($this->batalkanSemuaBilaError && $baris->contains('valid', false)) {
+            session()->flash('error', 'Import dibatalkan — masih ada baris error dan opsi "batalkan semua bila ada error" aktif. Tidak ada data yang disimpan.');
+
+            return;
+        }
+
+        $tahun = $this->tahunImpor;
+
+        DB::transaction(function () use ($barisValid, $tahun): void {
+            foreach ($barisValid as $baris) {
+                $iku = MasterIkuModel::updateOrCreate(
+                    ['kode' => $baris['data']['kode']],
+                    $baris['data']['master_iku']
+                );
+
+                CapaianTahunan::updateOrCreate(
+                    ['iku_id' => $iku->id, 'tahun' => $tahun],
+                    $baris['data']['capaian_tahunan']
+                );
+            }
+        });
+
+        MasterIkuModel::lupakanCache();
+
+        session()->flash('status', "Berhasil mengimpor {$barisValid->count()} indikator untuk tahun {$tahun}.");
+
+        $this->reset(['pratinjau', 'pratinjauErrorStruktural']);
     }
 
     public function edit(int $id): void
@@ -139,9 +249,12 @@ class MasterIku extends Component
 
         $this->editingId = $iku->id;
         $this->kode = $iku->kode;
+        $this->kodeTujuan = $iku->kode_tujuan ?? '';
+        $this->namaTujuan = $iku->nama_tujuan ?? '';
+        $this->kodeSasaran = $iku->kode_sasaran ?? '';
         $this->indikator = $iku->indikator;
-        $this->tim = $iku->tim;
-        $this->penanggungJawab = $iku->penanggung_jawab;
+        $this->tim = $iku->tim ?? '';
+        $this->penanggungJawab = $iku->penanggung_jawab ?? '';
         $this->sasaran = $iku->sasaran ?? '';
         $this->dasarHitung = $iku->dasar_hitung ?? '';
         $this->basisData = $iku->basis_data ?? '';
@@ -155,7 +268,7 @@ class MasterIku extends Component
 
     public function cancelEdit(): void
     {
-        $this->reset(['editingId', 'kode', 'indikator', 'tim', 'penanggungJawab', 'sasaran', 'dasarHitung', 'basisData', 'deskripsiX', 'deskripsiY']);
+        $this->reset(['editingId', 'kode', 'kodeTujuan', 'namaTujuan', 'kodeSasaran', 'indikator', 'tim', 'penanggungJawab', 'sasaran', 'dasarHitung', 'basisData', 'deskripsiX', 'deskripsiY']);
         $this->satuan = 'Persen';
         $this->metodeCapaian = 'langsung';
         $this->jenisIku = 'iku';
@@ -172,6 +285,9 @@ class MasterIku extends Component
             // — dinormalisasi di sini juga (bukan cuma migrasi backfill data lama) supaya
             // tetap konsisten walau seseorang terbiasa mengetik "IKU-1131" di kolom Kode.
             'kode' => preg_replace('/^\D+/', '', trim($this->kode)) ?: trim($this->kode),
+            'kode_tujuan' => $this->kodeTujuan ?: null,
+            'nama_tujuan' => $this->namaTujuan ?: null,
+            'kode_sasaran' => $this->kodeSasaran ?: null,
             'indikator' => $this->indikator,
             'tim' => $this->tim,
             'penanggung_jawab' => $this->penanggungJawab,
@@ -262,6 +378,8 @@ class MasterIku extends Component
             ->sort()
             ->values();
 
+        $pratinjau = collect($this->pratinjau);
+
         return view('livewire.master-iku', [
             'ikuList' => $ikuList,
             'totalIndikator' => $ikuList->count(),
@@ -272,6 +390,8 @@ class MasterIku extends Component
             'pendingDeleteKode' => $this->pendingDeleteId
                 ? $ikuList->firstWhere('id', $this->pendingDeleteId)?->kode
                 : null,
+            'jumlahValid' => $pratinjau->where('valid', true)->count(),
+            'jumlahError' => $pratinjau->where('valid', false)->count(),
         ]);
     }
 }

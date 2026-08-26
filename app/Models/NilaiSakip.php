@@ -8,8 +8,8 @@ use Illuminate\Database\Eloquent\Model;
 /**
  * Nilai SAKIP dari Inspektorat — satu angka per TAHUN untuk SELURUH organisasi
  * (bukan per-IKU), diisi Tim SAKIP di halaman Dasbor Capaian. Menentukan Predikat
- * SAKIP (lihat Capaian::predikatSakip()) yang dipakai rumus Penilaian Kinerja
- * Organisasi (PKO) — lihat App\Livewire\DasborCapaian::hitungPko().
+ * SAKIP (Rumus 2.1, lihat Capaian::predikatSakip()) yang ditampilkan sebagai info
+ * header saja — TIDAK dipakai dalam perhitungan capaian apa pun.
  */
 class NilaiSakip extends Model
 {

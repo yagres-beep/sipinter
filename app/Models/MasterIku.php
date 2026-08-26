@@ -16,6 +16,9 @@ class MasterIku extends Model
 
     protected $fillable = [
         'kode',
+        'kode_tujuan',
+        'nama_tujuan',
+        'kode_sasaran',
         'indikator',
         'tim',
         'penanggung_jawab',
@@ -49,9 +52,10 @@ class MasterIku extends Model
     }
 
     /**
-     * IKU (indikator inti, dihitung penuh ke PKO) vs Proksi (indikator pendukung/
-     * pengganti sementara) — sesuai kolom "Jenis (IKU atau Proksi)" Kertas Kerja
-     * Pengukuran Kinerja Triwulanan resmi.
+     * IKU (indikator inti, dihitung penuh — lihat App\Services\CapaianCalculatorService)
+     * vs Proksi (indikator pendukung/pengganti sementara, TIDAK dihitung capaiannya
+     * sama sekali) — sesuai kolom "Jenis (IKU atau Proksi)" Kertas Kerja Pengukuran
+     * Kinerja Triwulanan resmi.
      */
     public const JENIS_IKU = 'iku';
 
@@ -60,12 +64,9 @@ class MasterIku extends Model
     /**
      * Klasifikasi murni informasional, sesuai kolom "Jenis (Triwulanan atau Tahunan)"
      * Kertas Kerja resmi — ditampilkan di Daftar Master IKU (lihat pakaiTriwulanan()
-     * dipakai di master-iku.blade.php), TIDAK mempengaruhi basis Penilaian Kinerja
-     * Organisasi (PKO): formula AJ (Normalisasi Capaian PK) pada sheet resmi SELALU
-     * merujuk kolom AB (Capaian Terhadap Target Setahun TW IV) untuk SEMUA IKU, apa
-     * pun nilai kolom ini — dikonfirmasi dari baris ber-Jenis "Triwulanan" pada sheet
-     * yang formulanya tetap memakai AB, bukan kolom berbasis triwulan (V/Z). Lihat
-     * App\Livewire\DasborCapaian::basisCapaianPko().
+     * dipakai di master-iku.blade.php), TIDAK mempengaruhi rumus Capaian Kinerja
+     * apa pun: Capaian Terhadap Target Triwulanan (Rumus 2.3) & Setahun (Rumus 2.4)
+     * tetap dihitung untuk SEMUA IKU apa pun nilai kolom ini.
      */
     public const JENIS_PERIODE_TRIWULANAN = 'triwulanan';
 

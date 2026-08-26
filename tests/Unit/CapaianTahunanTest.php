@@ -122,4 +122,90 @@ class CapaianTahunanTest extends TestCase
         // Capaian % (Setahun) TW II: realisasi kumulatif 86.46 / target 101.67 -> 85.04.
         $this->assertEqualsWithDelta(85.04, $capaian->capaianSetahun(2), 0.01);
     }
+
+    /**
+     * Bagian 4 edge case 2 — Tipe A ("%"): target% TIDAK selalu 100. Contoh dari
+     * spek: X=8,Y=90 -> 8,89%.
+     */
+    public function test_tipe_a_target_persen_tidak_selalu_seratus_delapan_koma_delapan_sembilan(): void
+    {
+        $capaian = $this->buatCapaianRasio(['x_target' => 8, 'y_target' => 90]);
+
+        $this->assertEqualsWithDelta(8.89, $capaian->targetTahunan(), 0.01);
+    }
+
+    /**
+     * Bagian 4 edge case 2 — Tipe A ("%"): contoh kedua dari spek, X=4,Y=4 -> 100%
+     * (kebetulan 100, TAPI bukan aturan tetap — dibuktikan berbeda dari contoh di atas).
+     */
+    public function test_tipe_a_target_persen_bisa_seratus_persen(): void
+    {
+        $capaian = $this->buatCapaianRasio(['x_target' => 4, 'y_target' => 4]);
+
+        $this->assertEqualsWithDelta(100.0, $capaian->targetTahunan(), 0.01);
+    }
+
+    /**
+     * Bagian 4 edge case 1 — Kumulatif TW I = nilai TW I itu sendiri (Tipe A).
+     */
+    public function test_tipe_a_kumulatif_tw_satu_sama_dengan_nilai_tw_satu_sendiri(): void
+    {
+        $capaian = $this->buatCapaianRasio([
+            'x_alokasi_tw1' => 8, 'y_alokasi_tw1' => 90,
+        ]);
+
+        $this->assertEqualsWithDelta(8.89, $capaian->alokasiKumulatif(1), 0.01);
+    }
+
+    /**
+     * Bagian 4 edge case 1 — Kumulatif TW I = nilai TW I itu sendiri (Tipe B).
+     */
+    public function test_tipe_b_kumulatif_tw_satu_sama_dengan_nilai_tw_satu_sendiri(): void
+    {
+        $capaian = $this->buatCapaianRasio(['alokasi_tw1' => 1.09], MasterIku::METODE_LANGSUNG);
+
+        $this->assertEqualsWithDelta(1.09, $capaian->alokasiKumulatif(1), 0.01);
+    }
+
+    /**
+     * Bagian 4 edge case 3 — Tipe B ("Non %"): variasi contoh Indeks Pelayanan
+     * Publik dari spek (target 4,35), disesuaikan ke presisi 2 desimal karena
+     * kolom alokasi_tw dan realisasi_tw di CapaianTahunan memakai cast 'decimal:2'
+     * (spek aslinya memakai presisi 5 desimal — angka LITERAL spek 76,00%/18,17%
+     * diverifikasi terpisah di CapaianCalculatorServiceTest terhadap fungsi murni
+     * hitungCapaian()/hitungPersentase(), yang tidak terpengaruh presisi kolom DB).
+     */
+    public function test_tipe_b_indeks_pelayanan_publik_variasi_presisi_dua_desimal(): void
+    {
+        $capaian = $this->buatCapaianRasio([
+            'target_tahunan' => 4.35,
+            'alokasi_tw1' => 0.52, 'alokasi_tw2' => 0.52,
+            'realisasi_tw1' => 0.40, 'realisasi_tw2' => 0.39,
+        ], MasterIku::METODE_LANGSUNG);
+
+        $this->assertEqualsWithDelta(1.04, $capaian->alokasiKumulatif(2), 0.001);
+        $this->assertEqualsWithDelta(0.79, $capaian->realisasiKumulatif(2), 0.001);
+        // 0.79 / 1.04 * 100 = 75.96.
+        $this->assertEqualsWithDelta(75.96, $capaian->capaianTriwulanan(2), 0.01);
+        // 0.79 / 4.35 * 100 = 18.16.
+        $this->assertEqualsWithDelta(18.16, $capaian->capaianSetahun(2), 0.01);
+    }
+
+    /**
+     * Bagian 4 edge case 4 — Realisasi triwulan belum diisi (null) -> capaian TW
+     * itu "-" (bukan angka), dan TIDAK mencemari kumulatif triwulan berikutnya
+     * seolah-olah bernilai 0 sungguhan (beda dari alokasi 0 yang memang sengaja 0).
+     */
+    public function test_realisasi_null_menghasilkan_tidak_dinilai_bukan_dianggap_nol_sungguhan(): void
+    {
+        $capaian = $this->buatCapaianRasio([
+            'alokasi_tw1' => 50, 'alokasi_tw2' => 50,
+            'realisasi_tw1' => 50, // TW II realisasi belum diisi (null).
+        ], MasterIku::METODE_LANGSUNG);
+
+        // TW II: alokasi kumulatif 100 > 0, realisasi kumulatif tetap 50 (TW II belum
+        // menambah apa-apa, BUKAN realisasi_tw2 dianggap 0 lalu capaian TW II jadi "-").
+        $this->assertEqualsWithDelta(50.0, $capaian->realisasiKumulatif(2), 0.01);
+        $this->assertEqualsWithDelta(50.0, $capaian->capaianTriwulanan(2), 0.01);
+    }
 }

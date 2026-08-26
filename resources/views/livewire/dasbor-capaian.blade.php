@@ -47,12 +47,7 @@
     </div>
 
     <div class="card">
-        <div class="card-h">
-            🏛️ Penilaian Kinerja Organisasi (PKO) — {{ $tahun }}
-            @if ($pko['predikat_pko'])
-                <span class="badge {{ $pko['rata_rata_capaian_pk'] >= 80 ? 'b-approve' : ($pko['rata_rata_capaian_pk'] >= 60 ? 'b-tunggu' : 'b-tolak') }}">{{ $pko['predikat_pko'] }}</span>
-            @endif
-        </div>
+        <div class="card-h">📜 Predikat SAKIP — {{ $tahun }}</div>
 
         <div class="field" style="max-width:260px">
             <label>Nilai SAKIP {{ $tahun }} <span class="muted" style="font-weight:400;font-size:10px">— dari Inspektorat, satu angka untuk seluruh organisasi</span></label>
@@ -71,36 +66,22 @@
         <div class="stat-grid" style="margin-top:14px">
             <div class="stat-tile">
                 <div class="si">📜</div>
-                <div class="sv" style="font-size:15px">{{ $pko['predikat_sakip'] ?? '-' }}</div>
+                <div class="sv" style="font-size:15px">{{ $infoSakip['predikat_sakip'] ?? '-' }}</div>
                 <div class="sl">Predikat SAKIP</div>
-            </div>
-            <div class="stat-tile">
-                <div class="si">➖</div>
-                <div class="sv">{{ $pko['koreksi_persen'] }}%</div>
-                <div class="sl">Koreksi Predikat</div>
-            </div>
-            <div class="stat-tile">
-                <div class="si">Σ</div>
-                <div class="sv">{{ $pko['total_capaian_pk'] }}</div>
-                <div class="sl">Total Capaian PK ({{ $pko['jumlah_iku_dihitung'] }} IKU)</div>
-            </div>
-            <div class="stat-tile">
-                <div class="si">🎯</div>
-                <div class="sv">{{ $pko['rata_rata_capaian_pk'] ?? '-' }}</div>
-                <div class="sl">Rata-rata Capaian PK (NKO)</div>
             </div>
         </div>
 
-        <div class="fhint" style="margin-top:10px">ℹ️ Normalisasi Capaian PK = min(Capaian % Setahun TW IV tiap IKU, batas — diatur di <a wire:navigate href="{{ route('master-iku.index') }}">Pengaturan Rumus Capaian</a>). Nilai Akhir = Normalisasi × (100% − Koreksi Predikat SAKIP). Total/Rata-rata dihitung dari seluruh IKU (Proksi dikecualikan) yang sudah punya Capaian Setahun TW IV pada tahun ini.</div>
+        <div class="fhint" style="margin-top:10px">ℹ️ Predikat SAKIP ditampilkan sebagai informasi saja, tidak dipakai dalam perhitungan Capaian Kinerja.</div>
     </div>
 
     <div class="card">
         <div class="card-h">📈 Capaian Kinerja IKU per Triwulan — {{ $tahun }}</div>
-        <div class="fhint" style="margin-bottom:10px">ℹ️ Rata-rata Capaian Terhadap Target Triwulanan seluruh IKU (Proksi dikecualikan) pada triwulan tsb — nilai "-" (belum ada IKU yang bisa dinilai) &amp; nilai 0 diabaikan dari rata-rata, supaya tidak menyeret turun IKU lain yang sudah tercapai.</div>
+        <div class="fhint" style="margin-bottom:10px">ℹ️ Rata-rata Capaian Terhadap Target Triwulanan/Setahun seluruh IKU (Proksi dikecualikan) pada triwulan tsb. Baris "Triwulanan": nilai "-" &amp; nilai 0 diabaikan dari rata-rata. Baris "Setahun": dibagi jumlah total indikator IKU.</div>
         <div class="table-scroll">
             <table>
                 <thead>
                     <tr>
+                        <th></th>
                         @foreach (['I', 'II', 'III', 'IV'] as $tw)
                             <th style="text-align:center">TW {{ $tw }}</th>
                         @endforeach
@@ -108,8 +89,15 @@
                 </thead>
                 <tbody>
                     <tr>
+                        <td class="muted">Terhadap Triwulanan</td>
                         @foreach ([1, 2, 3, 4] as $tw)
                             <td style="text-align:center">{{ is_numeric($capaianKinerjaPerTriwulan[$tw]) ? round($capaianKinerjaPerTriwulan[$tw], 2).'%' : $capaianKinerjaPerTriwulan[$tw] }}</td>
+                        @endforeach
+                    </tr>
+                    <tr>
+                        <td class="muted">Terhadap Setahun</td>
+                        @foreach ([1, 2, 3, 4] as $tw)
+                            <td style="text-align:center">{{ is_numeric($capaianSetahunPerTriwulan[$tw]) ? round($capaianSetahunPerTriwulan[$tw], 2).'%' : $capaianSetahunPerTriwulan[$tw] }}</td>
                         @endforeach
                     </tr>
                 </tbody>
