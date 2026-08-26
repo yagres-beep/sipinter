@@ -318,6 +318,7 @@ class VerifikasiCapaian extends Component
         $this->capaian->catatStatus(Capaian::STATUS_DIKEMBALIKAN, auth()->user(), $this->catatanBukaKembali ?: null);
 
         session()->flash('status', 'Isian dibuka kembali — Ketua Tim sekarang bisa menambahkan kegiatan.');
+        $this->dispatch('notify', type: 'success', message: 'Isian dibuka kembali — Ketua Tim sekarang bisa menambahkan kegiatan.');
 
         $this->redirectRoute('verifikasi.index');
     }
@@ -480,6 +481,7 @@ class VerifikasiCapaian extends Component
 
         if ($catatan === '') {
             $this->addError('catatanBerkas.'.$berkasId, 'Catatan wajib diisi saat menandai berkas "Tidak Sesuai" — supaya Ketua Tim tahu apa yang perlu diperbaiki.');
+            $this->dispatch('notify', type: 'error', message: 'Catatan wajib diisi saat menandai berkas "Tidak Sesuai".');
 
             return;
         }
@@ -529,6 +531,7 @@ class VerifikasiCapaian extends Component
 
         if ($catatan === '') {
             $this->addError('catatanKendala.'.$kendalaId, 'Catatan wajib diisi saat menandai pasangan ini "Tidak Sesuai" — supaya Ketua Tim tahu apa yang perlu diperbaiki.');
+            $this->dispatch('notify', type: 'error', message: 'Catatan wajib diisi saat menandai pasangan kendala & solusi "Tidak Sesuai".');
 
             return;
         }
@@ -753,6 +756,7 @@ class VerifikasiCapaian extends Component
         });
 
         session()->flash('status', 'Perubahan disimpan.');
+        $this->dispatch('notify', type: 'success', message: 'Perubahan disimpan.');
     }
 
     /**
@@ -785,6 +789,7 @@ class VerifikasiCapaian extends Component
         });
 
         session()->flash('status', 'Progres pemeriksaan disimpan sementara — Anda bisa melanjutkan kapan saja.');
+        $this->dispatch('notify', type: 'success', message: 'Progres pemeriksaan disimpan sementara.');
     }
 
     public function verifikasiSelesai(): void
@@ -798,12 +803,14 @@ class VerifikasiCapaian extends Component
 
         if ($berkas->contains(fn ($b) => $b->status_verifikasi === 'menunggu') || $kendala->contains(fn ($k) => $k->status_verifikasi === 'menunggu')) {
             $this->addError('berkas', 'Seluruh berkas dan pasangan kendala & solusi harus ditandai "Sesuai" atau "Tidak Sesuai" terlebih dahulu.');
+            $this->dispatch('notify', type: 'error', message: 'Seluruh berkas dan pasangan kendala & solusi harus ditandai terlebih dahulu.');
 
             return;
         }
 
         if ($berkas->contains(fn ($b) => $b->status_verifikasi === 'ditolak') || $kendala->contains(fn ($k) => $k->status_verifikasi === 'ditolak')) {
             $this->addError('berkas', 'Terdapat berkas atau pasangan kendala & solusi yang ditolak — gunakan tombol "Kembalikan ke Ketua Tim", bukan "Verifikasi Selesai".');
+            $this->dispatch('notify', type: 'error', message: 'Ada berkas/kendala yang ditolak — gunakan "Kembalikan ke Ketua Tim".');
 
             return;
         }
@@ -826,11 +833,13 @@ class VerifikasiCapaian extends Component
             });
         } catch (InvalidStatusTransitionException $e) {
             $this->addError('berkas', $e->getMessage());
+            $this->dispatch('notify', type: 'error', message: $e->getMessage());
 
             return;
         }
 
         session()->flash('status', 'Verifikasi selesai. Isian ditandai "diverifikasi".');
+        $this->dispatch('notify', type: 'success', message: 'Verifikasi selesai. Isian ditandai "diverifikasi".');
 
         $this->redirectRoute('verifikasi.index');
     }
@@ -856,6 +865,7 @@ class VerifikasiCapaian extends Component
 
         if ($berkas->contains(fn ($b) => $b->status_verifikasi === 'menunggu') || $kendala->contains(fn ($k) => $k->status_verifikasi === 'menunggu')) {
             $this->addError('berkas', 'Seluruh berkas dan pasangan kendala & solusi harus ditandai "Sesuai" atau "Tidak Sesuai" terlebih dahulu.');
+            $this->dispatch('notify', type: 'error', message: 'Seluruh berkas dan pasangan kendala & solusi harus ditandai terlebih dahulu.');
 
             return;
         }
@@ -865,6 +875,7 @@ class VerifikasiCapaian extends Component
 
         if (! $adaBerkasDitolak && ! $adaKendalaDitolak) {
             $this->addError('berkas', 'Tandai minimal satu berkas atau pasangan kendala & solusi sebagai "Tidak Sesuai" beserta catatan sebelum mengembalikan isian.');
+            $this->dispatch('notify', type: 'error', message: 'Tandai minimal satu berkas/kendala "Tidak Sesuai" sebelum mengembalikan isian.');
 
             return;
         }
@@ -905,11 +916,13 @@ class VerifikasiCapaian extends Component
             });
         } catch (InvalidStatusTransitionException $e) {
             $this->addError('berkas', $e->getMessage());
+            $this->dispatch('notify', type: 'error', message: $e->getMessage());
 
             return;
         }
 
         session()->flash('status', 'Isian dikembalikan ke Ketua Tim untuk diperbaiki.');
+        $this->dispatch('notify', type: 'success', message: 'Isian dikembalikan ke Ketua Tim untuk diperbaiki.');
 
         $this->redirectRoute('verifikasi.index');
     }

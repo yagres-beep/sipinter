@@ -3,18 +3,10 @@
         bisaDiisiTw: {{ $bulan % 3 === 0 ? 'true' : 'false' }},
         modalBerkas: null,
         pendingHapus: null,
-        toasts: [],
-        toastSeq: 0,
-        pushToast(type, message) {
-            const id = ++this.toastSeq;
-            this.toasts.push({ id, type, message });
-            setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, 6000);
-        },
     }"
-    x-on:notify.window="pushToast($event.detail.type, $event.detail.message)"
-    x-on:livewire-upload-start.window="pushToast('info', 'Mengunggah berkas ke server…')"
-    x-on:livewire-upload-finish.window="pushToast('success', 'Berkas dipilih & tersimpan sementara di server — akan disalin ke Google Drive saat diajukan.')"
-    x-on:livewire-upload-error.window="pushToast('error', 'Gagal mengunggah berkas — periksa ukuran (maks 10MB) dan format (harus PDF), lalu coba lagi.')"
+    x-on:livewire-upload-start.window="$dispatch('notify', { type: 'info', message: 'Mengunggah berkas ke server…' })"
+    x-on:livewire-upload-finish.window="$dispatch('notify', { type: 'success', message: 'Berkas dipilih & tersimpan sementara di server — akan disalin ke Google Drive saat diajukan.' })"
+    x-on:livewire-upload-error.window="$dispatch('notify', { type: 'error', message: 'Gagal mengunggah berkas — periksa ukuran (maks 10MB) dan format (harus PDF), lalu coba lagi.' })"
 >
     <div class="page-head">
         <div class="page-title">Isian Kegiatan</div>
@@ -743,8 +735,9 @@
 
     {{--
         Diisi live lewat $this->stream() SELAMA ajukanIsian() berjalan (lihat
-        PengisianKegiatan::streamProgresUnggah()) — beda dari toast di bawah yang baru
-        tampil setelah SELURUH proses (termasuk seluruh berkas & transaksi DB) selesai.
+        PengisianKegiatan::streamProgresUnggah()) — beda dari toast global (lihat
+        x-toast-stack di layout) yang baru tampil setelah SELURUH proses (termasuk
+        seluruh berkas & transaksi DB) selesai.
         Dibungkus wire:loading supaya otomatis hilang lagi begitu request selesai walau
         isinya sempat belum sempat dikosongkan oleh stream() terakhir.
     --}}
@@ -795,13 +788,4 @@
         </div>
     </div>
 
-    <div class="toast-stack">
-        <template x-for="toast in toasts" :key="toast.id">
-            <div class="toast" :class="toast.type">
-                <span class="ic" x-text="toast.type === 'success' ? '✅' : (toast.type === 'error' ? '⚠️' : (toast.type === 'warning' ? '⚠️' : 'ℹ️'))"></span>
-                <span class="msg" x-text="toast.message"></span>
-                <button type="button" class="x" @click="toasts = toasts.filter(t => t.id !== toast.id)">✕</button>
-            </div>
-        </template>
-    </div>
 </div>

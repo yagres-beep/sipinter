@@ -142,6 +142,8 @@
         ↑
     </button>
 
+    <x-toast-stack />
+
     @livewireScripts
 </body>
 </html>
