@@ -159,7 +159,24 @@ class TargetTahunan extends Component
             foreach ($this->nilai as $ikuId => $data) {
                 $ct = CapaianTahunan::firstOrNew(['iku_id' => $ikuId, 'tahun' => $this->tahun]);
 
-                $alokasiTw = collect(self::KOLOM_ALOKASI_TW)->mapWithKeys(fn ($kolom) => [$kolom => $data[$kolom] ?? null]);
+                $xAlokasi = collect(['x_alokasi_tw1', 'x_alokasi_tw2', 'x_alokasi_tw3', 'x_alokasi_tw4'])
+                    ->mapWithKeys(fn ($kolom) => [$kolom => $data[$kolom] ?? null]);
+
+                // Alokasi Y HANYA diminta SEKALI di blade (satu input "Total", bukan
+                // 4 kotak identik per TW -- Y tidak bertambah tiap triwulan) --
+                // diratakan jadi TW I di sini & TW II-IV otomatis 0, supaya struktur
+                // 4-kolom-per-TW yang dipakai alokasiKumulatif()/realisasiKumulatif()
+                // (raw per-TW DIJUMLAHKAN, lihat CapaianTahunan) tetap menghasilkan
+                // kumulatif Y yang konstan sepanjang tahun.
+                $yTotal = $data['y_alokasi_tw1'] ?? null;
+                $yAlokasi = collect([
+                    'y_alokasi_tw1' => $yTotal,
+                    'y_alokasi_tw2' => $yTotal !== null ? 0.0 : null,
+                    'y_alokasi_tw3' => $yTotal !== null ? 0.0 : null,
+                    'y_alokasi_tw4' => $yTotal !== null ? 0.0 : null,
+                ]);
+
+                $alokasiTw = $xAlokasi->merge($yAlokasi);
 
                 $adaIsi = $data['target_tahunan'] !== null || $data['x_target'] !== null || $data['y_target'] !== null
                     || $alokasiTw->contains(fn ($v) => $v !== null);
@@ -178,10 +195,10 @@ class TargetTahunan extends Component
                     // awal tahun, sama seperti alokasinya, jadi CapaianTahunan::
                     // realisasiKumulatif() tetap menghitung Y yang benar tanpa Tim SAKIP
                     // perlu mengisi Realisasi Y berulang tiap triwulan di Verifikasi Capaian.
-                    'y_realisasi_tw1' => $data['y_alokasi_tw1'] ?? null,
-                    'y_realisasi_tw2' => $data['y_alokasi_tw2'] ?? null,
-                    'y_realisasi_tw3' => $data['y_alokasi_tw3'] ?? null,
-                    'y_realisasi_tw4' => $data['y_alokasi_tw4'] ?? null,
+                    'y_realisasi_tw1' => $yAlokasi['y_alokasi_tw1'],
+                    'y_realisasi_tw2' => $yAlokasi['y_alokasi_tw2'],
+                    'y_realisasi_tw3' => $yAlokasi['y_alokasi_tw3'],
+                    'y_realisasi_tw4' => $yAlokasi['y_alokasi_tw4'],
                 ])->save();
             }
         });

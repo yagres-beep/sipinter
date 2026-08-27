@@ -69,9 +69,12 @@ class TargetTahunanTest extends TestCase
     }
 
     /**
-     * Alokasi Pembilang(X)/Penyebut(Y) TW I-IV untuk IKU rasio diisi SEKALI di sini
-     * (bukan diketik ulang tiap sesi Verifikasi Capaian) -- dan Realisasi Y HARUS
-     * otomatis disalin dari Alokasi Y (bukan isian terpisah), supaya
+     * Alokasi X TW I-IV untuk IKU rasio diisi SEKALI di sini (bukan diketik ulang
+     * tiap sesi Verifikasi Capaian). Alokasi Y HANYA diminta SEKALI sebagai total
+     * (satu input, bukan 4 kotak identik per TW -- nilainya sama sepanjang tahun)
+     * -- diratakan jadi TW I & TW II-IV otomatis 0 di kolom tersimpan, supaya
+     * kumulatifnya (alokasiKumulatif()) tetap konstan sepanjang tahun. Realisasi Y
+     * HARUS otomatis mengikuti pola yang sama (bukan isian terpisah), supaya
      * CapaianTahunan::realisasiKumulatif() tetap menghitung Y yang benar walau
      * Tim SAKIP di Verifikasi Capaian cuma mengisi Realisasi X.
      */
@@ -90,9 +93,6 @@ class TargetTahunanTest extends TestCase
             ->set("nilai.{$iku->id}.x_alokasi_tw3", 2)
             ->set("nilai.{$iku->id}.x_alokasi_tw4", 3)
             ->set("nilai.{$iku->id}.y_alokasi_tw1", 3)
-            ->set("nilai.{$iku->id}.y_alokasi_tw2", 3)
-            ->set("nilai.{$iku->id}.y_alokasi_tw3", 3)
-            ->set("nilai.{$iku->id}.y_alokasi_tw4", 3)
             ->call('simpan')
             ->assertHasNoErrors();
 
@@ -101,13 +101,17 @@ class TargetTahunanTest extends TestCase
         $this->assertEquals(1, $ct->x_alokasi_tw1);
         $this->assertEquals(2, $ct->x_alokasi_tw3);
         $this->assertEquals(3, $ct->y_alokasi_tw1);
+        $this->assertEquals(0, $ct->y_alokasi_tw2);
+        $this->assertEquals(0, $ct->y_alokasi_tw3);
+        $this->assertEquals(0, $ct->y_alokasi_tw4);
 
-        // Realisasi Y (semua TW) HARUS sama dengan Alokasi Y, tanpa pernah diisi
+        // Realisasi Y HARUS mengikuti pola Alokasi Y yang sama (3 di TW I, 0 di
+        // sisanya) -- kumulatifnya tetap 3 sepanjang tahun -- tanpa pernah diisi
         // langsung di sini maupun di Verifikasi Capaian.
         $this->assertEquals(3, $ct->y_realisasi_tw1);
-        $this->assertEquals(3, $ct->y_realisasi_tw2);
-        $this->assertEquals(3, $ct->y_realisasi_tw3);
-        $this->assertEquals(3, $ct->y_realisasi_tw4);
+        $this->assertEquals(0, $ct->y_realisasi_tw2);
+        $this->assertEquals(0, $ct->y_realisasi_tw3);
+        $this->assertEquals(0, $ct->y_realisasi_tw4);
     }
 
     /**
