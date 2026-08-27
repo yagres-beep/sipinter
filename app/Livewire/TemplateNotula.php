@@ -11,11 +11,14 @@ use Livewire\Component;
 use Livewire\WithFileUploads;
 
 /**
- * Template Notula (RF-41) — Tim SAKIP mengunggah template .docx resmi berisi
- * penanda {{iku}}, {{analisis_capaian}}, {{kendala_solusi_kumulatif}}, {{rtl}},
- * {{ttd_kepala}}. Disimpan sebagai arsip/referensi format resmi; penyusunan
- * Bagian I otomatis (NotulaService::susunBagianSatu()) tetap memakai tampilan
- * web bawaan sistem, bukan mem-parse berkas ini.
+ * Template Notula (RF-41) — Tim SAKIP mengunggah template .docx MESIN resmi
+ * (macro {{iku_blok}}, {{kode}}, {{sasaran}}, dst. — lihat
+ * template_notula/PANDUAN_Template_Bagian_I_Mesin.md untuk daftar lengkapnya).
+ * Berkas ini DIPAKAI LANGSUNG sebagai template generate Bagian I lewat
+ * App\Services\NotulaBagian1DocxService::resolveTemplatePath() — begitu diunggah
+ * di sini, format/tata letak Bagian I di web maupun unduhan .docx langsung ikut
+ * berubah. Kalau berkas yang diunggah TIDAK punya struktur macro yang benar,
+ * penyusunan Bagian I akan gagal/error, bukan cuma tampil beda.
  */
 class TemplateNotula extends Component
 {

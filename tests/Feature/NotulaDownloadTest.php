@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\CapaianTahunan;
 use App\Models\FolderConfig;
 use App\Models\Kegiatan;
 use App\Models\MasterIku;
@@ -315,6 +316,44 @@ class NotulaDownloadTest extends TestCase
     }
 
     /**
+     * IKU bersatuan Persen: "Dasar Hitung" harus dirakit otomatis jadi "y = n/N x 100%"
+     * dari Deskripsi X/Y + data CapaianTahunan -- n = nilai MENTAH triwulan berjalan
+     * saja (x_realisasi_twN, BUKAN kumulatif dari TW sebelumnya), N = Target Tahunan Y
+     * (konstan). Kolom dasar_hitung manual (kalau diisi) tetap tampil sebagai keterangan
+     * tambahan setelah rumus otomatis, bukan digantikan.
+     */
+    public function test_docx_bagian1_dasar_hitung_persen_otomatis_pakai_realisasi_mentah_bukan_kumulatif(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $iku = MasterIku::create([
+            'kode' => '3001', 'indikator' => 'Persentase Uji Dasar Hitung', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
+            'sasaran' => 'Sasaran Uji Dasar Hitung', 'satuan' => 'Persen', 'metode_capaian' => MasterIku::METODE_RASIO,
+            'deskripsi_x' => 'Jumlah Publikasi Berkualitas', 'deskripsi_y' => 'Jumlah Seluruh Publikasi',
+            'dasar_hitung' => 'Target 2026: N = 8 mencakup: Laporan A, Laporan B.',
+        ]);
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 4, 'triwulan' => 2, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+
+        // TW I mentah = 5, TW II mentah = 2 (kumulatifnya 7) -- rumus HARUS pakai 2
+        // (mentah TW II saja), bukan 7 (kumulatif TW I+II).
+        CapaianTahunan::create([
+            'iku_id' => $iku->id, 'tahun' => 2026, 'y_target' => 8,
+            'x_realisasi_tw1' => 5, 'x_realisasi_tw2' => 2,
+        ]);
+
+        $notula = Notula::create(['periode_id' => $periode->id]);
+
+        $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
+
+        $this->assertStringContainsString('2.00/8.00', $xml);
+        $this->assertStringNotContainsString('7.00/8.00', $xml);
+        $this->assertStringContainsString('Jumlah Publikasi Berkualitas', $xml);
+        $this->assertStringContainsString('Jumlah Seluruh Publikasi', $xml);
+        $this->assertStringContainsString('Target 2026: N = 8 mencakup: Laporan A, Laporan B.', $xml);
+    }
+
+    /**
      * PIC Tindak Lanjut pada .docx harus memakai tim yang ditugaskan pada IKU-nya di
      * Master IKU (master_iku.tim), BUKAN nama orang yang diketik bebas per poin RTL
      * (rtl_evaluasi.pic) -- penanggung jawab RTL selalu tim, bukan individu.
@@ -347,6 +386,42 @@ class NotulaDownloadTest extends TestCase
 
         $this->assertStringContainsString('Tim III', $xml);
         $this->assertStringNotContainsString('Intan Purwanti', $xml);
+    }
+
+    /**
+     * Batas Waktu Tindak Lanjut HARUS selalu akhir bulan triwulan periode notula itu
+     * sendiri (RF-34, sesuai Kertas Kerja resmi) -- dihitung dari triwulan/tahun
+     * periode, BUKAN dibaca apa adanya dari kolom rtl_evaluasi.batas_waktu tersimpan
+     * (yang bisa salah kalau pernah diketik manual sebelum field itu dikunci di form).
+     */
+    public function test_docx_bagian1_batas_waktu_rtl_selalu_akhir_triwulan_bukan_kolom_tersimpan(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $iku = MasterIku::create([
+            'kode' => '3004', 'indikator' => 'Indikator Uji Batas Waktu RTL', 'tim' => 'Uji',
+            'penanggung_jawab' => 'Uji', 'sasaran' => 'Sasaran Uji Batas Waktu RTL',
+        ]);
+
+        // Triwulan II 2026 -> akhir triwulannya Juni 2026 -- batas_waktu TERSIMPAN
+        // sengaja diisi tanggal yang SALAH (Desember) untuk membuktikan kolom ini
+        // tidak lagi dipakai apa adanya.
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 4, 'triwulan' => 2, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+
+        RtlEvaluasi::create([
+            'iku_id' => $iku->id,
+            'periode_id' => $periode->id,
+            'rtl_teks' => 'RTL uji batas waktu',
+            'pic' => 'Uji',
+            'batas_waktu' => '2026-12-31',
+        ]);
+
+        $notula = Notula::create(['periode_id' => $periode->id]);
+
+        $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
+
+        $this->assertStringContainsString('Juni 2026', $xml);
+        $this->assertStringNotContainsString('Desember 2026', $xml);
     }
 
     /**

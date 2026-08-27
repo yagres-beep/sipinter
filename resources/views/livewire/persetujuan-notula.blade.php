@@ -45,7 +45,7 @@
                 @if ($notula->status === \App\Models\Notula::STATUS_DISETUJUI)
                     <div class="ttd-box" style="margin-top:12px">
                         ttd<br>
-                        <b>{{ $notula->disetujuiOleh?->nama }}</b> · {{ $notula->disetujui_pada?->translatedFormat('d F Y') }}
+                        <b>{{ $notula->disetujuiOleh?->nama }}</b> · {{ $notula->disetujui_pada?->wita()->translatedFormat('d F Y') }}
                     </div>
                 @endif
 
@@ -101,7 +101,7 @@
             @foreach ($riwayatDisetujui as $n)
                 <div class="filechip ok" wire:key="riwayat-{{ $n->id }}">
                     <span class="nm">📄 Notula TW {{ ['I', 'II', 'III', 'IV'][$n->periode->triwulan - 1] }} {{ $n->periode->tahun }}
-                        <span class="sub">Disetujui {{ $n->disetujui_pada?->translatedFormat('d F Y') }}</span>
+                        <span class="sub">Disetujui {{ $n->disetujui_pada?->wita()->translatedFormat('d F Y') }}</span>
                     </span>
                     <a href="{{ route('notula.unduh-final', $n) }}" class="btn btn-ghost btn-sm">⬇ Unduh</a>
                 </div>

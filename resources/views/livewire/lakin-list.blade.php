@@ -44,7 +44,7 @@
                         <tr wire:key="lakin-{{ $lakin->id }}" class="clickable" onclick="window.location='{{ route('lakin.show', $lakin) }}'">
                             <td><b>{{ $lakin->tahun }}</b></td>
                             <td>{{ $lakin->baris_count }} indikator</td>
-                            <td style="text-align:right" class="muted">{{ $lakin->updated_at->translatedFormat('d F Y, H:i') }}</td>
+                            <td style="text-align:right" class="muted">{{ $lakin->updated_at->wita()->translatedFormat('d F Y, H:i') }} WITA</td>
                         </tr>
                     @empty
                         <tr>

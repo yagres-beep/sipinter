@@ -198,7 +198,12 @@
                             </div>
                             <div class="field">
                                 <label>Batas Waktu <span class="req">*</span></label>
-                                <input type="date" class="inp filled" wire:model="rtlBaru.{{ $i }}.batas_waktu">
+                                {{-- RF-34: SELALU akhir triwulan berikutnya, TIDAK bisa diketik bebas --
+                                     sesuai Kertas Kerja resmi (satu batas waktu yang sama untuk seluruh
+                                     poin RTL triwulan tsb). readonly (bukan disabled) supaya wire:model
+                                     tetap mengirim nilai default yang sudah diisi mount()/emptyRtlBlock(). --}}
+                                <input type="date" class="inp filled" style="background:var(--ro-bg)" wire:model="rtlBaru.{{ $i }}.batas_waktu" readonly onkeydown="return false" title="Otomatis akhir {{ $labelBerikutnya }}, tidak bisa diubah">
+                                <div class="fhint" style="margin-top:4px">Otomatis akhir {{ $labelBerikutnya }}.</div>
                                 @error("rtlBaru.{$i}.batas_waktu")
                                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                                 @enderror

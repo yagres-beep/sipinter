@@ -1,7 +1,7 @@
 <div>
     <div class="page-head">
         <div class="page-title">Template Notula</div>
-        <div class="page-sub">Unggah template resmi (.docx) berisi penanda otomatis untuk Bagian I.</div>
+        <div class="page-sub">Unggah template mesin (.docx) yang DIPAKAI LANGSUNG untuk menyusun Bagian I otomatis.</div>
     </div>
 
     @if (session('status'))
@@ -13,9 +13,11 @@
     @endif
 
     <div class="info">
-        ℹ️ Penanda yang didukung: <code>@{{iku}}</code>, <code>@{{analisis_capaian}}</code>,
-        <code>@{{kendala_solusi_kumulatif}}</code>, <code>@{{rtl}}</code>, <code>@{{ttd_kepala}}</code>.
-        Template ini disimpan sebagai arsip format resmi — penyusunan Bagian I otomatis pada Kompilasi Notula tetap memakai tampilan bawaan sistem.
+        ⚠️ Berkas ini BUKAN sekadar arsip — begitu diunggah, berkas ini langsung dipakai untuk menyusun
+        Bagian I (pratinjau web maupun unduhan .docx). Pastikan berkasnya adalah template MESIN dengan
+        struktur macro <code>@{{iku_blok}}</code> ... <code>@{{/iku_blok}}</code> yang benar (lihat panduan
+        <code>PANDUAN_Template_Bagian_I_Mesin.md</code>), bukan sekadar dokumen contoh format resmi —
+        berkas tanpa macro yang sesuai akan membuat "Susun Ulang Otomatis" gagal.
     </div>
 
     <div class="card">
@@ -55,7 +57,7 @@
 
         @if ($config->template_notula_path)
             <div class="filechip ok">
-                <span class="nm">📄 {{ $config->template_notula_nama_asli }} <span class="sub">Diperbarui {{ $config->updated_at->translatedFormat('d F Y, H:i') }}</span></span>
+                <span class="nm">📄 {{ $config->template_notula_nama_asli }} <span class="sub">Diperbarui {{ $config->updated_at->wita()->translatedFormat('d F Y, H:i') }} WITA</span></span>
                 <button type="button" class="btn btn-ghost btn-sm" wire:click="unduh" wire:loading.attr="disabled" wire:target="unduh">⬇ Unduh</button>
                 <button type="button" class="btn btn-red btn-sm" wire:click="confirmHapus" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="confirmHapus">Hapus</button>
             </div>

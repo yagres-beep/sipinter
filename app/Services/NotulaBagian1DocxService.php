@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\FolderConfig;
+use App\Models\MasterIku;
 use App\Models\Notula;
 use App\Models\PengaturanCapaian;
 use App\Support\RumusMarkup;
@@ -108,8 +109,13 @@ class NotulaBagian1DocxService
     }
 
     /**
-     * Susun daftar bernomor "1. ...\n2. ..." dari kumpulan teks -- dipakai untuk daftar
+     * Susun daftar bernomor "\n1. ...\n2. ..." dari kumpulan teks -- dipakai untuk daftar
      * kegiatan/kendala/solusi/RTL supaya formatnya sama seperti jalur PDF (<ol> bernomor).
+     *
+     * Diawali newline (bukan cuma DI ANTARA item) karena macro-nya selalu ditaruh
+     * langsung setelah label pada baris yang sama di template (mis. "Kendala : {{kendala}}")
+     * -- tanpa newline pembuka ini, poin 1 akan menempel di baris label sementara hanya
+     * poin 2 dst. yang pindah baris baru.
      */
     private function daftarBernomor(iterable $items): ?string
     {
@@ -118,7 +124,7 @@ class NotulaBagian1DocxService
             return null;
         }
 
-        return $daftar->map(fn ($teks, $i) => ($i + 1).'. '.$teks)->implode("\n");
+        return "\n".$daftar->map(fn ($teks, $i) => ($i + 1).'. '.$teks)->implode("\n");
     }
 
     private function isiHeader(TemplateProcessor $p, Notula $notula, array $data): void
@@ -255,8 +261,11 @@ class NotulaBagian1DocxService
         // dirangkap jadi pertanyaan proksi seperti versi template lama.
         $analisis = trim((string) $capaian?->analisis_capaian);
         $daftarKegiatan = $this->daftarBernomor($kegiatanIku->pluck('uraian_kegiatan')->filter());
+        // $daftarKegiatan SUDAH diawali "\n" sendiri (lihat daftarBernomor()) -- pemisahnya
+        // cukup SATU "\n" lagi di sini supaya total ada baris kosong di antara narasi dan
+        // daftar (bukan dua "\n\n" + "\n" bawaan yang bikin tiga baris kosong).
         $analisisLengkap = $analisis !== '' && $daftarKegiatan !== null
-            ? $analisis."\n\n".$daftarKegiatan
+            ? $analisis."\n".$daftarKegiatan
             : ($analisis !== '' ? $analisis : $daftarKegiatan);
         $this->set($sub, 'analisis_capaian', $analisisLengkap);
 
@@ -275,15 +284,32 @@ class NotulaBagian1DocxService
         $rtlTeks = $this->daftarBernomor($rtlIku->pluck('rtl_teks')->filter());
         // PIC Tindak Lanjut = tim yang ditugaskan pada IKU ini di Master IKU
         // (master_iku.tim), BUKAN nama orang yang diketik bebas per poin RTL.
-        $batasWaktuRtl = $rtlIku->pluck('batas_waktu')->filter()->sort()->last();
         $this->set($sub, 'rtl', $rtlTeks);
         $this->set($sub, 'pic_rtl', $iku->tim);
-        $this->set($sub, 'batas_waktu_rtl', $batasWaktuRtl?->translatedFormat('F Y'));
+        // Batas Waktu Tindak Lanjut SELALU akhir bulan triwulan tsb (RF-34, sesuai
+        // Kertas Kerja resmi -- satu batas waktu yang sama untuk SEMUA poin RTL
+        // triwulan yang sama) -- dihitung LANGSUNG dari triwulan/tahun periode
+        // notula ini (yang sama dipakai memfilter $rtlIku, lihat
+        // NotulaService::kumpulkanDataBagianSatu()), BUKAN dibaca dari kolom
+        // rtl_evaluasi.batas_waktu tersimpan (bisa berbeda-beda kalau pernah
+        // diketik manual sebelum field ini dikunci di form RtlEvaluasi).
+        $this->set($sub, 'batas_waktu_rtl', $rtlIku->isNotEmpty() ? $this->akhirTriwulan($data['periode']->tahun, $data['periode']->triwulan)->translatedFormat('F Y') : null);
 
+        // IKU bersatuan Persen SEMUA memakai rumus baku "y = n/N x 100%" (beda dari
+        // IKU bersatuan Poin yang rumusnya unik per indikator, mis. IPP/TPSS) --
+        // dirakit otomatis di formulaPersenOtomatis() supaya Tim SAKIP tidak perlu
+        // mengetik ulang rumus & memperbarui angkanya tiap triwulan. Kolom
+        // dasar_hitung sendiri (kalau diisi) TETAP ditampilkan sebagai keterangan
+        // tambahan setelahnya (mis. rincian "Target 2026: N = 2 mencakup: ..."),
+        // bukan lagi wajib memuat rumus lengkap.
+        //
         // [[a|b]] (pecahan bersusun di PDF, lihat App\Support\RumusMarkup) diratakan
         // jadi notasi biasa "a/b" -- .docx tidak mendukung pecahan bersusun lewat
         // penggantian teks biasa (TemplateProcessor::setValue).
-        $dasarHitungTeks = RumusMarkup::keTeksPolos($iku->dasar_hitung);
+        $dasarHitungGabungan = collect([$this->formulaPersenOtomatis($iku, $rekap), $iku->dasar_hitung])
+            ->filter(fn ($t) => filled($t))
+            ->implode("\n\n");
+        $dasarHitungTeks = RumusMarkup::keTeksPolos($dasarHitungGabungan);
         $dasarHitung = trim(($dasarHitungTeks ?: '').($iku->basis_data ? ' Basis Data: '.$iku->basis_data : ''));
         $this->set($sub, 'dasar_hitung', $dasarHitung !== '' ? $dasarHitung : null);
         $this->set($sub, 'bukti_realisasi', $linkFolder);
@@ -291,6 +317,51 @@ class NotulaBagian1DocxService
         $this->set($sub, 'penjelasan_lainnya', $capaian?->catatan);
 
         return $this->getMainPart($sub);
+    }
+
+    /**
+     * Akhir bulan triwulan $triwulan pada tahun $tahun (TW I->Maret, II->Juni,
+     * III->September, IV->Desember) -- dipakai untuk Batas Waktu Tindak Lanjut,
+     * lihat pemanggilnya di isiSatuIku().
+     */
+    private function akhirTriwulan(int $tahun, int $triwulan): \Illuminate\Support\Carbon
+    {
+        return \Illuminate\Support\Carbon::create($tahun, $triwulan * 3, 1)->endOfMonth();
+    }
+
+    /**
+     * Rumus "Dasar Hitung" baku untuk IKU bersatuan Persen: "y = n/N x 100%" --
+     * SEMUA IKU % memakai pola yang SAMA (beda dari IKU bersatuan Poin, mis. IPP/
+     * TPSS, yang rumusnya unik per indikator dan tetap diketik manual). n & N di
+     * sini BUKAN pasangan yang dipakai capaian_tw/capaian_pk (itu memakai kumulatif
+     * TW I s.d. TW berjalan, lihat CapaianTahunan::realisasiKumulatif() -- TIDAK
+     * disentuh):
+     * - n = nilai MENTAH triwulan berjalan SAJA (rekap['x_realisasi_tw'], apa adanya
+     *   yang diketik Tim SAKIP di Verifikasi Capaian, BUKAN kumulatif).
+     * - N = Target Tahunan Y (rekap['y_target'], konstan sepanjang tahun -- BUKAN
+     *   dijumlahkan per triwulan seperti alokasi/realisasi).
+     *
+     * Null (bukan dirakit) bila datanya belum lengkap (satuan bukan Persen, atau
+     * Deskripsi X/Y / target Y / realisasi triwulan berjalan belum diisi) -- supaya
+     * jatuh ke isian manual kolom `dasar_hitung` apa adanya, bukan menampilkan
+     * rumus dengan bagian kosong.
+     */
+    private function formulaPersenOtomatis(MasterIku $iku, array $rekap): ?string
+    {
+        if ($iku->satuan !== 'Persen' || ! $iku->deskripsi_x || ! $iku->deskripsi_y) {
+            return null;
+        }
+
+        $n = $rekap['x_realisasi_tw'] ?? null;
+        $besarN = $rekap['y_target'] ?? null;
+        if ($n === null || $besarN === null) {
+            return null;
+        }
+
+        $nTeks = PengaturanCapaian::formatAngka($n);
+        $besarNTeks = PengaturanCapaian::formatAngka($besarN);
+
+        return "y = [[n|N]] × 100% = [[{$nTeks}|{$besarNTeks}]] × 100%\n\ndimana:\ny = {$iku->indikator}\nn = {$iku->deskripsi_x}\nN = {$iku->deskripsi_y}";
     }
 
     /**

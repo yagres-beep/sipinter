@@ -152,6 +152,13 @@ class NotulaService
                 'realisasi' => $ct ? (float) ($ct->{"realisasi_tw{$tw}"} ?? 0) : null,
                 'capaian_tw' => $ct?->capaianTriwulanan($tw),
                 'capaian_pk' => $ct?->capaianSetahun($tw),
+                // Untuk rumus "Dasar Hitung" IKU bersatuan Persen (lihat
+                // NotulaBagian1DocxService::formulaPersenOtomatis()) -- n = nilai
+                // MENTAH triwulan berjalan saja (x_realisasi_twN, BUKAN kumulatif,
+                // lihat docblock CapaianTahunan), N = target tahunan Y (konstan,
+                // TIDAK dijumlahkan tiap triwulan seperti alokasi/realisasi).
+                'x_realisasi_tw' => $ct?->{"x_realisasi_tw{$tw}"},
+                'y_target' => $ct?->y_target,
             ]];
         });
 
@@ -272,7 +279,11 @@ class NotulaService
             'tahun' => $periode->tahun,
             'sertakanTtd' => $sertakanTtd,
             'kotaTtd' => $notula->kota_ttd,
-            'tanggal' => $sertakanTtd ? $notula->disetujui_pada?->translatedFormat('d F Y') : null,
+            // disetujui_pada tersimpan UTC (config('app.timezone')) -- ->wita() dulu
+            // supaya tanggal TTD tidak meleset sehari untuk persetujuan dekat tengah
+            // malam WITA (mis. disetujui 23:30 WITA = 15:30 UTC hari yang sama, tapi
+            // 00:30 WITA keesokan harinya = 16:30 UTC hari SEBELUMNYA).
+            'tanggal' => $sertakanTtd ? $notula->disetujui_pada?->wita()->translatedFormat('d F Y') : null,
             'namaKepala' => $sertakanTtd ? $notula->disetujuiOleh?->nama : null,
             'namaNotulis' => $notula->notulis,
         ];
