@@ -111,17 +111,6 @@
 
 <div class="row2">
     <div class="field">
-        <label>Satuan <span class="req">*</span></label>
-        <select class="inp filled" wire:model="satuan">
-            <option value="Persen">Persen</option>
-            <option value="Poin">Poin</option>
-        </select>
-        <div class="fhint">Satuan target/realisasi IKU ini — hanya label tampilan di form Verifikasi Capaian, tidak mengubah rumus capaian.</div>
-        @error('satuan')
-            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-        @enderror
-    </div>
-    <div class="field">
         <label>Metode Perhitungan <span class="req">*</span></label>
         <select class="inp filled" wire:model.live="metodeCapaian">
             <option value="langsung">Langsung (nilai apa adanya)</option>
@@ -131,6 +120,17 @@
         @error('metodeCapaian')
             <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
         @enderror
+    </div>
+    <div class="field">
+        <label>Satuan</label>
+        {{-- Satuan SELALU mengikuti Metode Perhitungan (Rasio->Persen, Langsung->Poin
+             -- dipaksakan di App\Models\MasterIku::booted()), jadi di sini murni
+             TAMPILAN, bukan pilihan bebas -- supaya tidak bisa lagi terjadi
+             kombinasi ganjil (mis. "Langsung" tapi berlabel "Persen"). --}}
+        <div class="inp filled" style="background:var(--ro-bg);display:flex;align-items:center">
+            {{ $metodeCapaian === 'rasio' ? 'Persen' : 'Poin' }}
+        </div>
+        <div class="fhint">Otomatis mengikuti Metode Perhitungan.</div>
     </div>
 </div>
 

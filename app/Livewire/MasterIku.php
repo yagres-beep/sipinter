@@ -303,7 +303,11 @@ class MasterIku extends Component
         ];
 
         if ($this->editingId) {
-            MasterIkuModel::whereKey($this->editingId)->update($data);
+            // find()->update() (BUKAN whereKey()->update() query builder langsung) --
+            // supaya event MasterIku::booted()/saving() (auto-sinkron satuan dari
+            // metode_capaian) ikut terpicu; update() lewat query builder melewati
+            // event Eloquent sama sekali.
+            MasterIkuModel::findOrFail($this->editingId)->update($data);
         } else {
             MasterIkuModel::create($data);
         }

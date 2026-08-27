@@ -46,9 +46,32 @@ class MasterIku extends Model
      */
     public const METODE_RASIO = 'rasio';
 
+    public const SATUAN_PERSEN = 'Persen';
+
+    public const SATUAN_POIN = 'Poin';
+
     public function pakaiRasio(): bool
     {
         return $this->metode_capaian === self::METODE_RASIO;
+    }
+
+    /**
+     * Satuan SELALU mengikuti Metode Perhitungan (Rasio -> Persen, Langsung -> Poin)
+     * -- dipaksakan di sini (bukan dibiarkan pilihan bebas terpisah) supaya tidak
+     * bisa lagi terjadi kombinasi ganjil seperti IKU 'langsung' bersatuan "Persen"
+     * yang sebelumnya ditemukan di data (mis. Indeks Pelayanan Publik, Nilai SAKIP
+     * -- keduanya sebenarnya "Poin" per Kertas Kerja resmi, cuma salah input manual).
+     * Dipasang lewat event Eloquent (bukan cuma disetel manual di tiap pemanggil)
+     * supaya berlaku di SEMUA jalur tulis: form Master IKU, dropdown Jenis Nilai di
+     * Target Tahunan (App\Livewire\TargetTahunan), maupun impor Excel.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (self $iku) {
+            $iku->satuan = $iku->metode_capaian === self::METODE_RASIO
+                ? self::SATUAN_PERSEN
+                : self::SATUAN_POIN;
+        });
     }
 
     /**

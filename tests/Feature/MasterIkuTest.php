@@ -322,6 +322,57 @@ class MasterIkuTest extends TestCase
         $this->assertSame('Jumlah seluruh publikasi', $iku->deskripsi_y);
     }
 
+    /**
+     * Satuan HARUS selalu ikut Metode Perhitungan (Rasio->Persen, Langsung->Poin)
+     * -- dipaksakan lewat MasterIku::booted()/saving(), bukan pilihan bebas
+     * terpisah, supaya tidak bisa lagi ada kombinasi ganjil seperti IKU 'langsung'
+     * berlabel "Persen" (kasus nyata yang pernah ditemukan: Indeks Pelayanan
+     * Publik & Nilai SAKIP, seharusnya "Poin").
+     */
+    public function test_satuan_selalu_ikut_metode_capaian_walau_diisi_beda(): void
+    {
+        $this->loginSebagaiTimSakip();
+
+        Livewire::test(MasterIku::class)
+            ->set('kode', '9003')
+            ->set('indikator', 'Indikator uji satuan otomatis')
+            ->set('tim', 'Tim Uji')
+            ->set('penanggungJawab', 'Petugas Uji')
+            ->set('metodeCapaian', 'langsung')
+            ->set('satuan', 'Persen')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $iku = MasterIkuModel::where('kode', '9003')->first();
+        $this->assertSame('Poin', $iku->satuan);
+    }
+
+    /**
+     * Aturan yang sama berlaku saat IKU diedit lewat find()->update() (bukan cuma
+     * create()) -- lihat App\Livewire\MasterIku::save(), yang sengaja dipindah
+     * dari whereKey()->update() supaya event Eloquent ikut terpicu.
+     */
+    public function test_satuan_ikut_tersinkron_saat_metode_capaian_diubah_lewat_edit(): void
+    {
+        $this->loginSebagaiTimSakip();
+
+        $iku = MasterIkuModel::create([
+            'kode' => '9004', 'indikator' => 'Indikator uji edit satuan', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
+            'metode_capaian' => MasterIkuModel::METODE_LANGSUNG,
+        ]);
+        $this->assertSame('Poin', $iku->fresh()->satuan);
+
+        Livewire::test(MasterIku::class)
+            ->call('edit', $iku->id)
+            ->set('metodeCapaian', 'rasio')
+            ->set('deskripsiX', 'X uji')
+            ->set('deskripsiY', 'Y uji')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $this->assertSame('Persen', $iku->fresh()->satuan);
+    }
+
     public function test_edit_iku_memuat_metode_capaian_yang_tersimpan(): void
     {
         $this->loginSebagaiTimSakip();
