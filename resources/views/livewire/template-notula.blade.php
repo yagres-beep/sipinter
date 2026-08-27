@@ -8,6 +8,10 @@
         <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>
     @endif
 
+    @if (session('error'))
+        <div class="badge b-tolak" style="display:block;margin-bottom:14px">{{ session('error') }}</div>
+    @endif
+
     <div class="info">
         ℹ️ Penanda yang didukung: <code>@{{iku}}</code>, <code>@{{analisis_capaian}}</code>,
         <code>@{{kendala_solusi_kumulatif}}</code>, <code>@{{rtl}}</code>, <code>@{{ttd_kepala}}</code>.

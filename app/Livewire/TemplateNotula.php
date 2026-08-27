@@ -41,6 +41,12 @@ class TemplateNotula extends Component
 
         $path = $this->templateFile->store('template-notula', 'local');
 
+        if (! $path || ! Storage::disk('local')->exists($path)) {
+            session()->flash('error', 'Gagal menyimpan berkas template ke server. Periksa izin tulis folder storage/app/private.');
+
+            return;
+        }
+
         $config->update([
             'template_notula_path' => $path,
             'template_notula_nama_asli' => $this->templateFile->getClientOriginalName(),
