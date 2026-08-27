@@ -2,10 +2,12 @@
 
 namespace App\Services;
 
+use App\Models\FolderConfig;
 use App\Models\Notula;
 use App\Models\PengaturanCapaian;
 use App\Support\RumusMarkup;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpWord\TemplateProcessor;
 use ReflectionProperty;
 use RuntimeException;
@@ -25,17 +27,23 @@ use RuntimeException;
  * sumber yang sama dipakai jalur PDF, lihat notula-bagian1-konten.blade.php), dan salah satu dari
  * tiga varian {{blok_sakip}}/{{blok_berakhlak}}/{{blok_ro}} dipilih sesuai teks indikator, sama
  * seperti deteksi SAKIP/BerAKHLAK pada jalur PDF.
+ *
+ * Template SUMBER diutamakan dari berkas yang diunggah Tim SAKIP lewat menu
+ * Pengaturan > Template Notula (App\Livewire\TemplateNotula, disimpan di
+ * FolderConfig::template_notula_path) -- supaya begitu format resmi berubah dari
+ * pusat, Tim SAKIP tinggal mengunggah template baru ke situ TANPA perlu developer
+ * mengganti berkas bawaan di kode (lihat DEFAULT_TEMPLATE_PATH di bawah, dipakai
+ * hanya sebagai cadangan bila belum ada yang diunggah sama sekali).
  */
 class NotulaBagian1DocxService
 {
-    private const TEMPLATE_PATH = 'template_notula/SIPINTER_Template_Bagian_I_Mesin.docx';
+    private const DEFAULT_TEMPLATE_PATH = 'template_notula/SIPINTER_Template_Bagian_I_Mesin.docx';
 
     public function __construct(private NotulaService $notulaService) {}
 
     public function generate(Notula $notula, string $outputPath): string
     {
-        $templatePath = base_path(self::TEMPLATE_PATH);
-        abort_unless(file_exists($templatePath), 404, 'Template Bagian I (mesin) belum tersedia.');
+        $templatePath = $this->resolveTemplatePath();
 
         $data = $this->notulaService->kumpulkanDataBagianSatu($notula);
 
@@ -60,6 +68,26 @@ class NotulaBagian1DocxService
         $processor->setMacroChars('${', '}');
 
         return $outputPath;
+    }
+
+    /**
+     * Berkas Template Notula yang sedang diunggah (Pengaturan > Template Notula) diutamakan
+     * bila ada dan masih tersimpan di disk -- jatuh ke berkas bawaan proyek kalau belum
+     * pernah diunggah sama sekali (instalasi baru) atau berkasnya hilang dari disk (mis. di
+     * hosting tanpa storage persisten, lihat catatan fidelitas serupa di BerkasDownloadController).
+     */
+    private function resolveTemplatePath(): string
+    {
+        $config = FolderConfig::current();
+
+        if ($config->template_notula_path && Storage::disk('local')->exists($config->template_notula_path)) {
+            return Storage::disk('local')->path($config->template_notula_path);
+        }
+
+        $bawaan = base_path(self::DEFAULT_TEMPLATE_PATH);
+        abort_unless(file_exists($bawaan), 404, 'Template Bagian I (mesin) belum tersedia.');
+
+        return $bawaan;
     }
 
     /**

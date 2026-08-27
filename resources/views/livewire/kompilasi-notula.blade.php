@@ -277,9 +277,8 @@
             <span class="st {{ $bagian1Siap ? 'ok' : 'no' }}" style="margin-left:auto">{{ $bagian1Siap ? '✓ Bagian I siap' : '✕ Bagian I belum disusun' }}</span>
         </div>
         <div style="margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap">
-            <a href="{{ route('notula.unduh-bagian1-docx', $notula) }}" class="btn btn-teal btn-sm" style="text-decoration:none;display:inline-block">⬇ Unduh Bagian I (.docx, terisi otomatis)</a>
+            <a href="{{ route('notula.pratinjau-cepat-pdf', $notula) }}" class="btn btn-teal btn-sm" style="text-decoration:none;display:inline-block">⬇ Unduh Pratinjau Lengkap (.pdf, apa adanya)</a>
             <a href="{{ route('notula.template-bagian1') }}" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-block">⬇ Unduh Panduan Bagian I (referensi, tidak perlu diunggah balik)</a>
-            <a href="{{ route('notula.pratinjau-cepat-pdf', $notula) }}" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-block">⬇ Unduh Pratinjau Lengkap (.pdf, apa adanya)</a>
         </div>
         <p class="fhint" style="margin-bottom:10px">Klik lalu ketik langsung di dalam Bagian I pada pratinjau di bawah untuk menyunting — Bagian II &amp; III ikut tampil di bawahnya persis dari berkas yang diunggah.</p>
 
@@ -483,7 +482,7 @@
                 <span wire:loading wire:target="susunUlangOtomatis"><i class="spin"></i> Menyusun…</span>
             </button>
             <button type="button" class="btn btn-primary btn-sm" wire:click="simpanSuntinganBagian1" wire:loading.attr="disabled" wire:target="susunUlangOtomatis,simpanSuntinganBagian1">
-                <span wire:loading.remove wire:target="simpanSuntinganBagian1">💾 Simpan Bagian I</span>
+                <span wire:loading.remove wire:target="simpanSuntinganBagian1">💾 Simpan</span>
                 <span wire:loading wire:target="simpanSuntinganBagian1"><i class="spin"></i> Menyimpan…</span>
             </button>
         </div>

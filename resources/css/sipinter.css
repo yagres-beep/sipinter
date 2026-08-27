@@ -411,13 +411,12 @@ th.th-sort.active .th-arrow{opacity:1;color:var(--blue-600);font-weight:700}
   --line:#e9edf3; --line2:#f1f5f9; --blue-soft:#eff5ff; --teal-soft:#eefbf8;
 }
 .word-canvas{background:#e4e7ee;border:1px solid var(--line);border-radius:10px;padding:36px 24px;display:flex;justify-content:center;overflow-x:auto}
-.notula{background:var(--white);border:1px solid #d5d9e2;border-radius:2px;padding:96px 90px;box-shadow:0 1px 3px rgba(16,32,70,.08),0 12px 32px rgba(16,32,70,.14);font-family:'Times New Roman',Times,serif;line-height:1.9;font-size:14px;max-width:816px;width:100%;min-width:0}
+.notula{background:var(--white);border:1px solid #d5d9e2;border-radius:2px;padding:96px 90px;box-shadow:0 1px 3px rgba(16,32,70,.08),0 12px 32px rgba(16,32,70,.14);font-family:Arial,Helvetica,sans-serif;line-height:1.5;font-size:11pt;max-width:816px;width:100%;min-width:0}
 .notula h3{text-align:center;font-size:16px;color:#111;margin-bottom:4px;font-weight:700}
 .notula .nsub{text-align:center;color:var(--muted);font-size:11.5px;margin-bottom:18px;font-family:'Inter',sans-serif}
 .notula .nrow{margin-bottom:12px}
-.notula .nlabel{font-weight:700;color:#111;font-size:13px;margin-bottom:3px}
-.notula .ntxt{font-size:13px}
-.notula table{margin:10px 0;font-size:12.5px;border-collapse:collapse}
+.notula .nlabel{font-weight:700;color:#111;margin-bottom:3px}
+.notula table{margin:10px 0;border-collapse:collapse}
 .notula td,.notula th{border:1px solid #999;padding:7px 9px}
 .notula th{text-transform:none;letter-spacing:0;color:#111;font-weight:700;background:#f2f2f2}
 .notula p{margin:0 0 12px}
@@ -426,7 +425,6 @@ th.th-sort.active .th-arrow{opacity:1;color:var(--blue-600);font-weight:700}
 .notula li{margin-bottom:5px}
 .notula em{color:var(--muted)}
 .notula .bagian-judul{font-size:15px;font-weight:700;margin:22px 0 10px;border-bottom:1px solid #cbd5e1;padding-bottom:5px}
-.notula .notula-inline{font-size:13px}
 .doc-preview-label{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin:16px 0 8px}
 .doc-preview-frame{border:1px solid var(--line);border-radius:12px;box-shadow:var(--sh);overflow:hidden;background:var(--white)}
 .doc-preview-frame iframe{display:block;width:100%;border:none}

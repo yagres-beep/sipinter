@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\FolderConfig;
 use App\Models\Kegiatan;
 use App\Models\MasterIku;
 use App\Models\Notula;
@@ -272,5 +273,34 @@ class NotulaDownloadTest extends TestCase
         $notula->refresh();
         $this->assertSame(Notula::STATUS_DRAFT, $notula->status);
         $this->assertNull($notula->pdf_gabungan);
+    }
+
+    /**
+     * Begitu Tim SAKIP mengunggah template baru lewat Pengaturan > Template Notula
+     * (mis. format resmi berubah dari pusat), unduhan Bagian I harus memakai berkas
+     * itu -- BUKAN berkas bawaan proyek -- tanpa perlu developer mengubah kode.
+     */
+    public function test_docx_bagian1_memakai_template_yang_diunggah_lewat_pengaturan(): void
+    {
+        Storage::fake('local');
+        $this->loginSebagai('Tim SAKIP');
+
+        $isiTemplateAsli = file_get_contents(base_path('template_notula/SIPINTER_Template_Bagian_I_Mesin.docx'));
+        Storage::disk('local')->put('template-notula/custom.docx', $isiTemplateAsli);
+        FolderConfig::current()->update([
+            'template_notula_path' => 'template-notula/custom.docx',
+            'template_notula_nama_asli' => 'custom.docx',
+        ]);
+
+        MasterIku::create([
+            'kode' => '9999', 'indikator' => 'Indikator Uji Template Unggahan', 'sasaran' => 'Sasaran Uji Template Unggahan',
+            'tim' => 'Uji', 'penanggung_jawab' => 'Uji',
+        ]);
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $notula = Notula::create(['periode_id' => $periode->id]);
+
+        $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
+
+        $this->assertStringContainsString('Sasaran Uji Template Unggahan', $xml);
     }
 }
