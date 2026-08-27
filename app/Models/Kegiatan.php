@@ -6,6 +6,7 @@ use App\Exceptions\InvalidStatusTransitionException;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Kegiatan extends Model
@@ -54,24 +55,24 @@ class Kegiatan extends Model
         'catatan_uraian',
         'jenis',
         'tahapan_survei',
-        'rincian_output',
-        'volume_ro',
-        'progres_persen',
         'nama_folder_auto',
         'drive_folder_id',
         'status_dokumen',
     ];
 
-    protected function casts(): array
-    {
-        return [
-            'progres_persen' => 'decimal:2',
-        ];
-    }
-
     public function masterIku(): BelongsTo
     {
         return $this->belongsTo(MasterIku::class, 'iku_id');
+    }
+
+    /**
+     * Nol atau lebih Rincian Output (RO) milik kegiatan ini (RF baru) — lihat
+     * App\Models\RincianOutput. Diurutkan sesuai id (urutan input) supaya penomoran
+     * "RO 1", "RO 2", ... di formulir & notula konsisten antar tampilan.
+     */
+    public function rincianOutput(): HasMany
+    {
+        return $this->hasMany(RincianOutput::class)->orderBy('id');
     }
 
     /**

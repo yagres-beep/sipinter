@@ -9,8 +9,10 @@ use App\Models\Capaian;
 use App\Models\CapaianTahunan;
 use App\Models\Kegiatan;
 use App\Models\KendalaSolusi;
+use App\Models\RincianOutput;
 use App\Models\RtlEvaluasi;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Livewire\Component;
 
 /**
@@ -38,31 +40,20 @@ class VerifikasiCapaian extends Component
     public ?string $catatan = null;
 
     /**
-     * Nama Rincian Output (RO) resmi per kegiatan, dikunci pada id kegiatan — TERPISAH
-     * dari $koreksiKegiatan (uraian_kegiatan bebas-teks yang ditulis petugas) karena
-     * penamaan RO resmi tidak selalu sama dengan uraian kegiatan yang diketik petugas.
-     * Diisi Tim SAKIP di sini supaya tabel "Realisasi Volume RO dan Progres
-     * Pelaksanaan Kegiatan" di notula (lihat notula-bagian1-konten blade) menampilkan
-     * nama RO yang benar, bukan uraian_kegiatan apa adanya.
+     * Rincian Output (RO) per kegiatan — RF baru: satu Kegiatan boleh punya BANYAK RO
+     * (mis. satu kegiatan survei menghasilkan beberapa publikasi berbeda), lihat
+     * App\Models\RincianOutput. Dikunci [kegiatan_id][kunci_baris] => data baris;
+     * $kunci_baris adalah id RincianOutput asli (baris sudah tersimpan) ATAU kunci
+     * sementara "baru-..." (baris baru dari tambahRo(), belum pernah disimpan).
+     * TERPISAH dari $koreksiKegiatan (uraian_kegiatan bebas-teks yang ditulis
+     * petugas) karena penamaan RO resmi tidak selalu sama dengan uraian kegiatan.
+     * Hanya terisi Tim SAKIP saat IKU-nya BELUM punya realisasi triwulan berjalan
+     * (lihat notula-bagian1-konten blade: tabel ini hanya tampil bila
+     * $rekap['realisasi'] masih kosong), tapi tidak wajib.
      *
-     * @var array<int, string|null>
+     * @var array<int, array<string, array{id: int|null, uraian: string|null, volume_ro: string|null, progres_persen: string|null}>>
      */
     public array $rincianOutput = [];
-
-    /**
-     * Realisasi Volume RO & Progres Pelaksanaan Kegiatan (%) per kegiatan, dikunci
-     * pada id kegiatan — sama seperti $koreksiKegiatan, hanya terisi Tim SAKIP saat
-     * IKU-nya BELUM punya realisasi triwulan berjalan (lihat notula-bagian1-konten
-     * blade: tabel ini hanya tampil bila $rekap['realisasi'] masih kosong).
-     *
-     * @var array<int, string|null>
-     */
-    public array $realisasiVolumeRo = [];
-
-    /**
-     * @var array<int, string|null>
-     */
-    public array $realisasiProgresPersen = [];
 
     /**
      * Nilai form Alokasi/Realisasi Triwulanan — diikat lewat wire:model (properti
@@ -262,9 +253,14 @@ class VerifikasiCapaian extends Component
         foreach ($this->kegiatanList() as $kegiatan) {
             $this->koreksiKegiatan[$kegiatan->id] = $kegiatan->uraian_kegiatan;
             $this->catatanUraian[$kegiatan->id] = $kegiatan->catatan_uraian;
-            $this->rincianOutput[$kegiatan->id] = $kegiatan->rincian_output;
-            $this->realisasiVolumeRo[$kegiatan->id] = $kegiatan->volume_ro;
-            $this->realisasiProgresPersen[$kegiatan->id] = $kegiatan->progres_persen;
+            $this->rincianOutput[$kegiatan->id] = $kegiatan->rincianOutput
+                ->mapWithKeys(fn ($ro) => [(string) $ro->id => [
+                    'id' => $ro->id,
+                    'uraian' => $ro->uraian,
+                    'volume_ro' => $ro->volume_ro,
+                    'progres_persen' => $ro->progres_persen,
+                ]])
+                ->all();
         }
 
         foreach ($this->kendalaSolusiList() as $ks) {
@@ -295,7 +291,8 @@ class VerifikasiCapaian extends Component
      */
     public function kegiatanList()
     {
-        return $this->cacheKegiatanList ??= Kegiatan::where('iku_id', $this->capaian->iku_id)
+        return $this->cacheKegiatanList ??= Kegiatan::with('rincianOutput')
+            ->where('iku_id', $this->capaian->iku_id)
             ->where('periode_id', $this->capaian->periode_id)
             ->where('status_dokumen', '!=', Kegiatan::STATUS_DRAFT)
             ->orderBy('id')
@@ -720,9 +717,9 @@ class VerifikasiCapaian extends Component
             'analisis_capaian' => ['nullable', 'string'],
             'catatan' => ['nullable', 'string'],
             'koreksiKegiatan.*' => ['required', 'string', 'max:1000'],
-            'rincianOutput.*' => ['nullable', 'string', 'max:255'],
-            'realisasiVolumeRo.*' => ['nullable', 'string', 'max:255'],
-            'realisasiProgresPersen.*' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'rincianOutput.*.*.uraian' => ['nullable', 'string', 'max:255'],
+            'rincianOutput.*.*.volume_ro' => ['nullable', 'string', 'max:255'],
+            'rincianOutput.*.*.progres_persen' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'koreksiKendala.*.kendala' => ['required', 'string'],
             'koreksiKendala.*.solusi' => ['nullable', 'string'],
             'koreksiRtlRealisasi.*' => ['nullable', 'string'],
@@ -758,9 +755,9 @@ class VerifikasiCapaian extends Component
         return [
             'analisis_capaian' => 'analisis capaian',
             'catatan' => 'penjelasan/pembahasan lainnya',
-            'rincianOutput.*' => 'rincian output',
-            'realisasiVolumeRo.*' => 'realisasi volume RO',
-            'realisasiProgresPersen.*' => 'progres pelaksanaan kegiatan (%)',
+            'rincianOutput.*.*.uraian' => 'rincian output',
+            'rincianOutput.*.*.volume_ro' => 'realisasi volume RO',
+            'rincianOutput.*.*.progres_persen' => 'progres pelaksanaan kegiatan (%)',
             'alokasi_tw1' => 'Alokasi Target TW I',
             'alokasi_tw2' => 'Alokasi Target TW II',
             'alokasi_tw3' => 'Alokasi Target TW III',
@@ -871,6 +868,45 @@ class VerifikasiCapaian extends Component
     }
 
     /**
+     * Tambah satu baris RO kosong untuk kegiatan ini — hanya tersimpan ke DB nanti
+     * saat "Simpan"/"Verifikasi Selesai"/dst. ditekan (lihat simpanRincianOutputKegiatan()),
+     * sama seperti pola koreksi teks lain di komponen ini. Kunci sementara "baru-..."
+     * dipakai supaya baris ini bisa dihapus lagi (hapusRo()) sebelum sempat tersimpan
+     * tanpa perlu id asli.
+     */
+    public function tambahRo(int $kegiatanId): void
+    {
+        $kegiatan = $this->kegiatanList()->firstWhere('id', $kegiatanId);
+        if (! $kegiatan || ! $this->kegiatanBisaDikoreksi($kegiatan)) {
+            return;
+        }
+
+        $kunciBaru = 'baru-'.(string) Str::uuid();
+        $this->rincianOutput[$kegiatanId][$kunciBaru] = ['id' => null, 'uraian' => null, 'volume_ro' => null, 'progres_persen' => null];
+    }
+
+    /**
+     * Hapus satu baris RO — baris yang SUDAH tersimpan (punya id asli) dihapus dari
+     * DB seketika (sama seperti tombol aksi langsung lain di komponen ini, mis.
+     * tandaiSesuai()); baris yang baru ditambahkan lewat tambahRo() dan belum
+     * disimpan cukup dibuang dari state lokal.
+     */
+    public function hapusRo(int $kegiatanId, string $kunci): void
+    {
+        $kegiatan = $this->kegiatanList()->firstWhere('id', $kegiatanId);
+        if (! $kegiatan || ! $this->kegiatanBisaDikoreksi($kegiatan)) {
+            return;
+        }
+
+        $id = $this->rincianOutput[$kegiatanId][$kunci]['id'] ?? null;
+        if ($id) {
+            RincianOutput::whereKey($id)->delete();
+        }
+
+        unset($this->rincianOutput[$kegiatanId][$kunci]);
+    }
+
+    /**
      * Simpan koreksi teks (bila ada perubahan) ke kegiatan, kendala-solusi, dan
      * realisasi RTL — dipanggil bersamaan dengan verifikasi/pengembalian supaya
      * Tim SAKIP tidak perlu tombol simpan terpisah untuk tiap koreksi kecil.
@@ -887,12 +923,8 @@ class VerifikasiCapaian extends Component
                 continue;
             }
 
-            $kegiatan->update([
-                'uraian_kegiatan' => $teks,
-                'rincian_output' => $this->rincianOutput[$id] ?: null,
-                'volume_ro' => $this->realisasiVolumeRo[$id] ?: null,
-                'progres_persen' => filled($this->realisasiProgresPersen[$id] ?? null) ? $this->realisasiProgresPersen[$id] : null,
-            ]);
+            $kegiatan->update(['uraian_kegiatan' => $teks]);
+            $this->simpanRincianOutputKegiatan($kegiatan);
         }
 
         foreach ($this->koreksiKendala as $id => $data) {
@@ -905,6 +937,45 @@ class VerifikasiCapaian extends Component
         foreach ($this->koreksiRtlRealisasi as $id => $teks) {
             if (filled($teks)) {
                 RtlEvaluasi::whereKey($id)->update(['realisasi' => $teks]);
+            }
+        }
+    }
+
+    /**
+     * Tulis seluruh baris RO satu kegiatan ke DB: baris yang KOSONG (ketiga kolom
+     * kosong) dihapus bila sudah tersimpan sebelumnya, atau dilewati bila memang baru
+     * ditambahkan lewat tambahRo() dan tidak pernah diisi; baris yang terisi
+     * dibuat/diperbarui sesuai ada/tidaknya id asli.
+     */
+    protected function simpanRincianOutputKegiatan(Kegiatan $kegiatan): void
+    {
+        foreach ($this->rincianOutput[$kegiatan->id] ?? [] as $kunci => $baris) {
+            $terisi = filled($baris['uraian'] ?? null) || filled($baris['volume_ro'] ?? null) || filled($baris['progres_persen'] ?? null);
+
+            if (! $terisi) {
+                if (! empty($baris['id'])) {
+                    RincianOutput::whereKey($baris['id'])->delete();
+                    $this->rincianOutput[$kegiatan->id][$kunci]['id'] = null;
+                }
+
+                continue;
+            }
+
+            $payload = [
+                'uraian' => $baris['uraian'] ?: null,
+                'volume_ro' => $baris['volume_ro'] ?: null,
+                'progres_persen' => filled($baris['progres_persen'] ?? null) ? $baris['progres_persen'] : null,
+            ];
+
+            if (! empty($baris['id'])) {
+                RincianOutput::whereKey($baris['id'])->update($payload);
+            } else {
+                // Simpan id baris yang BARU dibuat kembali ke state komponen --
+                // tanpa ini, panggilan berikutnya (mis. hapusRo() atau simpan ulang)
+                // tidak tahu baris ini sudah tersimpan dan bisa membuat duplikat/gagal
+                // menghapusnya dari DB (dikunci masih pakai kunci sementara "baru-...").
+                $ro = $kegiatan->rincianOutput()->create($payload);
+                $this->rincianOutput[$kegiatan->id][$kunci]['id'] = $ro->id;
             }
         }
     }

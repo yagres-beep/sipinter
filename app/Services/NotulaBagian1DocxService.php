@@ -149,6 +149,7 @@ class NotulaBagian1DocxService
         $rekap = $data['rekapPerIku']->get($iku->id, []);
         $capaian = $data['capaianPerIku']->get($iku->id);
         $kegiatanIku = $data['kegiatanPerIku']->get($iku->id, collect());
+        $roIku = $data['roPerIku']->get($iku->id, collect());
         $kendalaSolusiTriwulan = $data['kendalaSolusiPerIku']->get($iku->id, collect());
         $rtlIku = $data['rtlPerIku']->get($iku->id, collect());
         $rtlSebelumnyaIku = $data['rtlSebelumnyaPerIku']->get($iku->id, collect());
@@ -167,7 +168,7 @@ class NotulaBagian1DocxService
         $xml = $this->resolveBlokKondisional($xml, 'blok_berakhlak', $isBerakhlak);
         $xml = $this->resolveBlokKondisional($xml, 'blok_ro', $tampilkanRo);
         if ($tampilkanRo) {
-            $xml = $this->gandakanBarisRo($xml, $kegiatanIku);
+            $xml = $this->gandakanBarisRo($xml, $roIku);
         }
 
         $sub->setMacroChars('{{', '}}');
@@ -241,26 +242,27 @@ class NotulaBagian1DocxService
 
     /**
      * Gandakan baris template RO ({{ro_row}}...{{/ro_row}}, 3 kolom: Rincian Output/Realisasi
-     * Volume RO/Progres) sekali per Kegiatan pada IKU ini -- sumber data yang SAMA dipakai jalur
-     * PDF (lihat notula-bagian1-konten.blade.php), bukan katalog kode RO tetap seperti versi lama.
-     * Kosong (belum ada Kegiatan) -> satu baris placeholder "…", sama seperti pola @empty Blade.
+     * Volume RO/Progres) sekali per RincianOutput pada IKU ini (RF baru: satu Kegiatan boleh
+     * punya banyak RO) -- sumber data yang SAMA dipakai jalur PDF (lihat
+     * notula-bagian1-konten.blade.php), bukan katalog kode RO tetap seperti versi lama.
+     * Kosong (belum ada RO) -> satu baris placeholder "…", sama seperti pola @empty Blade.
      */
-    private function gandakanBarisRo(string $xml, Collection $kegiatanIku): string
+    private function gandakanBarisRo(string $xml, Collection $roIku): string
     {
         [$before, $rowTemplate, $after] = $this->splitOnMarkers($xml, '{{ro_row}}', '{{/ro_row}}', 'tr');
 
-        if ($kegiatanIku->isEmpty()) {
+        if ($roIku->isEmpty()) {
             $baris = $this->isiBarisRo($rowTemplate, '…', '…', '…');
         } else {
-            $baris = $kegiatanIku->map(function ($kegiatan) use ($rowTemplate) {
-                $progres = $kegiatan->progres_persen !== null
-                    ? number_format((float) $kegiatan->progres_persen, 2, ',', '.').'%'
+            $baris = $roIku->map(function ($ro) use ($rowTemplate) {
+                $progres = $ro->progres_persen !== null
+                    ? number_format((float) $ro->progres_persen, 2, ',', '.').'%'
                     : '…';
 
                 return $this->isiBarisRo(
                     $rowTemplate,
-                    $kegiatan->rincian_output ?: $kegiatan->uraian_kegiatan ?: '…',
-                    $kegiatan->volume_ro ?: '…',
+                    $ro->uraian ?: $ro->kegiatan->uraian_kegiatan ?: '…',
+                    $ro->volume_ro ?: '…',
                     $progres
                 );
             })->implode('');

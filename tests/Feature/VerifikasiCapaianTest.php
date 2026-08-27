@@ -11,6 +11,7 @@ use App\Models\Kegiatan;
 use App\Models\KendalaSolusi;
 use App\Models\MasterIku;
 use App\Models\Periode;
+use App\Models\RincianOutput;
 use App\Models\Role;
 use App\Models\RtlEvaluasi;
 use App\Models\User;
@@ -919,10 +920,15 @@ class VerifikasiCapaianTest extends TestCase
         $this->actingAs($this->buatSakip());
         $data = $this->siapkanIkuDenganDuaKegiatan();
 
-        Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
-            ->set("rincianOutput.{$data['kegiatan1']->id}", 'Publikasi/Laporan Statistik')
-            ->set("realisasiVolumeRo.{$data['kegiatan1']->id}", '2 publikasi')
-            ->set("realisasiProgresPersen.{$data['kegiatan1']->id}", 80)
+        $component = Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
+            ->call('tambahRo', $data['kegiatan1']->id);
+
+        $kunciRo = array_key_first($component->get('rincianOutput')[$data['kegiatan1']->id]);
+
+        $component
+            ->set("rincianOutput.{$data['kegiatan1']->id}.{$kunciRo}.uraian", 'Publikasi/Laporan Statistik')
+            ->set("rincianOutput.{$data['kegiatan1']->id}.{$kunciRo}.volume_ro", '2 publikasi')
+            ->set("rincianOutput.{$data['kegiatan1']->id}.{$kunciRo}.progres_persen", 80)
             ->set('catatan', 'Penjelasan tambahan dari Tim SAKIP')
             ->call('tandaiSesuai', $data['berkas1']->id)
             ->call('tandaiSesuai', $data['berkas2']->id)
@@ -933,11 +939,43 @@ class VerifikasiCapaianTest extends TestCase
             ->call('verifikasiSelesai')
             ->assertHasNoErrors();
 
-        $kegiatan1 = $data['kegiatan1']->fresh();
-        $this->assertSame('Publikasi/Laporan Statistik', $kegiatan1->rincian_output);
-        $this->assertSame('2 publikasi', $kegiatan1->volume_ro);
-        $this->assertEquals(80, $kegiatan1->progres_persen);
+        $ro = RincianOutput::where('kegiatan_id', $data['kegiatan1']->id)->first();
+        $this->assertNotNull($ro);
+        $this->assertSame('Publikasi/Laporan Statistik', $ro->uraian);
+        $this->assertSame('2 publikasi', $ro->volume_ro);
+        $this->assertEquals(80, $ro->progres_persen);
         $this->assertSame('Penjelasan tambahan dari Tim SAKIP', $data['capaian']->fresh()->catatan);
+    }
+
+    public function test_tambah_dan_hapus_ro_bekerja_untuk_lebih_dari_satu_ro_per_kegiatan(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+        $kegiatanId = $data['kegiatan1']->id;
+
+        $component = Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
+            ->call('tambahRo', $kegiatanId)
+            ->call('tambahRo', $kegiatanId);
+
+        $this->assertCount(2, $component->get('rincianOutput')[$kegiatanId]);
+
+        $kunci = array_keys($component->get('rincianOutput')[$kegiatanId]);
+
+        $component
+            ->set("rincianOutput.{$kegiatanId}.{$kunci[0]}.uraian", 'RO Pertama')
+            ->set("rincianOutput.{$kegiatanId}.{$kunci[0]}.volume_ro", '1 publikasi')
+            ->set("rincianOutput.{$kegiatanId}.{$kunci[1]}.uraian", 'RO Kedua')
+            ->set("rincianOutput.{$kegiatanId}.{$kunci[1]}.volume_ro", '2 publikasi')
+            ->call('simpanPerubahan')
+            ->assertHasNoErrors();
+
+        $this->assertCount(2, RincianOutput::where('kegiatan_id', $kegiatanId)->get());
+
+        // Hapus salah satu baris yang SUDAH tersimpan -- harus langsung hilang dari DB.
+        $component->call('hapusRo', $kegiatanId, $kunci[0]);
+
+        $this->assertCount(1, RincianOutput::where('kegiatan_id', $kegiatanId)->get());
+        $this->assertSame('RO Kedua', RincianOutput::where('kegiatan_id', $kegiatanId)->first()->uraian);
     }
 
     public function test_route_verifikasi_ditolak_untuk_peran_selain_tim_sakip(): void

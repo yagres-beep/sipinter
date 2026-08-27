@@ -51,6 +51,14 @@ class TemplateNotula extends Component
         $this->reset('templateFile');
     }
 
+    public function unduh(): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $config = FolderConfig::current();
+        abort_unless($config->template_notula_path && Storage::disk('local')->exists($config->template_notula_path), 404);
+
+        return Storage::disk('local')->download($config->template_notula_path, $config->template_notula_nama_asli);
+    }
+
     public function confirmHapus(): void
     {
         $this->konfirmasiHapus = true;

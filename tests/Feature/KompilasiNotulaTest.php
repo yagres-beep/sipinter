@@ -177,7 +177,10 @@ class KompilasiNotulaTest extends TestCase
             'uraian_kegiatan' => 'Kegiatan uji Bagian I',
             'jenis' => 'bukan_survei_sensus',
             'status_dokumen' => Kegiatan::STATUS_DIVERIFIKASI,
-            'rincian_output' => 'Publikasi/Laporan Statistik Uji',
+        ]);
+
+        $kegiatan->rincianOutput()->create([
+            'uraian' => 'Publikasi/Laporan Statistik Uji',
             'volume_ro' => '3 publikasi',
             'progres_persen' => 75,
         ]);
@@ -209,13 +212,17 @@ class KompilasiNotulaTest extends TestCase
             'tahun' => 2026, 'bulan' => 4, 'triwulan' => 2, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false,
         ]);
 
-        Kegiatan::create([
+        $kegiatan = Kegiatan::create([
             'iku_id' => $iku->id,
             'periode_id' => $periode->id,
             'uraian_kegiatan' => 'Kegiatan uji tanpa rincian output',
             'jenis' => 'bukan_survei_sensus',
             'status_dokumen' => Kegiatan::STATUS_DIVERIFIKASI,
         ]);
+
+        // RO diisi (volume/progres) tapi namanya (uraian) sengaja dikosongkan --
+        // notula harus jatuh ke uraian_kegiatan sebagai fallback nama RO.
+        $kegiatan->rincianOutput()->create(['volume_ro' => '1 publikasi', 'progres_persen' => 50]);
 
         $notula = app(NotulaService::class)->untukTriwulan(2026, 2);
         $html = app(NotulaService::class)->susunBagianSatu($notula);

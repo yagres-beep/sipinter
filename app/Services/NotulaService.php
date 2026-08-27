@@ -95,11 +95,24 @@ class NotulaService
             ->get()
             ->groupBy('sasaran');
 
-        $kegiatanPerIku = Kegiatan::with('masterIku')
+        $kegiatanPerIku = Kegiatan::with(['masterIku', 'rincianOutput'])
             ->whereHas('periode', fn ($q) => $q->where('tahun', $periode->tahun)->where('triwulan', $tw))
             ->whereIn('status_dokumen', [Kegiatan::STATUS_DIVERIFIKASI, Kegiatan::STATUS_DISETUJUI])
             ->get()
             ->groupBy('iku_id');
+
+        // RF baru: satu Kegiatan boleh punya BANYAK RO (App\Models\RincianOutput),
+        // jadi tabel "Realisasi Volume RO..." di notula sumbernya diratakan dari
+        // SELURUH RO milik seluruh kegiatan IKU ini -- bukan satu baris per kegiatan
+        // seperti sebelumnya (saat RO masih kolom tunggal langsung di tabel kegiatan).
+        // Relasi kegiatan disetel manual (bukan lazy-load) supaya fallback "pakai
+        // uraian_kegiatan bila RO belum diberi nama sendiri" tidak memicu query
+        // tambahan per baris RO -- Kegiatan-nya sudah ada di memori lewat $kegiatanPerIku.
+        $roPerIku = $kegiatanPerIku->map(function ($daftarKegiatan) {
+            return $daftarKegiatan->flatMap(function ($kegiatan) {
+                return $kegiatan->rincianOutput->each(fn ($ro) => $ro->setRelation('kegiatan', $kegiatan));
+            });
+        });
 
         $capaianPerIku = Capaian::where('periode_id', $periode->id)->get()->keyBy('iku_id');
 
@@ -200,6 +213,7 @@ class NotulaService
             'rekapPerIku' => $rekapPerIku,
             'capaianPerIku' => $capaianPerIku,
             'kegiatanPerIku' => $kegiatanPerIku,
+            'roPerIku' => $roPerIku,
             'kendalaSolusiPerIku' => $kendalaSolusiPerIku,
             'rtlPerIku' => $rtlPerIku,
             'rtlSebelumnyaPerIku' => $rtlSebelumnyaPerIku,
@@ -342,6 +356,18 @@ class NotulaService
             ->exists();
 
         return ! $adaYangBelum;
+    }
+
+    /**
+     * Render pratinjau CEPAT dari Bagian I/II/III yang TERSIMPAN saat ini (boleh belum
+     * lengkap) sebagai PDF sekali-pakai — TANPA menyentuh status notula atau kolom
+     * pdf_gabungan (beda dari gabungkan() di bawah, yang punya efek samping mengirim
+     * notula ke Kepala). Dipakai tombol "Unduh Pratinjau" di Kompilasi Notula supaya
+     * Tim SAKIP bisa memeriksa hasil sewaktu-waktu tanpa terikat alur resmi kirim.
+     */
+    public function renderPratinjauPdf(Notula $notula, string $outputPath): string
+    {
+        return $this->renderNotulaUtuhPdf($notula, sertakanTtd: false, outputPath: $outputPath);
     }
 
     /**

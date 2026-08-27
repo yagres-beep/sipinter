@@ -37,6 +37,25 @@ class TemplateNotulaTest extends TestCase
         Storage::disk('local')->assertExists($config->template_notula_path);
     }
 
+    public function test_unduh_template_notula_mengembalikan_berkas_tersimpan(): void
+    {
+        Storage::fake('local');
+
+        $peran = Role::create(['nama' => 'Tim SAKIP']);
+        $this->actingAs(User::create([
+            'nama' => 'SAKIP Uji', 'username' => 'sakip3@example.test', 'email' => 'sakip3@example.test', 'password' => 'password',
+            'role_id' => $peran->id, 'status_verifikasi' => 'terverifikasi',
+        ]));
+
+        Livewire::test(TemplateNotula::class)
+            ->set('templateFile', UploadedFile::fake()->create('template.docx', 50))
+            ->call('unggah');
+
+        Livewire::test(TemplateNotula::class)
+            ->call('unduh')
+            ->assertFileDownloaded('template.docx');
+    }
+
     public function test_hapus_template_menghapus_berkas_dan_referensinya(): void
     {
         Storage::fake('local');

@@ -173,16 +173,18 @@ class NotulaDownloadTest extends TestCase
 
         $periode = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
 
-        Kegiatan::create([
+        $kegiatan = Kegiatan::create([
             'iku_id' => $iku->id,
             'periode_id' => $periode->id,
             'uraian_kegiatan' => 'Kegiatan uji RO docx',
             'jenis' => 'bukan_survei_sensus',
             'status_dokumen' => Kegiatan::STATUS_DIVERIFIKASI,
-            'rincian_output' => 'Publikasi Uji RO Docx',
-            'volume_ro' => '5 publikasi',
-            'progres_persen' => 60,
         ]);
+
+        // Satu Kegiatan boleh punya lebih dari satu RO (RF baru) -- keduanya harus
+        // sama-sama muncul di unduhan, bukan cuma yang pertama.
+        $kegiatan->rincianOutput()->create(['uraian' => 'Publikasi Uji RO Docx', 'volume_ro' => '5 publikasi', 'progres_persen' => 60]);
+        $kegiatan->rincianOutput()->create(['uraian' => 'Laporan Uji RO Docx Kedua', 'volume_ro' => '2 laporan', 'progres_persen' => 40]);
 
         $notula = Notula::create(['periode_id' => $periode->id]);
 
@@ -191,6 +193,9 @@ class NotulaDownloadTest extends TestCase
         $this->assertStringContainsString('Publikasi Uji RO Docx', $xml);
         $this->assertStringContainsString('5 publikasi', $xml);
         $this->assertStringContainsString('60,00%', $xml);
+        $this->assertStringContainsString('Laporan Uji RO Docx Kedua', $xml);
+        $this->assertStringContainsString('2 laporan', $xml);
+        $this->assertStringContainsString('40,00%', $xml);
     }
 
     /**
@@ -245,5 +250,27 @@ class NotulaDownloadTest extends TestCase
         $this->assertStringContainsString('Sri Notulis', $xml);
         $this->assertStringContainsString('Andi Kepala', $xml);
         $this->assertStringContainsString('Kulisusu', $xml);
+    }
+
+    /**
+     * "Unduh Pratinjau" harus tersedia kapan saja (mis. Bagian II/III belum diunggah)
+     * TANPA syarat "semua bukti terverifikasi" seperti unduh-draf, dan TANPA efek
+     * samping mengubah status notula/pdf_gabungan seperti gabungkan() -- murni
+     * kenyamanan Tim SAKIP memeriksa hasil sewaktu masih menyusun.
+     */
+    public function test_pratinjau_cepat_pdf_tersedia_kapan_saja_tanpa_efek_samping(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $notula = Notula::create(['periode_id' => $periode->id]);
+
+        $this->get(route('notula.pratinjau-cepat-pdf', $notula))
+            ->assertOk()
+            ->assertHeader('content-disposition');
+
+        $notula->refresh();
+        $this->assertSame(Notula::STATUS_DRAFT, $notula->status);
+        $this->assertNull($notula->pdf_gabungan);
     }
 }

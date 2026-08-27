@@ -9,7 +9,7 @@
     <div class="page-head">
         <div class="page-title">Kompilasi Notula Triwulan {{ ['I', 'II', 'III', 'IV'][$triwulan - 1] }} {{ $tahun }}</div>
         <div class="page-sub">
-            Gabungkan tiga bagian menjadi satu PDF notula utuh.
+            Susun tiga bagian jadi satu notula utuh, lalu kirim ke Kepala untuk persetujuan.
             <x-badge-status :status="$notula->status" />
         </div>
     </div>
@@ -190,7 +190,10 @@
         <div class="sec"><span>Pratinjau &amp; Sunting Notula — Bagian I, II, III</span></div>
         <p style="color:var(--muted);font-size:12.5px;margin-bottom:16px">
             Satu dokumen utuh dari atas ke bawah, sama seperti membuka file Word yang sudah lengkap. Bagian I bisa
-            disunting langsung; Bagian II &amp; III tinggal unggah berkasnya dan langsung tampil di bawahnya.
+            disunting langsung; Bagian II &amp; III tinggal unggah berkasnya dan langsung tampil di bawahnya. Isi
+            Bagian II &amp; III bebas mengikuti template Anda sendiri — cuma format berkasnya yang disarankan
+            <b>.docx (Word)</b> supaya hasil gabungannya rapi menyambung mengikuti tata letak Bagian I (gambar/PDF
+            hasil pindai tetap didukung, tapi tampil sebagai gambar statis, tidak menyambung layoutnya).
         </p>
 
         {{-- BAGIAN I — disunting langsung, WYSIWYG --}}
@@ -473,22 +476,42 @@
             </div>
         @endif
 
+        <div class="doc-preview-label">📄 Pratinjau Notula Lengkap — Bagian I, II, III (mengikuti isian terkini apa adanya)</div>
+        <div class="word-canvas">
+            <div class="notula">
+                {!! $bagian1EditText !!}
+
+                @if (trim((string) $notula->bagian2_html) !== '')
+                    <div class="bagian-judul">BAGIAN II — Peran BPS dalam Prioritas Nasional &amp; Isu Strategis</div>
+                    {!! $notula->bagian2_html !!}
+                @endif
+
+                @if (trim((string) $notula->bagian3_html) !== '')
+                    <div class="bagian-judul">BAGIAN III — Realisasi Anggaran &amp; Upaya Efisiensi</div>
+                    {!! $notula->bagian3_html !!}
+                @endif
+            </div>
+        </div>
+        <div class="btn-row" style="margin-top:10px">
+            <a href="{{ route('notula.pratinjau-cepat-pdf', $notula) }}" class="btn btn-ghost btn-sm" style="text-decoration:none">⬇ Unduh Pratinjau (.pdf, apa adanya)</a>
+        </div>
+
         <div class="merge-bar" style="margin-top:26px">
             <span class="merge-stat">
                 Status: Bagian I {{ $bagian1Siap ? '✓' : '✕' }} · II {{ $bagian2Siap ? '✓' : '✕' }} · III {{ $bagian3Siap ? '✓' : '✕' }}
                 @if (! ($bagian1Siap && $bagian2Siap && $bagian3Siap))
-                    — lengkapi seluruh bagian untuk menggabungkan
+                    — lengkapi seluruh bagian untuk mengirim ke Kepala
                 @endif
             </span>
             <button type="button" class="btn btn-primary btn-sm" wire:click="gabungkan" wire:loading.attr="disabled" wire:target="gabungkan" @disabled(! ($bagian1Siap && $bagian2Siap && $bagian3Siap))>
-                <span wire:loading.remove wire:target="gabungkan">🔗 Gabungkan → PDF</span>
-                <span wire:loading wire:target="gabungkan"><i class="spin"></i> Menggabungkan…</span>
+                <span wire:loading.remove wire:target="gabungkan">📨 Kirim ke Kepala untuk Persetujuan</span>
+                <span wire:loading wire:target="gabungkan"><i class="spin"></i> Mengirim…</span>
             </button>
 
             @if ($sudahDigabung)
                 <a href="{{ route('notula.unduh-draf', $notula) }}" class="btn btn-ghost btn-sm {{ ! $semuaTerverifikasi ? 'disabled' : '' }}"
                     @if (! $semuaTerverifikasi) onclick="return false" style="opacity:.5;cursor:not-allowed" title="Seluruh bukti kegiatan triwulan ini harus terverifikasi dahulu" @endif>
-                    ⬇ Unduh draf
+                    ⬇ Unduh draf resmi
                 </a>
 
                 @if ($notula->status === \App\Models\Notula::STATUS_DISETUJUI && $notula->pdf_final)
@@ -498,17 +521,11 @@
                 @endif
             @endif
         </div>
+        <div class="fhint" style="margin-top:6px">Mengirim akan menandai notula ini "menunggu persetujuan Kepala" — pastikan pratinjau di atas sudah sesuai sebelum mengirim.</div>
 
         @error('gabung')
             <div style="color:var(--red);font-size:11.5px;margin-top:10px">{{ $message }}</div>
         @enderror
-
-        @if ($sudahDigabung)
-            <div class="doc-preview-label">📄 Pratinjau resmi — hasil akhir PDF gabungan (I + II + III)</div>
-            <div class="doc-preview-frame">
-                <iframe src="{{ route('notula.pratinjau', $notula) }}" style="height:700px" title="Pratinjau notula gabungan"></iframe>
-            </div>
-        @endif
     </div>
 
     @if ($riwayatDisetujui->isNotEmpty())

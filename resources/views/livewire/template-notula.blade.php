@@ -52,6 +52,7 @@
         @if ($config->template_notula_path)
             <div class="filechip ok">
                 <span class="nm">📄 {{ $config->template_notula_nama_asli }} <span class="sub">Diperbarui {{ $config->updated_at->translatedFormat('d F Y, H:i') }}</span></span>
+                <button type="button" class="btn btn-ghost btn-sm" wire:click="unduh" wire:loading.attr="disabled" wire:target="unduh">⬇ Unduh</button>
                 <button type="button" class="btn btn-red btn-sm" wire:click="confirmHapus" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="confirmHapus">Hapus</button>
             </div>
         @else

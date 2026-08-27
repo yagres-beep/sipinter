@@ -95,17 +95,30 @@ class NotulaDownloadController extends Controller
     }
 
     /**
-     * F2.2: unduh template Word resmi Bagian II/III (bukan hasil generate — Tim SAKIP
-     * mengisinya di Word lalu mengunggahnya balik lewat Kompilasi Notula). Berkasnya
-     * disimpan sebagai arsip di root proyek (template_notula/, bukan storage), sama
-     * seperti berkas arsip lain yang dikelola lewat TemplateNotula — file ini murni
-     * bawaan aplikasi, bukan unggahan pengguna.
+     * Unduhan cepat pratinjau Bagian I+II+III yang tersimpan SAAT INI — TIDAK terikat
+     * status "semua bukti terverifikasi" maupun alur kirim-ke-Kepala seperti draf()
+     * di atas (lihat NotulaService::renderPratinjauPdf()); murni kenyamanan Tim SAKIP
+     * untuk memeriksa hasil sewaktu-waktu selagi masih menyusun. Digenerate on-the-fly
+     * lalu langsung dihapus setelah terkirim, sama seperti unduhBagian1Docx().
      */
+    public function pratinjauCepatPdf(Notula $notula, NotulaService $notulaService): BinaryFileResponse
+    {
+        $path = storage_path("app/private/notula/{$notula->id}/pratinjau-cepat.pdf");
+        $notulaService->renderPratinjauPdf($notula, $path);
+
+        $namaUnduhan = "notula-pratinjau-tw{$notula->periode->triwulan}-{$notula->periode->tahun}.pdf";
+
+        return response()->download($path, $namaUnduhan)->deleteFileAfterSend();
+    }
+
     /**
      * Bagian I TIDAK diunggah balik (disusun otomatis, lihat NotulaService::susunBagianSatu())
      * — berkas ini murni panduan/referensi supaya Tim SAKIP tahu isi apa yang perlu diketik
      * di kolom Analisis Capaian Kinerja/Kendala/Solusi/RTL/Dasar Hitung agar hasil cetaknya
-     * mengikuti struktur resmi.
+     * mengikuti struktur resmi. Contoh TEMPLATE MESIN mentah (macro {{...}} apa adanya, yang
+     * dipakai NotulaBagian1DocxService::generate()) ada di menu Pengaturan > Template Notula
+     * (App\Livewire\TemplateNotula), bukan di sini -- lihat
+     * template_notula/PANDUAN_Template_Bagian_I_Mesin.md untuk konvensi macro-nya.
      */
     public function templateBagian1(): BinaryFileResponse
     {
@@ -115,6 +128,13 @@ class NotulaDownloadController extends Controller
         return response()->download($path, 'Panduan_Bagian_I_Capaian_Kinerja.docx');
     }
 
+    /**
+     * F2.2: unduh template Word resmi Bagian II/III (bukan hasil generate — Tim SAKIP
+     * mengisinya di Word lalu mengunggahnya balik lewat Kompilasi Notula). Berkasnya
+     * disimpan sebagai arsip di root proyek (template_notula/, bukan storage), sama
+     * seperti berkas arsip lain yang dikelola lewat TemplateNotula — file ini murni
+     * bawaan aplikasi, bukan unggahan pengguna.
+     */
     public function templateBagian2(): BinaryFileResponse
     {
         $path = base_path('template_notula/SIPINTER_Template_Bagian_II_Prioritas.docx');

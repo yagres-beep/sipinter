@@ -69,6 +69,7 @@
             $capaian = $capaianPerIku->get($iku->id);
             $rekap = $rekapPerIku->get($iku->id, []);
             $kegiatanIku = $kegiatanPerIku->get($iku->id, collect());
+            $roIku = $roPerIku->get($iku->id, collect());
             $kendalaSolusiTriwulan = $kendalaSolusiPerIku->get($iku->id, collect());
             $rtlIku = $rtlPerIku->get($iku->id, collect());
             $linkFolder = $linkFolderPerIku[$iku->id] ?? null;
@@ -115,11 +116,11 @@
                 <em>(hanya terisi jika belum ada realisasi IKU pada triwulan berjalan — hapus tabel ini bila realisasi sudah ada)</em>:</p>
             <table style="width:100%">
                 <tr><th>Rincian Output</th><th>Realisasi Volume RO</th><th>Progres Pelaksanaan Kegiatan (%)</th></tr>
-                @forelse ($kegiatanIku as $kegiatan)
+                @forelse ($roIku as $ro)
                     <tr>
-                        <td>{{ $kegiatan->rincian_output ?: $kegiatan->uraian_kegiatan }}</td>
-                        <td>{{ $kegiatan->volume_ro ?: '…' }}</td>
-                        <td>{{ $fmtProgres($kegiatan->progres_persen) }}</td>
+                        <td>{{ $ro->uraian ?: $ro->kegiatan->uraian_kegiatan }}</td>
+                        <td>{{ $ro->volume_ro ?: '…' }}</td>
+                        <td>{{ $fmtProgres($ro->progres_persen) }}</td>
                     </tr>
                 @empty
                     <tr><td>…</td><td>…</td><td>…</td></tr>
