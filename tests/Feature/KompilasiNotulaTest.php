@@ -119,7 +119,12 @@ class KompilasiNotulaTest extends TestCase
         $this->assertStringContainsString('Kepala BPS', $html);
     }
 
-    public function test_penomoran_iku_pada_tabel_capaian_dimulai_ulang_per_sasaran(): void
+    /**
+     * Kolom "No." pada tabel Sasaran/capaian harus berisi KODE IKU (sesuai Template
+     * Notula resmi -- baris contoh terisi memakai kode seperti 1111, bukan nomor urut
+     * 1/2/3), sama seperti macro {{kode}} yang sudah dipakai jalur unduhan .docx.
+     */
+    public function test_kolom_no_pada_tabel_capaian_berisi_kode_iku_bukan_nomor_urut(): void
     {
         MasterIku::create(['kode' => '9001', 'indikator' => 'Uji IKU Satu', 'sasaran' => 'Sasaran Uji', 'tim' => 'Uji', 'penanggung_jawab' => 'A']);
         MasterIku::create(['kode' => '9002', 'indikator' => 'Uji IKU Dua', 'sasaran' => 'Sasaran Uji', 'tim' => 'Uji', 'penanggung_jawab' => 'A']);
@@ -127,10 +132,8 @@ class KompilasiNotulaTest extends TestCase
         $notula = app(NotulaService::class)->untukTriwulan(2026, 3);
         $html = app(NotulaService::class)->susunBagianSatu($notula);
 
-        $this->assertStringContainsString('<td>1</td>', $html);
-        $this->assertStringContainsString('<td>2</td>', $html);
-        $this->assertStringNotContainsString('<td>9001</td>', $html);
-        $this->assertStringNotContainsString('<td>9002</td>', $html);
+        $this->assertStringContainsString('<td>9001</td>', $html);
+        $this->assertStringContainsString('<td>9002</td>', $html);
         $this->assertStringContainsString('9001 — Uji IKU Satu', $html);
         $this->assertStringContainsString('9002 — Uji IKU Dua', $html);
     }
@@ -227,6 +230,36 @@ class KompilasiNotulaTest extends TestCase
         $this->assertStringContainsString('Capaian Terhadap Target PK', $html);
         $this->assertStringContainsString('Capaian Terhadap Target Triwulanan', $html);
         $this->assertStringNotContainsString('Capaian Thd', $html);
+    }
+
+    /**
+     * Analisis Capaian Kinerja harus diikuti daftar bernomor kegiatan pendukung IKU
+     * ini pada triwulan berjalan yang sudah diverifikasi (RF-37) -- sama seperti
+     * jalur unduhan .docx (NotulaBagian1DocxService::isiSatuIku()), sebelumnya daftar
+     * ini hilang sama sekali di jalur HTML/PDF walau kegiatannya sudah diverifikasi.
+     */
+    public function test_analisis_capaian_kinerja_menampilkan_daftar_kegiatan_terverifikasi(): void
+    {
+        $iku = MasterIku::create([
+            'kode' => '9010', 'indikator' => 'Uji IKU Daftar Kegiatan', 'sasaran' => 'Sasaran Uji', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
+        ]);
+
+        $periode = Periode::create([
+            'tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false,
+        ]);
+
+        Kegiatan::create([
+            'iku_id' => $iku->id,
+            'periode_id' => $periode->id,
+            'uraian_kegiatan' => 'Pelaksanaan Sakernas Agustus 2026 terverifikasi',
+            'jenis' => 'bukan_survei_sensus',
+            'status_dokumen' => Kegiatan::STATUS_DIVERIFIKASI,
+        ]);
+
+        $notula = app(NotulaService::class)->untukTriwulan(2026, 3);
+        $html = app(NotulaService::class)->susunBagianSatu($notula);
+
+        $this->assertStringContainsString('Pelaksanaan Sakernas Agustus 2026 terverifikasi', $html);
     }
 
     public function test_bagian1_tidak_menampilkan_tabel_ro_bila_belum_ada_ro_terisi(): void

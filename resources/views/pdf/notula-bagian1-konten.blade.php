@@ -54,7 +54,7 @@
         @foreach ($daftarIku as $iku)
             @php $rekap = $rekapPerIku->get($iku->id, []); @endphp
             <tr>
-                <td>{{ $loop->iteration }}</td>
+                <td>{{ $iku->kode }}</td>
                 <td>{{ $iku->indikator }}</td>
                 <td>{{ $fmt($rekap['target_pk'] ?? null) }}</td>
                 <td>{{ $fmt($rekap['target_tw'] ?? null) }}</td>
@@ -91,13 +91,37 @@
         @endphp
         <div class="nrow" style="margin-top:16px"><span class="nlabel">{{ $iku->kode }} — {{ $iku->indikator }}</span></div>
 
-        {{-- Analisis Capaian Kinerja: satu kotak berjudul, isinya teks bebas yang
-             ditulis Tim SAKIP (boleh berupa beberapa paragraf/daftar bernomor sesuai
-             Template Notula resmi) — nl2br supaya baris baru yang diketik tetap
-             tampil sebagai baris baru, bukan menyatu jadi satu baris panjang. --}}
+        {{-- Analisis Capaian Kinerja: teks bebas yang ditulis Tim SAKIP, DIIKUTI
+             daftar bernomor kegiatan pendukung IKU ini pada triwulan berjalan yang
+             sudah diverifikasi/disetujui (RF-37, $kegiatanIku sudah tersaring status
+             DIVERIFIKASI/DISETUJUI lewat NotulaService::kumpulkanDataBagianSatu()) —
+             sama seperti jalur unduhan .docx (NotulaBagian1DocxService::isiSatuIku()),
+             sebelumnya daftar ini tidak ikut tercetak di jalur HTML/PDF ini. nl2br
+             supaya baris baru yang diketik tetap tampil sebagai baris baru. --}}
+        @php
+            $analisisTeks = trim((string) $capaian?->analisis_capaian);
+            $daftarKegiatanIku = $kegiatanIku->pluck('uraian_kegiatan')->filter();
+        @endphp
         <table style="width:100%">
             <tr><th style="text-align:center">Analisis Capaian Kinerja</th></tr>
-            <tr><td>{!! nl2br(e($capaian?->analisis_capaian ?: '…')) !!}</td></tr>
+            <tr>
+                <td>
+                    @if ($analisisTeks === '' && $daftarKegiatanIku->isEmpty())
+                        …
+                    @else
+                        @if ($analisisTeks !== '')
+                            {!! nl2br(e($analisisTeks)) !!}
+                        @endif
+                        @if ($daftarKegiatanIku->isNotEmpty())
+                            <ol style="margin:{{ $analisisTeks !== '' ? '8px' : '0' }} 0 0 18px;padding:0">
+                                @foreach ($daftarKegiatanIku as $uraian)
+                                    <li>{!! nl2br(e($uraian)) !!}</li>
+                                @endforeach
+                            </ol>
+                        @endif
+                    @endif
+                </td>
+            </tr>
         </table>
 
         @if ($isSakip)
@@ -192,63 +216,74 @@
             </tr>
         </table>
 
+        {{-- Sesuai Template Notula resmi: setiap field di sini adalah BARIS TABEL
+             tersendiri (bergaris pemisah sendiri-sendiri), BUKAN digabung jadi satu
+             sel panjang seperti sebelumnya. --}}
         <table style="width:100%">
             <tr><th colspan="2" style="text-align:center">Dasar Hitung/Bukti Dukung/Lainnya</th></tr>
             <tr>
                 <td colspan="2">
-                    <div class="nrow">
-                        <span class="nlabel">Dasar Hitung dan Basis Data Realisasi IKU :</span><br>
-                        @if ($iku->dasar_hitung || $iku->basis_data)
-                            @if ($iku->dasar_hitung)
-                                {!! nl2br(\App\Support\RumusMarkup::keHtml($iku->dasar_hitung)) !!}
-                            @endif
-                            @if ($iku->dasar_hitung && $iku->basis_data)<br>@endif
-                            @if ($iku->basis_data)Basis Data: {{ $iku->basis_data }}@endif
-                        @else
-                            …
+                    <span class="nlabel">Dasar Hitung dan Basis Data Realisasi IKU :</span><br>
+                    @if ($iku->dasar_hitung || $iku->basis_data)
+                        @if ($iku->dasar_hitung)
+                            {!! nl2br(\App\Support\RumusMarkup::keHtml($iku->dasar_hitung)) !!}
                         @endif
-                    </div>
-
-                    @if ($notula->link_lampiran_basis_data)
-                        <div class="nrow">
-                            Lampiran Basis Data IKU dapat dilihat pada link
-                            <a href="{{ $notula->link_lampiran_basis_data }}">{{ $notula->link_lampiran_basis_data }}</a>
-                        </div>
+                        @if ($iku->dasar_hitung && $iku->basis_data)<br>@endif
+                        @if ($iku->basis_data)Basis Data: {{ $iku->basis_data }}@endif
+                    @else
+                        …
                     @endif
+                </td>
+            </tr>
 
-                    <div class="nrow">
-                        <span class="nlabel">Tautan Bukti Dukung Realisasi Target :</span><br>
-                        @if ($linkFolder)
-                            <a href="{{ $linkFolder }}">{{ $linkFolder }}</a>
-                        @else
-                            …
-                        @endif
-                    </div>
-                    <div class="nrow">
-                        <span class="nlabel">Tautan Bukti Dukung Tindak Lanjut Triwulan Sebelumnya :</span><br>
-                        @if ($linkFolderTwSebelumnya)
-                            <a href="{{ $linkFolderTwSebelumnya }}">{{ $linkFolderTwSebelumnya }}</a>
-                        @else
-                            …
-                        @endif
-                    </div>
+            @if ($notula->link_lampiran_basis_data)
+                <tr>
+                    <td colspan="2">
+                        Lampiran Basis Data IKU dapat dilihat pada link
+                        <a href="{{ $notula->link_lampiran_basis_data }}">{{ $notula->link_lampiran_basis_data }}</a>
+                    </td>
+                </tr>
+            @endif
 
-                    @if ($rtlSebelumnyaIku->isNotEmpty())
-                        <div class="nrow">
-                            RTL triwulan {{ $romawi[$periode->triwulan - 1] ?? $periode->triwulan - 1 }} {{ $periode->tahun }} yang telah dilaksanakan
-                            pada triwulan {{ $labelTriwulan }} {{ $periode->tahun }} yaitu :
-                            <ol style="margin:4px 0 0 18px;padding:0">
-                                @foreach ($rtlSebelumnyaIku as $rtl)
-                                    <li>{!! nl2br(e($rtl->rtl_teks)) !!}</li>
-                                @endforeach
-                            </ol>
-                        </div>
+            <tr>
+                <td colspan="2">
+                    <span class="nlabel">Tautan Bukti Dukung Realisasi Target :</span><br>
+                    @if ($linkFolder)
+                        <a href="{{ $linkFolder }}">{{ $linkFolder }}</a>
+                    @else
+                        …
                     @endif
+                </td>
+            </tr>
+            <tr>
+                <td colspan="2">
+                    <span class="nlabel">Tautan Bukti Dukung Tindak Lanjut Triwulan Sebelumnya :</span><br>
+                    @if ($linkFolderTwSebelumnya)
+                        <a href="{{ $linkFolderTwSebelumnya }}">{{ $linkFolderTwSebelumnya }}</a>
+                    @else
+                        …
+                    @endif
+                </td>
+            </tr>
 
-                    <div class="nrow">
-                        <span class="nlabel">Penjelasan/pembahasan lainnya :</span><br>
-                        {!! nl2br(e($capaian?->catatan ?: '-')) !!}
-                    </div>
+            @if ($rtlSebelumnyaIku->isNotEmpty())
+                <tr>
+                    <td colspan="2">
+                        RTL triwulan {{ $romawi[$periode->triwulan - 1] ?? $periode->triwulan - 1 }} {{ $periode->tahun }} yang telah dilaksanakan
+                        pada triwulan {{ $labelTriwulan }} {{ $periode->tahun }} yaitu :
+                        <ol style="margin:4px 0 0 18px;padding:0">
+                            @foreach ($rtlSebelumnyaIku as $rtl)
+                                <li>{!! nl2br(e($rtl->rtl_teks)) !!}</li>
+                            @endforeach
+                        </ol>
+                    </td>
+                </tr>
+            @endif
+
+            <tr>
+                <td colspan="2">
+                    <span class="nlabel">Penjelasan/pembahasan lainnya :</span><br>
+                    {!! nl2br(e($capaian?->catatan ?: '-')) !!}
                 </td>
             </tr>
         </table>
