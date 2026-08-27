@@ -110,6 +110,31 @@ class TargetTahunanTest extends TestCase
         $this->assertEquals(3, $ct->y_realisasi_tw4);
     }
 
+    /**
+     * Jenis Nilai (%/Non %) IKU bisa DIREVISI langsung dari halaman Target Tahunan
+     * (dropdown per baris) -- tersimpan balik ke MasterIku::metode_capaian, bukan
+     * cuma efek lokal di halaman ini, supaya Verifikasi Capaian & Notula ikut
+     * memakai jenis yang baru.
+     */
+    public function test_ubah_jenis_nilai_dari_langsung_ke_rasio_tersimpan_ke_master_iku(): void
+    {
+        $this->loginSebagaiTimSakip();
+        $iku = MasterIku::create([
+            'kode' => 'UJI-105', 'indikator' => 'IKU Uji Revisi Jenis', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
+            'metode_capaian' => MasterIku::METODE_LANGSUNG,
+        ]);
+
+        Livewire::test(TargetTahunan::class)
+            ->set('tahun', 2026)
+            ->set("jenisNilai.{$iku->id}", MasterIku::METODE_RASIO)
+            ->set("nilai.{$iku->id}.x_target", 5)
+            ->set("nilai.{$iku->id}.y_target", 10)
+            ->call('simpan')
+            ->assertHasNoErrors();
+
+        $this->assertEquals(MasterIku::METODE_RASIO, $iku->fresh()->metode_capaian);
+    }
+
     public function test_simpan_tidak_membuat_baris_untuk_iku_yang_tidak_disentuh(): void
     {
         $this->loginSebagaiTimSakip();

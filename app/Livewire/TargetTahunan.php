@@ -45,6 +45,18 @@ class TargetTahunan extends Component
     public array $nilai = [];
 
     /**
+     * Jenis Nilai (rasio/langsung) per IKU, dikunci pada iku_id -- default dari
+     * MasterIku::metode_capaian yang sudah tersimpan, tapi bisa DIREVISI dari sini
+     * (dropdown di blade) kalau ternyata perlu diubah, tanpa harus pindah ke tab
+     * Master IKU. BUKAN data per-tahun (metode_capaian bukan kolom CapaianTahunan,
+     * jadi TIDAK ikut dimuat ulang oleh updatedTahun()/muatNilai() seperti $nilai)
+     * -- lihat simpan(), yang menuliskannya balik ke MasterIku bila berubah.
+     *
+     * @var array<int, string>
+     */
+    public array $jenisNilai = [];
+
+    /**
      * Kolom Alokasi X/Y per triwulan, dipakai berulang di muatNilai()/rules()/simpan()
      * supaya urutan TW1-4 selalu konsisten.
      */
@@ -57,6 +69,7 @@ class TargetTahunan extends Component
     {
         $this->tahun = (int) now()->year;
         $this->muatNilai();
+        $this->jenisNilai = $this->daftarIku()->mapWithKeys(fn (MasterIku $iku) => [$iku->id => $iku->metode_capaian])->all();
     }
 
     public function updatedTahun(): void
@@ -101,6 +114,10 @@ class TargetTahunan extends Component
     {
         $rules = [];
 
+        foreach (array_keys($this->jenisNilai) as $ikuId) {
+            $rules["jenisNilai.{$ikuId}"] = ['required', 'string', 'in:'.MasterIku::METODE_RASIO.','.MasterIku::METODE_LANGSUNG];
+        }
+
         foreach (array_keys($this->nilai) as $ikuId) {
             $rules["nilai.{$ikuId}.target_tahunan"] = ['nullable', 'numeric', 'min:0'];
             $rules["nilai.{$ikuId}.x_target"] = ['nullable', 'numeric', 'min:0'];
@@ -125,6 +142,20 @@ class TargetTahunan extends Component
         $this->validate();
 
         DB::transaction(function () {
+            // Revisi Jenis Nilai (rasio/langsung) DITULIS BALIK ke MasterIku bila
+            // berbeda dari yang tersimpan -- lihat docblock $jenisNilai. Data lama
+            // di kolom yang jadi "tidak dipakai" (mis. target_tahunan lama saat
+            // pindah ke rasio) SENGAJA dibiarkan apa adanya, bukan dihapus, supaya
+            // tidak hilang kalau ternyata direvisi balik lagi.
+            $ikuBerubah = MasterIku::whereIn('id', array_keys($this->jenisNilai))->get()->keyBy('id');
+            foreach ($this->jenisNilai as $ikuId => $jenis) {
+                $iku = $ikuBerubah->get($ikuId);
+                if ($iku && $iku->metode_capaian !== $jenis) {
+                    $iku->update(['metode_capaian' => $jenis]);
+                }
+            }
+            MasterIku::lupakanCache();
+
             foreach ($this->nilai as $ikuId => $data) {
                 $ct = CapaianTahunan::firstOrNew(['iku_id' => $ikuId, 'tahun' => $this->tahun]);
 

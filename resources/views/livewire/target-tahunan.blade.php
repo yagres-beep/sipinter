@@ -24,10 +24,12 @@
                     <tr>
                         <th>Kode</th>
                         <th>Indikator</th>
+                        <th>Jenis Nilai</th>
                         <th>Target Tahunan</th>
-                        <th colspan="4" style="text-align:center">Alokasi Target (X ÷ Y) per Triwulan <span class="muted" style="font-weight:400">— khusus IKU Persen</span></th>
+                        <th colspan="4" style="text-align:center">Alokasi Target (X ÷ Y) per Triwulan <span class="muted" style="font-weight:400">— khusus Jenis Nilai %</span></th>
                     </tr>
                     <tr>
+                        <th></th>
                         <th></th>
                         <th></th>
                         <th></th>
@@ -38,11 +40,18 @@
                 </thead>
                 <tbody>
                     @foreach ($daftarIku as $iku)
+                        @php $pakaiRasio = ($jenisNilai[$iku->id] ?? $iku->metode_capaian) === \App\Models\MasterIku::METODE_RASIO; @endphp
                         <tr wire:key="target-tahunan-{{ $iku->id }}">
                             <td class="muted">{{ $iku->kode }}</td>
                             <td>{{ $iku->indikator }}</td>
                             <td>
-                                @if ($iku->pakaiRasio())
+                                <select class="inp filled" style="width:110px" wire:model.live="jenisNilai.{{ $iku->id }}">
+                                    <option value="{{ \App\Models\MasterIku::METODE_RASIO }}">% (X ÷ Y)</option>
+                                    <option value="{{ \App\Models\MasterIku::METODE_LANGSUNG }}">Non % (langsung)</option>
+                                </select>
+                            </td>
+                            <td>
+                                @if ($pakaiRasio)
                                     <div style="display:flex;gap:8px;align-items:center">
                                         <input type="number" step="0.01" class="inp filled" style="width:100px" wire:model="nilai.{{ $iku->id }}.x_target" placeholder="{{ $iku->deskripsi_x ?: 'X' }}">
                                         <span class="muted">÷</span>
@@ -67,7 +76,7 @@
                                     @enderror
                                 @endif
                             </td>
-                            @if ($iku->pakaiRasio())
+                            @if ($pakaiRasio)
                                 @for ($tw = 1; $tw <= 4; $tw++)
                                     <td style="text-align:center">
                                         <div style="display:flex;flex-direction:column;gap:3px;align-items:center">
