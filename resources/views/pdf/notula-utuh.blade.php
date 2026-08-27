@@ -8,6 +8,7 @@
   h1 { font-size: 16px; margin-bottom: 2px; }
   h3 { font-size: 13px; margin-top: 16px; margin-bottom: 4px; text-align: center; }
   .sub { color: #64748b; margin-bottom: 14px; font-size: 11px; text-align: center; }
+  .nsub { color: #64748b; margin-bottom: 14px; font-size: 11px; text-align: center; }
   ul { margin: 0 0 8px 18px; padding: 0; }
   .nrow { margin-bottom: 8px; }
   .nlabel { font-weight: bold; }

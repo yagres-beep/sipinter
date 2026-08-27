@@ -202,6 +202,33 @@ class KompilasiNotulaTest extends TestCase
         $this->assertStringContainsString('Penjelasan tambahan hasil rapat', $html);
     }
 
+    /**
+     * Susunan judul & tabel Sasaran harus mengikuti Template Notula Bagian I resmi
+     * persis (nama satker sebagai baris ke-3 judul, frasa "pada BPS Kabupaten Buton
+     * Utara" di paragraf pembuka, baris Sasaran sebagai DUA sel terpisah bukan satu
+     * sel gabungan, label "Terhadap" ditulis lengkap bukan "Thd").
+     */
+    public function test_bagian1_judul_dan_tabel_sasaran_mengikuti_template_resmi(): void
+    {
+        MasterIku::create([
+            'kode' => '9006z', 'indikator' => 'Uji IKU Judul', 'sasaran' => 'Sasaran Uji Judul', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
+        ]);
+
+        $periode = Periode::create([
+            'tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false,
+        ]);
+
+        $notula = app(NotulaService::class)->untukTriwulan(2026, 3);
+        $html = app(NotulaService::class)->susunBagianSatu($notula);
+
+        $this->assertStringContainsString('BPS KABUPATEN BUTON UTARA', $html);
+        $this->assertStringContainsString('pada BPS Kabupaten Buton Utara sebesar', $html);
+        $this->assertStringContainsString('<th style="width:14%">Sasaran</th><th colspan="5" style="text-align:left">: Sasaran Uji Judul</th>', $html);
+        $this->assertStringContainsString('Capaian Terhadap Target PK', $html);
+        $this->assertStringContainsString('Capaian Terhadap Target Triwulanan', $html);
+        $this->assertStringNotContainsString('Capaian Thd', $html);
+    }
+
     public function test_bagian1_tidak_menampilkan_tabel_ro_bila_belum_ada_ro_terisi(): void
     {
         $iku = MasterIku::create([

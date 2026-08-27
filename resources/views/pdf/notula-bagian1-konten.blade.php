@@ -18,6 +18,7 @@
 
 <h3>NOTULA RAPAT</h3>
 <div class="nsub">MONITORING KINERJA TRIWULAN {{ $labelTriwulan }} TAHUN {{ $periode->tahun }}</div>
+<div class="nsub">BPS KABUPATEN BUTON UTARA</div>
 
 <table style="width:100%">
     <tr><td style="width:22%"><b>Agenda Pembahasan</b></td><td>Monitoring Kinerja Triwulan {{ $labelTriwulan }} Tahun {{ $periode->tahun }}</td></tr>
@@ -29,7 +30,7 @@
 
 <h3>I. Capaian Kinerja Triwulan {{ $labelTriwulan }} Tahun {{ $periode->tahun }}</h3>
 <p>
-    Capaian Kinerja IKU triwulan {{ $labelTriwulan }} tahun {{ $periode->tahun }} terhadap target triwulanan sebesar
+    Capaian Kinerja IKU triwulan {{ $labelTriwulan }} tahun {{ $periode->tahun }} terhadap target triwulanan pada BPS Kabupaten Buton Utara sebesar
     <b>{{ $rataCapaianTw !== null ? $rataCapaianTw.' persen' : '… persen' }}</b>. Sedangkan terhadap target tahun {{ $periode->tahun }} (target PK {{ $periode->tahun }}), capaian
     kinerjanya sebesar <b>{{ $rataCapaianPk !== null ? $rataCapaianPk.' persen' : '… persen' }}</b>. Adapun penjelasan detail capaian untuk setiap indikator kinerja disampaikan di
     bawah ini.
@@ -37,18 +38,18 @@
 
 @forelse ($sasaranPerIku as $sasaran => $daftarIku)
     <table style="width:100%">
-        <tr><th colspan="6" style="text-align:left">Sasaran: {{ $sasaran }}</th></tr>
+        <tr><th style="width:14%">Sasaran</th><th colspan="5" style="text-align:left">: {{ $sasaran }}</th></tr>
         <tr>
             <th rowspan="2">No.</th>
             <th rowspan="2">Indikator Kinerja</th>
             <th rowspan="2">Target PK {{ $periode->tahun }}</th>
             <th colspan="3">Triwulan {{ $labelTriwulan }}</th>
-            <th rowspan="2">Capaian Thd Target PK</th>
+            <th rowspan="2">Capaian Terhadap Target PK</th>
         </tr>
         <tr>
             <th>Target</th>
             <th>Realisasi</th>
-            <th>Capaian Thd Target Triwulanan</th>
+            <th>Capaian Terhadap Target Triwulanan</th>
         </tr>
         @foreach ($daftarIku as $iku)
             @php $rekap = $rekapPerIku->get($iku->id, []); @endphp
