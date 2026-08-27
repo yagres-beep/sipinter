@@ -98,10 +98,11 @@ class FolderConfig extends Model
      */
     public static function current(): self
     {
-        return static::query()->firstOrCreate([], [
-            'pola_json' => self::polaDefault(),
-            'template_notula_penanda' => '',
-        ]);
+        return static::query()->oldest('id')->first()
+            ?? static::query()->firstOrCreate([], [
+                'pola_json' => self::polaDefault(),
+                'template_notula_penanda' => '',
+            ]);
     }
 
     // hierarkiAktif(), kategoriList(), kategoriDenganSubfolderKegiatan() ada di trait
