@@ -278,6 +278,9 @@
         </div>
         <div style="margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap">
             <a href="{{ route('notula.pratinjau-cepat-pdf', $notula) }}" class="btn btn-teal btn-sm" style="text-decoration:none;display:inline-block">⬇ Unduh Pratinjau Lengkap (.pdf, apa adanya)</a>
+            @if ($bagian1Siap)
+                <a href="{{ route('notula.unduh-bagian1-docx', $notula) }}" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-block">⬇ Unduh Bagian I (.docx, sesuai Template Notula)</a>
+            @endif
             <a href="{{ route('notula.template-bagian1') }}" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-block">⬇ Unduh Panduan Bagian I (referensi, tidak perlu diunggah balik)</a>
         </div>
         <p class="fhint" style="margin-bottom:10px">Klik lalu ketik langsung di dalam Bagian I pada pratinjau di bawah untuk menyunting — Bagian II &amp; III ikut tampil di bawahnya persis dari berkas yang diunggah.</p>
