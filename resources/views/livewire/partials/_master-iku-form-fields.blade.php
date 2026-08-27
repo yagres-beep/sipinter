@@ -176,4 +176,23 @@
             @enderror
         </div>
     </div>
+    <div class="field" style="max-width:520px">
+        <label class="fl-row" style="cursor:pointer;gap:8px">
+            <input type="checkbox" wire:model="pakaiRincianN">
+            <span>Gunakan Rincian Item (N) <span class="muted" style="font-weight:400">— Realisasi Pembilang (X) diisi dengan memilih item dari daftar, bukan angka manual</span></span>
+        </label>
+        <div class="fhint">Daftar item dikelola di tab 🎯 Target Tahunan (dibuat sekali di awal tahun); tiap triwulan tinggal memilih item mana yang sudah direalisasikan di Verifikasi Capaian. Jumlah item = Alokasi Y, jumlah item terpilih per triwulan = Realisasi X.</div>
+        @error('pakaiRincianN')
+            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+        @enderror
+    </div>
+@elseif ($metodeCapaian === 'langsung' && $this->isTimSakip())
+    <div class="field">
+        <label>Rumus Capaian Kustom (lanjutan) <span class="muted" style="font-weight:400">— opsional, khusus Tim SAKIP</span></label>
+        <textarea class="inp filled" rows="2" wire:model="formulaCapaian" placeholder="mis. min(realisasi / alokasi * 100, batas) — kosongkan untuk memakai rumus baku"></textarea>
+        <div class="fhint">Menggantikan rumus baku (Realisasi ÷ Alokasi × 100, dibatasi sesuai <a wire:navigate href="{{ route('master-iku.index') }}#rumus">🧮 Pengaturan Rumus Capaian</a>) untuk IKU Non % ini SAJA. Variabel yang tersedia: <code>alokasi</code>, <code>realisasi</code>, <code>batas</code>. Kosongkan untuk tetap memakai rumus baku.</div>
+        @error('formulaCapaian')
+            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+        @enderror
+    </div>
 @endif

@@ -11,6 +11,7 @@ use App\Models\Kegiatan;
 use App\Models\KendalaSolusi;
 use App\Models\MasterIku;
 use App\Models\Periode;
+use App\Models\RincianN;
 use App\Models\RincianOutput;
 use App\Models\Role;
 use App\Models\RtlEvaluasi;
@@ -849,6 +850,35 @@ class VerifikasiCapaianTest extends TestCase
         // TW III kumulatif: X=2,Y=3 -> 66.67% alokasi; X=1,Y=3 -> 33.33% realisasi.
         $this->assertEqualsWithDelta(66.67, $capaianTahunan->alokasiKumulatif(3), 0.01);
         $this->assertEqualsWithDelta(33.33, $capaianTahunan->realisasiKumulatif(3), 0.01);
+    }
+
+    public function test_memilih_rincian_n_menentukan_realisasi_x_otomatis(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+        $data['iku']->update(['metode_capaian' => 'rasio', 'pakai_rincian_n' => true]);
+
+        // Item lama sudah direalisasikan TW I (sesi bulan lain sebelumnya) -- harus
+        // terkunci, tidak boleh ikut dipilih/berubah dari sesi TW III (periode ini).
+        $terkunci = RincianN::create(['iku_id' => $data['iku']->id, 'tahun' => 2026, 'uraian' => 'Sudah TW I', 'triwulan_realisasi' => 1]);
+        $itemA = RincianN::create(['iku_id' => $data['iku']->id, 'tahun' => 2026, 'uraian' => 'Item A']);
+        $itemB = RincianN::create(['iku_id' => $data['iku']->id, 'tahun' => 2026, 'uraian' => 'Item B']);
+
+        $component = Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']->fresh()]);
+
+        $this->assertCount(2, $component->instance()->rincianNBisaDipilih());
+        $this->assertCount(1, $component->instance()->rincianNTerkunci());
+
+        $component->set("rincianNPilih.{$itemA->id}", true)
+            ->call('simpanPerubahan')
+            ->assertHasNoErrors();
+
+        $this->assertEquals(3, $itemA->fresh()->triwulan_realisasi);
+        $this->assertNull($itemB->fresh()->triwulan_realisasi);
+        $this->assertEquals(1, $terkunci->fresh()->triwulan_realisasi);
+
+        $capaianTahunan = \App\Models\CapaianTahunan::where('iku_id', $data['iku']->id)->where('tahun', 2026)->first();
+        $this->assertEquals(1, $capaianTahunan->x_realisasi_tw3);
     }
 
     public function test_simpan_perubahan_kumulatif_menjumlahkan_tw_dari_sesi_lain_dan_tw_periode_ini(): void

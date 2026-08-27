@@ -27,11 +27,20 @@ class MasterIku extends Model
         'basis_data',
         'satuan',
         'metode_capaian',
+        'pakai_rincian_n',
+        'formula_capaian',
         'jenis_iku',
         'jenis_periode',
         'deskripsi_x',
         'deskripsi_y',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'pakai_rincian_n' => 'boolean',
+        ];
+    }
 
     /**
      * Alokasi Target/Realisasi diisi langsung sebagai angka (perilaku lama, default).
@@ -151,6 +160,16 @@ class MasterIku extends Model
     public function bagianKustomPoin(): HasMany
     {
         return $this->hasMany(BagianKustomPoin::class, 'iku_id');
+    }
+
+    /**
+     * Daftar item Rincian N (lihat App\Models\RincianN) milik IKU ini, SELURUH
+     * tahun -- pemanggil yang butuh satu tahun tertentu tetap perlu ->where('tahun', ...)
+     * sendiri (mis. App\Livewire\TargetTahunan/VerifikasiCapaian).
+     */
+    public function rincianN(): HasMany
+    {
+        return $this->hasMany(RincianN::class, 'iku_id');
     }
 
     /**

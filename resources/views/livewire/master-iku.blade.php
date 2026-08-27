@@ -202,7 +202,6 @@
                     <tr>
                         <th>Kode</th>
                         <th>Indikator</th>
-                        <th>Tim</th>
                         <th>Sasaran</th>
                         <th>Satuan</th>
                         <th>Metode</th>
@@ -217,7 +216,6 @@
                         <tr wire:key="iku-{{ $iku->id }}">
                             <td><b>{{ $iku->nomor_kode }}</b></td>
                             <td>{{ $iku->indikator }}</td>
-                            <td class="muted">{{ $iku->tim }}</td>
                             <td class="muted">{{ $iku->sasaran ?? '—' }}</td>
                             <td class="muted">{{ $iku->satuan }}</td>
                             <td>
@@ -229,7 +227,7 @@
                             </td>
                             <td class="muted">{{ $iku->jenis_iku === 'proksi' ? 'Proksi' : 'IKU' }}</td>
                             <td class="muted">{{ $iku->pakaiTriwulanan() ? 'Triwulanan' : 'Tahunan' }}</td>
-                            <td class="muted">{{ $iku->penanggung_jawab }}</td>
+                            <td class="muted">{{ $iku->tim }}</td>
                             <td style="text-align:right;white-space:nowrap">
                                 <button type="button" class="btn btn-ghost btn-sm" wire:click="edit({{ $iku->id }})" wire:loading.attr="disabled" wire:target="edit({{ $iku->id }})">
                                     <span wire:loading.remove wire:target="edit({{ $iku->id }})">Ubah</span>
@@ -243,7 +241,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="10" style="color:var(--muted)">Belum ada data Master IKU. Unggah Excel atau tambah manual di atas.</td>
+                            <td colspan="9" style="color:var(--muted)">Belum ada data Master IKU. Unggah Excel atau tambah manual di atas.</td>
                         </tr>
                     @endforelse
                 </tbody>

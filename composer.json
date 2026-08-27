@@ -16,7 +16,8 @@
         "phpoffice/phpword": "^1.4",
         "resend/resend-php": "*",
         "setasign/fpdi": "^2.6",
-        "setasign/fpdi-fpdf": "^2.3"
+        "setasign/fpdi-fpdf": "^2.3",
+        "symfony/expression-language": "^7.4"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

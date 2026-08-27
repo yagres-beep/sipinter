@@ -90,6 +90,15 @@ class MasterIku extends Component
     public string $metodeCapaian = 'langsung';
 
     /**
+     * Khusus metodeCapaian 'rasio': bila aktif, Realisasi Pembilang (X) tiap
+     * triwulan diisi dengan memilih item dari daftar Rincian N (bukan angka
+     * manual) -- lihat App\Models\RincianN, dikelola dari App\Livewire\
+     * TargetTahunan (buat daftar) &amp; App\Livewire\VerifikasiCapaian (pilih yang
+     * sudah direalisasikan).
+     */
+    public bool $pakaiRincianN = false;
+
+    /**
      * 'iku': indikator inti (default). 'proksi': indikator pendukung/pengganti
      * sementara — sesuai kolom "Jenis (IKU atau Proksi)" Kertas Kerja Pengukuran
      * Kinerja Triwulanan resmi (App\Models\MasterIku::JENIS_IKU/JENIS_PROKSI).
@@ -107,9 +116,30 @@ class MasterIku extends Component
 
     public string $deskripsiY = '';
 
+    /**
+     * Khusus metodeCapaian 'langsung': rumus kustom yang BENAR-BENAR dipakai
+     * sistem menghitung Capaian % (menggantikan rumus baku realisasi÷alokasi×100)
+     * -- lihat App\Services\FormulaCapaianService &amp; App\Models\CapaianTahunan.
+     * Hanya boleh diedit Tim SAKIP (isTimSakip()), kosong (default) berarti tetap
+     * memakai rumus baku seperti sekarang.
+     */
+    public string $formulaCapaian = '';
+
     public function mount(): void
     {
         $this->tahunImpor = (int) now()->year;
+    }
+
+    /**
+     * Halaman Master IKU sudah dibatasi route middleware 'role:Tim SAKIP'
+     * (routes/web.php) untuk SIAPA PUN yang mengaksesnya -- pengecekan di sini
+     * murni pertahanan berlapis untuk field formulaCapaian secara khusus
+     * (pola sama seperti App\Livewire\LakinDetail::isTimSakip()), berjaga-jaga
+     * bila gerbang role halaman ini pernah dilonggarkan di masa depan.
+     */
+    public function isTimSakip(): bool
+    {
+        return auth()->user()?->namaRole() === 'Tim SAKIP';
     }
 
     protected function rules(): array
@@ -130,6 +160,15 @@ class MasterIku extends Component
             'basisData' => ['nullable', 'string', 'max:255'],
             'satuan' => ['required', 'string', 'in:Persen,Poin'],
             'metodeCapaian' => ['required', 'string', 'in:langsung,rasio'],
+            'pakaiRincianN' => ['boolean'],
+            'formulaCapaian' => [
+                'nullable', 'string', 'max:2000',
+                function ($attribute, $value, $fail) {
+                    if (filled($value) && ! \App\Services\FormulaCapaianService::valid($value)) {
+                        $fail('Rumus tidak valid — periksa kembali penulisannya (variabel yang tersedia: alokasi, realisasi, batas).');
+                    }
+                },
+            ],
             'jenisIku' => ['required', 'string', 'in:iku,proksi'],
             'jenisPeriode' => ['required', 'string', 'in:triwulanan,tahunan'],
             'deskripsiX' => ['nullable', 'string', 'max:255'],
@@ -156,6 +195,7 @@ class MasterIku extends Component
             'jenisPeriode' => 'jenis periode',
             'deskripsiX' => 'label pembilang (X)',
             'deskripsiY' => 'label penyebut (Y)',
+            'formulaCapaian' => 'rumus capaian kustom',
         ];
     }
 
@@ -260,17 +300,20 @@ class MasterIku extends Component
         $this->basisData = $iku->basis_data ?? '';
         $this->satuan = $iku->satuan;
         $this->metodeCapaian = $iku->metode_capaian;
+        $this->pakaiRincianN = $iku->pakai_rincian_n;
         $this->jenisIku = $iku->jenis_iku;
         $this->jenisPeriode = $iku->jenis_periode;
         $this->deskripsiX = $iku->deskripsi_x ?? '';
         $this->deskripsiY = $iku->deskripsi_y ?? '';
+        $this->formulaCapaian = $iku->formula_capaian ?? '';
     }
 
     public function cancelEdit(): void
     {
-        $this->reset(['editingId', 'kode', 'kodeTujuan', 'namaTujuan', 'kodeSasaran', 'indikator', 'tim', 'penanggungJawab', 'sasaran', 'dasarHitung', 'basisData', 'deskripsiX', 'deskripsiY']);
+        $this->reset(['editingId', 'kode', 'kodeTujuan', 'namaTujuan', 'kodeSasaran', 'indikator', 'tim', 'penanggungJawab', 'sasaran', 'dasarHitung', 'basisData', 'deskripsiX', 'deskripsiY', 'formulaCapaian']);
         $this->satuan = 'Persen';
         $this->metodeCapaian = 'langsung';
+        $this->pakaiRincianN = false;
         $this->jenisIku = 'iku';
         $this->jenisPeriode = 'tahunan';
         $this->resetValidation();
@@ -296,11 +339,26 @@ class MasterIku extends Component
             'basis_data' => $this->basisData ?: null,
             'satuan' => $this->satuan,
             'metode_capaian' => $this->metodeCapaian,
+            // Dipaksa false bila bukan 'rasio' -- Rincian N hanya relevan untuk IKU
+            // bertipe rasio, mencegah nilai lama "nyangkut" saat metode diubah balik
+            // ke 'langsung' lewat edit tanpa checkbox ini sempat terlihat/diubah lagi.
+            'pakai_rincian_n' => $this->metodeCapaian === MasterIkuModel::METODE_RASIO && $this->pakaiRincianN,
             'jenis_iku' => $this->jenisIku,
             'jenis_periode' => $this->jenisPeriode,
             'deskripsi_x' => $this->deskripsiX ?: null,
             'deskripsi_y' => $this->deskripsiY ?: null,
         ];
+
+        // 'formula_capaian' HANYA disertakan (dan boleh diubah/dikosongkan) bila
+        // metode 'langsung' DAN Tim SAKIP (isTimSakip()) -- untuk 'rasio' dipaksa
+        // null (rumus kustom tidak relevan), untuk peran lain kunci ini SENGAJA
+        // tidak disertakan sama sekali supaya nilai lama di DB tidak ikut
+        // tertimpa/terhapus oleh update() (lihat isTimSakip()).
+        if ($this->metodeCapaian === MasterIkuModel::METODE_RASIO) {
+            $data['formula_capaian'] = null;
+        } elseif ($this->isTimSakip()) {
+            $data['formula_capaian'] = $this->formulaCapaian ?: null;
+        }
 
         if ($this->editingId) {
             // find()->update() (BUKAN whereKey()->update() query builder langsung) --

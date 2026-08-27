@@ -9,6 +9,7 @@ use App\Models\Capaian;
 use App\Models\CapaianTahunan;
 use App\Models\Kegiatan;
 use App\Models\KendalaSolusi;
+use App\Models\RincianN;
 use App\Models\RincianOutput;
 use App\Models\RtlEvaluasi;
 use Illuminate\Support\Collection;
@@ -55,6 +56,18 @@ class VerifikasiCapaian extends Component
      * @var array<int, array<string, array{id: int|null, uraian: string|null, volume_ro: string|null, progres_persen: string|null}>>
      */
     public array $rincianOutput = [];
+
+    /**
+     * Centang item Rincian N (App\Models\RincianN) yang direalisasikan PADA
+     * TRIWULAN INI -- dikunci pada id RincianN, HANYA memuat item yang
+     * triwulan_realisasi-nya masih kosong ATAU sudah triwulan ini sendiri (item
+     * yang direalisasikan triwulan LAIN tidak pernah masuk sini, ditampilkan
+     * read-only di blade). Menggantikan input manual x_realisasi_tw{n} untuk IKU
+     * MasterIku::pakai_rincian_n -- lihat updatedRincianNPilih()/syncRincianN().
+     *
+     * @var array<int, bool>
+     */
+    public array $rincianNPilih = [];
 
     /**
      * Nilai form Alokasi/Realisasi Triwulanan — diikat lewat wire:model (properti
@@ -205,6 +218,8 @@ class VerifikasiCapaian extends Component
 
     protected ?Collection $cacheBerkasBagianKustom = null;
 
+    protected ?Collection $cacheRincianNList = null;
+
     /**
      * TIDAK public dengan sengaja (beda dari $capaian) — Livewire di sini tidak bisa
      * menghidrasi ulang instance CapaianTahunan yang BELUM tersimpan (firstOrNew)
@@ -277,6 +292,102 @@ class VerifikasiCapaian extends Component
             $this->koreksiRtlRealisasi[$poin->id] = $poin->realisasi;
             $this->catatanRtl[$poin->id] = $poin->catatan;
         }
+
+        $tw = (int) $this->capaian->periode->triwulan;
+        foreach ($this->rincianNList() as $n) {
+            if ($n->triwulan_realisasi === $tw) {
+                $this->rincianNPilih[$n->id] = true;
+            }
+        }
+    }
+
+    /**
+     * Item Rincian N (App\Models\RincianN) milik IKU+tahun periode ini -- HANYA
+     * bermakna bila MasterIku::pakai_rincian_n, kosong (collection kosong) untuk
+     * IKU lain. Di-cache satu request, sama seperti koleksi lain di kelas ini.
+     */
+    public function rincianNList(): Collection
+    {
+        if ($this->cacheRincianNList !== null) {
+            return $this->cacheRincianNList;
+        }
+
+        if (! $this->capaian->masterIku->pakai_rincian_n) {
+            return $this->cacheRincianNList = collect();
+        }
+
+        return $this->cacheRincianNList = RincianN::where('iku_id', $this->capaian->iku_id)
+            ->where('tahun', $this->capaian->periode->tahun)
+            ->orderBy('id')
+            ->get();
+    }
+
+    /**
+     * Item yang BOLEH dipilih pada triwulan berjalan (belum direalisasikan
+     * triwulan mana pun, atau sudah direalisasikan triwulan ini sendiri) --
+     * dipakai blade untuk render checklist $rincianNPilih.
+     */
+    public function rincianNBisaDipilih(): Collection
+    {
+        $tw = (int) $this->capaian->periode->triwulan;
+
+        return $this->rincianNList()->filter(fn (RincianN $n) => $n->triwulan_realisasi === null || $n->triwulan_realisasi === $tw)->values();
+    }
+
+    /**
+     * Item yang SUDAH direalisasikan pada triwulan LAIN (sebelum triwulan
+     * berjalan) -- ditampilkan read-only di blade, tidak pernah masuk
+     * $rincianNPilih maupun bisa diubah dari sesi verifikasi ini.
+     */
+    public function rincianNTerkunci(): Collection
+    {
+        $tw = (int) $this->capaian->periode->triwulan;
+
+        return $this->rincianNList()->filter(fn (RincianN $n) => $n->triwulan_realisasi !== null && $n->triwulan_realisasi !== $tw)->values();
+    }
+
+    /**
+     * Live-recompute x_realisasi_tw{TW aktif} dari jumlah item yang SEDANG
+     * dicentang -- dipanggil otomatis Livewire tiap $rincianNPilih berubah (mirip
+     * efek wire:model.live pada input manual), supaya kumulatif &amp; Capaian %
+     * di blade langsung bereaksi tanpa perlu menyimpan dulu.
+     */
+    public function updatedRincianNPilih(): void
+    {
+        $tw = (int) $this->capaian->periode->triwulan;
+        $this->{"x_realisasi_tw{$tw}"} = collect($this->rincianNPilih)->filter()->count();
+    }
+
+    /**
+     * Tulis pilihan $rincianNPilih ke DB (set/lepas triwulan_realisasi item
+     * terkait) lalu samakan x_realisasi_tw{TW aktif} dengan jumlah SESUNGGUHNYA
+     * di DB setelahnya -- dipanggil dari tiap jalur simpan (bukan hanya
+     * updatedRincianNPilih() yang cuma live-preview di memori), TIDAK melakukan
+     * apa pun bila IKU ini tidak MasterIku::pakai_rincian_n.
+     */
+    protected function syncRincianN(): void
+    {
+        if (! $this->capaian->masterIku->pakai_rincian_n) {
+            return;
+        }
+
+        $tw = (int) $this->capaian->periode->triwulan;
+
+        foreach ($this->rincianNBisaDipilih() as $n) {
+            $dicentang = (bool) ($this->rincianNPilih[$n->id] ?? false);
+
+            if ($dicentang && $n->triwulan_realisasi === null) {
+                $n->update(['triwulan_realisasi' => $tw]);
+            } elseif (! $dicentang && $n->triwulan_realisasi === $tw) {
+                $n->update(['triwulan_realisasi' => null]);
+            }
+        }
+
+        $this->cacheRincianNList = null;
+        $this->{"x_realisasi_tw{$tw}"} = RincianN::where('iku_id', $this->capaian->iku_id)
+            ->where('tahun', $this->capaian->periode->tahun)
+            ->where('triwulan_realisasi', $tw)
+            ->count();
     }
 
     /**
@@ -724,6 +835,7 @@ class VerifikasiCapaian extends Component
             'koreksiKendala.*.kendala' => ['required', 'string'],
             'koreksiKendala.*.solusi' => ['nullable', 'string'],
             'koreksiRtlRealisasi.*' => ['nullable', 'string'],
+            'rincianNPilih.*' => ['boolean'],
             'alokasi_tw1' => ['nullable', 'numeric', 'min:0'],
             'alokasi_tw2' => ['nullable', 'numeric', 'min:0'],
             'alokasi_tw3' => ['nullable', 'numeric', 'min:0'],
@@ -995,6 +1107,7 @@ class VerifikasiCapaian extends Component
 
         DB::transaction(function () {
             $this->capaian->update(['analisis_capaian' => $this->analisis_capaian, 'catatan' => $this->catatan]);
+            $this->syncRincianN();
             $this->capaianTahunanTerkini()->save();
             $this->simpanKoreksiTeks();
         });
@@ -1024,6 +1137,7 @@ class VerifikasiCapaian extends Component
 
         DB::transaction(function () {
             $this->capaian->update(['analisis_capaian' => $this->analisis_capaian, 'catatan' => $this->catatan]);
+            $this->syncRincianN();
             $this->capaianTahunanTerkini()->save();
             $this->simpanKoreksiTeks();
 
@@ -1079,6 +1193,7 @@ class VerifikasiCapaian extends Component
         try {
             DB::transaction(function () {
                 $this->capaian->update(['analisis_capaian' => $this->analisis_capaian, 'catatan' => $this->catatan]);
+                $this->syncRincianN();
                 $this->capaianTahunanTerkini()->save();
                 $this->simpanKoreksiTeks();
 
@@ -1154,6 +1269,7 @@ class VerifikasiCapaian extends Component
         try {
             DB::transaction(function () {
                 $this->capaian->update(['analisis_capaian' => $this->analisis_capaian, 'catatan' => $this->catatan]);
+                $this->syncRincianN();
                 $this->capaianTahunanTerkini()->save();
                 $this->simpanKoreksiTeks();
 

@@ -424,6 +424,62 @@ class MasterIkuTest extends TestCase
             ->assertSet('basisData', 'Sumber uji');
     }
 
+    public function test_iku_langsung_bisa_disimpan_dengan_formula_capaian_kustom(): void
+    {
+        $this->loginSebagaiTimSakip();
+
+        Livewire::test(MasterIku::class)
+            ->set('kode', '9009')
+            ->set('indikator', 'Indikator uji formula')
+            ->set('tim', 'Tim Uji')
+            ->set('penanggungJawab', 'Petugas Uji')
+            ->set('metodeCapaian', 'langsung')
+            ->set('formulaCapaian', 'min(realisasi / alokasi * 100, batas)')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $iku = MasterIkuModel::where('kode', '9009')->first();
+        $this->assertSame('min(realisasi / alokasi * 100, batas)', $iku->formula_capaian);
+    }
+
+    public function test_formula_capaian_tidak_valid_ditolak(): void
+    {
+        $this->loginSebagaiTimSakip();
+
+        Livewire::test(MasterIku::class)
+            ->set('kode', '9010')
+            ->set('indikator', 'Indikator uji formula salah')
+            ->set('tim', 'Tim Uji')
+            ->set('penanggungJawab', 'Petugas Uji')
+            ->set('metodeCapaian', 'langsung')
+            ->set('formulaCapaian', 'realisasi / / alokasi')
+            ->call('save')
+            ->assertHasErrors(['formulaCapaian']);
+
+        $this->assertDatabaseMissing('master_iku', ['kode' => '9010']);
+    }
+
+    public function test_formula_capaian_dipaksa_kosong_untuk_metode_rasio(): void
+    {
+        $this->loginSebagaiTimSakip();
+
+        Livewire::test(MasterIku::class)
+            ->set('kode', '9011')
+            ->set('indikator', 'Indikator uji formula rasio')
+            ->set('tim', 'Tim Uji')
+            ->set('penanggungJawab', 'Petugas Uji')
+            ->set('metodeCapaian', 'rasio')
+            // formulaCapaian tidak pernah tampil di form untuk rasio, tapi tetap
+            // dicoba diisi langsung ke properti komponen di sini -- harus dipaksa
+            // null saat disimpan (lihat App\Livewire\MasterIku::save()).
+            ->set('formulaCapaian', 'alokasi + realisasi')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $iku = MasterIkuModel::where('kode', '9011')->first();
+        $this->assertNull($iku->formula_capaian);
+    }
+
     public function test_edit_iku_tanpa_tim_dan_penanggung_jawab_dari_import_tidak_error(): void
     {
         $this->loginSebagaiTimSakip();

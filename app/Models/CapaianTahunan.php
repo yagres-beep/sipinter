@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Services\CapaianCalculatorService;
+use App\Services\FormulaCapaianService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -165,19 +166,48 @@ class CapaianTahunan extends Model
      * Rumus 2.3 (Capaian Kinerja Terhadap Target Triwulanan) pada triwulan $tw —
      * Realisasi Kumulatif ÷ Alokasi Target Kumulatif TW itu sendiri, lewat rumus
      * resmi Capaian::hitungPersentase() (batas maksimal, aturan strip "-", dst.
-     * tidak diduplikasi di sini).
+     * tidak diduplikasi di sini) -- ATAU rumus kustom bila IKU 'langsung' ini
+     * mengisi MasterIku::formula_capaian (lihat capaianFormula()).
      */
     public function capaianTriwulanan(int $tw): ?float
     {
-        return Capaian::hitungPersentase($this->alokasiKumulatif($tw), $this->realisasiKumulatif($tw));
+        $alokasi = $this->alokasiKumulatif($tw);
+        $realisasi = $this->realisasiKumulatif($tw);
+
+        return $this->capaianFormula($alokasi, $realisasi) ?? Capaian::hitungPersentase($alokasi, $realisasi);
     }
 
     /**
      * Rumus 2.4 (Capaian Kinerja Terhadap Target Setahun) pada triwulan $tw —
-     * Realisasi Kumulatif TW itu ÷ Target Tahunan penuh.
+     * Realisasi Kumulatif TW itu ÷ Target Tahunan penuh -- ATAU rumus kustom bila
+     * IKU 'langsung' ini mengisi MasterIku::formula_capaian.
      */
     public function capaianSetahun(int $tw): ?float
     {
-        return Capaian::hitungPersentase($this->targetTahunan(), $this->realisasiKumulatif($tw));
+        $target = $this->targetTahunan();
+        $realisasi = $this->realisasiKumulatif($tw);
+
+        return $this->capaianFormula($target, $realisasi) ?? Capaian::hitungPersentase($target, $realisasi);
+    }
+
+    /**
+     * Rumus kustom (App\Services\FormulaCapaianService), HANYA dipakai bila
+     * MasterIku::metode_capaian === 'langsung' DAN MasterIku::formula_capaian
+     * terisi -- null (dilewati, jatuh ke rumus baku Capaian::hitungPersentase())
+     * untuk SEMUA IKU 'rasio' dan SELURUH IKU 'langsung' yang belum mengisi rumus
+     * kustom (yaitu SEMUA indikator yang sudah ada hari ini, tidak ada yang
+     * berubah perilakunya kecuali eksplisit diisi Tim SAKIP).
+     */
+    protected function capaianFormula(float $alokasi, float $realisasi): ?float
+    {
+        $iku = $this->masterIku;
+
+        if (! $iku || $iku->pakaiRasio() || blank($iku->formula_capaian)) {
+            return null;
+        }
+
+        $batas = (float) PengaturanCapaian::ambil()->batas_maksimal_persen;
+
+        return round(FormulaCapaianService::evaluasi($iku->formula_capaian, $alokasi, $realisasi, $batas), 2);
     }
 }

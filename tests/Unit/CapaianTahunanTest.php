@@ -208,4 +208,47 @@ class CapaianTahunanTest extends TestCase
         $this->assertEqualsWithDelta(50.0, $capaian->realisasiKumulatif(2), 0.01);
         $this->assertEqualsWithDelta(50.0, $capaian->capaianTriwulanan(2), 0.01);
     }
+
+    /**
+     * MasterIku::formula_capaian (App\Services\FormulaCapaianService) HANYA
+     * dipakai untuk metode 'langsung' -- menggantikan rumus baku
+     * Capaian::hitungPersentase() sepenuhnya (termasuk tidak lagi dibatasi
+     * batas_maksimal_persen, karena rumusnya sendiri yang menentukan).
+     */
+    public function test_formula_kustom_dipakai_untuk_metode_langsung_bila_diisi(): void
+    {
+        $iku = new MasterIku(['metode_capaian' => MasterIku::METODE_LANGSUNG, 'formula_capaian' => 'alokasi + realisasi']);
+        $capaian = new CapaianTahunan(['alokasi_tw1' => 10, 'realisasi_tw1' => 5]);
+        $capaian->setRelation('masterIku', $iku);
+
+        $this->assertEqualsWithDelta(15.0, $capaian->capaianTriwulanan(1), 0.01);
+    }
+
+    /**
+     * IKU 'rasio' TIDAK PERNAH memakai formula_capaian walau kolomnya kebetulan
+     * terisi (seharusnya tidak bisa terjadi lewat form Master IKU, tapi
+     * capaianFormula() tetap menjaga di sisi model juga) -- tetap rumus X÷Y baku.
+     */
+    public function test_formula_kustom_diabaikan_untuk_metode_rasio(): void
+    {
+        $iku = new MasterIku(['metode_capaian' => MasterIku::METODE_RASIO, 'formula_capaian' => 'alokasi + realisasi']);
+        $capaian = new CapaianTahunan([
+            'x_target' => 3, 'y_target' => 3,
+            'x_alokasi_tw1' => 1, 'y_alokasi_tw1' => 3,
+            'x_realisasi_tw1' => 1, 'y_realisasi_tw1' => 3,
+        ]);
+        $capaian->setRelation('masterIku', $iku);
+
+        $this->assertEqualsWithDelta(100.0, $capaian->capaianTriwulanan(1), 0.01);
+    }
+
+    public function test_tanpa_formula_kustom_metode_langsung_tetap_pakai_rumus_baku(): void
+    {
+        $iku = new MasterIku(['metode_capaian' => MasterIku::METODE_LANGSUNG]);
+        $capaian = new CapaianTahunan(['alokasi_tw1' => 50, 'realisasi_tw1' => 25]);
+        $capaian->setRelation('masterIku', $iku);
+
+        // Rumus baku: realisasi/alokasi*100 = 50.0, BUKAN hasil formula apa pun.
+        $this->assertEqualsWithDelta(50.0, $capaian->capaianTriwulanan(1), 0.01);
+    }
 }

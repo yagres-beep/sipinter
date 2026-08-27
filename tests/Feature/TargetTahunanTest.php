@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Livewire\TargetTahunan;
 use App\Models\CapaianTahunan;
 use App\Models\MasterIku;
+use App\Models\RincianN;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -115,22 +116,21 @@ class TargetTahunanTest extends TestCase
     }
 
     /**
-     * Jenis Nilai (%/Non %) IKU bisa DIREVISI langsung dari halaman Target Tahunan
-     * (dropdown per baris) -- tersimpan balik ke MasterIku::metode_capaian, bukan
-     * cuma efek lokal di halaman ini, supaya Verifikasi Capaian & Notula ikut
-     * memakai jenis yang baru.
+     * Jenis Nilai (%/Non %) di Target Tahunan sekarang HANYA mengikuti
+     * MasterIku::metode_capaian (read-only) -- satu-satunya cara mengubahnya
+     * adalah lewat form Master IKU, bukan lagi dari halaman ini.
      */
-    public function test_ubah_jenis_nilai_dari_langsung_ke_rasio_tersimpan_ke_master_iku(): void
+    public function test_jenis_nilai_mengikuti_metode_capaian_master_iku(): void
     {
         $this->loginSebagaiTimSakip();
         $iku = MasterIku::create([
-            'kode' => 'UJI-105', 'indikator' => 'IKU Uji Revisi Jenis', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
-            'metode_capaian' => MasterIku::METODE_LANGSUNG,
+            'kode' => 'UJI-105', 'indikator' => 'IKU Uji Jenis', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
+            'metode_capaian' => MasterIku::METODE_RASIO,
         ]);
 
         Livewire::test(TargetTahunan::class)
             ->set('tahun', 2026)
-            ->set("jenisNilai.{$iku->id}", MasterIku::METODE_RASIO)
+            ->assertSee('% (X ÷ Y)')
             ->set("nilai.{$iku->id}.x_target", 5)
             ->set("nilai.{$iku->id}.y_target", 10)
             ->call('simpan')
@@ -150,6 +150,50 @@ class TargetTahunanTest extends TestCase
             ->assertHasNoErrors();
 
         $this->assertDatabaseCount('capaian_tahunan', 0);
+    }
+
+    public function test_tambah_rincian_n_menentukan_alokasi_y_otomatis(): void
+    {
+        $this->loginSebagaiTimSakip();
+        $iku = MasterIku::create([
+            'kode' => 'UJI-106', 'indikator' => 'IKU Uji Rincian N', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
+            'metode_capaian' => MasterIku::METODE_RASIO, 'pakai_rincian_n' => true,
+        ]);
+
+        $component = Livewire::test(TargetTahunan::class)->set('tahun', 2026)
+            ->call('tambahN', $iku->id)
+            ->call('tambahN', $iku->id)
+            ->assertHasNoErrors();
+
+        $kunciList = array_keys($component->get('rincianN')[$iku->id]);
+        foreach ($kunciList as $i => $kunci) {
+            $component->set("rincianN.{$iku->id}.{$kunci}.uraian", 'Item '.($i + 1));
+        }
+
+        $component->call('simpan')->assertHasNoErrors();
+
+        $this->assertDatabaseCount('rincian_n', 2);
+        $ct = CapaianTahunan::where('iku_id', $iku->id)->where('tahun', 2026)->first();
+        $this->assertEquals(2, $ct->y_alokasi_tw1);
+        $this->assertEquals(0, $ct->y_alokasi_tw2);
+        $this->assertEquals(2, $ct->y_realisasi_tw1);
+    }
+
+    public function test_hapus_rincian_n_yang_tersimpan_menghapus_dari_db(): void
+    {
+        $this->loginSebagaiTimSakip();
+        $iku = MasterIku::create([
+            'kode' => 'UJI-107', 'indikator' => 'IKU Uji Hapus Rincian N', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
+            'metode_capaian' => MasterIku::METODE_RASIO, 'pakai_rincian_n' => true,
+        ]);
+        $n = RincianN::create(['iku_id' => $iku->id, 'tahun' => 2026, 'uraian' => 'Item lama']);
+
+        Livewire::test(TargetTahunan::class)
+            ->set('tahun', 2026)
+            ->call('hapusN', $iku->id, (string) $n->id)
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseMissing('rincian_n', ['id' => $n->id]);
     }
 
     public function test_ganti_tahun_memuat_nilai_tahun_tsb(): void
