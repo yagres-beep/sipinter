@@ -189,7 +189,10 @@ class NotulaBagian1DocxService
         $indikatorLower = mb_strtolower($iku->indikator);
         $isSakip = str_contains($indikatorLower, 'sakip');
         $isBerakhlak = str_contains($indikatorLower, 'berakhlak');
-        $tampilkanRo = ! $isSakip && ! $isBerakhlak && empty($rekap['realisasi'] ?? null);
+        // Tabel RO hanya tampil bila BENAR-BENAR ada RO terisi -- sebelumnya tetap
+        // tercetak (satu baris placeholder "...") walau IKU ini belum punya RO sama
+        // sekali, padahal seharusnya seluruh blok baru muncul begitu ada isiannya.
+        $tampilkanRo = ! $isSakip && ! $isBerakhlak && empty($rekap['realisasi'] ?? null) && $roIku->isNotEmpty();
 
         $xml = $blokTemplate;
         $xml = $this->resolveBlokKondisional($xml, 'blok_sakip', $isSakip);

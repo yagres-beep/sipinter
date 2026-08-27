@@ -202,6 +202,32 @@ class KompilasiNotulaTest extends TestCase
         $this->assertStringContainsString('Penjelasan tambahan hasil rapat', $html);
     }
 
+    public function test_bagian1_tidak_menampilkan_tabel_ro_bila_belum_ada_ro_terisi(): void
+    {
+        $iku = MasterIku::create([
+            'kode' => '9005z', 'indikator' => 'Uji IKU Tanpa RO', 'sasaran' => 'Sasaran Uji', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
+        ]);
+
+        $periode = Periode::create([
+            'tahun' => 2026, 'bulan' => 4, 'triwulan' => 2, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false,
+        ]);
+
+        // Kegiatan ADA tapi belum punya RincianOutput sama sekali -- tabel RO tidak
+        // boleh ikut tercetak (dulu tetap tercetak satu baris placeholder "...").
+        Kegiatan::create([
+            'iku_id' => $iku->id,
+            'periode_id' => $periode->id,
+            'uraian_kegiatan' => 'Kegiatan uji tanpa RO sama sekali',
+            'jenis' => 'bukan_survei_sensus',
+            'status_dokumen' => Kegiatan::STATUS_DIVERIFIKASI,
+        ]);
+
+        $notula = app(NotulaService::class)->untukTriwulan(2026, 2);
+        $html = app(NotulaService::class)->susunBagianSatu($notula);
+
+        $this->assertStringNotContainsString('Realisasi Volume RO dan Progress Pelaksanaan Kegiatan', $html);
+    }
+
     public function test_bagian1_pakai_uraian_kegiatan_sebagai_rincian_output_bila_belum_diisi_tim_sakip(): void
     {
         $iku = MasterIku::create([
