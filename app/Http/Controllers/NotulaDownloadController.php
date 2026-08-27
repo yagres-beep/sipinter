@@ -84,10 +84,11 @@ class NotulaDownloadController extends Controller
      * NotulaService::kumpulkanDataBagianSatu()), lewat NotulaBagian1DocxService.
      * Digenerate on-the-fly ke berkas sementara lalu langsung dihapus setelah terkirim.
      */
-    public function unduhBagian1Docx(Notula $notula, NotulaBagian1DocxService $docxService): BinaryFileResponse
+    public function unduhBagian1Docx(Notula $notula, NotulaService $notulaService, NotulaBagian1DocxService $docxService): BinaryFileResponse
     {
         $path = storage_path("app/private/notula/{$notula->id}/bagian1-mesin.docx");
-        $docxService->generate($notula, $path);
+        $data = $notulaService->kumpulkanDataBagianSatu($notula);
+        $docxService->generate($notula, $data, $path);
 
         $namaUnduhan = "notula-bagian1-tw{$notula->periode->triwulan}-{$notula->periode->tahun}.docx";
 

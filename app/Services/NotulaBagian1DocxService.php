@@ -14,19 +14,21 @@ use RuntimeException;
 
 /**
  * Isi template Bagian I bervariabel {{...}} (template_notula/SIPINTER_Template_Bagian_I_Mesin.docx)
- * dari data yang sama dipakai jalur HTML/PDF (lihat NotulaService::kumpulkanDataBagianSatu()) --
- * supaya Tim SAKIP bisa mengunduh Bagian I sebagai .docx asli (bisa disunting/digabung manual
- * dengan Bagian II/III yang disusun di luar sistem), persis struktur dokumen resmi.
+ * dari data yang sama dipakai NotulaService::kumpulkanDataBagianSatu() -- dipakai LANGSUNG oleh
+ * DUA jalur: (1) unduhan Bagian I sebagai .docx asli (NotulaDownloadController::unduhBagian1Docx()),
+ * dan (2) NotulaService::susunBagianSatu(), yang mengonversi hasilnya ke HTML lewat LibreOffice
+ * untuk pratinjau/notula gabungan -- supaya format Bagian I di web SELALU persis mengikuti template
+ * resmi yang diunggah Tim SAKIP, bukan tata letak HTML terpisah yang harus disunting manual tiap
+ * kali format resmi berubah (lihat NotulaService::susunBagianSatu()).
  *
  * Template-nya berisi SATU blok {{iku_blok}}...{{/iku_blok}} yang DIGANDAKAN di sini sekali per
  * Master IKU (RF baru) -- BUKAN satu macro bernama per kode IKU seperti versi lama. Ini supaya
  * penomoran/kode IKU boleh berubah kapan pun (mis. lewat impor Master IKU dari Excel) tanpa harus
  * menulis ulang template-nya; satu-satunya alasan template perlu disunting lagi adalah bila
  * STRUKTUR dokumen resmi sendiri berubah dari pusat. Blok RO ({{ro_row}}...{{/ro_row}}) di dalamnya
- * ikut digandakan per Kegiatan pada IKU tsb (Kegiatan::rincian_output/volume_ro/progres_persen --
- * sumber yang sama dipakai jalur PDF, lihat notula-bagian1-konten.blade.php), dan salah satu dari
- * tiga varian {{blok_sakip}}/{{blok_berakhlak}}/{{blok_ro}} dipilih sesuai teks indikator, sama
- * seperti deteksi SAKIP/BerAKHLAK pada jalur PDF.
+ * ikut digandakan per Kegiatan pada IKU tsb (Kegiatan::rincian_output/volume_ro/progres_persen),
+ * dan salah satu dari tiga varian {{blok_sakip}}/{{blok_berakhlak}}/{{blok_ro}} dipilih sesuai teks
+ * indikator (lihat isiSatuIku() di bawah untuk deteksinya).
  *
  * Template SUMBER diutamakan dari berkas yang diunggah Tim SAKIP lewat menu
  * Pengaturan > Template Notula (App\Livewire\TemplateNotula, disimpan di
@@ -39,13 +41,17 @@ class NotulaBagian1DocxService
 {
     private const DEFAULT_TEMPLATE_PATH = 'template_notula/SIPINTER_Template_Bagian_I_Mesin.docx';
 
-    public function __construct(private NotulaService $notulaService) {}
-
-    public function generate(Notula $notula, string $outputPath): string
+    /**
+     * $data WAJIB hasil NotulaService::kumpulkanDataBagianSatu($notula) milik
+     * pemanggil sendiri -- diterima sebagai parameter (bukan resolve NotulaService
+     * lewat constructor) supaya kelas ini TIDAK bergantung balik ke NotulaService,
+     * yang sejak susunBagianSatu() memakai kelas ini untuk menghasilkan HTML Bagian I
+     * (lihat NotulaService) sudah jadi dependensi searah lainnya -- dependensi dua
+     * arah di antara keduanya akan bikin container Laravel gagal resolve (circular).
+     */
+    public function generate(Notula $notula, array $data, string $outputPath): string
     {
         $templatePath = $this->resolveTemplatePath();
-
-        $data = $this->notulaService->kumpulkanDataBagianSatu($notula);
 
         $processor = new TemplateProcessor($templatePath);
         // Template ini pakai delimiter {{...}} (bukan ${...} bawaan PhpWord) supaya
@@ -93,8 +99,7 @@ class NotulaBagian1DocxService
     /**
      * Satu nilai teks bebas -- newline TETAP newline asli (TemplateProcessor::setValue
      * otomatis mengubahnya jadi <w:br/> lewat replaceCarriageReturns(), sudah diverifikasi
-     * lewat smoke test manual), null jadi placeholder "…" sesuai konvensi yang sama
-     * dipakai jalur HTML (notula-bagian1-konten.blade.php).
+     * lewat smoke test manual), null jadi placeholder "…".
      */
     private function set(TemplateProcessor $p, string $nama, ?string $nilai): void
     {
@@ -161,15 +166,43 @@ class NotulaBagian1DocxService
             return $this->isiSatuIku($sub, $ikuBlokTemplate, $iku, $data);
         });
 
-        $isiBaru = $potongan->implode('<w:p/>');
+        $isiBaru = $potongan->implode('<w:p/>').$this->bagianKustomXml($data['bagianKustomPerBagian']);
 
         $this->setMainPart($processor, $before.$isiBaru.$after);
     }
 
     /**
-     * Isi SATU salinan blok per-IKU: pilih varian SAKIP/BerAKHLAK/RO yang sesuai (persis
-     * deteksi teks indikator yang dipakai notula-bagian1-konten.blade.php), gandakan baris
-     * RO per Kegiatan, lalu isi seluruh macro sisa lewat TemplateProcessor sekali pakai.
+     * Bagian kustom (mis. "Manajemen Risiko", App\Livewire\BagianKustomManager) TIDAK
+     * punya macro sendiri di template resmi (bagian ini bukan bagian baku Kertas Kerja
+     * BPS, murni tambahan per-instansi) -- makanya disisipkan sebagai paragraf XML
+     * mentah alih-alih lewat TemplateProcessor::setValue(), tepat setelah blok IKU
+     * terakhir (sebelum {{bagian_2}}), sama seperti posisinya dulu di jalur HTML/blade.
+     */
+    private function bagianKustomXml(Collection $bagianKustomPerBagian): string
+    {
+        $xml = '';
+
+        foreach ($bagianKustomPerBagian as $bagian) {
+            $xml .= '<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">'
+                .htmlspecialchars($bagian->nama, ENT_QUOTES | ENT_XML1)
+                .'</w:t></w:r></w:p>';
+
+            foreach ($bagian->poin as $poin) {
+                $teks = ($poin->masterIku->kode ?? '').': '.$poin->teks;
+                $xml .= '<w:p><w:r><w:t xml:space="preserve">• '
+                    .htmlspecialchars($teks, ENT_QUOTES | ENT_XML1)
+                    .'</w:t></w:r></w:p>';
+            }
+        }
+
+        return $xml;
+    }
+
+    /**
+     * Isi SATU salinan blok per-IKU: pilih varian SAKIP/BerAKHLAK/RO yang sesuai (dideteksi
+     * dari teks indikator, bukan kode -- penomoran kode IKU beda tiap instansi & bisa
+     * berubah), gandakan baris RO per Kegiatan, lalu isi seluruh macro sisa lewat
+     * TemplateProcessor sekali pakai.
      */
     private function isiSatuIku(TemplateProcessor $sub, string $blokTemplate, $iku, array $data): string
     {
@@ -185,7 +218,7 @@ class NotulaBagian1DocxService
         $linkFolderTwSebelumnya = $data['linkFolderTwSebelumnyaPerIku'][$iku->id] ?? null;
 
         // Deteksi SAKIP/BerAKHLAK dari TEKS indikator (bukan kode -- penomoran kode IKU
-        // beda tiap instansi & bisa berubah), sama persis dengan notula-bagian1-konten.blade.php.
+        // beda tiap instansi & bisa berubah).
         $indikatorLower = mb_strtolower($iku->indikator);
         $isSakip = str_contains($indikatorLower, 'sakip');
         $isBerakhlak = str_contains($indikatorLower, 'berakhlak');
@@ -241,8 +274,7 @@ class NotulaBagian1DocxService
 
         $rtlTeks = $this->daftarBernomor($rtlIku->pluck('rtl_teks')->filter());
         // PIC Tindak Lanjut = tim yang ditugaskan pada IKU ini di Master IKU
-        // (master_iku.tim), BUKAN nama orang yang diketik bebas per poin RTL — sama
-        // seperti jalur PDF (notula-bagian1-konten.blade.php).
+        // (master_iku.tim), BUKAN nama orang yang diketik bebas per poin RTL.
         $batasWaktuRtl = $rtlIku->pluck('batas_waktu')->filter()->sort()->last();
         $this->set($sub, 'rtl', $rtlTeks);
         $this->set($sub, 'pic_rtl', $iku->tim);
@@ -276,9 +308,8 @@ class NotulaBagian1DocxService
     /**
      * Gandakan baris template RO ({{ro_row}}...{{/ro_row}}, 3 kolom: Rincian Output/Realisasi
      * Volume RO/Progres) sekali per RincianOutput pada IKU ini (RF baru: satu Kegiatan boleh
-     * punya banyak RO) -- sumber data yang SAMA dipakai jalur PDF (lihat
-     * notula-bagian1-konten.blade.php), bukan katalog kode RO tetap seperti versi lama.
-     * Kosong (belum ada RO) -> satu baris placeholder "…", sama seperti pola @empty Blade.
+     * punya banyak RO), bukan katalog kode RO tetap seperti versi lama. Kosong (belum ada RO)
+     * -> baris ini tidak ditampilkan sama sekali (lihat $tampilkanRo di isiSatuIku()).
      */
     private function gandakanBarisRo(string $xml, Collection $roIku): string
     {

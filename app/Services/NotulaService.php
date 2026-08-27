@@ -36,6 +36,7 @@ class NotulaService
         protected LibreOfficeConversionService $konversi,
         protected PdfRasterService $rasterisasi,
         protected FolderStructureService $folder,
+        protected NotulaBagian1DocxService $docx,
     ) {}
 
     /**
@@ -60,12 +61,30 @@ class NotulaService
      * kumulatif, RTL berjalan) lalu simpan sebagai HTML. Dipanggil eksplisit lewat
      * tombol "Susun Ulang Otomatis" — akan MENIMPA suntingan manual sebelumnya,
      * jadi TIDAK dipanggil diam-diam di render() setiap request.
+     *
+     * Kontennya dihasilkan dari template .docx RESMI yang sama dipakai jalur unduhan
+     * (NotulaBagian1DocxService, diisi dari data $data yang sama), lalu dikonversi ke
+     * HTML lewat LibreOffice headless -- BUKAN blade HTML terpisah yang harus disunting
+     * manual tiap kali format template berubah. Begitu Tim SAKIP mengunggah template
+     * baru lewat Pengaturan > Template Notula, tata letak/font/border Bagian I ikut
+     * berubah otomatis tanpa perlu ubah kode, sama seperti Bagian II/III yang sudah
+     * lebih dulu memakai pola konversi ini (lihat terimaUploadBagian()).
      */
     public function susunBagianSatu(Notula $notula): string
     {
         $data = $this->kumpulkanDataBagianSatu($notula);
 
-        $html = view('pdf.notula-bagian1-konten', $data)->render();
+        $dir = storage_path("app/private/notula/{$notula->id}/bagian1-sementara");
+        $this->pastikanFolder($dir);
+        $docxPath = $dir.'/bagian1.docx';
+
+        $this->docx->generate($notula, $data, $docxPath);
+
+        try {
+            $html = $this->konversi->convertToHtml($docxPath, $dir);
+        } finally {
+            @unlink($docxPath);
+        }
 
         $notula->update(['bagian1_html' => $html]);
 
@@ -74,8 +93,9 @@ class NotulaService
 
     /**
      * Kumpulkan seluruh data siap-pakai untuk Bagian I (RF-42) — dipakai baik oleh
-     * susunBagianSatu() (jalur HTML/PDF via Blade) maupun NotulaBagian1DocxService
-     * (jalur .docx bervariabel {{...}}), supaya kedua jalur SELALU bersumber dari
+     * susunBagianSatu() (mengisi template lalu konversi ke HTML) maupun jalur unduhan
+     * .docx murni (NotulaDownloadController::unduhBagian1Docx()), keduanya lewat
+     * NotulaBagian1DocxService::generate(), supaya kedua jalur SELALU bersumber dari
      * query yang sama persis dan tidak pernah berbeda datanya.
      *
      * @return array<string, mixed>

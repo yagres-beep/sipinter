@@ -35,6 +35,7 @@ class KompilasiNotulaTest extends TestCase
 
     public function test_susun_ulang_otomatis_mengirim_event_untuk_memperbarui_editor_wysiwyg(): void
     {
+        $this->fakeKonversiBagian1KeXmlMentah();
         $this->loginSebagaiTimSakip();
 
         Livewire::test(KompilasiNotula::class)
@@ -46,6 +47,7 @@ class KompilasiNotulaTest extends TestCase
 
     public function test_simpan_suntingan_bagian1_menyimpan_konten_dari_editor(): void
     {
+        $this->fakeKonversiBagian1KeXmlMentah();
         $this->loginSebagaiTimSakip();
 
         $component = Livewire::test(KompilasiNotula::class)
@@ -63,6 +65,7 @@ class KompilasiNotulaTest extends TestCase
 
     public function test_bagian_2_menolak_format_tidak_didukung(): void
     {
+        $this->fakeKonversiBagian1KeXmlMentah();
         $this->loginSebagaiTimSakip();
 
         // docx/xlsx/odt/ods, gambar (jpg/png), dan PDF SEKARANG didukung (notula
@@ -78,6 +81,7 @@ class KompilasiNotulaTest extends TestCase
 
     public function test_ganti_triwulan_mengirim_event_untuk_memuat_ulang_editor(): void
     {
+        $this->fakeKonversiBagian1KeXmlMentah();
         $this->loginSebagaiTimSakip();
 
         Livewire::test(KompilasiNotula::class)
@@ -89,6 +93,7 @@ class KompilasiNotulaTest extends TestCase
 
     public function test_simpan_detail_rapat_menyimpan_dan_tampil_di_bagian1(): void
     {
+        $this->fakeKonversiBagian1KeXmlMentah();
         $this->loginSebagaiTimSakip();
 
         $component = Livewire::test(KompilasiNotula::class)
@@ -120,25 +125,11 @@ class KompilasiNotulaTest extends TestCase
     }
 
     /**
-     * Kolom "No." pada tabel Sasaran/capaian harus berisi KODE IKU (sesuai Template
-     * Notula resmi -- baris contoh terisi memakai kode seperti 1111, bukan nomor urut
-     * 1/2/3), sama seperti macro {{kode}} yang sudah dipakai jalur unduhan .docx.
+     * Rekap capaian triwulanan/PK (dipakai narasi pembuka Bagian I) murni perhitungan
+     * data -- diuji langsung lewat kumpulkanDataBagianSatu(), TIDAK perlu lewat
+     * rendering/konversi apa pun (lebih tahan terhadap perubahan tata letak template).
      */
-    public function test_kolom_no_pada_tabel_capaian_berisi_kode_iku_bukan_nomor_urut(): void
-    {
-        MasterIku::create(['kode' => '9001', 'indikator' => 'Uji IKU Satu', 'sasaran' => 'Sasaran Uji', 'tim' => 'Uji', 'penanggung_jawab' => 'A']);
-        MasterIku::create(['kode' => '9002', 'indikator' => 'Uji IKU Dua', 'sasaran' => 'Sasaran Uji', 'tim' => 'Uji', 'penanggung_jawab' => 'A']);
-
-        $notula = app(NotulaService::class)->untukTriwulan(2026, 3);
-        $html = app(NotulaService::class)->susunBagianSatu($notula);
-
-        $this->assertStringContainsString('<td>9001</td>', $html);
-        $this->assertStringContainsString('<td>9002</td>', $html);
-        $this->assertStringContainsString('9001 — Uji IKU Satu', $html);
-        $this->assertStringContainsString('9002 — Uji IKU Dua', $html);
-    }
-
-    public function test_ringkasan_capaian_dihitung_dari_rekap_dan_mengecualikan_iku_tanpa_nilai(): void
+    public function test_rekap_capaian_dihitung_dari_capaian_tahunan_dan_mengecualikan_iku_tanpa_nilai(): void
     {
         $ikuBernilai = MasterIku::create(['kode' => '9003', 'indikator' => 'Uji IKU Tiga', 'sasaran' => 'Sasaran Uji', 'tim' => 'Uji', 'penanggung_jawab' => 'A']);
         MasterIku::create(['kode' => '9004', 'indikator' => 'Uji IKU Empat Tanpa Nilai', 'sasaran' => 'Sasaran Uji', 'tim' => 'Uji', 'penanggung_jawab' => 'A']);
@@ -152,14 +143,52 @@ class KompilasiNotulaTest extends TestCase
         ]);
 
         $notula = app(NotulaService::class)->untukTriwulan(2026, 1);
+        $data = app(NotulaService::class)->kumpulkanDataBagianSatu($notula);
+
+        $this->assertSame(100.0, $data['rataCapaianTw']);
+        $this->assertSame(25.0, $data['rataCapaianPk']);
+    }
+
+    /**
+     * Smoke test triwulan I (tidak punya triwulan sebelumnya di tahun yang sama) --
+     * pastikan susunBagianSatu() tidak melempar galat sepanjang seluruh alur generate
+     * template -> konversi -> simpan.
+     */
+    public function test_bagian1_tw_pertama_tidak_melempar_galat(): void
+    {
+        $this->fakeKonversiBagian1KeXmlMentah();
+
+        MasterIku::create(['kode' => '9006', 'indikator' => 'Uji IKU Enam', 'sasaran' => 'Sasaran Uji', 'tim' => 'Uji', 'penanggung_jawab' => 'A']);
+
+        $notula = app(NotulaService::class)->untukTriwulan(2026, 1);
         $html = app(NotulaService::class)->susunBagianSatu($notula);
 
-        $this->assertStringContainsString('<b>100 persen</b>', $html);
-        $this->assertStringContainsString('<b>25 persen</b>', $html);
+        $this->assertNotSame('', trim($html));
+        $this->assertSame($html, Notula::first()->bagian1_html);
+    }
+
+    /**
+     * susunBagianSatu() harus benar-benar menjalankan seluruh pipa: generate docx dari
+     * template resmi -> konversi ke HTML -> simpan ke bagian1_html -> bersihkan berkas
+     * docx sementara (tidak dibiarkan menumpuk di storage/app/private).
+     */
+    public function test_susun_bagian_satu_membersihkan_docx_sementara_setelah_konversi(): void
+    {
+        $this->fakeKonversiBagian1KeXmlMentah();
+
+        MasterIku::create(['kode' => '9007', 'indikator' => 'Uji IKU Tujuh', 'sasaran' => 'Sasaran Uji', 'tim' => 'Uji', 'penanggung_jawab' => 'A']);
+
+        $notula = app(NotulaService::class)->untukTriwulan(2026, 2);
+        app(NotulaService::class)->susunBagianSatu($notula);
+
+        $docxPath = storage_path("app/private/notula/{$notula->id}/bagian1-sementara/bagian1.docx");
+        $this->assertFileDoesNotExist($docxPath);
     }
 
     public function test_bagian1_menampilkan_volume_ro_dasar_hitung_dan_catatan_bila_terisi(): void
     {
+        $this->fakeKonversiBagian1KeXmlMentah();
+
         $iku = MasterIku::create([
             'kode' => '9005',
             'indikator' => 'Uji IKU Lima',
@@ -203,150 +232,5 @@ class KompilasiNotulaTest extends TestCase
         $this->assertStringContainsString('Jumlah publikasi tepat waktu dibagi jumlah seluruh publikasi', $html);
         $this->assertStringContainsString('Data internal Fungsi Statistik', $html);
         $this->assertStringContainsString('Penjelasan tambahan hasil rapat', $html);
-    }
-
-    /**
-     * Susunan judul & tabel Sasaran harus mengikuti Template Notula Bagian I resmi
-     * persis (nama satker sebagai baris ke-3 judul, frasa "pada BPS Kabupaten Buton
-     * Utara" di paragraf pembuka, baris Sasaran sebagai DUA sel terpisah bukan satu
-     * sel gabungan, label "Terhadap" ditulis lengkap bukan "Thd").
-     */
-    public function test_bagian1_judul_dan_tabel_sasaran_mengikuti_template_resmi(): void
-    {
-        MasterIku::create([
-            'kode' => '9006z', 'indikator' => 'Uji IKU Judul', 'sasaran' => 'Sasaran Uji Judul', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
-        ]);
-
-        $periode = Periode::create([
-            'tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false,
-        ]);
-
-        $notula = app(NotulaService::class)->untukTriwulan(2026, 3);
-        $html = app(NotulaService::class)->susunBagianSatu($notula);
-
-        $this->assertStringContainsString('BPS KABUPATEN BUTON UTARA', $html);
-        $this->assertStringContainsString('pada BPS Kabupaten Buton Utara sebesar', $html);
-        $this->assertStringContainsString('<th style="width:14%">Sasaran</th><th colspan="5" style="text-align:left">: Sasaran Uji Judul</th>', $html);
-        $this->assertStringContainsString('Capaian Terhadap Target PK', $html);
-        $this->assertStringContainsString('Capaian Terhadap Target Triwulanan', $html);
-        $this->assertStringNotContainsString('Capaian Thd', $html);
-    }
-
-    /**
-     * Analisis Capaian Kinerja harus diikuti daftar bernomor kegiatan pendukung IKU
-     * ini pada triwulan berjalan yang sudah diverifikasi (RF-37) -- sama seperti
-     * jalur unduhan .docx (NotulaBagian1DocxService::isiSatuIku()), sebelumnya daftar
-     * ini hilang sama sekali di jalur HTML/PDF walau kegiatannya sudah diverifikasi.
-     */
-    public function test_analisis_capaian_kinerja_menampilkan_daftar_kegiatan_terverifikasi(): void
-    {
-        $iku = MasterIku::create([
-            'kode' => '9010', 'indikator' => 'Uji IKU Daftar Kegiatan', 'sasaran' => 'Sasaran Uji', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
-        ]);
-
-        $periode = Periode::create([
-            'tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false,
-        ]);
-
-        Kegiatan::create([
-            'iku_id' => $iku->id,
-            'periode_id' => $periode->id,
-            'uraian_kegiatan' => 'Pelaksanaan Sakernas Agustus 2026 terverifikasi',
-            'jenis' => 'bukan_survei_sensus',
-            'status_dokumen' => Kegiatan::STATUS_DIVERIFIKASI,
-        ]);
-
-        $notula = app(NotulaService::class)->untukTriwulan(2026, 3);
-        $html = app(NotulaService::class)->susunBagianSatu($notula);
-
-        $this->assertStringContainsString('Pelaksanaan Sakernas Agustus 2026 terverifikasi', $html);
-    }
-
-    public function test_bagian1_tidak_menampilkan_tabel_ro_bila_belum_ada_ro_terisi(): void
-    {
-        $iku = MasterIku::create([
-            'kode' => '9005z', 'indikator' => 'Uji IKU Tanpa RO', 'sasaran' => 'Sasaran Uji', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
-        ]);
-
-        $periode = Periode::create([
-            'tahun' => 2026, 'bulan' => 4, 'triwulan' => 2, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false,
-        ]);
-
-        // Kegiatan ADA tapi belum punya RincianOutput sama sekali -- tabel RO tidak
-        // boleh ikut tercetak (dulu tetap tercetak satu baris placeholder "...").
-        Kegiatan::create([
-            'iku_id' => $iku->id,
-            'periode_id' => $periode->id,
-            'uraian_kegiatan' => 'Kegiatan uji tanpa RO sama sekali',
-            'jenis' => 'bukan_survei_sensus',
-            'status_dokumen' => Kegiatan::STATUS_DIVERIFIKASI,
-        ]);
-
-        $notula = app(NotulaService::class)->untukTriwulan(2026, 2);
-        $html = app(NotulaService::class)->susunBagianSatu($notula);
-
-        $this->assertStringNotContainsString('Realisasi Volume RO dan Progress Pelaksanaan Kegiatan', $html);
-    }
-
-    public function test_bagian1_pakai_uraian_kegiatan_sebagai_rincian_output_bila_belum_diisi_tim_sakip(): void
-    {
-        $iku = MasterIku::create([
-            'kode' => '9005a', 'indikator' => 'Uji IKU Lima A', 'sasaran' => 'Sasaran Uji', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
-        ]);
-
-        $periode = Periode::create([
-            'tahun' => 2026, 'bulan' => 4, 'triwulan' => 2, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false,
-        ]);
-
-        $kegiatan = Kegiatan::create([
-            'iku_id' => $iku->id,
-            'periode_id' => $periode->id,
-            'uraian_kegiatan' => 'Kegiatan uji tanpa rincian output',
-            'jenis' => 'bukan_survei_sensus',
-            'status_dokumen' => Kegiatan::STATUS_DIVERIFIKASI,
-        ]);
-
-        // RO diisi (volume/progres) tapi namanya (uraian) sengaja dikosongkan --
-        // notula harus jatuh ke uraian_kegiatan sebagai fallback nama RO.
-        $kegiatan->rincianOutput()->create(['volume_ro' => '1 publikasi', 'progres_persen' => 50]);
-
-        $notula = app(NotulaService::class)->untukTriwulan(2026, 2);
-        $html = app(NotulaService::class)->susunBagianSatu($notula);
-
-        $this->assertStringContainsString('Kegiatan uji tanpa rincian output', $html);
-    }
-
-    public function test_bagian1_tw_pertama_tidak_mencoba_tautan_bukti_dukung_tw_sebelumnya(): void
-    {
-        MasterIku::create(['kode' => '9006', 'indikator' => 'Uji IKU Enam', 'sasaran' => 'Sasaran Uji', 'tim' => 'Uji', 'penanggung_jawab' => 'A']);
-
-        $notula = app(NotulaService::class)->untukTriwulan(2026, 1);
-
-        // Triwulan I tidak punya triwulan sebelumnya (tahun yang sama) — pastikan
-        // susunBagianSatu() tidak melempar galat saat mencoba menyusunnya.
-        $html = app(NotulaService::class)->susunBagianSatu($notula);
-
-        $this->assertStringContainsString('Tautan Bukti Dukung Tindak Lanjut Triwulan Sebelumnya', $html);
-    }
-
-    public function test_bagian1_indikator_sakip_dan_berakhlak_memakai_format_khusus(): void
-    {
-        MasterIku::create(['kode' => '9008', 'indikator' => 'Nilai SAKIP oleh Inspektorat', 'sasaran' => 'Dukungan Manajemen', 'tim' => 'Uji', 'penanggung_jawab' => 'A']);
-        MasterIku::create(['kode' => '9009', 'indikator' => 'Indeks Implementasi BerAKHLAK', 'sasaran' => 'Dukungan Manajemen', 'tim' => 'Uji', 'penanggung_jawab' => 'A']);
-
-        $notula = app(NotulaService::class)->untukTriwulan(2026, 2);
-        $html = app(NotulaService::class)->susunBagianSatu($notula);
-
-        // SAKIP: pertanyaan analisis khusus + tabel Indikator Proksi, BUKAN tabel
-        // Rincian Output biasa.
-        $this->assertStringContainsString('Jelaskan mengenai persentase monitoring capaian kinerja triwulanan yang terlaksana tepat waktu', $html);
-        $this->assertStringContainsString('Indikator Proksi', $html);
-
-        // BerAKHLAK: pertanyaan analisis khusus, TANPA tabel sama sekali.
-        $this->assertStringContainsString('Jelaskan mengenai Persentase kegiatan untuk mengoptimalkan implementasi BerAKHLAK yang terlaksana sesuai rencana', $html);
-
-        // Keduanya tidak ikut memicu tabel "Realisasi Volume RO dan Progress
-        // Pelaksanaan Kegiatan" bawaan (khusus indikator biasa).
-        $this->assertStringNotContainsString('Realisasi Volume RO dan Progress Pelaksanaan Kegiatan', $html);
     }
 }

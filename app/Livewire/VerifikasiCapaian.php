@@ -11,6 +11,7 @@ use App\Models\Kegiatan;
 use App\Models\KendalaSolusi;
 use App\Models\RincianOutput;
 use App\Models\RtlEvaluasi;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Livewire\Component;
@@ -48,7 +49,7 @@ class VerifikasiCapaian extends Component
      * TERPISAH dari $koreksiKegiatan (uraian_kegiatan bebas-teks yang ditulis
      * petugas) karena penamaan RO resmi tidak selalu sama dengan uraian kegiatan.
      * Hanya terisi Tim SAKIP saat IKU-nya BELUM punya realisasi triwulan berjalan
-     * (lihat notula-bagian1-konten blade: tabel ini hanya tampil bila
+     * (lihat NotulaBagian1DocxService::isiSatuIku(): tabel RO hanya tampil bila
      * $rekap['realisasi'] masih kosong), tapi tidak wajib.
      *
      * @var array<int, array<string, array{id: int|null, uraian: string|null, volume_ro: string|null, progres_persen: string|null}>>
@@ -192,17 +193,17 @@ class VerifikasiCapaian extends Component
      * ulang di banyak tempat (mount, render, verifikasiSelesai, kembalikanKeKetuaTim)
      * dalam request yang sama; tanpa cache ini query yang sama terulang berkali-kali.
      */
-    protected ?\Illuminate\Support\Collection $cacheKegiatanList = null;
+    protected ?Collection $cacheKegiatanList = null;
 
-    protected ?\Illuminate\Support\Collection $cacheKendalaSolusiList = null;
+    protected ?Collection $cacheKendalaSolusiList = null;
 
-    protected ?\Illuminate\Support\Collection $cacheRtlSebelumnya = null;
+    protected ?Collection $cacheRtlSebelumnya = null;
 
-    protected ?\Illuminate\Support\Collection $cacheBerkasKegiatan = null;
+    protected ?Collection $cacheBerkasKegiatan = null;
 
-    protected ?\Illuminate\Support\Collection $cacheBagianKustomList = null;
+    protected ?Collection $cacheBagianKustomList = null;
 
-    protected ?\Illuminate\Support\Collection $cacheBerkasBagianKustom = null;
+    protected ?Collection $cacheBerkasBagianKustom = null;
 
     /**
      * TIDAK public dengan sengaja (beda dari $capaian) — Livewire di sini tidak bisa
@@ -395,7 +396,7 @@ class VerifikasiCapaian extends Component
      * per kegiatan DALAM SATU QUERY (bukan satu query per kegiatan) — dipakai baik
      * untuk tampilan per-kegiatan maupun validasi "semua berkas sudah ditandai".
      */
-    protected function berkasKegiatanTerkelompok(): \Illuminate\Support\Collection
+    protected function berkasKegiatanTerkelompok(): Collection
     {
         if ($this->cacheBerkasKegiatan !== null) {
             return $this->cacheBerkasKegiatan;
@@ -407,7 +408,7 @@ class VerifikasiCapaian extends Component
             ->groupBy('ref_id');
     }
 
-    protected function berkasBagianKustomTerkelompok(): \Illuminate\Support\Collection
+    protected function berkasBagianKustomTerkelompok(): Collection
     {
         if ($this->cacheBerkasBagianKustom !== null) {
             return $this->cacheBerkasBagianKustom;

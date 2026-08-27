@@ -7,9 +7,12 @@ use App\Livewire\PengisianKegiatan;
 use App\Models\BagianKustom;
 use App\Models\BagianKustomPoin;
 use App\Models\Berkas;
+use App\Models\FolderConfig;
 use App\Models\MasterIku;
+use App\Models\Periode;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\NotulaService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Livewire\Livewire;
@@ -74,7 +77,7 @@ class BagianKustomTest extends TestCase
             ->call('tambah')
             ->assertHasNoErrors();
 
-        $kategori = \App\Models\FolderConfig::current()->pola_json['kategori'];
+        $kategori = FolderConfig::current()->pola_json['kategori'];
         $namaKategori = array_column($kategori, 'nama');
 
         $this->assertContains('Manajemen Risiko', $namaKategori);
@@ -84,10 +87,10 @@ class BagianKustomTest extends TestCase
     {
         $this->actingAsSakip();
 
-        \App\Models\FolderConfig::tambahKategoriDariBagianKustom('Manajemen Risiko');
-        \App\Models\FolderConfig::tambahKategoriDariBagianKustom('Manajemen Risiko');
+        FolderConfig::tambahKategoriDariBagianKustom('Manajemen Risiko');
+        FolderConfig::tambahKategoriDariBagianKustom('Manajemen Risiko');
 
-        $kategori = \App\Models\FolderConfig::current()->pola_json['kategori'];
+        $kategori = FolderConfig::current()->pola_json['kategori'];
         $jumlah = collect($kategori)->where('nama', 'Manajemen Risiko')->count();
 
         $this->assertSame(1, $jumlah);
@@ -128,7 +131,7 @@ class BagianKustomTest extends TestCase
         $this->actingAsSakip();
         $iku = MasterIku::create(['kode' => '1131', 'indikator' => 'Uji', 'tim' => 'Sosial', 'penanggung_jawab' => 'A']);
         $bagian = BagianKustom::create(['nama' => 'Manajemen Risiko', 'aktif' => true]);
-        $periode = \App\Models\Periode::create(['tahun' => 2026, 'bulan' => 3, 'triwulan' => 1, 'bulan_ke' => 3, 'flag_bulan_terlewat' => true]);
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 3, 'triwulan' => 1, 'bulan_ke' => 3, 'flag_bulan_terlewat' => true]);
         BagianKustomPoin::create(['bagian_kustom_id' => $bagian->id, 'iku_id' => $iku->id, 'periode_id' => $periode->id, 'teks' => 'Risiko A']);
 
         Livewire::test(BagianKustomManager::class)
@@ -283,13 +286,15 @@ class BagianKustomTest extends TestCase
 
     public function test_notula_bagian_satu_menyertakan_poin_bagian_kustom(): void
     {
+        $this->fakeKonversiBagian1KeXmlMentah();
+
         $iku = MasterIku::create(['kode' => 'UJI-006', 'indikator' => 'Uji', 'tim' => 'Uji', 'penanggung_jawab' => 'A']);
         $bagian = BagianKustom::create(['nama' => 'Manajemen Risiko', 'aktif' => true]);
-        $periode = \App\Models\Periode::create(['tahun' => 2026, 'bulan' => 4, 'triwulan' => 2, 'bulan_ke' => 1, 'flag_bulan_terlewat' => true]);
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 4, 'triwulan' => 2, 'bulan_ke' => 1, 'flag_bulan_terlewat' => true]);
         BagianKustomPoin::create(['bagian_kustom_id' => $bagian->id, 'iku_id' => $iku->id, 'periode_id' => $periode->id, 'teks' => 'Risiko keterlambatan data']);
 
-        $notula = app(\App\Services\NotulaService::class)->untukTriwulan(2026, 2);
-        $html = app(\App\Services\NotulaService::class)->susunBagianSatu($notula);
+        $notula = app(NotulaService::class)->untukTriwulan(2026, 2);
+        $html = app(NotulaService::class)->susunBagianSatu($notula);
 
         $this->assertStringContainsString('Manajemen Risiko', $html);
         $this->assertStringContainsString('Risiko keterlambatan data', $html);

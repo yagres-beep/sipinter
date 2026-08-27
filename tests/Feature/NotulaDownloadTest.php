@@ -35,6 +35,7 @@ class NotulaDownloadTest extends TestCase
 
         return $xml === false ? '' : $xml;
     }
+
     use RefreshDatabase;
 
     protected function loginSebagai(string $peranNama): User
@@ -198,6 +199,96 @@ class NotulaDownloadTest extends TestCase
         $this->assertStringContainsString('Laporan Uji RO Docx Kedua', $xml);
         $this->assertStringContainsString('2 laporan', $xml);
         $this->assertStringContainsString('40,00%', $xml);
+    }
+
+    /**
+     * Realisasi Volume RO hanya boleh tercetak bila IKU-nya BENAR-BENAR punya RO
+     * terisi -- sebelumnya tetap tercetak (satu baris placeholder "...") walau IKU
+     * ini belum punya RincianOutput sama sekali.
+     */
+    public function test_docx_bagian1_tidak_menampilkan_tabel_ro_bila_belum_ada_ro_terisi(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $iku = MasterIku::create([
+            'kode' => '2003', 'indikator' => 'Indikator Uji Tanpa RO', 'tim' => 'Tim Uji', 'penanggung_jawab' => 'Uji', 'sasaran' => 'Sasaran Uji RO',
+        ]);
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+
+        Kegiatan::create([
+            'iku_id' => $iku->id,
+            'periode_id' => $periode->id,
+            'uraian_kegiatan' => 'Kegiatan uji tanpa RO sama sekali',
+            'jenis' => 'bukan_survei_sensus',
+            'status_dokumen' => Kegiatan::STATUS_DIVERIFIKASI,
+        ]);
+
+        $notula = Notula::create(['periode_id' => $periode->id]);
+
+        $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
+
+        $this->assertStringNotContainsString('Realisasi Volume RO', $xml);
+    }
+
+    /**
+     * RO tanpa nama sendiri (uraian kosong) harus jatuh ke uraian_kegiatan induknya
+     * sebagai nama tampilan, bukan dikosongkan.
+     */
+    public function test_docx_bagian1_ro_jatuh_ke_uraian_kegiatan_bila_uraian_ro_kosong(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $iku = MasterIku::create([
+            'kode' => '2004', 'indikator' => 'Indikator Uji RO Fallback', 'tim' => 'Tim Uji', 'penanggung_jawab' => 'Uji', 'sasaran' => 'Sasaran Uji RO',
+        ]);
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+
+        $kegiatan = Kegiatan::create([
+            'iku_id' => $iku->id,
+            'periode_id' => $periode->id,
+            'uraian_kegiatan' => 'Kegiatan uji fallback nama RO',
+            'jenis' => 'bukan_survei_sensus',
+            'status_dokumen' => Kegiatan::STATUS_DIVERIFIKASI,
+        ]);
+
+        $kegiatan->rincianOutput()->create(['volume_ro' => '1 publikasi', 'progres_persen' => 50]);
+
+        $notula = Notula::create(['periode_id' => $periode->id]);
+
+        $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
+
+        $this->assertStringContainsString('Kegiatan uji fallback nama RO', $xml);
+    }
+
+    /**
+     * Analisis Capaian Kinerja harus diikuti daftar bernomor kegiatan pendukung IKU
+     * ini pada triwulan berjalan yang sudah diverifikasi/disetujui (RF-37).
+     */
+    public function test_docx_bagian1_analisis_capaian_menampilkan_daftar_kegiatan_terverifikasi(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $iku = MasterIku::create([
+            'kode' => '2005', 'indikator' => 'Indikator Uji Daftar Kegiatan', 'tim' => 'Tim Uji', 'penanggung_jawab' => 'Uji', 'sasaran' => 'Sasaran Uji RO',
+        ]);
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+
+        Kegiatan::create([
+            'iku_id' => $iku->id,
+            'periode_id' => $periode->id,
+            'uraian_kegiatan' => 'Pelaksanaan Sakernas Agustus 2026 terverifikasi',
+            'jenis' => 'bukan_survei_sensus',
+            'status_dokumen' => Kegiatan::STATUS_DIVERIFIKASI,
+        ]);
+
+        $notula = Notula::create(['periode_id' => $periode->id]);
+
+        $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
+
+        $this->assertStringContainsString('Pelaksanaan Sakernas Agustus 2026 terverifikasi', $xml);
     }
 
     /**

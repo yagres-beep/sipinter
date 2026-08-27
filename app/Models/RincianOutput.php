@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * (lihat migrasi 2026_08_27_000010_buat_tabel_rincian_output). Dipakai untuk mengisi
  * tabel "Realisasi Volume RO dan Progress Pelaksanaan Kegiatan" di notula — lihat
  * App\Services\NotulaService::kumpulkanDataBagianSatu() dan
- * resources/views/pdf/notula-bagian1-konten.blade.php.
+ * App\Services\NotulaBagian1DocxService.
  */
 class RincianOutput extends Model
 {
