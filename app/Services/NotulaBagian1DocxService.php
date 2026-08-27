@@ -237,10 +237,12 @@ class NotulaBagian1DocxService
         $this->set($sub, 'solusi', $this->daftarBernomor($semuaKendalaSolusi->pluck('solusi')->filter()));
 
         $rtlTeks = $this->daftarBernomor($rtlIku->pluck('rtl_teks')->filter());
-        $picRtl = $rtlIku->pluck('pic')->filter()->unique()->implode(', ');
+        // PIC Tindak Lanjut = tim yang ditugaskan pada IKU ini di Master IKU
+        // (master_iku.tim), BUKAN nama orang yang diketik bebas per poin RTL — sama
+        // seperti jalur PDF (notula-bagian1-konten.blade.php).
         $batasWaktuRtl = $rtlIku->pluck('batas_waktu')->filter()->sort()->last();
         $this->set($sub, 'rtl', $rtlTeks);
-        $this->set($sub, 'pic_rtl', $picRtl !== '' ? $picRtl : null);
+        $this->set($sub, 'pic_rtl', $iku->tim);
         $this->set($sub, 'batas_waktu_rtl', $batasWaktuRtl?->translatedFormat('F Y'));
 
         // [[a|b]] (pecahan bersusun di PDF, lihat App\Support\RumusMarkup) diratakan

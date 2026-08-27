@@ -8,6 +8,7 @@ use App\Models\MasterIku;
 use App\Models\Notula;
 use App\Models\Periode;
 use App\Models\Role;
+use App\Models\RtlEvaluasi;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
@@ -220,6 +221,41 @@ class NotulaDownloadTest extends TestCase
         $this->assertStringContainsString('Indikator Proksi', $xml);
         $this->assertStringContainsString('Jelaskan mengenai Persentase kegiatan untuk mengoptimalkan implementasi BerAKHLAK yang terlaksana sesuai rencana', $xml);
         $this->assertStringNotContainsString('Realisasi Volume RO dan Progress Pelaksanaan Kegiatan', $xml);
+    }
+
+    /**
+     * PIC Tindak Lanjut pada .docx harus memakai tim yang ditugaskan pada IKU-nya di
+     * Master IKU (master_iku.tim), BUKAN nama orang yang diketik bebas per poin RTL
+     * (rtl_evaluasi.pic) -- penanggung jawab RTL selalu tim, bukan individu.
+     */
+    public function test_docx_bagian1_pic_tindak_lanjut_memakai_tim_master_iku_bukan_pic_rtl(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $iku = MasterIku::create([
+            'kode' => '3003',
+            'indikator' => 'Indikator Uji PIC',
+            'tim' => 'Tim III',
+            'penanggung_jawab' => 'Uji',
+            'sasaran' => 'Sasaran Uji PIC',
+        ]);
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+
+        RtlEvaluasi::create([
+            'iku_id' => $iku->id,
+            'periode_id' => $periode->id,
+            'rtl_teks' => 'RTL uji PIC',
+            'pic' => 'Intan Purwanti',
+            'batas_waktu' => '2026-09-30',
+        ]);
+
+        $notula = Notula::create(['periode_id' => $periode->id]);
+
+        $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
+
+        $this->assertStringContainsString('Tim III', $xml);
+        $this->assertStringNotContainsString('Intan Purwanti', $xml);
     }
 
     /**

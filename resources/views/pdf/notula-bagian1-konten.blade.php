@@ -162,10 +162,13 @@
         </div>
 
         @php
-            // PIC & Batas Waktu dicetak SEKALI untuk seluruh daftar RTL indikator ini
-            // (bukan diulang per baris) — nama unik digabung, batas waktu memakai yang
-            // PALING JAUH (paling longgar) di antara seluruh poin RTL triwulan ini.
-            $picRtl = $rtlIku->pluck('pic')->filter()->unique()->implode(', ');
+            // PIC Tindak Lanjut = tim yang ditugaskan pada IKU ini di Master IKU
+            // (master_iku.tim), BUKAN nama orang yang diketik bebas per poin RTL —
+            // penanggung jawab RTL selalu tim, konsisten dengan penanggungJawabOtomatis().
+            // Batas Waktu tetap dicetak SEKALI untuk seluruh daftar RTL indikator ini
+            // (bukan diulang per baris), memakai yang PALING JAUH (paling longgar) di
+            // antara seluruh poin RTL triwulan ini.
+            $picRtl = $iku->tim;
             $batasWaktuRtl = $rtlIku->pluck('batas_waktu')->filter()->sort()->last();
         @endphp
         <table style="width:100%">
