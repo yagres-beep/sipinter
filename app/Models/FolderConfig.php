@@ -61,6 +61,8 @@ class FolderConfig extends Model
         'template_notula_penanda',
         'template_notula_path',
         'template_notula_nama_asli',
+        'template_notula_drive_file_id',
+        'template_notula_storage_account_id',
     ];
 
     protected function casts(): array

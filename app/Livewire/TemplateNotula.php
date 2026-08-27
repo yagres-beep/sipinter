@@ -3,6 +3,9 @@
 namespace App\Livewire;
 
 use App\Models\FolderConfig;
+use App\Services\FolderStructureService;
+use App\Services\GoogleDriveService;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -47,10 +50,29 @@ class TemplateNotula extends Component
             return;
         }
 
-        $config->update([
+        $namaAsli = $this->templateFile->getClientOriginalName();
+
+        $isian = [
             'template_notula_path' => $path,
-            'template_notula_nama_asli' => $this->templateFile->getClientOriginalName(),
-        ]);
+            'template_notula_nama_asli' => $namaAsli,
+        ];
+
+        // Salinan lokal (storage/app/private) TIDAK persisten di Render free plan —
+        // terhapus tiap kali container di-deploy ulang. Arsipkan juga ke Drive
+        // (sama seperti Berkas & PDF final notula, lihat BerkasDownloadController)
+        // supaya unduh() masih bisa mengambilnya walau salinan lokalnya sudah hilang.
+        // Kegagalan Drive TIDAK membatalkan unggahan — salinan lokal tetap tersimpan
+        // untuk sesi berjalan, hanya dicatat sebagai peringatan (pola sama seperti
+        // NotulaService::setujui()).
+        try {
+            $hasil = app(FolderStructureService::class)->unggahTemplateNotula(Storage::disk('local')->path($path), $namaAsli);
+            $isian['template_notula_drive_file_id'] = $hasil['drive_file_id'];
+            $isian['template_notula_storage_account_id'] = $hasil['storage_account_id'];
+        } catch (\Throwable $e) {
+            Log::warning("Gagal mengarsipkan template notula ke Drive: {$e->getMessage()}");
+        }
+
+        $config->update($isian);
 
         session()->flash('status', 'Template notula berhasil diunggah.');
 
@@ -60,9 +82,32 @@ class TemplateNotula extends Component
     public function unduh(): \Symfony\Component\HttpFoundation\StreamedResponse
     {
         $config = FolderConfig::current();
-        abort_unless($config->template_notula_path && Storage::disk('local')->exists($config->template_notula_path), 404);
 
-        return Storage::disk('local')->download($config->template_notula_path, $config->template_notula_nama_asli);
+        if ($config->template_notula_path && Storage::disk('local')->exists($config->template_notula_path)) {
+            return Storage::disk('local')->download($config->template_notula_path, $config->template_notula_nama_asli);
+        }
+
+        abort_unless($config->template_notula_drive_file_id, 404);
+
+        try {
+            $konten = app(GoogleDriveService::class)->downloadFileContent($config->template_notula_drive_file_id);
+        } catch (\Throwable $e) {
+            Log::warning("Gagal mengambil template notula dari Drive: {$e->getMessage()}");
+            abort(404);
+        }
+
+        // WAJIB StreamedResponse (bukan response() biasa) -- Livewire hanya mengenali
+        // StreamedResponse/BinaryFileResponse sebagai "unduhan berkas" dari method
+        // component (lihat SupportFileDownloads::valueIsntAFileResponse()); response()
+        // biasa akan diam-diam diabaikan, browser tidak pernah menerima berkasnya.
+        return new \Symfony\Component\HttpFoundation\StreamedResponse(
+            fn () => print($konten),
+            200,
+            [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'Content-Disposition' => 'attachment; filename="'.$config->template_notula_nama_asli.'"',
+            ]
+        );
     }
 
     public function confirmHapus(): void
@@ -83,7 +128,12 @@ class TemplateNotula extends Component
             Storage::disk('local')->delete($config->template_notula_path);
         }
 
-        $config->update(['template_notula_path' => null, 'template_notula_nama_asli' => null]);
+        $config->update([
+            'template_notula_path' => null,
+            'template_notula_nama_asli' => null,
+            'template_notula_drive_file_id' => null,
+            'template_notula_storage_account_id' => null,
+        ]);
 
         $this->konfirmasiHapus = false;
 

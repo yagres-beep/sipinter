@@ -398,6 +398,36 @@ class FolderStructureService
             ?? throw new RuntimeException('Belum ada storage aktif. Tambahkan & aktifkan akun di menu Akun & Storage terlebih dahulu.');
     }
 
+    // ================================================================
+    // RF-41 — arsip Template Notula (satu berkas konfigurasi, bukan per-triwulan)
+    // ================================================================
+
+    /**
+     * Arsipkan template notula (App\Livewire\TemplateNotula) ke Drive, di folder
+     * "Template Notula" langsung di bawah root akun aktif — dokumen ini satu
+     * berkas konfigurasi aplikasi, bukan milik satu tahun/triwulan/IKU tertentu
+     * seperti unggahArsipNotula()/unggahBerkas(), jadi tidak lewat hierarki itu.
+     */
+    public function unggahTemplateNotula(string $localPath, string $namaBerkas): array
+    {
+        $akun = $this->akunAktifAtauGagal();
+
+        $folderTemplate = $this->findOrCreateFolderCached('Template Notula', $akun->drive_folder_id);
+
+        $namaSudahAda = $this->namesInFolderCached($folderTemplate);
+        $namaUnik = self::namaUnik(pathinfo($namaBerkas, PATHINFO_FILENAME), $namaSudahAda, '.'.pathinfo($namaBerkas, PATHINFO_EXTENSION));
+
+        $mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        $hasil = $this->drive->uploadFile($localPath, $namaUnik, $folderTemplate, $mime);
+
+        $akun->tambahKuotaTerpakai($hasil['size_bytes']);
+
+        return [
+            'drive_file_id' => $hasil['id'],
+            'storage_account_id' => $akun->id,
+        ];
+    }
+
     /**
      * Pola folder yang berlaku untuk SATU IKU tertentu — pola KHUSUS IKU ini bila ada
      * baris override di iku_folder_config, jatuh ke pola GLOBAL (FolderConfig) bila
