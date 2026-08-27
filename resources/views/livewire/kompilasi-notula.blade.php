@@ -47,24 +47,26 @@
     @if ($kesiapanSasaran->isNotEmpty())
         <div class="card">
             <div class="sec"><span>Kesiapan per Sasaran</span></div>
-            <table>
-                <thead><tr><th>Sasaran</th><th>IKU Siap</th><th>Status</th></tr></thead>
-                <tbody>
-                    @foreach ($kesiapanSasaran as $baris)
-                        <tr>
-                            <td>{{ $baris['sasaran'] }}</td>
-                            <td>{{ $baris['iku_siap'] }}/{{ $baris['iku_total'] }}</td>
-                            <td>
-                                @if ($baris['iku_siap'] === $baris['iku_total'])
-                                    <x-badge-status status="diverifikasi" />
-                                @else
-                                    <x-badge-status status="menunggu" />
-                                @endif
-                            </td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
+            <div class="scroll-y" style="max-height:320px">
+                <table>
+                    <thead><tr><th>Sasaran</th><th>IKU Siap</th><th>Status</th></tr></thead>
+                    <tbody>
+                        @foreach ($kesiapanSasaran as $baris)
+                            <tr>
+                                <td>{{ $baris['sasaran'] }}</td>
+                                <td>{{ $baris['iku_siap'] }}/{{ $baris['iku_total'] }}</td>
+                                <td>
+                                    @if ($baris['iku_siap'] === $baris['iku_total'])
+                                        <x-badge-status status="diverifikasi" />
+                                    @else
+                                        <x-badge-status status="menunggu" />
+                                    @endif
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
         </div>
     @endif
 
@@ -189,22 +191,97 @@
     <div class="card">
         <div class="sec"><span>Pratinjau &amp; Sunting Notula — Bagian I, II, III</span></div>
         <p style="color:var(--muted);font-size:12.5px;margin-bottom:16px">
-            Satu dokumen utuh dari atas ke bawah, sama seperti membuka file Word yang sudah lengkap. Bagian I bisa
-            disunting langsung; Bagian II &amp; III tinggal unggah berkasnya dan langsung tampil di bawahnya. Isi
-            Bagian II &amp; III bebas mengikuti template Anda sendiri — cuma format berkasnya yang disarankan
-            <b>.docx (Word)</b> supaya hasil gabungannya rapi menyambung mengikuti tata letak Bagian I (gambar/PDF
-            hasil pindai tetap didukung, tapi tampil sebagai gambar statis, tidak menyambung layoutnya).
+            Satu dokumen utuh dari atas ke bawah, sama seperti membuka file Word yang sudah lengkap. Unggah
+            berkas Bagian II &amp; III dulu di bawah ini, lalu sunting Bagian I langsung di pratinjau gabungan
+            paling bawah. Isi Bagian II &amp; III bebas mengikuti template Anda sendiri — cuma format
+            berkasnya yang disarankan <b>.docx (Word)</b> supaya hasil gabungannya rapi menyambung mengikuti
+            tata letak Bagian I (gambar/PDF hasil pindai tetap didukung, tapi tampil sebagai gambar statis,
+            tidak menyambung layoutnya).
         </p>
 
-        {{-- BAGIAN I — disunting langsung, WYSIWYG --}}
+        {{-- BAGIAN II — berkas unggahan, tampil sebagai kelanjutan dokumen yang sama --}}
         <div class="doc-bagian-head">
-            <span class="doc-bagian-badge">Bagian I</span> Capaian Kinerja
-            <span class="st {{ $bagian1Siap ? 'ok' : 'no' }}" style="margin-left:auto">{{ $bagian1Siap ? '✓ Siap' : '✕ Belum lengkap' }}</span>
+            <span class="doc-bagian-badge">Bagian II</span> Peran BPS dalam Prioritas Nasional &amp; Isu Strategis
+            <span class="st {{ $bagian2Siap ? 'ok' : 'no' }}" style="margin-left:auto">{{ $bagian2Siap ? '✓ Siap' : '✕ Belum lengkap' }}</span>
+        </div>
+
+        @if ($bagian2Siap)
+            <div class="doc-preview-frame">
+                <iframe src="{{ route('notula.pratinjau-bagian2', $notula) }}" style="height:500px" title="Pratinjau Bagian II"></iframe>
+            </div>
+            <div class="btn-row" style="margin-top:8px">
+                <label class="btn btn-ghost btn-sm" style="cursor:pointer">
+                    ⟲ Ganti Berkas
+                    <input type="file" wire:model="bagian2File" accept=".docx,.doc,.xlsx,.xls,.odt,.ods,.jpg,.jpeg,.png,.pdf" style="display:none">
+                </label>
+            </div>
+        @else
+            <label class="upload upload-tinggi need" style="cursor:pointer;display:flex">
+                <div><div class="big">📤</div>Klik untuk unggah Bagian II (docx/xlsx/odt/ods, gambar, atau PDF)</div>
+                <input type="file" wire:model="bagian2File" accept=".docx,.doc,.xlsx,.xls,.odt,.ods,.jpg,.jpeg,.png,.pdf" style="display:none">
+            </label>
+        @endif
+        <div wire:loading wire:target="bagian2File" style="font-size:11.5px;color:var(--muted);margin-top:6px">Mengunggah…</div>
+        @error('bagian2File')
+            <div style="color:var(--red);font-size:11.5px;margin-top:6px">{{ $message }}</div>
+        @enderror
+        @if ($bagian2File)
+            <div class="btn-row" style="margin-top:8px">
+                <button type="button" class="btn btn-teal btn-sm" wire:click="unggahBagian(2)" wire:loading.attr="disabled" wire:target="unggahBagian(2)">
+                    <span wire:loading.remove wire:target="unggahBagian(2)">Proses →</span>
+                    <span wire:loading wire:target="unggahBagian(2)"><i class="spin"></i> Memproses…</span>
+                </button>
+            </div>
+        @endif
+
+        {{-- BAGIAN III — sama seperti Bagian II --}}
+        <div class="doc-bagian-head" style="margin-top:28px">
+            <span class="doc-bagian-badge">Bagian III</span> Realisasi Anggaran &amp; Upaya Efisiensi
+            <span class="st {{ $bagian3Siap ? 'ok' : 'no' }}" style="margin-left:auto">{{ $bagian3Siap ? '✓ Siap' : '✕ Belum lengkap' }}</span>
+        </div>
+
+        @if ($bagian3Siap)
+            <div class="doc-preview-frame">
+                <iframe src="{{ route('notula.pratinjau-bagian3', $notula) }}" style="height:500px" title="Pratinjau Bagian III"></iframe>
+            </div>
+            <div class="btn-row" style="margin-top:8px">
+                <label class="btn btn-ghost btn-sm" style="cursor:pointer">
+                    ⟲ Ganti Berkas
+                    <input type="file" wire:model="bagian3File" accept=".docx,.doc,.xlsx,.xls,.odt,.ods,.jpg,.jpeg,.png,.pdf" style="display:none">
+                </label>
+            </div>
+        @else
+            <label class="upload upload-tinggi need" style="cursor:pointer;display:flex">
+                <div><div class="big">📤</div>Klik untuk unggah Bagian III (docx/xlsx/odt/ods, gambar, atau PDF)</div>
+                <input type="file" wire:model="bagian3File" accept=".docx,.doc,.xlsx,.xls,.odt,.ods,.jpg,.jpeg,.png,.pdf" style="display:none">
+            </label>
+        @endif
+        <div wire:loading wire:target="bagian3File" style="font-size:11.5px;color:var(--muted);margin-top:6px">Mengunggah…</div>
+        @error('bagian3File')
+            <div style="color:var(--red);font-size:11.5px;margin-top:6px">{{ $message }}</div>
+        @enderror
+        @if ($bagian3File)
+            <div class="btn-row" style="margin-top:8px">
+                <button type="button" class="btn btn-teal btn-sm" wire:click="unggahBagian(3)" wire:loading.attr="disabled" wire:target="unggahBagian(3)">
+                    <span wire:loading.remove wire:target="unggahBagian(3)">Proses →</span>
+                    <span wire:loading wire:target="unggahBagian(3)"><i class="spin"></i> Memproses…</span>
+                </button>
+            </div>
+        @endif
+
+        {{-- NOTULA LENGKAP — gabungan I+II+III; Bagian I disunting LANGSUNG di sini
+             (satu-satunya editor Bagian I di halaman ini, supaya tidak dobel dengan
+             pratinjau), Bagian II/III mengikuti berkas yang diunggah di atas apa adanya. --}}
+        <div class="doc-bagian-head" style="margin-top:28px">
+            <span class="doc-bagian-badge">Notula Lengkap</span> Bagian I, II, III
+            <span class="st {{ $bagian1Siap ? 'ok' : 'no' }}" style="margin-left:auto">{{ $bagian1Siap ? '✓ Bagian I siap' : '✕ Bagian I belum disusun' }}</span>
         </div>
         <div style="margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap">
             <a href="{{ route('notula.unduh-bagian1-docx', $notula) }}" class="btn btn-teal btn-sm" style="text-decoration:none;display:inline-block">⬇ Unduh Bagian I (.docx, terisi otomatis)</a>
             <a href="{{ route('notula.template-bagian1') }}" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-block">⬇ Unduh Panduan Bagian I (referensi, tidak perlu diunggah balik)</a>
+            <a href="{{ route('notula.pratinjau-cepat-pdf', $notula) }}" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-block">⬇ Unduh Pratinjau Lengkap (.pdf, apa adanya)</a>
         </div>
+        <p class="fhint" style="margin-bottom:10px">Klik lalu ketik langsung di dalam Bagian I pada pratinjau di bawah untuk menyunting — Bagian II &amp; III ikut tampil di bawahnya persis dari berkas yang diunggah.</p>
 
         <div x-data="{
             aktifBold: false, aktifItalic: false, aktifUnderline: false,
@@ -375,15 +452,26 @@
             </div>
 
             <div class="word-canvas">
-            <div class="notula" contenteditable="true" wire:ignore spellcheck="false" x-ref="editor"
-                style="min-height:520px;max-height:680px;overflow-y:auto"
-                x-on:bagian1-diperbarui.window="$el.innerHTML = $event.detail.html"
-                @keyup="perbaruiStatus()" @mouseup="perbaruiStatus()"
-                @blur="$wire.set('bagian1EditText', $el.innerHTML)">
-                @if (trim($bagian1EditText) === '')
-                    <p style="color:var(--faint);font-style:italic">Belum ada konten. Tekan "Susun Ulang Otomatis" atau mulai mengetik di sini.</p>
-                @else
-                    {!! $bagian1EditText !!}
+            <div class="notula" style="max-height:800px;overflow-y:auto">
+                <div class="notula-edit" contenteditable="true" wire:ignore spellcheck="false" x-ref="editor"
+                    x-on:bagian1-diperbarui.window="$el.innerHTML = $event.detail.html"
+                    @keyup="perbaruiStatus()" @mouseup="perbaruiStatus()"
+                    @blur="$wire.set('bagian1EditText', $el.innerHTML)">
+                    @if (trim($bagian1EditText) === '')
+                        <p style="color:var(--faint);font-style:italic">Belum ada konten. Tekan "Susun Ulang Otomatis" atau mulai mengetik di sini.</p>
+                    @else
+                        {!! $bagian1EditText !!}
+                    @endif
+                </div>
+
+                @if (trim((string) $notula->bagian2_html) !== '')
+                    <div class="bagian-judul">BAGIAN II — Peran BPS dalam Prioritas Nasional &amp; Isu Strategis</div>
+                    {!! $notula->bagian2_html !!}
+                @endif
+
+                @if (trim((string) $notula->bagian3_html) !== '')
+                    <div class="bagian-judul">BAGIAN III — Realisasi Anggaran &amp; Upaya Efisiensi</div>
+                    {!! $notula->bagian3_html !!}
                 @endif
             </div>
             </div>
@@ -398,102 +486,6 @@
                 <span wire:loading.remove wire:target="simpanSuntinganBagian1">💾 Simpan Bagian I</span>
                 <span wire:loading wire:target="simpanSuntinganBagian1"><i class="spin"></i> Menyimpan…</span>
             </button>
-        </div>
-
-        {{-- BAGIAN II — berkas unggahan, tampil sebagai kelanjutan dokumen yang sama --}}
-        <div class="doc-bagian-head" style="margin-top:28px">
-            <span class="doc-bagian-badge">Bagian II</span> Peran BPS dalam Prioritas Nasional &amp; Isu Strategis
-            <span class="st {{ $bagian2Siap ? 'ok' : 'no' }}" style="margin-left:auto">{{ $bagian2Siap ? '✓ Siap' : '✕ Belum lengkap' }}</span>
-        </div>
-        <div style="margin-bottom:8px">
-            <a href="{{ route('notula.template-bagian2') }}" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-block">⬇ Unduh Template Word Bagian II</a>
-        </div>
-
-        @if ($bagian2Siap)
-            <div class="doc-preview-frame">
-                <iframe src="{{ route('notula.pratinjau-bagian2', $notula) }}" style="height:500px" title="Pratinjau Bagian II"></iframe>
-            </div>
-            <div class="btn-row" style="margin-top:8px">
-                <label class="btn btn-ghost btn-sm" style="cursor:pointer">
-                    ⟲ Ganti Berkas
-                    <input type="file" wire:model="bagian2File" accept=".docx,.doc,.xlsx,.xls,.odt,.ods,.jpg,.jpeg,.png,.pdf" style="display:none">
-                </label>
-            </div>
-        @else
-            <label class="upload upload-tinggi need" style="cursor:pointer;display:flex">
-                <div><div class="big">📤</div>Klik untuk unggah Bagian II (docx/xlsx/odt/ods, gambar, atau PDF)</div>
-                <input type="file" wire:model="bagian2File" accept=".docx,.doc,.xlsx,.xls,.odt,.ods,.jpg,.jpeg,.png,.pdf" style="display:none">
-            </label>
-        @endif
-        <div wire:loading wire:target="bagian2File" style="font-size:11.5px;color:var(--muted);margin-top:6px">Mengunggah…</div>
-        @error('bagian2File')
-            <div style="color:var(--red);font-size:11.5px;margin-top:6px">{{ $message }}</div>
-        @enderror
-        @if ($bagian2File)
-            <div class="btn-row" style="margin-top:8px">
-                <button type="button" class="btn btn-teal btn-sm" wire:click="unggahBagian(2)" wire:loading.attr="disabled" wire:target="unggahBagian(2)">
-                    <span wire:loading.remove wire:target="unggahBagian(2)">Proses →</span>
-                    <span wire:loading wire:target="unggahBagian(2)"><i class="spin"></i> Memproses…</span>
-                </button>
-            </div>
-        @endif
-
-        {{-- BAGIAN III — sama seperti Bagian II --}}
-        <div class="doc-bagian-head" style="margin-top:28px">
-            <span class="doc-bagian-badge">Bagian III</span> Realisasi Anggaran &amp; Upaya Efisiensi
-            <span class="st {{ $bagian3Siap ? 'ok' : 'no' }}" style="margin-left:auto">{{ $bagian3Siap ? '✓ Siap' : '✕ Belum lengkap' }}</span>
-        </div>
-        <div style="margin-bottom:8px">
-            <a href="{{ route('notula.template-bagian3') }}" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-block">⬇ Unduh Template Word Bagian III</a>
-        </div>
-
-        @if ($bagian3Siap)
-            <div class="doc-preview-frame">
-                <iframe src="{{ route('notula.pratinjau-bagian3', $notula) }}" style="height:500px" title="Pratinjau Bagian III"></iframe>
-            </div>
-            <div class="btn-row" style="margin-top:8px">
-                <label class="btn btn-ghost btn-sm" style="cursor:pointer">
-                    ⟲ Ganti Berkas
-                    <input type="file" wire:model="bagian3File" accept=".docx,.doc,.xlsx,.xls,.odt,.ods,.jpg,.jpeg,.png,.pdf" style="display:none">
-                </label>
-            </div>
-        @else
-            <label class="upload upload-tinggi need" style="cursor:pointer;display:flex">
-                <div><div class="big">📤</div>Klik untuk unggah Bagian III (docx/xlsx/odt/ods, gambar, atau PDF)</div>
-                <input type="file" wire:model="bagian3File" accept=".docx,.doc,.xlsx,.xls,.odt,.ods,.jpg,.jpeg,.png,.pdf" style="display:none">
-            </label>
-        @endif
-        <div wire:loading wire:target="bagian3File" style="font-size:11.5px;color:var(--muted);margin-top:6px">Mengunggah…</div>
-        @error('bagian3File')
-            <div style="color:var(--red);font-size:11.5px;margin-top:6px">{{ $message }}</div>
-        @enderror
-        @if ($bagian3File)
-            <div class="btn-row" style="margin-top:8px">
-                <button type="button" class="btn btn-teal btn-sm" wire:click="unggahBagian(3)" wire:loading.attr="disabled" wire:target="unggahBagian(3)">
-                    <span wire:loading.remove wire:target="unggahBagian(3)">Proses →</span>
-                    <span wire:loading wire:target="unggahBagian(3)"><i class="spin"></i> Memproses…</span>
-                </button>
-            </div>
-        @endif
-
-        <div class="doc-preview-label">📄 Pratinjau Notula Lengkap — Bagian I, II, III (mengikuti isian terkini apa adanya)</div>
-        <div class="word-canvas">
-            <div class="notula">
-                {!! $bagian1EditText !!}
-
-                @if (trim((string) $notula->bagian2_html) !== '')
-                    <div class="bagian-judul">BAGIAN II — Peran BPS dalam Prioritas Nasional &amp; Isu Strategis</div>
-                    {!! $notula->bagian2_html !!}
-                @endif
-
-                @if (trim((string) $notula->bagian3_html) !== '')
-                    <div class="bagian-judul">BAGIAN III — Realisasi Anggaran &amp; Upaya Efisiensi</div>
-                    {!! $notula->bagian3_html !!}
-                @endif
-            </div>
-        </div>
-        <div class="btn-row" style="margin-top:10px">
-            <a href="{{ route('notula.pratinjau-cepat-pdf', $notula) }}" class="btn btn-ghost btn-sm" style="text-decoration:none">⬇ Unduh Pratinjau (.pdf, apa adanya)</a>
         </div>
 
         <div class="merge-bar" style="margin-top:26px">

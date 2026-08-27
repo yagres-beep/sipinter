@@ -430,8 +430,12 @@ th.th-sort.active .th-arrow{opacity:1;color:var(--blue-600);font-weight:700}
 .doc-preview-label{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin:16px 0 8px}
 .doc-preview-frame{border:1px solid var(--line);border-radius:12px;box-shadow:var(--sh);overflow:hidden;background:var(--white)}
 .doc-preview-frame iframe{display:block;width:100%;border:none}
-.notula[contenteditable]{cursor:text}
-.notula[contenteditable]:focus{outline:none;box-shadow:0 1px 3px rgba(16,32,70,.08),0 12px 32px rgba(16,32,70,.14),0 0 0 2px var(--blue)}
+/* Bagian I editable dalam pratinjau gabungan -- CUMA region ini yang contenteditable
+   (bukan .notula secara keseluruhan), supaya konten Bagian II/III (hasil unggahan,
+   bukan teks bebas) tidak ikut kepencet bisa disunting. */
+.notula-edit[contenteditable]{cursor:text;outline:none;border-radius:4px}
+.notula-edit[contenteditable]:focus{box-shadow:0 0 0 2px var(--blue);background:var(--blue-soft)}
+.scroll-y{overflow-y:auto}
 .doc-toolbar{display:flex;align-items:center;gap:3px;flex-wrap:wrap;background:linear-gradient(#fbfcfe,#eef1f6);border:1px solid #d5d9e2;border-radius:10px 10px 0 0;border-bottom:1px solid #d5d9e2;padding:8px 10px;box-shadow:inset 0 -1px 0 rgba(16,32,70,.04)}
 .doc-toolbar button{background:none;border:1.5px solid transparent;border-radius:6px;min-width:30px;height:30px;padding:0 9px;font-size:13px;font-weight:700;color:#333;cursor:pointer;font-family:'Times New Roman',Times,serif;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;line-height:1;transition:.1s}
 .doc-toolbar button:hover{background:#e0e6f0;border-color:#d5d9e2}
