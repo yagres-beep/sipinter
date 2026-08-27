@@ -56,7 +56,7 @@
             <p style="color:var(--muted);font-size:12px;margin-bottom:10px">
                 Kategori <b>Capaian</b> dan <b>Bukti-Dukung-SAKIP</b> wajib ada (RF-12) dan tidak bisa dihapus.
                 "Subfolder per bulan" memecah kategori ini jadi per-bulan (folder Bulan ada DI DALAM kategori, bukan di atasnya).
-                "Subfolder per kegiatan" membuat tiap kegiatan dapat folder sendiri di dalamnya (RF-13) — bila keduanya aktif, urutannya Kategori/Bulan/Kegiatan.
+                "Subfolder per kegiatan" membuat tiap kegiatan dapat folder sendiri di dalamnya (RF-13) — bila keduanya aktif, urutan penyarangannya (Bulan di luar atau Kegiatan di luar) bisa ditukar lewat tombol "⇄ Tukar" yang muncul.
             </p>
 
             @error('kategori')
@@ -92,6 +92,13 @@
                             <input type="checkbox" wire:click="toggleSubfolderKegiatan({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="toggleSubfolderKegiatan({{ $i }})" @checked($k['subfolder_per_kegiatan'])>
                             Subfolder per kegiatan
                         </label>
+                        @if (($k['subfolder_per_bulan'] ?? false) && $k['subfolder_per_kegiatan'])
+                            @php $bulanDuluan = ($k['urutan_bulan_kegiatan'] ?? 'bulan_dulu') === 'bulan_dulu'; @endphp
+                            <div style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);width:100%;margin-top:6px">
+                                <span>Urutan: {{ $bulanDuluan ? 'Bulan di luar (Kategori/Bulan/Kegiatan)' : 'Kegiatan di luar (Kategori/Kegiatan/Bulan)' }}</span>
+                                <button type="button" class="btn btn-ghost btn-sm" style="padding:2px 8px" wire:click="toggleUrutanBulanKegiatan({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="toggleUrutanBulanKegiatan({{ $i }})" title="Tukar urutan Bulan/Kegiatan">⇄ Tukar</button>
+                            </div>
+                        @endif
                     </div>
                 </div>
             @endforeach
@@ -252,6 +259,13 @@
                                 <input type="checkbox" wire:click="toggleSubfolderKegiatanIku({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="toggleSubfolderKegiatanIku({{ $i }})" @checked($k['subfolder_per_kegiatan'])>
                                 Subfolder per kegiatan
                             </label>
+                            @if (($k['subfolder_per_bulan'] ?? false) && $k['subfolder_per_kegiatan'])
+                                @php $bulanDuluanIku = ($k['urutan_bulan_kegiatan'] ?? 'bulan_dulu') === 'bulan_dulu'; @endphp
+                                <div style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);width:100%;margin-top:6px">
+                                    <span>Urutan: {{ $bulanDuluanIku ? 'Bulan di luar (Kategori/Bulan/Kegiatan)' : 'Kegiatan di luar (Kategori/Kegiatan/Bulan)' }}</span>
+                                    <button type="button" class="btn btn-ghost btn-sm" style="padding:2px 8px" wire:click="toggleUrutanBulanKegiatanIku({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="toggleUrutanBulanKegiatanIku({{ $i }})" title="Tukar urutan Bulan/Kegiatan">⇄ Tukar</button>
+                                </div>
+                            @endif
                         </div>
                     </div>
                 @endforeach

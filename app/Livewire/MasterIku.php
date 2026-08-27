@@ -6,7 +6,6 @@ use App\Exports\MasterIkuTemplateExport;
 use App\Imports\MasterIkuImport;
 use App\Models\CapaianTahunan;
 use App\Models\MasterIku as MasterIkuModel;
-use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel as ExcelFacade;
 use Livewire\Component;
@@ -60,17 +59,11 @@ class MasterIku extends Component
 
     public string $kode = '';
 
-    public string $kodeTujuan = '';
-
-    public string $namaTujuan = '';
-
     public string $kodeSasaran = '';
 
     public string $indikator = '';
 
     public string $tim = '';
-
-    public string $penanggungJawab = '';
 
     public string $sasaran = '';
 
@@ -97,13 +90,6 @@ class MasterIku extends Component
      * sudah direalisasikan).
      */
     public bool $pakaiRincianN = false;
-
-    /**
-     * 'iku': indikator inti (default). 'proksi': indikator pendukung/pengganti
-     * sementara — sesuai kolom "Jenis (IKU atau Proksi)" Kertas Kerja Pengukuran
-     * Kinerja Triwulanan resmi (App\Models\MasterIku::JENIS_IKU/JENIS_PROKSI).
-     */
-    public string $jenisIku = 'iku';
 
     /**
      * 'tahunan' (default) | 'triwulanan' — sesuai kolom "Jenis (Triwulanan atau
@@ -149,12 +135,9 @@ class MasterIku extends Component
                 'required', 'string', 'max:50',
                 'unique:master_iku,kode,'.($this->editingId ?? 'NULL').',id',
             ],
-            'kodeTujuan' => ['nullable', 'string', 'max:50'],
-            'namaTujuan' => ['nullable', 'string', 'max:255'],
             'kodeSasaran' => ['nullable', 'string', 'max:50'],
             'indikator' => ['required', 'string'],
             'tim' => ['required', 'string', 'max:255'],
-            'penanggungJawab' => ['required', 'string', 'max:255'],
             'sasaran' => ['nullable', 'string', 'max:255'],
             'dasarHitung' => ['nullable', 'string'],
             'basisData' => ['nullable', 'string', 'max:255'],
@@ -169,7 +152,6 @@ class MasterIku extends Component
                     }
                 },
             ],
-            'jenisIku' => ['required', 'string', 'in:iku,proksi'],
             'jenisPeriode' => ['required', 'string', 'in:triwulanan,tahunan'],
             'deskripsiX' => ['nullable', 'string', 'max:255'],
             'deskripsiY' => ['nullable', 'string', 'max:255'],
@@ -180,18 +162,14 @@ class MasterIku extends Component
     {
         return [
             'kode' => 'kode',
-            'kodeTujuan' => 'kode tujuan',
-            'namaTujuan' => 'nama tujuan',
             'kodeSasaran' => 'kode sasaran',
             'indikator' => 'indikator',
             'tim' => 'tim',
-            'penanggungJawab' => 'penanggung jawab',
             'sasaran' => 'sasaran',
             'dasarHitung' => 'dasar hitung',
             'basisData' => 'basis data',
             'satuan' => 'satuan',
             'metodeCapaian' => 'metode perhitungan',
-            'jenisIku' => 'jenis IKU',
             'jenisPeriode' => 'jenis periode',
             'deskripsiX' => 'label pembilang (X)',
             'deskripsiY' => 'label penyebut (Y)',
@@ -289,19 +267,15 @@ class MasterIku extends Component
 
         $this->editingId = $iku->id;
         $this->kode = $iku->kode;
-        $this->kodeTujuan = $iku->kode_tujuan ?? '';
-        $this->namaTujuan = $iku->nama_tujuan ?? '';
         $this->kodeSasaran = $iku->kode_sasaran ?? '';
         $this->indikator = $iku->indikator;
         $this->tim = $iku->tim ?? '';
-        $this->penanggungJawab = $iku->penanggung_jawab ?? '';
         $this->sasaran = $iku->sasaran ?? '';
         $this->dasarHitung = $iku->dasar_hitung ?? '';
         $this->basisData = $iku->basis_data ?? '';
         $this->satuan = $iku->satuan;
         $this->metodeCapaian = $iku->metode_capaian;
         $this->pakaiRincianN = $iku->pakai_rincian_n;
-        $this->jenisIku = $iku->jenis_iku;
         $this->jenisPeriode = $iku->jenis_periode;
         $this->deskripsiX = $iku->deskripsi_x ?? '';
         $this->deskripsiY = $iku->deskripsi_y ?? '';
@@ -310,11 +284,10 @@ class MasterIku extends Component
 
     public function cancelEdit(): void
     {
-        $this->reset(['editingId', 'kode', 'kodeTujuan', 'namaTujuan', 'kodeSasaran', 'indikator', 'tim', 'penanggungJawab', 'sasaran', 'dasarHitung', 'basisData', 'deskripsiX', 'deskripsiY', 'formulaCapaian']);
+        $this->reset(['editingId', 'kode', 'kodeSasaran', 'indikator', 'tim', 'sasaran', 'dasarHitung', 'basisData', 'deskripsiX', 'deskripsiY', 'formulaCapaian']);
         $this->satuan = 'Persen';
         $this->metodeCapaian = 'langsung';
         $this->pakaiRincianN = false;
-        $this->jenisIku = 'iku';
         $this->jenisPeriode = 'tahunan';
         $this->resetValidation();
     }
@@ -328,12 +301,9 @@ class MasterIku extends Component
             // — dinormalisasi di sini juga (bukan cuma migrasi backfill data lama) supaya
             // tetap konsisten walau seseorang terbiasa mengetik "IKU-1131" di kolom Kode.
             'kode' => preg_replace('/^\D+/', '', trim($this->kode)) ?: trim($this->kode),
-            'kode_tujuan' => $this->kodeTujuan ?: null,
-            'nama_tujuan' => $this->namaTujuan ?: null,
             'kode_sasaran' => $this->kodeSasaran ?: null,
             'indikator' => $this->indikator,
             'tim' => $this->tim,
-            'penanggung_jawab' => $this->penanggungJawab,
             'sasaran' => $this->sasaran ?: null,
             'dasar_hitung' => $this->dasarHitung ?: null,
             'basis_data' => $this->basisData ?: null,
@@ -343,7 +313,6 @@ class MasterIku extends Component
             // bertipe rasio, mencegah nilai lama "nyangkut" saat metode diubah balik
             // ke 'langsung' lewat edit tanpa checkbox ini sempat terlihat/diubah lagi.
             'pakai_rincian_n' => $this->metodeCapaian === MasterIkuModel::METODE_RASIO && $this->pakaiRincianN,
-            'jenis_iku' => $this->jenisIku,
             'jenis_periode' => $this->jenisPeriode,
             'deskripsi_x' => $this->deskripsiX ?: null,
             'deskripsi_y' => $this->deskripsiY ?: null,
@@ -434,12 +403,6 @@ class MasterIku extends Component
         // untuk saran datalist itu murni pemborosan — datanya sudah ada di sini.
         $ikuList = MasterIkuModel::orderBy('kode')->get();
 
-        $daftarPenanggungJawab = $ikuList->pluck('penanggung_jawab')->filter()
-            ->merge(User::where('status_verifikasi', 'terverifikasi')->orderBy('nama')->pluck('nama'))
-            ->unique()
-            ->sort()
-            ->values();
-
         $pratinjau = collect($this->pratinjau);
 
         return view('livewire.master-iku', [
@@ -448,7 +411,6 @@ class MasterIku extends Component
             'daftarKode' => $ikuList->pluck('kode')->filter()->unique()->sort()->values()->all(),
             'daftarTim' => $ikuList->pluck('tim')->filter()->unique()->sort()->values()->all(),
             'daftarSasaran' => $ikuList->pluck('sasaran')->filter()->unique()->sort()->values()->all(),
-            'daftarPenanggungJawab' => $daftarPenanggungJawab,
             'pendingDeleteKode' => $this->pendingDeleteId
                 ? $ikuList->firstWhere('id', $this->pendingDeleteId)?->kode
                 : null,

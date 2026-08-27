@@ -81,32 +81,30 @@ class DasborCapaian extends Component
     }
 
     /**
-     * Daftar CapaianTahunan indikator jenis IKU (Proksi disaring keluar di sini,
-     * sekali, dipakai ulang oleh capaianKinerjaPerTriwulan()/capaianSetahunPerTriwulan()/
-     * capaianPerSasaran() — sesuai spek "Capaian hanya dihitung untuk indikator IKU").
+     * Daftar CapaianTahunan tahun terpilih, dipakai ulang oleh
+     * capaianKinerjaPerTriwulan()/capaianSetahunPerTriwulan()/capaianPerSasaran()
+     * supaya tidak query berulang.
      *
      * @return \Illuminate\Support\Collection<int, CapaianTahunan>
      */
-    protected function capaianTahunanIkuSaja(): \Illuminate\Support\Collection
+    protected function capaianTahunanTahunIni(): \Illuminate\Support\Collection
     {
         return CapaianTahunan::with('masterIku')
             ->where('tahun', $this->tahun)
-            ->get()
-            ->filter(fn (CapaianTahunan $ct) => $ct->masterIku?->jenis_iku === MasterIku::JENIS_IKU);
+            ->get();
     }
 
     /**
      * Bagian 3 bullet 1 — rata-rata Capaian Terhadap Target Triwulanan (Rumus 2.3)
-     * seluruh IKU (Proksi dikecualikan) pada KEEMPAT triwulan tahun terpilih
-     * sekaligus, supaya Tim SAKIP bisa membandingkan tren antar triwulan dalam satu
-     * tabel tanpa berpindah halaman — lihat kartu "Capaian Kinerja IKU per Triwulan"
-     * di view.
+     * seluruh IKU pada KEEMPAT triwulan tahun terpilih sekaligus, supaya Tim SAKIP
+     * bisa membandingkan tren antar triwulan dalam satu tabel tanpa berpindah
+     * halaman — lihat kartu "Capaian Kinerja IKU per Triwulan" di view.
      *
      * @return array<int, float|string> triwulan (1-4) => rata-rata Capaian Kinerja IKU, atau "-" bila belum ada IKU yang bisa dinilai pada triwulan itu
      */
     protected function capaianKinerjaPerTriwulan(): array
     {
-        $capaianTahunanIku = $this->capaianTahunanIkuSaja();
+        $capaianTahunanIku = $this->capaianTahunanTahunIni();
 
         $hasil = [];
 
@@ -123,16 +121,16 @@ class DasborCapaian extends Component
 
     /**
      * Bagian 3 bullet 2 — rata-rata Capaian Terhadap Target Setahun (Rumus 2.4)
-     * seluruh IKU (Proksi dikecualikan) pada KEEMPAT triwulan tahun terpilih —
-     * paralel dengan capaianKinerjaPerTriwulan() di atas, tapi memakai
-     * capaianSetahun()/rataRataCapaianSetahun() (pembagi = jumlah TOTAL indikator
-     * IKU, bukan jumlah nilai valid — lihat CapaianCalculatorService::rataRataCapaianSetahun()).
+     * seluruh IKU pada KEEMPAT triwulan tahun terpilih — paralel dengan
+     * capaianKinerjaPerTriwulan() di atas, tapi memakai capaianSetahun()/
+     * rataRataCapaianSetahun() (pembagi = jumlah TOTAL indikator, bukan jumlah
+     * nilai valid — lihat CapaianCalculatorService::rataRataCapaianSetahun()).
      *
      * @return array<int, float|string>
      */
     protected function capaianSetahunPerTriwulan(): array
     {
-        $capaianTahunanIku = $this->capaianTahunanIkuSaja();
+        $capaianTahunanIku = $this->capaianTahunanTahunIni();
 
         $hasil = [];
 
@@ -149,15 +147,15 @@ class DasborCapaian extends Component
 
     /**
      * Bagian 3 bullet 3 — rata-rata Capaian Terhadap Target Triwulanan (Rumus 2.3)
-     * pada triwulan TERPILIH ($this->triwulan), dikelompokkan per MasterIku::sasaran
-     * (Proksi dikecualikan). IKU tanpa sasaran terisi dikelompokkan di bawah label
-     * "Tanpa Sasaran" supaya tetap terlihat, bukan diam-diam hilang dari tabel.
+     * pada triwulan TERPILIH ($this->triwulan), dikelompokkan per MasterIku::sasaran.
+     * IKU tanpa sasaran terisi dikelompokkan di bawah label "Tanpa Sasaran" supaya
+     * tetap terlihat, bukan diam-diam hilang dari tabel.
      *
      * @return \Illuminate\Support\Collection<string, float|string> sasaran => rata-rata Capaian Kinerja IKU
      */
     protected function capaianPerSasaran(): \Illuminate\Support\Collection
     {
-        $perSasaran = $this->capaianTahunanIkuSaja()
+        $perSasaran = $this->capaianTahunanTahunIni()
             ->groupBy(fn (CapaianTahunan $ct) => $ct->masterIku->sasaran ?: 'Tanpa Sasaran');
 
         return $perSasaran->map(function ($group) {
@@ -269,11 +267,6 @@ class DasborCapaian extends Component
      * penuh untuk yang kedua. Rumus tetap lewat Capaian::hitungPersentase() (satu
      * sumber rumus resmi, tidak diduplikasi di CapaianTahunan maupun di sini).
      *
-     * IKU berjenis Proksi (MasterIku::JENIS_PROKSI) TETAP tampil di baris (supaya
-     * kegiatannya tetap terlihat), TAPI persentase/persentase_setahun-nya SELALU
-     * null — sesuai spek "Capaian hanya dihitung untuk indikator IKU, Proksi tidak
-     * dihitung sama sekali".
-     *
      * @return \Illuminate\Support\Collection<int, array{iku: MasterIku, jumlah_kegiatan: int, target_pk: float, target_tw: float, realisasi: float, persentase: ?float, realisasi_ytd: float, persentase_setahun: ?float}>
      */
     protected function dataRekap()
@@ -294,7 +287,6 @@ class DasborCapaian extends Component
             ->map(function ($kegiatanGroup) use ($capaianTahunanPerIku) {
                 $iku = $kegiatanGroup->first()->masterIku;
                 $capaianTahunan = $capaianTahunanPerIku->get($iku->id);
-                $ikuSaja = $iku->jenis_iku === MasterIku::JENIS_IKU;
 
                 $targetPk = $capaianTahunan?->targetTahunan() ?? 0.0;
                 $targetTw = $capaianTahunan?->alokasiKumulatif($this->triwulan) ?? 0.0;
@@ -308,11 +300,10 @@ class DasborCapaian extends Component
                     'target_tw' => $targetTw,
                     'realisasi' => $realisasi,
                     // Pembilang kedua kolom capaian di bawah SELALU $realisasiYtd
-                    // (kumulatif s.d. triwulan ini), bukan $realisasi (triwulan ini saja) —
-                    // TAPI hanya dihitung untuk IKU, Proksi selalu null (lihat docblock di atas).
-                    'persentase' => $ikuSaja ? Capaian::hitungPersentase($targetTw, $realisasiYtd) : null,
+                    // (kumulatif s.d. triwulan ini), bukan $realisasi (triwulan ini saja).
+                    'persentase' => Capaian::hitungPersentase($targetTw, $realisasiYtd),
                     'realisasi_ytd' => $realisasiYtd,
-                    'persentase_setahun' => $ikuSaja ? Capaian::hitungPersentase($targetPk, $realisasiYtd) : null,
+                    'persentase_setahun' => Capaian::hitungPersentase($targetPk, $realisasiYtd),
                 ];
             })
             ->sortBy(fn ($row) => $row['iku']->kode)

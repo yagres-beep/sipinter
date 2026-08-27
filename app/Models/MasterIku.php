@@ -16,12 +16,9 @@ class MasterIku extends Model
 
     protected $fillable = [
         'kode',
-        'kode_tujuan',
-        'nama_tujuan',
         'kode_sasaran',
         'indikator',
         'tim',
-        'penanggung_jawab',
         'sasaran',
         'dasar_hitung',
         'basis_data',
@@ -29,7 +26,6 @@ class MasterIku extends Model
         'metode_capaian',
         'pakai_rincian_n',
         'formula_capaian',
-        'jenis_iku',
         'jenis_periode',
         'deskripsi_x',
         'deskripsi_y',
@@ -82,16 +78,6 @@ class MasterIku extends Model
                 : self::SATUAN_POIN;
         });
     }
-
-    /**
-     * IKU (indikator inti, dihitung penuh — lihat App\Services\CapaianCalculatorService)
-     * vs Proksi (indikator pendukung/pengganti sementara, TIDAK dihitung capaiannya
-     * sama sekali) — sesuai kolom "Jenis (IKU atau Proksi)" Kertas Kerja Pengukuran
-     * Kinerja Triwulanan resmi.
-     */
-    public const JENIS_IKU = 'iku';
-
-    public const JENIS_PROKSI = 'proksi';
 
     /**
      * Klasifikasi murni informasional, sesuai kolom "Jenis (Triwulanan atau Tahunan)"

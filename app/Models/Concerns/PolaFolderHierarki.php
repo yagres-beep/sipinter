@@ -65,4 +65,22 @@ trait PolaFolderHierarki
             ->pluck('nama')
             ->all();
     }
+
+    /**
+     * Urutan penyarangan Bulan vs Kegiatan untuk SATU kategori, bila keduanya aktif
+     * sekaligus (RF: "panah" pilih urutan di menu Struktur Folder) —
+     * 'bulan_dulu' (bawaan): Kategori/Bulan/Kegiatan (folder Bulan membungkus
+     * Kegiatan). 'kegiatan_dulu': Kategori/Kegiatan/Bulan (folder Kegiatan
+     * membungkus Bulan). Kunci 'urutan_bulan_kegiatan' hilang pada data lama
+     * (sebelum RF ini ada) dianggap 'bulan_dulu', sama seperti perilaku sebelumnya.
+     * Dipakai App\Services\FolderStructureService::resolveKategoriFolder()/
+     * unggahBerkas() untuk susunan folder Drive yang SESUNGGUHNYA, bukan cuma
+     * pratinjau.
+     */
+    public function kategoriUrutanBulanKegiatan(string $namaKategori): string
+    {
+        $kategori = collect($this->kategoriList())->firstWhere('nama', $namaKategori);
+
+        return $kategori['urutan_bulan_kegiatan'] ?? 'bulan_dulu';
+    }
 }

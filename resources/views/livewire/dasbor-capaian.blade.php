@@ -76,7 +76,7 @@
 
     <div class="card">
         <div class="card-h">📈 Capaian Kinerja IKU per Triwulan — {{ $tahun }}</div>
-        <div class="fhint" style="margin-bottom:10px">ℹ️ Rata-rata Capaian Terhadap Target Triwulanan/Setahun seluruh IKU (Proksi dikecualikan) pada triwulan tsb. Baris "Triwulanan": nilai "-" &amp; nilai 0 diabaikan dari rata-rata. Baris "Setahun": dibagi jumlah total indikator IKU.</div>
+        <div class="fhint" style="margin-bottom:10px">ℹ️ Rata-rata Capaian Terhadap Target Triwulanan/Setahun seluruh IKU pada triwulan tsb. Baris "Triwulanan": nilai "-" &amp; nilai 0 diabaikan dari rata-rata. Baris "Setahun": dibagi jumlah total indikator IKU.</div>
         <div class="table-scroll">
             <table>
                 <thead>
@@ -106,7 +106,7 @@
 
         @if ($capaianPerSasaran->isNotEmpty())
             <div class="card-h" style="margin-top:18px;font-size:13px">🎯 Capaian per Sasaran — Triwulan {{ ['I', 'II', 'III', 'IV'][$triwulan - 1] }} {{ $tahun }}</div>
-            <div class="table-scroll">
+            <div class="table-scroll" style="max-height:420px">
                 <table>
                     <thead>
                         <tr>

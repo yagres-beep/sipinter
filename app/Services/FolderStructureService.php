@@ -175,6 +175,12 @@ class FolderStructureService
      * kategori — ia jadi SUBFOLDER di dalam kategori tertentu saja, tergantung
      * apakah kategori itu dikonfigurasi "subfolder per bulan" (mis. Capaian &
      * Bukti-Dukung-SAKIP biasanya iya, Evaluasi-RTL biasanya tidak).
+     *
+     * Bila kategori ini JUGA punya subfolder per kegiatan (RF-13) DAN urutannya
+     * 'kegiatan_dulu' (lihat PolaFolderHierarki::kategoriUrutanBulanKegiatan()),
+     * folder Bulan SENGAJA belum dibuat di sini — ditunda sampai SETELAH folder
+     * kegiatan dibuat (lihat unggahBerkas()), supaya susunannya jadi Kategori/
+     * Kegiatan/Bulan, bukan Kategori/Bulan/Kegiatan (bawaan).
      */
     public function resolveKategoriFolder(Periode $periode, MasterIku $iku, string $namaKategori): string
     {
@@ -183,12 +189,23 @@ class FolderStructureService
 
         $folderId = $this->findOrCreateFolderCached($namaKategori, $folderId);
 
-        if (in_array($namaKategori, $config->kategoriDenganSubfolderBulan(), true)) {
-            $namaBulan = Carbon::create($periode->tahun, $periode->bulan, 1)->locale('id')->translatedFormat('F');
-            $folderId = $this->findOrCreateFolderCached($namaBulan, $folderId);
+        $pakaiSubfolderBulan = in_array($namaKategori, $config->kategoriDenganSubfolderBulan(), true);
+        $bulanDuluan = $config->kategoriUrutanBulanKegiatan($namaKategori) === 'bulan_dulu';
+
+        if ($pakaiSubfolderBulan && $bulanDuluan) {
+            $folderId = $this->findOrCreateFolderCached($this->namaBulan($periode), $folderId);
         }
 
         return $folderId;
+    }
+
+    /**
+     * Nama bulan Indonesia (mis. "Agustus") dari Periode — dipakai
+     * resolveKategoriFolder() & unggahBerkas() (urutan 'kegiatan_dulu').
+     */
+    private function namaBulan(Periode $periode): string
+    {
+        return Carbon::create($periode->tahun, $periode->bulan, 1)->locale('id')->translatedFormat('F');
     }
 
     /**
@@ -311,9 +328,20 @@ class FolderStructureService
         $kategoriFolderId = $this->resolveKategoriFolder($periode, $iku, $namaKategori);
 
         $config = $this->configUntukIku($iku);
-        $tujuanFolderId = ($kegiatan && in_array($namaKategori, $config->kategoriDenganSubfolderKegiatan(), true))
-            ? $this->resolveKegiatanFolder($kegiatan, $kategoriFolderId)
-            : $kategoriFolderId;
+        $tujuanFolderId = $kategoriFolderId;
+
+        if ($kegiatan && in_array($namaKategori, $config->kategoriDenganSubfolderKegiatan(), true)) {
+            $tujuanFolderId = $this->resolveKegiatanFolder($kegiatan, $kategoriFolderId);
+
+            // Urutan 'kegiatan_dulu': folder Bulan (bila kategori ini juga pakai
+            // subfolder per bulan) SENGAJA belum dibuat oleh resolveKategoriFolder()
+            // di atas — dibuat di sini, DI DALAM folder kegiatan, supaya susunannya
+            // Kategori/Kegiatan/Bulan.
+            if (in_array($namaKategori, $config->kategoriDenganSubfolderBulan(), true)
+                && $config->kategoriUrutanBulanKegiatan($namaKategori) === 'kegiatan_dulu') {
+                $tujuanFolderId = $this->findOrCreateFolderCached($this->namaBulan($periode), $tujuanFolderId);
+            }
+        }
 
         // RF-17: "nama berkas capaian mengikuti nama kegiatan/capaian-nya" — identitas
         // kegiatan sudah terwakili oleh folder di atas (lihat resolveKegiatanFolder),

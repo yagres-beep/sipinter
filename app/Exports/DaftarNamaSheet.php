@@ -13,9 +13,10 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 /**
  * Sheet referensi "Daftar Nama" pada Template Excel Master IKU — daftar pengguna
- * terverifikasi (Nama, Peran, Tim) supaya kolom Penanggung Jawab pada sheet
- * "Master IKU" bisa diisi dengan menyalin nama dari sini, bukan mengetik ulang.
- * Hanya referensi/bantuan pengisian — MasterIkuImport tidak membaca sheet ini.
+ * terverifikasi (Nama, Peran, Tim) supaya kolom Tim pada form Master IKU (yang
+ * juga berlaku sebagai Penanggung Jawab) bisa diisi dengan menyalin nama tim dari
+ * sini, bukan mengetik ulang. Hanya referensi/bantuan pengisian — MasterIkuImport
+ * tidak membaca sheet ini.
  */
 class DaftarNamaSheet implements FromCollection, WithColumnWidths, WithHeadings, WithStyles, WithTitle
 {

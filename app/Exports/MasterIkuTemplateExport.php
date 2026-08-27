@@ -6,8 +6,8 @@ use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 
 /**
  * Template Excel Master IKU (RF-05) — dua sheet: "Master IKU" (diisi &amp; diunggah
- * kembali, lihat MasterIkuTemplateSheet) dan "Daftar Nama" (referensi nama pengguna
- * terverifikasi untuk disalin ke kolom Penanggung Jawab, lihat DaftarNamaSheet).
+ * kembali, lihat MasterIkuTemplateSheet) dan "Daftar Nama" (referensi nama Tim
+ * pengguna terverifikasi, lihat DaftarNamaSheet).
  */
 class MasterIkuTemplateExport implements WithMultipleSheets
 {

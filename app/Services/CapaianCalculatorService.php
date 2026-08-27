@@ -97,12 +97,11 @@ class CapaianCalculatorService
 
     /**
      * Bagian 3 bullet 1 (Rata-rata capaian per TW, vs target triwulanan) — rata-rata
-     * Capaian Kinerja indikator jenis IKU (BUKAN Proksi — pemanggil wajib sudah
-     * menyaring itu SEBELUM memanggil fungsi ini, lihat App\Models\MasterIku::
-     * JENIS_IKU/JENIS_PROKSI) — mengabaikan nilai TIDAK_DINILAI ("-") MAUPUN nilai 0,
-     * supaya IKU yang belum sempat direalisasikan tidak menyeret turun rata-rata IKU
-     * lain yang sudah tercapai. TIDAK_DINILAI ("-") dikembalikan bila tidak ada satu
-     * pun nilai valid untuk dirata-ratakan.
+     * Capaian Kinerja seluruh indikator dalam daftar — mengabaikan nilai
+     * TIDAK_DINILAI ("-") MAUPUN nilai 0, supaya IKU yang belum sempat
+     * direalisasikan tidak menyeret turun rata-rata IKU lain yang sudah tercapai.
+     * TIDAK_DINILAI ("-") dikembalikan bila tidak ada satu pun nilai valid untuk
+     * dirata-ratakan.
      *
      * @param  array<int, float|string>  $capaianList
      */
@@ -124,10 +123,10 @@ class CapaianCalculatorService
      * Bagian 3 bullet 2 (Rata-rata capaian per TW, vs target setahun) — BEDA
      * sengaja dari rataRataCapaianTriwulanan() di atas: bila SEMUA IKU bernilai
      * TIDAK_DINILAI ("-") → TIDAK_DINILAI; selain itu (jumlah capaian SELURUH IKU,
-     * "-" dihitung 0 dalam jumlah) ÷ (jumlah TOTAL indikator IKU dalam daftar) —
+     * "-" dihitung 0 dalam jumlah) ÷ (jumlah TOTAL indikator dalam daftar) —
      * pembagi TETAP jumlah total elemen $capaianList, BUKAN jumlah nilai valid
      * (beda dari rataRataCapaianTriwulanan() yang membagi dengan jumlah nilai valid
-     * saja). Pemanggil wajib sudah menyaring Proksi sebelum memanggil ini.
+     * saja).
      *
      * @param  array<int, float|string>  $capaianList
      */
@@ -147,9 +146,9 @@ class CapaianCalculatorService
 
     /**
      * Bagian 3 bullet 3 (Subtotal per kelompok sasaran) — AVERAGEIF Capaian Kinerja
-     * indikator jenis IKU dalam SATU sasaran (pemanggil mengelompokkan per
-     * MasterIku::sasaran & menyaring jenis_iku SEBELUM memanggil ini) — mengabaikan
-     * TIDAK_DINILAI ("-"), TAPI nilai 0 TETAP ikut dirata-ratakan (beda dari
+     * indikator dalam SATU sasaran (pemanggil mengelompokkan per MasterIku::sasaran
+     * SEBELUM memanggil ini) — mengabaikan TIDAK_DINILAI ("-"), TAPI nilai 0 TETAP
+     * ikut dirata-ratakan (beda dari
      * rataRataCapaianTriwulanan() di atas — 0 di sini berarti "sudah dinilai,
      * capaiannya nol", bukan "belum dinilai"). TIDAK_DINILAI dikembalikan bila
      * kelompok kosong.

@@ -28,7 +28,7 @@
             <div class="ico ico-teal" style="width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:19px">📥</div>
             <div>
                 <div style="font-weight:700;color:var(--ink);font-size:13px">Template Sheet Master_IKU (.xlsx)</div>
-                <div class="fhint" style="margin-top:2px">Kolom: Kode/Nama Tujuan, Kode/Nama Sasaran, Kode Indikator, Indikator Kinerja, Jenis Indikator, Jenis Periode, Jenis Nilai (%/Non %), Satuan, Target Tahunan, Deskripsi &amp; Target X/Y (khusus "%"), Alokasi Target TW I-IV. Tim/Penanggung Jawab diisi belakangan lewat form manual (lihat sheet "Daftar Nama" untuk saran nama). Jangan hapus baris contoh (baris 2-3) &amp; petunjuk (baris 4).</div>
+                <div class="fhint" style="margin-top:2px">Kolom: Kode/Nama Sasaran, Kode Indikator, Indikator Kinerja, Jenis Periode, Jenis Nilai (%/Non %), Satuan, Target Tahunan, Deskripsi &amp; Target X/Y (khusus "%"), Alokasi Target TW I-IV. Tim (yang juga berlaku sebagai Penanggung Jawab) diisi belakangan lewat form manual (lihat sheet "Daftar Nama" untuk saran nama Tim). Jangan hapus baris contoh (baris 2-3) &amp; petunjuk (baris 4).</div>
             </div>
         </div>
         <button type="button" class="btn btn-teal" wire:click="downloadTemplate">⬇ Unduh Template (.xlsx)</button>
@@ -37,6 +37,7 @@
     @if ($pratinjau === null)
         <div class="card">
             <div class="sec"><span>Unggah Data IKU (Excel)</span></div>
+            <div class="fhint" style="margin-bottom:14px">Prosesnya 2 langkah: berkas diunggah &amp; diperiksa dulu di sini (belum tersimpan ke database), lalu ditampilkan sebagai pratinjau baris valid/error untuk dicek sebelum menekan "Konfirmasi Import" pada langkah berikutnya.</div>
 
             <div class="row2">
                 <div class="field">
@@ -53,6 +54,10 @@
                         <option value="insert">Insert baru (tolak Kode Indikator yang sudah ada)</option>
                         <option value="upsert">Upsert (perbarui Kode Indikator yang sudah ada)</option>
                     </select>
+                    <div class="fhint">
+                        <b>Insert baru</b>: khusus menambah IKU yang belum pernah ada — bila satu saja Kode Indikator di file sudah ada di database, baris itu ditolak (aman dipakai saat pertama kali impor).
+                        <b>Upsert</b>: Kode Indikator yang sudah ada akan DITIMPA datanya dengan isi file ini, yang belum ada tetap ditambah baru — pakai ini saat mengunggah ulang untuk memperbaiki/memperbarui data IKU yang sudah ada.
+                    </div>
                     @error('modeImpor')
                         <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                     @enderror
@@ -91,7 +96,7 @@
 
             <div class="btn-row">
                 <button type="button" class="btn btn-primary" wire:click="pratinjauExcel" wire:loading.attr="disabled" wire:target="pratinjauExcel">
-                    <span wire:loading.remove wire:target="pratinjauExcel">Pratinjau</span>
+                    <span wire:loading.remove wire:target="pratinjauExcel">📤 Unggah &amp; Pratinjau (Langkah 1/2)</span>
                     <span wire:loading wire:target="pratinjauExcel"><i class="spin"></i> Memproses…</span>
                 </button>
             </div>
@@ -99,7 +104,7 @@
     @else
         <div class="card">
             <div class="sec">
-                <span>Pratinjau Import — Tahun {{ $tahunImpor }}</span>
+                <span>Pratinjau Import (Langkah 2/2) — Tahun {{ $tahunImpor }}</span>
                 <span class="badge b-approve">{{ $jumlahValid }} valid</span>
                 @if ($jumlahError > 0)
                     <span class="badge b-tolak">{{ $jumlahError }} error</span>
@@ -204,10 +209,9 @@
                         <th>Indikator</th>
                         <th>Sasaran</th>
                         <th>Satuan</th>
-                        <th>Metode</th>
-                        <th>Jenis</th>
+                        <th style="text-align:center">Metode</th>
                         <th>Periode</th>
-                        <th>Penanggung Jawab</th>
+                        <th>Penanggung Jawab (Tim)</th>
                         <th style="text-align:right">Tindakan</th>
                     </tr>
                 </thead>
@@ -218,16 +222,15 @@
                             <td>{{ $iku->indikator }}</td>
                             <td class="muted">{{ $iku->sasaran ?? '—' }}</td>
                             <td class="muted">{{ $iku->satuan }}</td>
-                            <td>
+                            <td style="text-align:center">
                                 @if ($iku->pakaiRasio())
-                                    <span class="badge b-tunggu">Rasio X÷Y</span>
+                                    <span class="badge b-tunggu" style="white-space:nowrap">Rasio X÷Y</span>
                                 @else
-                                    <span class="muted">Langsung</span>
+                                    <span class="badge b-draft" style="white-space:nowrap">Langsung</span>
                                 @endif
                             </td>
-                            <td class="muted">{{ $iku->jenis_iku === 'proksi' ? 'Proksi' : 'IKU' }}</td>
                             <td class="muted">{{ $iku->pakaiTriwulanan() ? 'Triwulanan' : 'Tahunan' }}</td>
-                            <td class="muted">{{ $iku->tim }}</td>
+                            <td class="muted">{{ $iku->tim ?? '—' }}</td>
                             <td style="text-align:right;white-space:nowrap">
                                 <button type="button" class="btn btn-ghost btn-sm" wire:click="edit({{ $iku->id }})" wire:loading.attr="disabled" wire:target="edit({{ $iku->id }})">
                                     <span wire:loading.remove wire:target="edit({{ $iku->id }})">Ubah</span>
@@ -241,7 +244,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="9" style="color:var(--muted)">Belum ada data Master IKU. Unggah Excel atau tambah manual di atas.</td>
+                            <td colspan="8" style="color:var(--muted)">Belum ada data Master IKU. Unggah Excel atau tambah manual di atas.</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -249,7 +252,7 @@
             <x-table-pagination />
         </div>
 
-        <div class="info" style="margin:14px 0 0">ℹ️ Bisa juga tambah/perbaiki satu IKU manual (Kode, Indikator, Tim, Penanggung Jawab) tanpa Excel.</div>
+        <div class="info" style="margin:14px 0 0">ℹ️ Bisa juga tambah/perbaiki satu IKU manual (Kode, Indikator, Tim) tanpa Excel.</div>
     </div>
 
     @if ($pendingDeleteId && $alasanTidakBisaHapus)

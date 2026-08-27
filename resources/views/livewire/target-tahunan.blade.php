@@ -18,7 +18,7 @@
     <div class="card">
         <div class="sec"><span>Target Tahunan — {{ $tahun }}</span></div>
 
-        <div class="table-scroll">
+        <div class="table-scroll" style="max-height:65vh">
             <table>
                 <thead>
                     <tr>
@@ -90,7 +90,7 @@
                                         @enderror
                                     </td>
                                 @endfor
-                                <td style="text-align:left;min-width:220px">
+                                <td style="text-align:{{ $iku->pakai_rincian_n ? 'left' : 'center' }};min-width:220px">
                                     @if ($iku->pakai_rincian_n)
                                         <div class="muted" style="font-size:10.5px;margin-bottom:4px">Rincian N — {{ count($rincianN[$iku->id] ?? []) }} item = Alokasi Y</div>
                                         <div style="max-height:140px;overflow-y:auto;display:flex;flex-direction:column;gap:4px">

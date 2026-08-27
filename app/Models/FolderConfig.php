@@ -19,12 +19,16 @@ use Illuminate\Database\Eloquent\Model;
  *     {"level": "iku", "aktif": true}
  *   ],
  *   "kategori": [
- *     {"nama": "Capaian", "wajib": true, "subfolder_per_kegiatan": true},
+ *     {"nama": "Capaian", "wajib": true, "subfolder_per_kegiatan": true, "subfolder_per_bulan": true, "urutan_bulan_kegiatan": "bulan_dulu"},
  *     {"nama": "Solusi", "wajib": false, "subfolder_per_kegiatan": false},
  *     {"nama": "Evaluasi-RTL", "wajib": false, "subfolder_per_kegiatan": false},
- *     {"nama": "Bukti-Dukung-SAKIP", "wajib": true, "subfolder_per_kegiatan": false}
+ *     {"nama": "Bukti-Dukung-SAKIP", "wajib": true, "subfolder_per_kegiatan": false, "subfolder_per_bulan": true}
  *   ]
  * }
+ *
+ * "urutan_bulan_kegiatan" (opsional, bawaan 'bulan_dulu' bila tidak ada) hanya
+ * relevan saat "subfolder_per_bulan" DAN "subfolder_per_kegiatan" sama-sama true —
+ * lihat App\Models\Concerns\PolaFolderHierarki::kategoriUrutanBulanKegiatan().
  *
  * - "hierarki" = urutan tingkatan folder SEBELUM masuk ke folder kategori (RF-11).
  *   "tahun" SENGAJA selalu dipaksa aktif & di posisi pertama (lihat hierarkiAktif())

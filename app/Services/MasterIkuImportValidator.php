@@ -8,9 +8,10 @@ use Illuminate\Support\Collection;
 /**
  * Validator murni untuk import Master IKU dari Excel (spek bagian 6.2) — TANPA
  * ketergantungan library Excel maupun DB write. Menerima baris mentah (array kolom
- * A-W, 0-based, sesuai tabel 6.1) & mengembalikan hasil terstruktur per baris: valid
- * + data siap simpan (dipecah master_iku/capaian_tahunan, lihat validasiSatuBaris()),
- * ATAU daftar pesan error.
+ * A-T, 0-based — lihat App\Exports\MasterIkuTemplateSheet::headings() untuk urutan
+ * pastinya) & mengembalikan hasil terstruktur per baris: valid + data siap simpan
+ * (dipecah master_iku/capaian_tahunan, lihat validasiSatuBaris()), ATAU daftar
+ * pesan error.
  *
  * App\Imports\MasterIkuImport hanya membaca sheet & memanggil ini (tidak menyimpan
  * apa pun sendiri); App\Livewire\MasterIku memanggil alur itu untuk PRATINJAU
@@ -30,12 +31,6 @@ class MasterIkuImportValidator
     public const TOLERANSI = 0.01;
 
     /** @var array<string,string> */
-    private const OPSI_JENIS_INDIKATOR = [
-        'iku' => MasterIku::JENIS_IKU,
-        'proksi' => MasterIku::JENIS_PROKSI,
-    ];
-
-    /** @var array<string,string> */
     private const OPSI_JENIS_PERIODE = [
         'triwulanan' => MasterIku::JENIS_PERIODE_TRIWULANAN,
         'tahunan' => MasterIku::JENIS_PERIODE_TAHUNAN,
@@ -48,7 +43,7 @@ class MasterIkuImportValidator
     ];
 
     /**
-     * @param  list<array<int, mixed>>  $rows  baris mentah kolom A-W (index 0-22)
+     * @param  list<array<int, mixed>>  $rows  baris mentah kolom A-T (index 0-19)
      * @param  int  $nomorBarisAwal  nomor baris Excel (1-based) untuk elemen pertama $rows
      * @param  bool  $modeUpsert  true: kodeIndikator yang sudah ada di DB boleh diperbarui. false (insert-only): ditolak.
      * @param  iterable<string>  $kodeSudahAdaDiDb  kode indikator yang SUDAH ada di database (mentah, akan dinormalisasi)
@@ -105,24 +100,21 @@ class MasterIkuImportValidator
     {
         $ambil = fn (int $kolom): string => trim((string) ($row[$kolom] ?? ''));
 
-        $kodeTujuan = $ambil(1);
-        $namaTujuan = $ambil(2);
-        $kodeSasaran = $ambil(3);
-        $namaSasaran = $ambil(4);
-        $kodeIndikatorMentah = $ambil(5);
-        $namaIndikator = $ambil(6);
-        $jenisIndikatorRaw = $ambil(7);
-        $jenisPeriodeRaw = $ambil(8);
-        $jenisNilaiRaw = $ambil(9);
-        $satuan = $ambil(10);
-        $targetTahunanRaw = $ambil(11);
-        $deskripsiX = $ambil(12);
-        $targetXRaw = $ambil(13);
-        $deskripsiY = $ambil(14);
-        $targetYRaw = $ambil(15);
-        $alokasiRaw = [$ambil(16), $ambil(17), $ambil(18), $ambil(19)];
+        $kodeSasaran = $ambil(1);
+        $namaSasaran = $ambil(2);
+        $kodeIndikatorMentah = $ambil(3);
+        $namaIndikator = $ambil(4);
+        $jenisPeriodeRaw = $ambil(5);
+        $jenisNilaiRaw = $ambil(6);
+        $satuan = $ambil(7);
+        $targetTahunanRaw = $ambil(8);
+        $deskripsiX = $ambil(9);
+        $targetXRaw = $ambil(10);
+        $deskripsiY = $ambil(11);
+        $targetYRaw = $ambil(12);
+        $alokasiRaw = [$ambil(13), $ambil(14), $ambil(15), $ambil(16)];
 
-        if ($kodeIndikatorMentah === '' && $namaIndikator === '' && $kodeTujuan === '' && $namaTujuan === ''
+        if ($kodeIndikatorMentah === '' && $namaIndikator === ''
             && $kodeSasaran === '' && $namaSasaran === '' && implode('', $alokasiRaw) === '') {
             return [null, ['__kosong__']];
         }
@@ -131,10 +123,9 @@ class MasterIkuImportValidator
 
         // --- 1. Wajib isi -----------------------------------------------------
         foreach ([
-            'Kode Tujuan' => $kodeTujuan, 'Nama Tujuan' => $namaTujuan,
             'Kode Sasaran' => $kodeSasaran, 'Nama Sasaran' => $namaSasaran,
             'Kode Indikator' => $kodeIndikatorMentah, 'Indikator Kinerja' => $namaIndikator,
-            'Jenis Indikator' => $jenisIndikatorRaw, 'Jenis Periode' => $jenisPeriodeRaw,
+            'Jenis Periode' => $jenisPeriodeRaw,
             'Jenis Nilai' => $jenisNilaiRaw, 'Satuan' => $satuan, 'Target Tahunan' => $targetTahunanRaw,
         ] as $label => $nilai) {
             if ($nilai === '') {
@@ -143,11 +134,6 @@ class MasterIkuImportValidator
         }
 
         // --- 2. Dropdown (case-insensitive, trim) ------------------------------
-        $jenisIndikator = self::OPSI_JENIS_INDIKATOR[strtolower($jenisIndikatorRaw)] ?? null;
-        if ($jenisIndikatorRaw !== '' && $jenisIndikator === null) {
-            $errors[] = "Baris {$nomorBaris}: kolom Jenis Indikator harus \"IKU\" atau \"Proksi\".";
-        }
-
         $jenisPeriode = self::OPSI_JENIS_PERIODE[strtolower($jenisPeriodeRaw)] ?? null;
         if ($jenisPeriodeRaw !== '' && $jenisPeriode === null) {
             $errors[] = "Baris {$nomorBaris}: kolom Jenis Periode harus \"Triwulanan\" atau \"Tahunan\".";
@@ -269,12 +255,9 @@ class MasterIkuImportValidator
             'kode' => $kodeIndikator,
             'master_iku' => [
                 'kode' => $kodeIndikator,
-                'kode_tujuan' => $kodeTujuan,
-                'nama_tujuan' => $namaTujuan,
                 'kode_sasaran' => $kodeSasaran,
                 'sasaran' => $namaSasaran,
                 'indikator' => $namaIndikator,
-                'jenis_iku' => $jenisIndikator,
                 'jenis_periode' => $jenisPeriode,
                 'satuan' => $satuan,
                 'metode_capaian' => $metodeCapaian,

@@ -167,6 +167,19 @@ class FolderConfigManager extends Component
     }
 
     /**
+     * Tukar urutan penyarangan Bulan vs Kegiatan (hanya berlaku bila kategori ini
+     * pakai KEDUA subfolder sekaligus) — 'bulan_dulu' (Kategori/Bulan/Kegiatan) vs
+     * 'kegiatan_dulu' (Kategori/Kegiatan/Bulan). Lihat App\Models\Concerns\
+     * PolaFolderHierarki::kategoriUrutanBulanKegiatan().
+     */
+    public function toggleUrutanBulanKegiatan(int $index): void
+    {
+        $this->kategori[$index]['urutan_bulan_kegiatan'] =
+            ($this->kategori[$index]['urutan_bulan_kegiatan'] ?? 'bulan_dulu') === 'bulan_dulu'
+                ? 'kegiatan_dulu' : 'bulan_dulu';
+    }
+
+    /**
      * Kategori mana yang punya subfolder Bulan di dalamnya (mis. Capaian, Bukti-
      * Dukung-SAKIP) — kategori lain langsung menampung berkas tanpa dipecah bulan.
      */
@@ -326,6 +339,13 @@ class FolderConfigManager extends Component
     public function toggleSubfolderKegiatanIku(int $index): void
     {
         $this->kategoriIku[$index]['subfolder_per_kegiatan'] = ! $this->kategoriIku[$index]['subfolder_per_kegiatan'];
+    }
+
+    public function toggleUrutanBulanKegiatanIku(int $index): void
+    {
+        $this->kategoriIku[$index]['urutan_bulan_kegiatan'] =
+            ($this->kategoriIku[$index]['urutan_bulan_kegiatan'] ?? 'bulan_dulu') === 'bulan_dulu'
+                ? 'kegiatan_dulu' : 'bulan_dulu';
     }
 
     public function toggleSubfolderBulanIku(int $index): void
@@ -514,24 +534,34 @@ class FolderConfigManager extends Component
             ];
 
             $indentDalamKategori = $indentKategori + 1;
+            $pakaiBulan = $k['subfolder_per_bulan'] ?? false;
+            $pakaiKegiatan = $k['subfolder_per_kegiatan'];
+            $bulanDuluan = ($k['urutan_bulan_kegiatan'] ?? 'bulan_dulu') === 'bulan_dulu';
 
-            // Folder Bulan (bila kategori ini dikonfigurasi subfolder_per_bulan) selalu
-            // membungkus subfolder-per-kegiatan, sesuai urutan nyata di Drive:
-            // Kategori/Agustus/[Kegiatan]/berkas.
-            if ($k['subfolder_per_bulan'] ?? false) {
+            // Bila keduanya aktif, urutan penyarangannya bisa ditukar Tim SAKIP lewat
+            // panah "Urutan" di menu ini — 'bulan_dulu' (bawaan): Kategori/Agustus/
+            // [Kegiatan]. 'kegiatan_dulu': Kategori/[Kegiatan]/Agustus.
+            if ($pakaiBulan && (! $pakaiKegiatan || $bulanDuluan)) {
                 $baris[] = ['teks' => '📁 Agustus', 'indent' => $indentDalamKategori, 'tipe' => 'folder'];
                 $indentDalamKategori++;
             }
 
-            if ($k['subfolder_per_kegiatan']) {
+            if ($pakaiKegiatan) {
                 $baris[] = [
                     'teks' => '📁 [Pelaksanaan] pencacahan Sakernas Agustus 2026',
                     'indent' => $indentDalamKategori,
                     'tipe' => 'folder',
                 ];
+                $indentDalamKategori++;
+
+                if ($pakaiBulan && ! $bulanDuluan) {
+                    $baris[] = ['teks' => '📁 Agustus', 'indent' => $indentDalamKategori, 'tipe' => 'folder'];
+                    $indentDalamKategori++;
+                }
+
                 $baris[] = [
                     'teks' => '📄 bukti-capaian.pdf',
-                    'indent' => $indentDalamKategori + 1,
+                    'indent' => $indentDalamKategori,
                     'tipe' => 'file',
                 ];
             } else {

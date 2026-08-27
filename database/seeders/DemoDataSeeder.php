@@ -120,21 +120,18 @@ class DemoDataSeeder extends Seeder
                 'kode' => 'IKU-1131',
                 'indikator' => 'Persentase publikasi statistik yang terbit tepat waktu',
                 'tim' => 'Distribusi dan Layanan Statistik',
-                'penanggung_jawab' => 'Kepala Seksi IPDS',
                 'sasaran' => 'Kualitas Layanan dan Diseminasi Statistik',
             ],
             [
                 'kode' => 'IKU-2112',
                 'indikator' => 'Persentase konsumen yang puas dengan kualitas data statistik',
                 'tim' => 'Statistik Produksi',
-                'penanggung_jawab' => 'Kepala Seksi Statistik Produksi',
                 'sasaran' => 'Peningkatan Kepuasan Konsumen Data Statistik',
             ],
             [
                 'kode' => 'IKU-3105',
                 'indikator' => 'Jumlah publikasi statistik sektoral yang terbit',
                 'tim' => 'Statistik Distribusi',
-                'penanggung_jawab' => 'Kepala Seksi Statistik Distribusi',
                 'sasaran' => 'Pembinaan Statistik Sektoral',
             ],
         ];
