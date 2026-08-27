@@ -329,17 +329,15 @@
             <div class="sec"><span>Rincian Output (RO)</span></div>
             <div class="info">ℹ️ Opsional — isi hanya bila IKU ini belum punya realisasi triwulan berjalan, agar tabel Realisasi Volume RO &amp; Progres Pelaksanaan Kegiatan di notula terisi benar. Satu kegiatan boleh punya lebih dari satu RO — tidak wajib diisi untuk tiap kegiatan/IKU.</div>
 
+            @php $nomorRo = 0; @endphp
             @foreach ($kegiatanList as $kegiatan)
                 @php $bisaDikoreksi = $this->kegiatanBisaDikoreksi($kegiatan); @endphp
                 <div class="keg" wire:key="ro-keg-{{ $kegiatan->id }}" @if (!$bisaDikoreksi) style="opacity:.8" @endif>
-                    <div class="keg-head">
-                        <span class="t">Kegiatan {{ $loop->iteration }}</span>
-                    </div>
-
                     @foreach (($rincianOutput[$kegiatan->id] ?? []) as $kunciRo => $baris)
+                        @php $nomorRo++; @endphp
                         <div class="keg" style="margin-top:8px" wire:key="ro-{{ $kegiatan->id }}-{{ $kunciRo }}">
                             <div class="keg-head">
-                                <span class="t">RO {{ $loop->iteration }}</span>
+                                <span class="t">RO {{ $nomorRo }}</span>
                                 @if ($bisaDikoreksi)
                                     <button type="button" class="btn btn-ghost btn-sm" wire:click="hapusRo({{ $kegiatan->id }}, '{{ $kunciRo }}')" wire:loading.attr="disabled" wire:target="hapusRo({{ $kegiatan->id }}, '{{ $kunciRo }}')">✕ Hapus</button>
                                 @endif

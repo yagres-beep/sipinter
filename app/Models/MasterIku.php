@@ -16,7 +16,6 @@ class MasterIku extends Model
 
     protected $fillable = [
         'kode',
-        'kode_sasaran',
         'indikator',
         'tim',
         'sasaran',

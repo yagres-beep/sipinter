@@ -8,6 +8,7 @@ use App\Models\Kegiatan;
 use App\Models\MasterIku;
 use App\Models\Notula;
 use App\Models\Periode;
+use App\Models\RincianN;
 use App\Models\Role;
 use App\Models\RtlEvaluasi;
 use App\Models\User;
@@ -351,6 +352,50 @@ class NotulaDownloadTest extends TestCase
         $this->assertStringContainsString('Jumlah Publikasi Berkualitas', $xml);
         $this->assertStringContainsString('Jumlah Seluruh Publikasi', $xml);
         $this->assertStringContainsString('Target 2026: N = 8 mencakup: Laporan A, Laporan B.', $xml);
+    }
+
+    /**
+     * IKU MasterIku::pakai_rincian_n aktif: Dasar Hitung .docx harus otomatis
+     * mencantumkan rincian NYATA n (item yang triwulan_realisasi-nya = triwulan
+     * notula ini) & N (SELURUH item tahun itu) dari App\Models\RincianN, bukan lagi
+     * mengharuskan Tim SAKIP mengetiknya manual ke kolom dasar_hitung.
+     */
+    public function test_docx_bagian1_dasar_hitung_rincian_n_dicantumkan_otomatis(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $iku = MasterIku::create([
+            'kode' => '3009', 'indikator' => 'Persentase Uji Rincian N', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
+            'sasaran' => 'Sasaran Uji Rincian N', 'satuan' => 'Persen', 'metode_capaian' => MasterIku::METODE_RASIO,
+            'deskripsi_x' => 'Jumlah Publikasi Berkualitas', 'deskripsi_y' => 'Jumlah Seluruh Publikasi',
+            'pakai_rincian_n' => true,
+        ]);
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 5, 'triwulan' => 2, 'bulan_ke' => 2, 'flag_bulan_terlewat' => false]);
+
+        CapaianTahunan::create([
+            'iku_id' => $iku->id, 'tahun' => 2026, 'y_target' => 4,
+            'x_realisasi_tw2' => 1,
+        ]);
+
+        // 4 item total tahun ini (N), hanya 1 direalisasikan TEPAT di TW II (n) --
+        // sisanya belum direalisasikan sama sekali, TIDAK ikut dihitung sebagai n
+        // walau tetap ikut menghitung N.
+        RincianN::create(['iku_id' => $iku->id, 'tahun' => 2026, 'uraian' => 'Laporan Kegiatan Susenas Maret 2026', 'triwulan_realisasi' => 2]);
+        RincianN::create(['iku_id' => $iku->id, 'tahun' => 2026, 'uraian' => 'Publikasi Statistik Kesejahteraan Rakyat 2026']);
+        RincianN::create(['iku_id' => $iku->id, 'tahun' => 2026, 'uraian' => 'Laporan Kegiatan Susenas September 2026']);
+        RincianN::create(['iku_id' => $iku->id, 'tahun' => 2026, 'uraian' => 'Laporan Kegiatan Seruti 2026']);
+
+        $notula = Notula::create(['periode_id' => $periode->id]);
+
+        $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
+
+        $this->assertStringContainsString('n = 1 mencakup:', $xml);
+        $this->assertStringContainsString('Laporan Kegiatan Susenas Maret 2026', $xml);
+        $this->assertStringContainsString('N = 4 mencakup:', $xml);
+        $this->assertStringContainsString('Publikasi Statistik Kesejahteraan Rakyat 2026', $xml);
+        $this->assertStringContainsString('Laporan Kegiatan Susenas September 2026', $xml);
+        $this->assertStringContainsString('Laporan Kegiatan Seruti 2026', $xml);
     }
 
     /**

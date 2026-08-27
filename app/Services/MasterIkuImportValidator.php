@@ -8,7 +8,7 @@ use Illuminate\Support\Collection;
 /**
  * Validator murni untuk import Master IKU dari Excel (spek bagian 6.2) — TANPA
  * ketergantungan library Excel maupun DB write. Menerima baris mentah (array kolom
- * A-T, 0-based — lihat App\Exports\MasterIkuTemplateSheet::headings() untuk urutan
+ * A-S, 0-based — lihat App\Exports\MasterIkuTemplateSheet::headings() untuk urutan
  * pastinya) & mengembalikan hasil terstruktur per baris: valid + data siap simpan
  * (dipecah master_iku/capaian_tahunan, lihat validasiSatuBaris()), ATAU daftar
  * pesan error.
@@ -43,7 +43,7 @@ class MasterIkuImportValidator
     ];
 
     /**
-     * @param  list<array<int, mixed>>  $rows  baris mentah kolom A-T (index 0-19)
+     * @param  list<array<int, mixed>>  $rows  baris mentah kolom A-S (index 0-18)
      * @param  int  $nomorBarisAwal  nomor baris Excel (1-based) untuk elemen pertama $rows
      * @param  bool  $modeUpsert  true: kodeIndikator yang sudah ada di DB boleh diperbarui. false (insert-only): ditolak.
      * @param  iterable<string>  $kodeSudahAdaDiDb  kode indikator yang SUDAH ada di database (mentah, akan dinormalisasi)
@@ -100,22 +100,21 @@ class MasterIkuImportValidator
     {
         $ambil = fn (int $kolom): string => trim((string) ($row[$kolom] ?? ''));
 
-        $kodeSasaran = $ambil(1);
-        $namaSasaran = $ambil(2);
-        $kodeIndikatorMentah = $ambil(3);
-        $namaIndikator = $ambil(4);
-        $jenisPeriodeRaw = $ambil(5);
-        $jenisNilaiRaw = $ambil(6);
-        $satuan = $ambil(7);
-        $targetTahunanRaw = $ambil(8);
-        $deskripsiX = $ambil(9);
-        $targetXRaw = $ambil(10);
-        $deskripsiY = $ambil(11);
-        $targetYRaw = $ambil(12);
-        $alokasiRaw = [$ambil(13), $ambil(14), $ambil(15), $ambil(16)];
+        $namaSasaran = $ambil(1);
+        $kodeIndikatorMentah = $ambil(2);
+        $namaIndikator = $ambil(3);
+        $jenisPeriodeRaw = $ambil(4);
+        $jenisNilaiRaw = $ambil(5);
+        $satuan = $ambil(6);
+        $targetTahunanRaw = $ambil(7);
+        $deskripsiX = $ambil(8);
+        $targetXRaw = $ambil(9);
+        $deskripsiY = $ambil(10);
+        $targetYRaw = $ambil(11);
+        $alokasiRaw = [$ambil(12), $ambil(13), $ambil(14), $ambil(15)];
 
         if ($kodeIndikatorMentah === '' && $namaIndikator === ''
-            && $kodeSasaran === '' && $namaSasaran === '' && implode('', $alokasiRaw) === '') {
+            && $namaSasaran === '' && implode('', $alokasiRaw) === '') {
             return [null, ['__kosong__']];
         }
 
@@ -123,7 +122,7 @@ class MasterIkuImportValidator
 
         // --- 1. Wajib isi -----------------------------------------------------
         foreach ([
-            'Kode Sasaran' => $kodeSasaran, 'Nama Sasaran' => $namaSasaran,
+            'Nama Sasaran' => $namaSasaran,
             'Kode Indikator' => $kodeIndikatorMentah, 'Indikator Kinerja' => $namaIndikator,
             'Jenis Periode' => $jenisPeriodeRaw,
             'Jenis Nilai' => $jenisNilaiRaw, 'Satuan' => $satuan, 'Target Tahunan' => $targetTahunanRaw,
@@ -255,7 +254,6 @@ class MasterIkuImportValidator
             'kode' => $kodeIndikator,
             'master_iku' => [
                 'kode' => $kodeIndikator,
-                'kode_sasaran' => $kodeSasaran,
                 'sasaran' => $namaSasaran,
                 'indikator' => $namaIndikator,
                 'jenis_periode' => $jenisPeriode,

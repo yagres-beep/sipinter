@@ -6,6 +6,8 @@ use App\Models\FolderConfig;
 use App\Models\MasterIku;
 use App\Models\Notula;
 use App\Models\PengaturanCapaian;
+use App\Models\Periode;
+use App\Models\RincianN;
 use App\Support\RumusMarkup;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
@@ -306,7 +308,7 @@ class NotulaBagian1DocxService
         // [[a|b]] (pecahan bersusun di PDF, lihat App\Support\RumusMarkup) diratakan
         // jadi notasi biasa "a/b" -- .docx tidak mendukung pecahan bersusun lewat
         // penggantian teks biasa (TemplateProcessor::setValue).
-        $dasarHitungGabungan = collect([$this->formulaPersenOtomatis($iku, $rekap), $iku->dasar_hitung])
+        $dasarHitungGabungan = collect([$this->formulaPersenOtomatis($iku, $rekap, $data['periode']), $iku->dasar_hitung])
             ->filter(fn ($t) => filled($t))
             ->implode("\n\n");
         $dasarHitungTeks = RumusMarkup::keTeksPolos($dasarHitungGabungan);
@@ -345,8 +347,15 @@ class NotulaBagian1DocxService
      * Deskripsi X/Y / target Y / realisasi triwulan berjalan belum diisi) -- supaya
      * jatuh ke isian manual kolom `dasar_hitung` apa adanya, bukan menampilkan
      * rumus dengan bagian kosong.
+     *
+     * IKU dengan MasterIku::pakai_rincian_n aktif mendapat TAMBAHAN rincian nyata
+     * item-item n/N (lihat rincianNMencakupTeks()) -- Tim SAKIP tidak perlu lagi
+     * mengetik ulang daftarnya secara manual tiap triwulan ke kolom dasar_hitung
+     * (mis. "N = 4 mencakup: ..."), karena sumbernya sudah App\Models\RincianN
+     * yang diisi sekali di awal tahun (App\Livewire\TargetTahunan) & dipilih per
+     * triwulan (App\Livewire\VerifikasiCapaian).
      */
-    private function formulaPersenOtomatis(MasterIku $iku, array $rekap): ?string
+    private function formulaPersenOtomatis(MasterIku $iku, array $rekap, Periode $periode): ?string
     {
         if ($iku->satuan !== 'Persen' || ! $iku->deskripsi_x || ! $iku->deskripsi_y) {
             return null;
@@ -361,7 +370,38 @@ class NotulaBagian1DocxService
         $nTeks = PengaturanCapaian::formatAngka($n);
         $besarNTeks = PengaturanCapaian::formatAngka($besarN);
 
-        return "y = [[n|N]] × 100% = [[{$nTeks}|{$besarNTeks}]] × 100%\n\ndimana:\ny = {$iku->indikator}\nn = {$iku->deskripsi_x}\nN = {$iku->deskripsi_y}";
+        $formula = "y = [[n|N]] × 100% = [[{$nTeks}|{$besarNTeks}]] × 100%\n\ndimana:\ny = {$iku->indikator}\nn = {$iku->deskripsi_x}\nN = {$iku->deskripsi_y}";
+
+        $rincian = $iku->pakai_rincian_n ? $this->rincianNMencakupTeks($iku, $periode) : null;
+
+        return $rincian !== null ? "{$formula}\n\n{$rincian}" : $formula;
+    }
+
+    /**
+     * Rincian nyata isi n (item yang triwulan_realisasi-nya = triwulan Notula ini,
+     * BUKAN kumulatif -- sama seperti n mentah di formulaPersenOtomatis()) dan N
+     * (SELURUH item tahun ini) untuk IKU MasterIku::pakai_rincian_n, format
+     * "n = 1 mencakup:\n• uraian\n\nN = 4 mencakup:\n• uraian...", persis contoh
+     * manual yang sebelumnya diketik Tim SAKIP sendiri ke kolom dasar_hitung.
+     * Null bila IKU ini belum punya satu pun baris RincianN untuk tahun tsb.
+     */
+    private function rincianNMencakupTeks(MasterIku $iku, Periode $periode): ?string
+    {
+        $semua = RincianN::where('iku_id', $iku->id)->where('tahun', $periode->tahun)->orderBy('id')->get();
+
+        if ($semua->isEmpty()) {
+            return null;
+        }
+
+        $terealisasi = $semua->where('triwulan_realisasi', $periode->triwulan);
+
+        $daftar = fn (Collection $baris) => $baris->map(fn (RincianN $r) => '• '.$r->uraian)->implode("\n");
+
+        $blokN = $terealisasi->isNotEmpty()
+            ? "n = {$terealisasi->count()} mencakup:\n".$daftar($terealisasi)
+            : 'n = 0 (belum ada item yang direalisasikan triwulan ini)';
+
+        return "{$blokN}\n\nN = {$semua->count()} mencakup:\n".$daftar($semua);
     }
 
     /**

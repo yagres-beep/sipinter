@@ -25,7 +25,7 @@ use Maatwebsite\Excel\Concerns\ToCollection;
 class MasterIkuImport implements ToCollection
 {
     public const EXPECTED_HEADER = [
-        'No.', 'Kode Sasaran', 'Nama Sasaran',
+        'No.', 'Nama Sasaran',
         'Kode Indikator', 'Indikator Kinerja', 'Jenis Periode', 'Jenis Nilai', 'Satuan',
         'Target Tahunan', 'Deskripsi X (Pembilang)', 'Target X (Pembilang)', 'Deskripsi Y (Penyebut)', 'Target Y (Penyebut)',
         'Alokasi Target TW I', 'Alokasi Target TW II', 'Alokasi Target TW III', 'Alokasi Target TW IV',

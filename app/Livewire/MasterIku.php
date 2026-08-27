@@ -59,8 +59,6 @@ class MasterIku extends Component
 
     public string $kode = '';
 
-    public string $kodeSasaran = '';
-
     public string $indikator = '';
 
     public string $tim = '';
@@ -135,7 +133,6 @@ class MasterIku extends Component
                 'required', 'string', 'max:50',
                 'unique:master_iku,kode,'.($this->editingId ?? 'NULL').',id',
             ],
-            'kodeSasaran' => ['nullable', 'string', 'max:50'],
             'indikator' => ['required', 'string'],
             'tim' => ['required', 'string', 'max:255'],
             'sasaran' => ['nullable', 'string', 'max:255'],
@@ -162,7 +159,6 @@ class MasterIku extends Component
     {
         return [
             'kode' => 'kode',
-            'kodeSasaran' => 'kode sasaran',
             'indikator' => 'indikator',
             'tim' => 'tim',
             'sasaran' => 'sasaran',
@@ -267,7 +263,6 @@ class MasterIku extends Component
 
         $this->editingId = $iku->id;
         $this->kode = $iku->kode;
-        $this->kodeSasaran = $iku->kode_sasaran ?? '';
         $this->indikator = $iku->indikator;
         $this->tim = $iku->tim ?? '';
         $this->sasaran = $iku->sasaran ?? '';
@@ -284,7 +279,7 @@ class MasterIku extends Component
 
     public function cancelEdit(): void
     {
-        $this->reset(['editingId', 'kode', 'kodeSasaran', 'indikator', 'tim', 'sasaran', 'dasarHitung', 'basisData', 'deskripsiX', 'deskripsiY', 'formulaCapaian']);
+        $this->reset(['editingId', 'kode', 'indikator', 'tim', 'sasaran', 'dasarHitung', 'basisData', 'deskripsiX', 'deskripsiY', 'formulaCapaian']);
         $this->satuan = 'Persen';
         $this->metodeCapaian = 'langsung';
         $this->pakaiRincianN = false;
@@ -301,7 +296,6 @@ class MasterIku extends Component
             // — dinormalisasi di sini juga (bukan cuma migrasi backfill data lama) supaya
             // tetap konsisten walau seseorang terbiasa mengetik "IKU-1131" di kolom Kode.
             'kode' => preg_replace('/^\D+/', '', trim($this->kode)) ?: trim($this->kode),
-            'kode_sasaran' => $this->kodeSasaran ?: null,
             'indikator' => $this->indikator,
             'tim' => $this->tim,
             'sasaran' => $this->sasaran ?: null,

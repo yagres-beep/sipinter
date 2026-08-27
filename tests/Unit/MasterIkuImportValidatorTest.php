@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 /**
  * MasterIkuImportValidator — validasi baris mentah Excel Master IKU sesuai spek
  * bagian 6.2 (satu test per aturan). Murni PHP, tanpa DB/Excel — baris disusun
- * langsung sebagai array kolom A-T (index 0-16 dipakai, R/S/T diabaikan).
+ * langsung sebagai array kolom A-S (index 0-15 dipakai, Q/R/S diabaikan).
  */
 class MasterIkuImportValidatorTest extends TestCase
 {
@@ -17,11 +17,11 @@ class MasterIkuImportValidatorTest extends TestCase
     {
         // Contoh dari spek: X=8, Y=90 -> Target Tahunan 8,89%.
         $row = [
-            0 => '1', 1 => 'S01', 2 => 'Sasaran Satu',
-            3 => '1001', 4 => 'Indikator Uji Persen', 5 => 'Tahunan', 6 => '%',
-            7 => 'Persen', 8 => '8.89',
-            9 => 'Pembilang', 10 => '8', 11 => 'Penyebut', 12 => '90',
-            13 => '2', 14 => '2', 15 => '2', 16 => '2',
+            0 => '1', 1 => 'Sasaran Satu',
+            2 => '1001', 3 => 'Indikator Uji Persen', 4 => 'Tahunan', 5 => '%',
+            6 => 'Persen', 7 => '8.89',
+            8 => 'Pembilang', 9 => '8', 10 => 'Penyebut', 11 => '90',
+            12 => '2', 13 => '2', 14 => '2', 15 => '2',
         ];
 
         return $override + $row;
@@ -32,11 +32,11 @@ class MasterIkuImportValidatorTest extends TestCase
     {
         // Contoh dari spek: Indeks Pelayanan Publik target 4,35.
         $row = [
-            0 => '2', 1 => 'S02', 2 => 'Sasaran Dua',
-            3 => '1002', 4 => 'Indikator Uji Non Persen', 5 => 'Triwulanan', 6 => 'Non %',
-            7 => 'Poin', 8 => '4.35',
-            9 => '', 10 => '', 11 => '', 12 => '',
-            13 => '1.09', 14 => '1.08', 15 => '1.09', 16 => '1.09',
+            0 => '2', 1 => 'Sasaran Dua',
+            2 => '1002', 3 => 'Indikator Uji Non Persen', 4 => 'Triwulanan', 5 => 'Non %',
+            6 => 'Poin', 7 => '4.35',
+            8 => '', 9 => '', 10 => '', 11 => '',
+            12 => '1.09', 13 => '1.08', 14 => '1.09', 15 => '1.09',
         ];
 
         return $override + $row;
@@ -63,7 +63,7 @@ class MasterIkuImportValidatorTest extends TestCase
 
     public function test_baris_tipe_persen_valid_seratus_persen(): void
     {
-        $row = $this->baseRowPersen([8 => '100', 10 => '4', 12 => '4', 13 => '1', 14 => '1', 15 => '1', 16 => '1']);
+        $row = $this->baseRowPersen([7 => '100', 9 => '4', 11 => '4', 12 => '1', 13 => '1', 14 => '1', 15 => '1']);
 
         $hasil = $this->validasi($row);
 
@@ -83,7 +83,7 @@ class MasterIkuImportValidatorTest extends TestCase
 
     public function test_kolom_wajib_kosong_menghasilkan_error(): void
     {
-        $hasil = $this->validasi($this->baseRowNonPersen([4 => '']));
+        $hasil = $this->validasi($this->baseRowNonPersen([3 => '']));
 
         $this->assertFalse($hasil['valid']);
         $this->assertStringContainsString('Indikator Kinerja wajib diisi', implode(' ', $hasil['errors']));
@@ -93,7 +93,7 @@ class MasterIkuImportValidatorTest extends TestCase
 
     public function test_dropdown_case_insensitive_dan_trim(): void
     {
-        $hasil = $this->validasi($this->baseRowNonPersen([5 => 'TRIWULANAN', 6 => ' non % ']));
+        $hasil = $this->validasi($this->baseRowNonPersen([4 => 'TRIWULANAN', 5 => ' non % ']));
 
         $this->assertTrue($hasil['valid'], implode(' | ', $hasil['errors']));
         $this->assertSame('triwulanan', $hasil['data']['master_iku']['jenis_periode']);
@@ -102,7 +102,7 @@ class MasterIkuImportValidatorTest extends TestCase
 
     public function test_dropdown_nilai_tidak_valid_menghasilkan_error(): void
     {
-        $hasil = $this->validasi($this->baseRowNonPersen([5 => 'Utama']));
+        $hasil = $this->validasi($this->baseRowNonPersen([4 => 'Utama']));
 
         $this->assertFalse($hasil['valid']);
         $this->assertStringContainsString('Jenis Periode harus', implode(' ', $hasil['errors']));
@@ -114,7 +114,7 @@ class MasterIkuImportValidatorTest extends TestCase
     {
         $hasil = MasterIkuImportValidator::validasiSemua([
             $this->baseRowNonPersen(),
-            $this->baseRowNonPersen([3 => '1002']),
+            $this->baseRowNonPersen([2 => '1002']),
         ], 4, false, []);
 
         $this->assertTrue($hasil[0]['valid']);
@@ -138,7 +138,7 @@ class MasterIkuImportValidatorTest extends TestCase
 
     public function test_tipe_persen_kolom_m_sampai_p_wajib_diisi(): void
     {
-        $hasil = $this->validasi($this->baseRowPersen([10 => '']));
+        $hasil = $this->validasi($this->baseRowPersen([9 => '']));
 
         $this->assertFalse($hasil['valid']);
         $this->assertStringContainsString('Target X (Pembilang) wajib diisi', implode(' ', $hasil['errors']));
@@ -146,7 +146,7 @@ class MasterIkuImportValidatorTest extends TestCase
 
     public function test_tipe_persen_target_x_dan_y_harus_lebih_dari_nol(): void
     {
-        $hasil = $this->validasi($this->baseRowPersen([10 => '0', 12 => '0']));
+        $hasil = $this->validasi($this->baseRowPersen([9 => '0', 11 => '0']));
 
         $this->assertFalse($hasil['valid']);
         $pesan = implode(' | ', $hasil['errors']);
@@ -156,7 +156,7 @@ class MasterIkuImportValidatorTest extends TestCase
 
     public function test_tipe_persen_jumlah_alokasi_harus_sama_dengan_target_x(): void
     {
-        $hasil = $this->validasi($this->baseRowPersen([13 => '5'])); // jumlah jadi 11, target X tetap 8.
+        $hasil = $this->validasi($this->baseRowPersen([12 => '5'])); // jumlah jadi 11, target X tetap 8.
 
         $this->assertFalse($hasil['valid']);
         $this->assertStringContainsString('harus sama dengan Target X', implode(' ', $hasil['errors']));
@@ -165,7 +165,7 @@ class MasterIkuImportValidatorTest extends TestCase
     public function test_tipe_persen_target_tahunan_harus_sama_dengan_x_dibagi_y(): void
     {
         // Target Tahunan ditulis 50% padahal X/Y = 8/90 = 8,89% -> tidak cocok.
-        $hasil = $this->validasi($this->baseRowPersen([8 => '50']));
+        $hasil = $this->validasi($this->baseRowPersen([7 => '50']));
 
         $this->assertFalse($hasil['valid']);
         $this->assertStringContainsString('harus sama dengan Target X ÷ Target Y × 100', implode(' ', $hasil['errors']));
@@ -175,7 +175,7 @@ class MasterIkuImportValidatorTest extends TestCase
 
     public function test_tipe_non_persen_kolom_m_sampai_p_harus_kosong(): void
     {
-        $hasil = $this->validasi($this->baseRowNonPersen([9 => 'Pembilang']));
+        $hasil = $this->validasi($this->baseRowNonPersen([8 => 'Pembilang']));
 
         $this->assertFalse($hasil['valid']);
         $this->assertStringContainsString('harus dikosongkan untuk Jenis Nilai "Non %"', implode(' ', $hasil['errors']));
@@ -183,7 +183,7 @@ class MasterIkuImportValidatorTest extends TestCase
 
     public function test_tipe_non_persen_jumlah_alokasi_harus_sama_dengan_target_tahunan(): void
     {
-        $hasil = $this->validasi($this->baseRowNonPersen([8 => '5.00'])); // jumlah alokasi tetap 4.35.
+        $hasil = $this->validasi($this->baseRowNonPersen([7 => '5.00'])); // jumlah alokasi tetap 4.35.
 
         $this->assertFalse($hasil['valid']);
         $this->assertStringContainsString('harus sama dengan Target Tahunan', implode(' ', $hasil['errors']));
@@ -193,7 +193,7 @@ class MasterIkuImportValidatorTest extends TestCase
 
     public function test_angka_negatif_ditolak(): void
     {
-        $hasil = $this->validasi($this->baseRowNonPersen([13 => '-1']));
+        $hasil = $this->validasi($this->baseRowNonPersen([12 => '-1']));
 
         $this->assertFalse($hasil['valid']);
         $this->assertStringContainsString('tidak boleh negatif', implode(' ', $hasil['errors']));
@@ -201,7 +201,7 @@ class MasterIkuImportValidatorTest extends TestCase
 
     public function test_sel_alokasi_kosong_dianggap_nol(): void
     {
-        $hasil = $this->validasi($this->baseRowNonPersen([8 => '2.17', 13 => '2.17', 14 => '', 15 => '', 16 => '']));
+        $hasil = $this->validasi($this->baseRowNonPersen([7 => '2.17', 12 => '2.17', 13 => '', 14 => '', 15 => '']));
 
         $this->assertTrue($hasil['valid'], implode(' | ', $hasil['errors']));
         $this->assertSame(0.0, $hasil['data']['capaian_tahunan']['alokasi_tw2']);
@@ -212,7 +212,7 @@ class MasterIkuImportValidatorTest extends TestCase
     public function test_baris_kosong_total_dilewati_tanpa_dilaporkan(): void
     {
         $hasil = MasterIkuImportValidator::validasiSemua([
-            array_fill(0, 17, ''),
+            array_fill(0, 16, ''),
         ], 4, false, []);
 
         $this->assertSame([], $hasil);

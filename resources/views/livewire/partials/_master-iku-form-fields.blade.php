@@ -13,41 +13,32 @@
         @enderror
     </div>
     <div class="field">
-        <label>Tim <span class="req">*</span></label>
+        <label>Penanggung Jawab (Tim) <span class="req">*</span></label>
         <input type="text" class="inp filled" list="daftar-tim" wire:model="tim" placeholder="mis. Produksi Statistik">
         <datalist id="daftar-tim">
             @foreach ($daftarTim as $opsi)
                 <option value="{{ $opsi }}"></option>
             @endforeach
         </datalist>
-        <div class="fhint">Pilih dari saran yang sudah ada, atau ketik tim baru. Tim ini juga berlaku sebagai Penanggung Jawab IKU (ditampilkan di Daftar Master IKU) — tidak perlu isian nama orang terpisah.</div>
+        <div class="fhint">Pilih dari saran yang sudah ada, atau ketik tim baru. Tim ini berlaku sebagai Penanggung Jawab IKU (ditampilkan di Daftar Master IKU) — tidak perlu isian nama orang terpisah.</div>
         @error('tim')
             <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
         @enderror
     </div>
 </div>
 
-<div class="row2">
-    <div class="field">
-        <label>Kode Sasaran</label>
-        <input type="text" class="inp filled" wire:model="kodeSasaran" placeholder="mis. S01">
-        @error('kodeSasaran')
-            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-        @enderror
-    </div>
-    <div class="field">
-        <label>Nama Sasaran</label>
-        <input type="text" class="inp filled" list="daftar-sasaran" wire:model="sasaran" placeholder="mis. Statistik Kesejahteraan Rakyat">
-        <datalist id="daftar-sasaran">
-            @foreach ($daftarSasaran as $opsi)
-                <option value="{{ $opsi }}"></option>
-            @endforeach
-        </datalist>
-        <div class="fhint">Untuk mengelompokkan tabel "Kesiapan per Sasaran" di halaman Kompilasi Notula &amp; Dasbor Capaian. Boleh dikosongkan.</div>
-        @error('sasaran')
-            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-        @enderror
-    </div>
+<div class="field">
+    <label>Sasaran</label>
+    <input type="text" class="inp filled" list="daftar-sasaran" wire:model="sasaran" placeholder="mis. Statistik Kesejahteraan Rakyat">
+    <datalist id="daftar-sasaran">
+        @foreach ($daftarSasaran as $opsi)
+            <option value="{{ $opsi }}"></option>
+        @endforeach
+    </datalist>
+    <div class="fhint">Untuk mengelompokkan tabel "Kesiapan per Sasaran" di halaman Kompilasi Notula &amp; Dasbor Capaian. Boleh dikosongkan.</div>
+    @error('sasaran')
+        <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+    @enderror
 </div>
 
 <div class="field">
