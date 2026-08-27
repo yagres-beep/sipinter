@@ -5,6 +5,8 @@ namespace App\Services;
 use DOMDocument;
 use DOMElement;
 use DOMNode;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 use RuntimeException;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Process;
@@ -101,12 +103,27 @@ class LibreOfficeConversionService
             mkdir($outputDir, 0755, true);
         }
 
+        // LibreOffice headless WAJIB punya direktori profil pengguna yang bisa ditulis
+        // (default-nya $HOME/.config/libreoffice) -- proses web server (mis. www-data
+        // di container) biasanya tidak punya $HOME yang valid/writable, bikin
+        // LibreOffice gagal start total ("User installation could not be completed",
+        // dconf-CRITICAL: unable to create directory '$HOME/.cache/dconf': Permission
+        // denied). -env:UserInstallation memaksa LibreOffice pakai folder SEMENTARA
+        // milik sendiri (unik per panggilan, supaya konversi yang jalan bersamaan
+        // tidak rebutan lock profil yang sama) alih-alih $HOME, dibersihkan lagi
+        // setelah proses selesai supaya tidak menumpuk di /tmp.
+        $profileDir = sys_get_temp_dir().DIRECTORY_SEPARATOR.'libreoffice-profile-'.Str::random(16);
+
         // --headless    : jalan tanpa membuka jendela GUI (cocok dipanggil dari server).
+        // --norestore   : jangan coba memulihkan sesi macet sebelumnya (bisa membuka
+        //                 dialog yang menggantung tanpa GUI).
         // --convert-to  : format tujuan konversi.
         // --outdir      : folder tempat berkas hasil konversi disimpan.
         $process = new Process([
             $binary,
             '--headless',
+            '--norestore',
+            '-env:UserInstallation=file://'.$profileDir,
             '--convert-to', $format,
             '--outdir', $outputDir,
             $inputPath,
@@ -116,6 +133,8 @@ class LibreOfficeConversionService
         // bisa agak lama — beri waktu lebih longgar dari request HTTP biasa.
         $process->setTimeout(120);
         $process->run();
+
+        File::deleteDirectory($profileDir);
 
         if (! $process->isSuccessful()) {
             throw new ProcessFailedException($process);
