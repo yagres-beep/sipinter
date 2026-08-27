@@ -71,11 +71,12 @@ class TargetTahunanTest extends TestCase
 
     /**
      * Alokasi X TW I-IV untuk IKU rasio diisi SEKALI di sini (bukan diketik ulang
-     * tiap sesi Verifikasi Capaian). Alokasi Y HANYA diminta SEKALI sebagai total
-     * (satu input, bukan 4 kotak identik per TW -- nilainya sama sepanjang tahun)
-     * -- diratakan jadi TW I & TW II-IV otomatis 0 di kolom tersimpan, supaya
-     * kumulatifnya (alokasiKumulatif()) tetap konstan sepanjang tahun. Realisasi Y
-     * HARUS otomatis mengikuti pola yang sama (bukan isian terpisah), supaya
+     * tiap sesi Verifikasi Capaian). Alokasi Y kini SELALU berasal dari JUMLAH
+     * baris Rincian N (App\Models\RincianN, otomatis aktif untuk semua IKU rasio —
+     * lihat MasterIku::pakaiRasio()), bukan angka manual — diratakan jadi TW I &
+     * TW II-IV otomatis 0 di kolom tersimpan, supaya kumulatifnya
+     * (alokasiKumulatif()) tetap konstan sepanjang tahun. Realisasi Y HARUS
+     * otomatis mengikuti pola yang sama (bukan isian terpisah), supaya
      * CapaianTahunan::realisasiKumulatif() tetap menghitung Y yang benar walau
      * Tim SAKIP di Verifikasi Capaian cuma mengisi Realisasi X.
      */
@@ -87,13 +88,22 @@ class TargetTahunanTest extends TestCase
             'metode_capaian' => MasterIku::METODE_RASIO,
         ]);
 
-        Livewire::test(TargetTahunan::class)
+        $component = Livewire::test(TargetTahunan::class)
             ->set('tahun', 2026)
+            ->call('tambahN', $iku->id)
+            ->call('tambahN', $iku->id)
+            ->call('tambahN', $iku->id);
+
+        $kunciList = array_keys($component->get('rincianN')[$iku->id]);
+        foreach ($kunciList as $i => $kunci) {
+            $component->set("rincianN.{$iku->id}.{$kunci}.uraian", 'Item '.($i + 1));
+        }
+
+        $component
             ->set("nilai.{$iku->id}.x_alokasi_tw1", 1)
             ->set("nilai.{$iku->id}.x_alokasi_tw2", 1)
             ->set("nilai.{$iku->id}.x_alokasi_tw3", 2)
             ->set("nilai.{$iku->id}.x_alokasi_tw4", 3)
-            ->set("nilai.{$iku->id}.y_alokasi_tw1", 3)
             ->call('simpan')
             ->assertHasNoErrors();
 
@@ -157,7 +167,7 @@ class TargetTahunanTest extends TestCase
         $this->loginSebagaiTimSakip();
         $iku = MasterIku::create([
             'kode' => 'UJI-106', 'indikator' => 'IKU Uji Rincian N', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
-            'metode_capaian' => MasterIku::METODE_RASIO, 'pakai_rincian_n' => true,
+            'metode_capaian' => MasterIku::METODE_RASIO,
         ]);
 
         $component = Livewire::test(TargetTahunan::class)->set('tahun', 2026)
@@ -184,7 +194,7 @@ class TargetTahunanTest extends TestCase
         $this->loginSebagaiTimSakip();
         $iku = MasterIku::create([
             'kode' => 'UJI-107', 'indikator' => 'IKU Uji Hapus Rincian N', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
-            'metode_capaian' => MasterIku::METODE_RASIO, 'pakai_rincian_n' => true,
+            'metode_capaian' => MasterIku::METODE_RASIO,
         ]);
         $n = RincianN::create(['iku_id' => $iku->id, 'tahun' => 2026, 'uraian' => 'Item lama']);
 

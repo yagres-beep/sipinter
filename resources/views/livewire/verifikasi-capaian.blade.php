@@ -118,8 +118,8 @@
                                 @endif
                             </td>
                             @for ($tw = 1; $tw <= 4; $tw++)
-                                <td style="text-align:center{{ $prefix === 'x_realisasi' && $capaian->masterIku->pakai_rincian_n && $tw === $twAktif ? ';min-width:220px;text-align:left' : '' }}">
-                                    @if ($prefix === 'x_realisasi' && $capaian->masterIku->pakai_rincian_n && $tw === $twAktif)
+                                <td style="text-align:center{{ $prefix === 'x_realisasi' && $tw === $twAktif ? ';min-width:220px;text-align:left' : '' }}">
+                                    @if ($prefix === 'x_realisasi' && $tw === $twAktif)
                                         <div style="max-height:140px;overflow-y:auto;display:flex;flex-direction:column;gap:3px">
                                             @foreach ($this->rincianNBisaDipilih() as $n)
                                                 <label class="fl-row" style="cursor:pointer;gap:6px;font-size:11.5px">
@@ -135,11 +135,6 @@
                                             @endif
                                         </div>
                                         <div class="muted" style="font-size:10.5px;margin-top:2px">{{ $this->{"x_realisasi_tw{$tw}"} ?? 0 }} item terpilih = Realisasi X TW ini</div>
-                                    @elseif ($bisaDiedit && $tw === $twAktif)
-                                        <input type="number" step="0.01" class="inp filled" style="width:100px;text-align:center" wire:model.live="{{ $prefix }}_tw{{ $tw }}">
-                                        @error("{$prefix}_tw{$tw}")
-                                            <div style="color:var(--red);font-size:10.5px">{{ $message }}</div>
-                                        @enderror
                                     @elseif ($bisaDiedit)
                                         <span class="muted" title="Hanya bisa diubah dari sesi verifikasi TW {{ ['I', 'II', 'III', 'IV'][$tw - 1] }}">🔒 {{ $capaianTahunan->{"{$prefix}_tw{$tw}"} ?? '-' }}</span>
                                     @else

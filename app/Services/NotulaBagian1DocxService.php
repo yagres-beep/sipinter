@@ -348,12 +348,14 @@ class NotulaBagian1DocxService
      * jatuh ke isian manual kolom `dasar_hitung` apa adanya, bukan menampilkan
      * rumus dengan bagian kosong.
      *
-     * IKU dengan MasterIku::pakai_rincian_n aktif mendapat TAMBAHAN rincian nyata
-     * item-item n/N (lihat rincianNMencakupTeks()) -- Tim SAKIP tidak perlu lagi
-     * mengetik ulang daftarnya secara manual tiap triwulan ke kolom dasar_hitung
-     * (mis. "N = 4 mencakup: ..."), karena sumbernya sudah App\Models\RincianN
-     * yang diisi sekali di awal tahun (App\Livewire\TargetTahunan) & dipilih per
-     * triwulan (App\Livewire\VerifikasiCapaian).
+     * SEMUA IKU % (satuan Persen hanya terjadi untuk MasterIku::pakaiRasio(), lihat
+     * MasterIku::booted()) mendapat TAMBAHAN rincian nyata item-item n/N (lihat
+     * rincianNMencakupTeks()) -- Tim SAKIP tidak perlu lagi mengetik ulang
+     * daftarnya secara manual tiap triwulan ke kolom dasar_hitung (mis. "N = 4
+     * mencakup: ..."), karena sumbernya sudah App\Models\RincianN yang diisi
+     * sekali di awal tahun (App\Livewire\TargetTahunan) & dipilih per triwulan
+     * (App\Livewire\VerifikasiCapaian). Null (belum ada satu pun item RincianN)
+     * berarti bagian ini dilewatkan.
      */
     private function formulaPersenOtomatis(MasterIku $iku, array $rekap, Periode $periode): ?string
     {
@@ -372,7 +374,7 @@ class NotulaBagian1DocxService
 
         $formula = "y = [[n|N]] × 100% = [[{$nTeks}|{$besarNTeks}]] × 100%\n\ndimana:\ny = {$iku->indikator}\nn = {$iku->deskripsi_x}\nN = {$iku->deskripsi_y}";
 
-        $rincian = $iku->pakai_rincian_n ? $this->rincianNMencakupTeks($iku, $periode) : null;
+        $rincian = $this->rincianNMencakupTeks($iku, $periode);
 
         return $rincian !== null ? "{$formula}\n\n{$rincian}" : $formula;
     }
@@ -380,7 +382,7 @@ class NotulaBagian1DocxService
     /**
      * Rincian nyata isi n (item yang triwulan_realisasi-nya = triwulan Notula ini,
      * BUKAN kumulatif -- sama seperti n mentah di formulaPersenOtomatis()) dan N
-     * (SELURUH item tahun ini) untuk IKU MasterIku::pakai_rincian_n, format
+     * (SELURUH item tahun ini) untuk IKU bermetode Rasio, format
      * "n = 1 mencakup:\n• uraian\n\nN = 4 mencakup:\n• uraian...", persis contoh
      * manual yang sebelumnya diketik Tim SAKIP sendiri ke kolom dasar_hitung.
      * Null bila IKU ini belum punya satu pun baris RincianN untuk tahun tsb.

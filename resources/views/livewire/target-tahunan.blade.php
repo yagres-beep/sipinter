@@ -1,6 +1,6 @@
 <div>
-    <div class="info teal">🎯 Target Tahunan tiap IKU diisi <strong>sekali per tahun di sini</strong> — dipakai otomatis di halaman Verifikasi setiap bulan untuk IKU tsb (tidak perlu diketik ulang tiap sesi verifikasi bulanan). Untuk Jenis Nilai %, Alokasi X diisi PER TRIWULAN (I-IV, karena nilainya bertambah bertahap), sedangkan Alokasi Y cukup diisi SEKALI sebagai total (nilainya sama sepanjang tahun) — Tim SAKIP di Verifikasi Capaian tiap triwulan cukup mengisi Realisasi X saja (Realisasi Y otomatis mengikuti Alokasi Y). Jenis Nilai Non % tetap mengisi Alokasi &amp; Realisasi dari halaman Verifikasi masing-masing bulan seperti biasa.</div>
-    <div class="fhint" style="margin-bottom:14px">ℹ️ Batas/plafon yang dipakai membandingkan Target Tahunan ini terhadap Realisasi (saat ini 120%) diatur terpisah di tab <a wire:navigate href="{{ route('master-iku.index') }}#rumus">🧮 Rumus Capaian</a>. Untuk IKU dengan "Gunakan Rincian Item (N)" aktif (diatur di Master IKU), Alokasi Y diganti daftar item — jumlah item di sini menjadi Alokasi Y otomatis.</div>
+    <div class="info teal">🎯 Target Tahunan tiap IKU diisi <strong>sekali per tahun di sini</strong> — dipakai otomatis di halaman Verifikasi setiap bulan untuk IKU tsb (tidak perlu diketik ulang tiap sesi verifikasi bulanan). Untuk Jenis Nilai %, Alokasi X diisi PER TRIWULAN (I-IV, karena nilainya bertambah bertahap), sedangkan Alokasi Y diisi lewat daftar Rincian Item (N) — jumlah item = Alokasi Y, dipilih lagi per item saat Verifikasi Capaian tiap triwulan untuk menentukan Realisasi X (Realisasi Y otomatis mengikuti Alokasi Y). Jenis Nilai Non % tetap mengisi Alokasi &amp; Realisasi dari halaman Verifikasi masing-masing bulan seperti biasa.</div>
+    <div class="fhint" style="margin-bottom:14px">ℹ️ Batas/plafon yang dipakai membandingkan Target Tahunan ini terhadap Realisasi (saat ini 120%) diatur terpisah di tab <a wire:navigate href="{{ route('master-iku.index') }}#rumus">🧮 Rumus Capaian</a>.</div>
 
     @if (session('status'))
         <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>
@@ -90,27 +90,20 @@
                                         @enderror
                                     </td>
                                 @endfor
-                                <td style="text-align:{{ $iku->pakai_rincian_n ? 'left' : 'center' }};min-width:220px">
-                                    @if ($iku->pakai_rincian_n)
-                                        <div class="muted" style="font-size:10.5px;margin-bottom:4px">Rincian N — {{ count($rincianN[$iku->id] ?? []) }} item = Alokasi Y</div>
-                                        <div style="max-height:140px;overflow-y:auto;display:flex;flex-direction:column;gap:4px">
-                                            @foreach (($rincianN[$iku->id] ?? []) as $kunci => $baris)
-                                                <div style="display:flex;gap:4px;align-items:center">
-                                                    <input type="text" class="inp filled" style="flex:1;font-size:11.5px;padding:4px 6px" placeholder="Uraian item" wire:model="rincianN.{{ $iku->id }}.{{ $kunci }}.uraian">
-                                                    <button type="button" class="btn btn-red btn-sm" style="padding:2px 6px" wire:click="hapusN({{ $iku->id }}, '{{ $kunci }}')" title="Hapus item">✕</button>
-                                                </div>
-                                            @endforeach
-                                        </div>
-                                        <button type="button" class="btn btn-ghost btn-sm" style="margin-top:4px" wire:click="tambahN({{ $iku->id }})">+ Tambah item</button>
-                                        @error("rincianN.{$iku->id}.*.uraian")
-                                            <div style="color:var(--red);font-size:10.5px">{{ $message }}</div>
-                                        @enderror
-                                    @else
-                                        <input type="number" step="0.01" class="inp filled" style="width:80px;text-align:center" wire:model="nilai.{{ $iku->id }}.y_alokasi_tw1" title="Total Y — sama untuk seluruh triwulan, cukup diisi sekali di sini">
-                                        @error("nilai.{$iku->id}.y_alokasi_tw1")
-                                            <div style="color:var(--red);font-size:10.5px">{{ $message }}</div>
-                                        @enderror
-                                    @endif
+                                <td style="text-align:left;min-width:220px">
+                                    <div class="muted" style="font-size:10.5px;margin-bottom:4px">Rincian N — {{ count($rincianN[$iku->id] ?? []) }} item = Alokasi Y</div>
+                                    <div style="max-height:140px;overflow-y:auto;display:flex;flex-direction:column;gap:4px">
+                                        @foreach (($rincianN[$iku->id] ?? []) as $kunci => $baris)
+                                            <div style="display:flex;gap:4px;align-items:center">
+                                                <input type="text" class="inp filled" style="flex:1;font-size:11.5px;padding:4px 6px" placeholder="Uraian item" wire:model="rincianN.{{ $iku->id }}.{{ $kunci }}.uraian">
+                                                <button type="button" class="btn btn-red btn-sm" style="padding:2px 6px" wire:click="hapusN({{ $iku->id }}, '{{ $kunci }}')" title="Hapus item">✕</button>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                    <button type="button" class="btn btn-ghost btn-sm" style="margin-top:4px" wire:click="tambahN({{ $iku->id }})">+ Tambah item</button>
+                                    @error("rincianN.{$iku->id}.*.uraian")
+                                        <div style="color:var(--red);font-size:10.5px">{{ $message }}</div>
+                                    @enderror
                                 </td>
                             @else
                                 <td colspan="5" class="muted" style="text-align:center;font-size:11.5px">diisi dari Verifikasi Capaian</td>

@@ -834,10 +834,15 @@ class VerifikasiCapaianTest extends TestCase
         $data = $this->siapkanIkuDenganDuaKegiatan();
         $data['iku']->update(['metode_capaian' => 'rasio']);
 
+        // Realisasi X kini SELALU berasal dari jumlah item Rincian N yang dicentang
+        // (App\Models\RincianN, otomatis aktif untuk semua IKU rasio) — bukan lagi
+        // angka manual, lihat App\Livewire\VerifikasiCapaian::syncRincianN().
+        $item = RincianN::create(['iku_id' => $data['iku']->id, 'tahun' => 2026, 'uraian' => 'Item A']);
+
         Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']->fresh()])
             ->set('x_alokasi_tw3', 2)
             ->set('y_alokasi_tw3', 3)
-            ->set('x_realisasi_tw3', 1)
+            ->set("rincianNPilih.{$item->id}", true)
             ->set('y_realisasi_tw3', 3)
             ->call('simpanPerubahan')
             ->assertHasNoErrors();
@@ -856,7 +861,7 @@ class VerifikasiCapaianTest extends TestCase
     {
         $this->actingAs($this->buatSakip());
         $data = $this->siapkanIkuDenganDuaKegiatan();
-        $data['iku']->update(['metode_capaian' => 'rasio', 'pakai_rincian_n' => true]);
+        $data['iku']->update(['metode_capaian' => 'rasio']);
 
         // Item lama sudah direalisasikan TW I (sesi bulan lain sebelumnya) -- harus
         // terkunci, tidak boleh ikut dipilih/berubah dari sesi TW III (periode ini).

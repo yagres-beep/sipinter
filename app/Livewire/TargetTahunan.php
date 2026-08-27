@@ -47,8 +47,8 @@ class TargetTahunan extends Component
     public array $nilai = [];
 
     /**
-     * Daftar Rincian N (App\Models\RincianN) per IKU yang MasterIku::pakai_rincian_n
-     * -- dikunci [iku_id][kunci_baris] => ['id' => ?int, 'uraian' => ?string], pola
+     * Daftar Rincian N (App\Models\RincianN) per IKU bermetode Rasio (MasterIku::
+     * pakaiRasio()) -- dikunci [iku_id][kunci_baris] => ['id' => ?int, 'uraian' => ?string], pola
      * sama seperti $rincianOutput di App\Livewire\VerifikasiCapaian. $kunci_baris
      * adalah id RincianN asli (baris sudah tersimpan) ATAU kunci sementara
      * "baru-..." (baris baru dari tambahN(), belum pernah disimpan). Jumlah baris
@@ -220,11 +220,11 @@ class TargetTahunan extends Component
                 // (raw per-TW DIJUMLAHKAN, lihat CapaianTahunan) tetap menghasilkan
                 // kumulatif Y yang konstan sepanjang tahun.
                 //
-                // Untuk IKU MasterIku::pakai_rincian_n, Alokasi Y BUKAN input manual
-                // -- diganti COUNT baris Rincian N milik IKU+tahun ini (lihat
-                // simpanRincianNUntukIku()), disimpan lebih dulu supaya count-nya
-                // akurat sebelum dipakai di sini.
-                if ($iku?->pakai_rincian_n) {
+                // Untuk IKU bermetode Rasio (MasterIku::pakaiRasio()), Alokasi Y BUKAN
+                // input manual -- diganti COUNT baris Rincian N milik IKU+tahun ini
+                // (lihat simpanRincianNUntukIku()), disimpan lebih dulu supaya
+                // count-nya akurat sebelum dipakai di sini.
+                if ($iku?->pakaiRasio()) {
                     $this->simpanRincianNUntukIku($ikuId);
                     $yTotal = (float) RincianN::where('iku_id', $ikuId)->where('tahun', $this->tahun)->count();
                 } else {

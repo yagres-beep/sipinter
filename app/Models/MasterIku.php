@@ -23,19 +23,11 @@ class MasterIku extends Model
         'basis_data',
         'satuan',
         'metode_capaian',
-        'pakai_rincian_n',
         'formula_capaian',
         'jenis_periode',
         'deskripsi_x',
         'deskripsi_y',
     ];
-
-    protected function casts(): array
-    {
-        return [
-            'pakai_rincian_n' => 'boolean',
-        ];
-    }
 
     /**
      * Alokasi Target/Realisasi diisi langsung sebagai angka (perilaku lama, default).

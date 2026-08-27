@@ -81,15 +81,6 @@ class MasterIku extends Component
     public string $metodeCapaian = 'langsung';
 
     /**
-     * Khusus metodeCapaian 'rasio': bila aktif, Realisasi Pembilang (X) tiap
-     * triwulan diisi dengan memilih item dari daftar Rincian N (bukan angka
-     * manual) -- lihat App\Models\RincianN, dikelola dari App\Livewire\
-     * TargetTahunan (buat daftar) &amp; App\Livewire\VerifikasiCapaian (pilih yang
-     * sudah direalisasikan).
-     */
-    public bool $pakaiRincianN = false;
-
-    /**
      * 'tahunan' (default) | 'triwulanan' — sesuai kolom "Jenis (Triwulanan atau
      * Tahunan)" Kertas Kerja resmi, murni informasional (lihat
      * App\Models\MasterIku::pakaiTriwulanan()).
@@ -140,7 +131,6 @@ class MasterIku extends Component
             'basisData' => ['nullable', 'string', 'max:255'],
             'satuan' => ['required', 'string', 'in:Persen,Poin'],
             'metodeCapaian' => ['required', 'string', 'in:langsung,rasio'],
-            'pakaiRincianN' => ['boolean'],
             'formulaCapaian' => [
                 'nullable', 'string', 'max:2000',
                 function ($attribute, $value, $fail) {
@@ -270,7 +260,6 @@ class MasterIku extends Component
         $this->basisData = $iku->basis_data ?? '';
         $this->satuan = $iku->satuan;
         $this->metodeCapaian = $iku->metode_capaian;
-        $this->pakaiRincianN = $iku->pakai_rincian_n;
         $this->jenisPeriode = $iku->jenis_periode;
         $this->deskripsiX = $iku->deskripsi_x ?? '';
         $this->deskripsiY = $iku->deskripsi_y ?? '';
@@ -282,7 +271,6 @@ class MasterIku extends Component
         $this->reset(['editingId', 'kode', 'indikator', 'tim', 'sasaran', 'dasarHitung', 'basisData', 'deskripsiX', 'deskripsiY', 'formulaCapaian']);
         $this->satuan = 'Persen';
         $this->metodeCapaian = 'langsung';
-        $this->pakaiRincianN = false;
         $this->jenisPeriode = 'tahunan';
         $this->resetValidation();
     }
@@ -303,10 +291,6 @@ class MasterIku extends Component
             'basis_data' => $this->basisData ?: null,
             'satuan' => $this->satuan,
             'metode_capaian' => $this->metodeCapaian,
-            // Dipaksa false bila bukan 'rasio' -- Rincian N hanya relevan untuk IKU
-            // bertipe rasio, mencegah nilai lama "nyangkut" saat metode diubah balik
-            // ke 'langsung' lewat edit tanpa checkbox ini sempat terlihat/diubah lagi.
-            'pakai_rincian_n' => $this->metodeCapaian === MasterIkuModel::METODE_RASIO && $this->pakaiRincianN,
             'jenis_periode' => $this->jenisPeriode,
             'deskripsi_x' => $this->deskripsiX ?: null,
             'deskripsi_y' => $this->deskripsiY ?: null,

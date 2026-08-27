@@ -355,10 +355,11 @@ class NotulaDownloadTest extends TestCase
     }
 
     /**
-     * IKU MasterIku::pakai_rincian_n aktif: Dasar Hitung .docx harus otomatis
-     * mencantumkan rincian NYATA n (item yang triwulan_realisasi-nya = triwulan
-     * notula ini) & N (SELURUH item tahun itu) dari App\Models\RincianN, bukan lagi
-     * mengharuskan Tim SAKIP mengetiknya manual ke kolom dasar_hitung.
+     * IKU bermetode Rasio (MasterIku::pakaiRasio(), yang kini SELALU memakai
+     * Rincian N): Dasar Hitung .docx harus otomatis mencantumkan rincian NYATA n
+     * (item yang triwulan_realisasi-nya = triwulan notula ini) & N (SELURUH item
+     * tahun itu) dari App\Models\RincianN, bukan lagi mengharuskan Tim SAKIP
+     * mengetiknya manual ke kolom dasar_hitung.
      */
     public function test_docx_bagian1_dasar_hitung_rincian_n_dicantumkan_otomatis(): void
     {
@@ -368,7 +369,6 @@ class NotulaDownloadTest extends TestCase
             'kode' => '3009', 'indikator' => 'Persentase Uji Rincian N', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
             'sasaran' => 'Sasaran Uji Rincian N', 'satuan' => 'Persen', 'metode_capaian' => MasterIku::METODE_RASIO,
             'deskripsi_x' => 'Jumlah Publikasi Berkualitas', 'deskripsi_y' => 'Jumlah Seluruh Publikasi',
-            'pakai_rincian_n' => true,
         ]);
 
         $periode = Periode::create(['tahun' => 2026, 'bulan' => 5, 'triwulan' => 2, 'bulan_ke' => 2, 'flag_bulan_terlewat' => false]);

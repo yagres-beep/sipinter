@@ -62,8 +62,9 @@ class VerifikasiCapaian extends Component
      * TRIWULAN INI -- dikunci pada id RincianN, HANYA memuat item yang
      * triwulan_realisasi-nya masih kosong ATAU sudah triwulan ini sendiri (item
      * yang direalisasikan triwulan LAIN tidak pernah masuk sini, ditampilkan
-     * read-only di blade). Menggantikan input manual x_realisasi_tw{n} untuk IKU
-     * MasterIku::pakai_rincian_n -- lihat updatedRincianNPilih()/syncRincianN().
+     * read-only di blade). Menggantikan input manual x_realisasi_tw{n} untuk
+     * SEMUA IKU bermetode Rasio (MasterIku::pakaiRasio()) -- lihat
+     * updatedRincianNPilih()/syncRincianN().
      *
      * @var array<int, bool>
      */
@@ -303,8 +304,9 @@ class VerifikasiCapaian extends Component
 
     /**
      * Item Rincian N (App\Models\RincianN) milik IKU+tahun periode ini -- HANYA
-     * bermakna bila MasterIku::pakai_rincian_n, kosong (collection kosong) untuk
-     * IKU lain. Di-cache satu request, sama seperti koleksi lain di kelas ini.
+     * bermakna untuk IKU bermetode Rasio (MasterIku::pakaiRasio()), kosong
+     * (collection kosong) untuk IKU lain. Di-cache satu request, sama seperti
+     * koleksi lain di kelas ini.
      */
     public function rincianNList(): Collection
     {
@@ -312,7 +314,7 @@ class VerifikasiCapaian extends Component
             return $this->cacheRincianNList;
         }
 
-        if (! $this->capaian->masterIku->pakai_rincian_n) {
+        if (! $this->capaian->masterIku->pakaiRasio()) {
             return $this->cacheRincianNList = collect();
         }
 
@@ -363,11 +365,11 @@ class VerifikasiCapaian extends Component
      * terkait) lalu samakan x_realisasi_tw{TW aktif} dengan jumlah SESUNGGUHNYA
      * di DB setelahnya -- dipanggil dari tiap jalur simpan (bukan hanya
      * updatedRincianNPilih() yang cuma live-preview di memori), TIDAK melakukan
-     * apa pun bila IKU ini tidak MasterIku::pakai_rincian_n.
+     * apa pun bila IKU ini tidak MasterIku::pakaiRasio().
      */
     protected function syncRincianN(): void
     {
-        if (! $this->capaian->masterIku->pakai_rincian_n) {
+        if (! $this->capaian->masterIku->pakaiRasio()) {
             return;
         }
 
