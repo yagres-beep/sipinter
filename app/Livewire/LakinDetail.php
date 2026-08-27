@@ -62,6 +62,12 @@ class LakinDetail extends Component
     {
         $this->lakin = $lakin->load('baris');
         $this->muatEdit();
+
+        $this->ikuTerpilihUntukTambah = $this->ikuBelumDitambahkan()
+            ->filter(fn ($data) => $data->terverifikasi)
+            ->pluck('iku.id')
+            ->values()
+            ->all();
     }
 
     /**
@@ -224,8 +230,30 @@ class LakinDetail extends Component
     }
 
     /**
+     * Centang seluruh IKU yang ditawarkan di checklist sekaligus — supaya Tim SAKIP
+     * tidak perlu klik satu per satu saat memang ingin memasukkan semuanya (yang
+     * sudah terverifikasi sudah tercentang duluan lewat mount(), tombol ini melengkapi
+     * sisanya yang belum).
+     */
+    public function pilihSemuaUntukTambah(): void
+    {
+        $this->ikuTerpilihUntukTambah = $this->ikuBelumDitambahkan()
+            ->pluck('iku.id')
+            ->values()
+            ->all();
+    }
+
+    public function batalkanSemuaUntukTambah(): void
+    {
+        $this->ikuTerpilihUntukTambah = [];
+    }
+
+    /**
      * Tambahkan HANYA IKU yang dicentang Tim SAKIP di checklist — inilah satu-satunya
-     * jalan baris berbasis IKU masuk ke LAKIN, tidak pernah otomatis-semua.
+     * jalan baris berbasis IKU masuk ke LAKIN, tidak pernah otomatis-semua. IKU yang
+     * sudah diverifikasi tercentang duluan (lihat mount()) supaya sekali klik
+     * "Tambahkan Terpilih" langsung memasukkan semua yang beres; Tim SAKIP tetap
+     * bebas mencentang/melepas apa pun sebelum menekan tombol itu.
      */
     public function tambahDariCapaian(): void
     {

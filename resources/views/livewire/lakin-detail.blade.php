@@ -156,7 +156,7 @@
     @if ($this->isTimSakip())
         <div class="card" style="margin-top:16px">
             <div class="card-h">📥 Tambah dari Data Capaian</div>
-            <div class="info">ℹ️ Centang IKU yang mau dimasukkan ke rekap ini — hanya yang dicentang yang ditambahkan, sisanya tetap tidak ikut sampai Anda pilih sendiri.</div>
+            <div class="info">ℹ️ IKU yang sudah diverifikasi Tim SAKIP otomatis tercentang. IKU yang belum diverifikasi tetap bisa dicentang manual bila mau. Hanya yang dicentang yang ditambahkan saat Anda menekan "Tambahkan Terpilih".</div>
 
             @error('ikuTerpilihUntukTambah')
                 <div style="color:var(--red);font-size:11.5px;margin-bottom:10px">{{ $message }}</div>
@@ -165,12 +165,21 @@
             @if ($ikuBelumDitambahkan->isEmpty())
                 <p style="color:var(--muted);font-size:13px">Semua IKU yang punya data capaian tahun {{ $lakin->tahun }} sudah ditambahkan.</p>
             @else
+                <div class="btn-row" style="margin-bottom:10px">
+                    <button type="button" class="btn btn-ghost btn-sm" wire:click="pilihSemuaUntukTambah">☑ Pilih Semua</button>
+                    <button type="button" class="btn btn-ghost btn-sm" wire:click="batalkanSemuaUntukTambah">☐ Batalkan Semua</button>
+                </div>
                 <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;margin-bottom:14px">
                     @foreach ($ikuBelumDitambahkan as $data)
                         <label class="fl-row" style="cursor:pointer;align-items:flex-start;gap:10px">
                             <input type="checkbox" value="{{ $data->iku->id }}" wire:model="ikuTerpilihUntukTambah" style="margin-top:3px">
                             <span>
                                 <b style="font-size:12.5px">{{ $data->iku->kode }}</b>
+                                @if ($data->terverifikasi)
+                                    <x-badge-status status="diverifikasi" />
+                                @else
+                                    <x-badge-status status="menunggu" label="Belum Diverifikasi" />
+                                @endif
                                 <span style="display:block;font-size:12px;color:var(--muted)">{{ $data->iku->indikator }}</span>
                                 <span style="display:block;font-size:11px;color:var(--faint);margin-top:2px">Target {{ $formatAngka($data->target) }} · Realisasi {{ $formatAngka($data->realisasi) }} · Capaian {{ $formatPersen($data->capaian_persen) }}</span>
                             </span>

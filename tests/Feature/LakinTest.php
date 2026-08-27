@@ -4,10 +4,12 @@ namespace Tests\Feature;
 
 use App\Livewire\LakinDetail;
 use App\Livewire\LakinList;
+use App\Models\Capaian;
 use App\Models\CapaianTahunan;
 use App\Models\Lakin;
 use App\Models\LakinBaris;
 use App\Models\MasterIku;
+use App\Models\Periode;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\LakinBuilderService;
@@ -63,6 +65,73 @@ class LakinTest extends TestCase
         $this->assertEquals(100, $data->target);
         $this->assertEquals(50, $data->realisasi);
         $this->assertEquals(50, $data->capaian_persen);
+    }
+
+    public function test_iku_tersedia_untuk_tahun_menandai_terverifikasi_bila_seluruh_capaian_beres(): void
+    {
+        $iku = MasterIku::create(['kode' => '1131', 'indikator' => 'Uji', 'tim' => 'Sosial', 'penanggung_jawab' => 'A']);
+        $this->buatCapaian($iku, 2026, 1, 100, 25);
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 1, 'triwulan' => 1, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        Capaian::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'status' => Capaian::STATUS_DISETUJUI]);
+
+        $data = app(LakinBuilderService::class)->ikuTersediaUntukTahun(2026)->get($iku->id);
+
+        $this->assertTrue($data->terverifikasi);
+    }
+
+    public function test_iku_tersedia_untuk_tahun_menandai_belum_terverifikasi_bila_ada_capaian_masih_diajukan(): void
+    {
+        $iku = MasterIku::create(['kode' => '1131', 'indikator' => 'Uji', 'tim' => 'Sosial', 'penanggung_jawab' => 'A']);
+        $this->buatCapaian($iku, 2026, 1, 100, 25);
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 1, 'triwulan' => 1, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        Capaian::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'status' => Capaian::STATUS_DIAJUKAN]);
+
+        $data = app(LakinBuilderService::class)->ikuTersediaUntukTahun(2026)->get($iku->id);
+
+        $this->assertFalse($data->terverifikasi);
+    }
+
+    public function test_iku_tersedia_untuk_tahun_menandai_belum_terverifikasi_bila_tidak_ada_baris_capaian(): void
+    {
+        $iku = MasterIku::create(['kode' => '1131', 'indikator' => 'Uji', 'tim' => 'Sosial', 'penanggung_jawab' => 'A']);
+        $this->buatCapaian($iku, 2026, 1, 100, 25);
+
+        $data = app(LakinBuilderService::class)->ikuTersediaUntukTahun(2026)->get($iku->id);
+
+        $this->assertFalse($data->terverifikasi);
+    }
+
+    public function test_checklist_otomatis_tercentang_untuk_iku_yang_sudah_diverifikasi(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $ikuTerverifikasi = MasterIku::create(['kode' => '1131', 'indikator' => 'Uji A', 'tim' => 'Sosial', 'penanggung_jawab' => 'A']);
+        $ikuBelumTerverifikasi = MasterIku::create(['kode' => '1132', 'indikator' => 'Uji B', 'tim' => 'Sosial', 'penanggung_jawab' => 'A']);
+
+        $this->buatCapaian($ikuTerverifikasi, 2026, 1, 100, 25);
+        $periodeA = Periode::create(['tahun' => 2026, 'bulan' => 1, 'triwulan' => 1, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        Capaian::create(['iku_id' => $ikuTerverifikasi->id, 'periode_id' => $periodeA->id, 'status' => Capaian::STATUS_DISETUJUI]);
+
+        $this->buatCapaian($ikuBelumTerverifikasi, 2026, 1, 100, 40);
+        $periodeB = Periode::create(['tahun' => 2026, 'bulan' => 2, 'triwulan' => 1, 'bulan_ke' => 2, 'flag_bulan_terlewat' => false]);
+        Capaian::create(['iku_id' => $ikuBelumTerverifikasi->id, 'periode_id' => $periodeB->id, 'status' => Capaian::STATUS_DIAJUKAN]);
+
+        $lakin = Lakin::create(['tahun' => 2026]);
+
+        $component = Livewire::test(LakinDetail::class, ['lakin' => $lakin]);
+
+        $this->assertSame([$ikuTerverifikasi->id], $component->get('ikuTerpilihUntukTambah'));
+
+        $component->call('pilihSemuaUntukTambah');
+        $this->assertEqualsCanonicalizing(
+            [$ikuTerverifikasi->id, $ikuBelumTerverifikasi->id],
+            $component->get('ikuTerpilihUntukTambah')
+        );
+
+        $component->call('batalkanSemuaUntukTambah');
+        $this->assertSame([], $component->get('ikuTerpilihUntukTambah'));
     }
 
     public function test_tambah_dari_iku_hanya_memasukkan_yang_dipilih(): void

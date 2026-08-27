@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Capaian;
 use App\Models\CapaianTahunan;
 use App\Models\Lakin;
 use App\Models\LakinBaris;
@@ -25,14 +26,14 @@ class LakinBuilderService
      * target/realisasi/capaian% hasil hitung — dipakai untuk checklist pemilihan di
      * LakinDetail. TIDAK menyimpan apa pun; hanya pratinjau sebelum Tim SAKIP memilih.
      *
-     * @return Collection<int, object{iku: \App\Models\MasterIku, target: ?string, realisasi: ?float, capaian_persen: ?float}> dikunci pada iku_id.
+     * @return Collection<int, object{iku: \App\Models\MasterIku, target: ?string, realisasi: ?float, capaian_persen: ?float, terverifikasi: bool}> dikunci pada iku_id.
      */
     public function ikuTersediaUntukTahun(int $tahun): Collection
     {
         return CapaianTahunan::with('masterIku')
             ->where('tahun', $tahun)
             ->get()
-            ->map(function (CapaianTahunan $capaianTahunan) {
+            ->map(function (CapaianTahunan $capaianTahunan) use ($tahun) {
                 $target = $capaianTahunan->targetTahunan();
                 $totalRealisasi = $capaianTahunan->realisasiKumulatif(4);
                 $capaianPersen = $capaianTahunan->capaianSetahun(4);
@@ -42,11 +43,36 @@ class LakinBuilderService
                     'target' => $target,
                     'realisasi' => $totalRealisasi,
                     'capaian_persen' => $capaianPersen,
+                    'terverifikasi' => $this->sudahTerverifikasi($capaianTahunan->iku_id, $tahun),
                 ];
             })
             ->sortBy(fn ($data) => $data->iku->kode)
             ->values()
             ->keyBy(fn ($data) => $data->iku->id);
+    }
+
+    /**
+     * IKU dianggap "sudah diverifikasi Tim SAKIP" untuk tahun ini bila SELURUH baris
+     * Capaian (per bulan) miliknya pada tahun tsb berstatus diverifikasi/disetujui,
+     * dan minimal ada satu baris — dipakai LakinDetail supaya checklist "Tambah dari
+     * Data Capaian" otomatis mencentang IKU yang sudah beres diverifikasi, sisanya
+     * (masih diajukan/sedang ditangani/dikembalikan/atau belum ada isian sama sekali)
+     * tetap harus dipilih manual.
+     */
+    private function sudahTerverifikasi(int $ikuId, int $tahun): bool
+    {
+        $statusList = Capaian::where('iku_id', $ikuId)
+            ->whereHas('periode', fn ($q) => $q->where('tahun', $tahun))
+            ->pluck('status');
+
+        if ($statusList->isEmpty()) {
+            return false;
+        }
+
+        return $statusList->every(fn ($status) => in_array($status, [
+            Capaian::STATUS_DIVERIFIKASI,
+            Capaian::STATUS_DISETUJUI,
+        ], true));
     }
 
     /**
