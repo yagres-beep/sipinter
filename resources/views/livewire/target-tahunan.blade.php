@@ -1,5 +1,5 @@
 <div>
-    <div class="info teal">🎯 Target Tahunan tiap IKU diisi <strong>sekali per tahun di sini</strong> — dipakai otomatis di halaman Verifikasi setiap bulan untuk IKU tsb (tidak perlu diketik ulang tiap sesi verifikasi bulanan). Alokasi Target &amp; Realisasi per triwulan tetap diisi dari halaman Verifikasi masing-masing bulan.</div>
+    <div class="info teal">🎯 Target Tahunan tiap IKU diisi <strong>sekali per tahun di sini</strong> — dipakai otomatis di halaman Verifikasi setiap bulan untuk IKU tsb (tidak perlu diketik ulang tiap sesi verifikasi bulanan). Untuk IKU bersatuan Persen, Alokasi Target Pembilang(X)/Penyebut(Y) TW I-IV JUGA diisi sekali di sini — Tim SAKIP di Verifikasi Capaian tiap triwulan cukup mengisi Realisasi X saja (Realisasi Y otomatis mengikuti Alokasi Y). IKU Non % (langsung) tetap mengisi Alokasi &amp; Realisasi dari halaman Verifikasi masing-masing bulan seperti biasa.</div>
     <div class="fhint" style="margin-bottom:14px">ℹ️ Batas/plafon yang dipakai membandingkan Target Tahunan ini terhadap Realisasi (saat ini 120%) diatur terpisah di tab <a wire:navigate href="{{ route('master-iku.index') }}#rumus">🧮 Rumus Capaian</a>.</div>
 
     @if (session('status'))
@@ -25,6 +25,15 @@
                         <th>Kode</th>
                         <th>Indikator</th>
                         <th>Target Tahunan</th>
+                        <th colspan="4" style="text-align:center">Alokasi Target (X ÷ Y) per Triwulan <span class="muted" style="font-weight:400">— khusus IKU Persen</span></th>
+                    </tr>
+                    <tr>
+                        <th></th>
+                        <th></th>
+                        <th></th>
+                        @foreach (['I', 'II', 'III', 'IV'] as $tw)
+                            <th style="text-align:center">TW {{ $tw }}</th>
+                        @endforeach
                     </tr>
                 </thead>
                 <tbody>
@@ -58,6 +67,24 @@
                                     @enderror
                                 @endif
                             </td>
+                            @if ($iku->pakaiRasio())
+                                @for ($tw = 1; $tw <= 4; $tw++)
+                                    <td style="text-align:center">
+                                        <div style="display:flex;flex-direction:column;gap:3px;align-items:center">
+                                            <input type="number" step="0.01" class="inp filled" style="width:72px;text-align:center" wire:model="nilai.{{ $iku->id }}.x_alokasi_tw{{ $tw }}" placeholder="X">
+                                            <input type="number" step="0.01" class="inp filled" style="width:72px;text-align:center" wire:model="nilai.{{ $iku->id }}.y_alokasi_tw{{ $tw }}" placeholder="Y">
+                                        </div>
+                                        @error("nilai.{$iku->id}.x_alokasi_tw{$tw}")
+                                            <div style="color:var(--red);font-size:10.5px">{{ $message }}</div>
+                                        @enderror
+                                        @error("nilai.{$iku->id}.y_alokasi_tw{$tw}")
+                                            <div style="color:var(--red);font-size:10.5px">{{ $message }}</div>
+                                        @enderror
+                                    </td>
+                                @endfor
+                            @else
+                                <td colspan="4" class="muted" style="text-align:center;font-size:11.5px">diisi dari Verifikasi Capaian</td>
+                            @endif
                         </tr>
                     @endforeach
                 </tbody>

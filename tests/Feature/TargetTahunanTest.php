@@ -68,6 +68,48 @@ class TargetTahunanTest extends TestCase
         $this->assertNull($ct->target_tahunan);
     }
 
+    /**
+     * Alokasi Pembilang(X)/Penyebut(Y) TW I-IV untuk IKU rasio diisi SEKALI di sini
+     * (bukan diketik ulang tiap sesi Verifikasi Capaian) -- dan Realisasi Y HARUS
+     * otomatis disalin dari Alokasi Y (bukan isian terpisah), supaya
+     * CapaianTahunan::realisasiKumulatif() tetap menghitung Y yang benar walau
+     * Tim SAKIP di Verifikasi Capaian cuma mengisi Realisasi X.
+     */
+    public function test_simpan_alokasi_tw_rasio_menyalin_realisasi_y_dari_alokasi_y(): void
+    {
+        $this->loginSebagaiTimSakip();
+        $iku = MasterIku::create([
+            'kode' => 'UJI-104', 'indikator' => 'IKU % Alokasi TW', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
+            'metode_capaian' => MasterIku::METODE_RASIO,
+        ]);
+
+        Livewire::test(TargetTahunan::class)
+            ->set('tahun', 2026)
+            ->set("nilai.{$iku->id}.x_alokasi_tw1", 1)
+            ->set("nilai.{$iku->id}.x_alokasi_tw2", 1)
+            ->set("nilai.{$iku->id}.x_alokasi_tw3", 2)
+            ->set("nilai.{$iku->id}.x_alokasi_tw4", 3)
+            ->set("nilai.{$iku->id}.y_alokasi_tw1", 3)
+            ->set("nilai.{$iku->id}.y_alokasi_tw2", 3)
+            ->set("nilai.{$iku->id}.y_alokasi_tw3", 3)
+            ->set("nilai.{$iku->id}.y_alokasi_tw4", 3)
+            ->call('simpan')
+            ->assertHasNoErrors();
+
+        $ct = CapaianTahunan::where('iku_id', $iku->id)->where('tahun', 2026)->first();
+
+        $this->assertEquals(1, $ct->x_alokasi_tw1);
+        $this->assertEquals(2, $ct->x_alokasi_tw3);
+        $this->assertEquals(3, $ct->y_alokasi_tw1);
+
+        // Realisasi Y (semua TW) HARUS sama dengan Alokasi Y, tanpa pernah diisi
+        // langsung di sini maupun di Verifikasi Capaian.
+        $this->assertEquals(3, $ct->y_realisasi_tw1);
+        $this->assertEquals(3, $ct->y_realisasi_tw2);
+        $this->assertEquals(3, $ct->y_realisasi_tw3);
+        $this->assertEquals(3, $ct->y_realisasi_tw4);
+    }
+
     public function test_simpan_tidak_membuat_baris_untuk_iku_yang_tidak_disentuh(): void
     {
         $this->loginSebagaiTimSakip();

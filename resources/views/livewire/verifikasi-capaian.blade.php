@@ -81,7 +81,7 @@
             </div>
         </div>
         @if ($capaian->masterIku->pakaiRasio())
-            <div class="fhint" style="margin:10px 0 6px">Isi Pembilang (X) &amp; Penyebut (Y) Alokasi/Realisasi TRIWULAN INI SAJA (bukan kumulatif, tidak perlu melihat isian triwulan sebelumnya) — kumulatif TW I s.d. TW berjalan &amp; persentasenya (X÷Y×100) dihitung otomatis di bawah.</div>
+            <div class="fhint" style="margin:10px 0 6px">Alokasi Pembilang (X) &amp; Penyebut (Y) TW I-IV sudah ditetapkan sekali di awal tahun lewat <a wire:navigate href="{{ route('master-iku.index') }}#target">🎯 Target Tahunan</a> — di sini cukup isi <strong>Realisasi Pembilang (X) TRIWULAN INI SAJA</strong> (bukan kumulatif). Realisasi Penyebut (Y) otomatis mengikuti Alokasi Y. Kumulatif TW I s.d. TW berjalan &amp; persentasenya (X÷Y×100) dihitung otomatis di bawah.</div>
         @else
             <div class="fhint" style="margin:10px 0 6px">Isi Alokasi Target &amp; Realisasi TRIWULAN INI SAJA (bukan kumulatif, tidak perlu melihat isian triwulan sebelumnya) — kumulatif TW I s.d. TW berjalan dihitung otomatis di bawah.</div>
         @endif
@@ -101,22 +101,33 @@
                 <tbody>
                 @if ($capaian->masterIku->pakaiRasio())
                     @foreach ([
-                        ['x_alokasi', $capaian->masterIku->deskripsi_x ?: 'Pembilang (X)', 'Alokasi'],
-                        ['y_alokasi', $capaian->masterIku->deskripsi_y ?: 'Penyebut (Y)', 'Alokasi'],
-                        ['x_realisasi', $capaian->masterIku->deskripsi_x ?: 'Pembilang (X)', 'Realisasi'],
-                        ['y_realisasi', $capaian->masterIku->deskripsi_y ?: 'Penyebut (Y)', 'Realisasi'],
-                    ] as [$prefix, $label, $bagian])
+                        ['x_alokasi', $capaian->masterIku->deskripsi_x ?: 'Pembilang (X)', 'Alokasi', false],
+                        ['y_alokasi', $capaian->masterIku->deskripsi_y ?: 'Penyebut (Y)', 'Alokasi', false],
+                        ['x_realisasi', $capaian->masterIku->deskripsi_x ?: 'Pembilang (X)', 'Realisasi', true],
+                        ['y_realisasi', $capaian->masterIku->deskripsi_y ?: 'Penyebut (Y)', 'Realisasi', false],
+                    ] as [$prefix, $label, $bagian, $bisaDiedit])
                         <tr>
-                            <td>{{ $label }} — {{ $bagian }} <span class="muted" style="font-weight:400">(TW ini)</span></td>
+                            <td>
+                                {{ $label }} — {{ $bagian }}
+                                @if ($bisaDiedit)
+                                    <span class="muted" style="font-weight:400">(TW ini)</span>
+                                @else
+                                    <span class="muted" style="font-weight:400">
+                                        ({{ $bagian === 'Alokasi' ? 'Target Tahunan' : 'otomatis = Alokasi Y' }})
+                                    </span>
+                                @endif
+                            </td>
                             @for ($tw = 1; $tw <= 4; $tw++)
                                 <td style="text-align:center">
-                                    @if ($tw === $twAktif)
+                                    @if ($bisaDiedit && $tw === $twAktif)
                                         <input type="number" step="0.01" class="inp filled" style="width:100px;text-align:center" wire:model.live="{{ $prefix }}_tw{{ $tw }}">
                                         @error("{$prefix}_tw{$tw}")
                                             <div style="color:var(--red);font-size:10.5px">{{ $message }}</div>
                                         @enderror
-                                    @else
+                                    @elseif ($bisaDiedit)
                                         <span class="muted" title="Hanya bisa diubah dari sesi verifikasi TW {{ ['I', 'II', 'III', 'IV'][$tw - 1] }}">🔒 {{ $capaianTahunan->{"{$prefix}_tw{$tw}"} ?? '-' }}</span>
+                                    @else
+                                        <span class="muted" title="{{ $bagian === 'Alokasi' ? 'Diisi lewat halaman Target Tahunan, bukan di sini' : 'Otomatis disalin dari Alokasi Y di Target Tahunan' }}">🔒 {{ $capaianTahunan->{"{$prefix}_tw{$tw}"} ?? '-' }}</span>
                                     @endif
                                 </td>
                             @endfor
