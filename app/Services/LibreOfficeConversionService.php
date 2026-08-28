@@ -172,6 +172,7 @@ class LibreOfficeConversionService
 
         if ($dom->documentElement) {
             $this->buangAtributBerbahaya($dom->documentElement);
+            $this->pindahkanAlignKeStyle($dom->documentElement);
         }
 
         // LibreOffice menaruh definisi kelas paragraf/tabel (P1, T1, dst.) di
@@ -213,6 +214,35 @@ class LibreOfficeConversionService
         $cssTerlingkup = $this->lingkupkanCss($css, '.notula-inline');
 
         return '<style>'.$cssTerlingkup.'</style><div class="notula-inline">'.$bodyHtml.'</div>';
+    }
+
+    /**
+     * LibreOffice mengekspor perataan paragraf lewat atribut HTML usang
+     * `align="center"` dsb. -- atribut presentational ini punya prioritas CSS
+     * PALING RENDAH (setara gaya bawaan user-agent), jadi KALAH oleh aturan
+     * stylesheet berbasis kelas yang disimpan di ekstrakKontenInline() (mis.
+     * `.notula-inline p { text-align: left }`, gaya paragraf default LibreOffice)
+     * walau elemennya sendiri punya align="center" eksplisit -- berakibat judul &
+     * blok TTD yang seharusnya rata tengah malah tampil rata kiri saat ditempel ke
+     * dokumen notula menyatu. Pindahkan ke inline style supaya SELALU menang di
+     * atas aturan <style> apa pun (inline style tidak bisa kalah kecuali lawannya
+     * pakai !important).
+     */
+    private function pindahkanAlignKeStyle(DOMNode $node): void
+    {
+        if ($node instanceof DOMElement && $node->hasAttribute('align')) {
+            $align = strtolower(trim($node->getAttribute('align')));
+            if (in_array($align, ['left', 'right', 'center', 'justify'], true)) {
+                $style = rtrim(trim($node->getAttribute('style')), '; ');
+                $style = ($style !== '' ? $style.'; ' : '').'text-align: '.$align.';';
+                $node->setAttribute('style', $style);
+            }
+            $node->removeAttribute('align');
+        }
+
+        foreach (iterator_to_array($node->childNodes) as $anak) {
+            $this->pindahkanAlignKeStyle($anak);
+        }
     }
 
     private function buangAtributBerbahaya(DOMNode $node): void

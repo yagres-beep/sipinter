@@ -22,7 +22,7 @@ class NotulaDownloadController extends Controller
      */
     public function draf(Notula $notula, NotulaService $notulaService): StreamedResponse
     {
-        abort_unless($notula->pdf_gabungan, 404);
+        abort_unless($this->berkasAda($notula->pdf_gabungan), 404, 'Berkas PDF draf tidak ditemukan di server — gabungkan ulang notula.');
         abort_unless(
             $notulaService->semuaBuktiTerverifikasi($notula->periode),
             403,
@@ -39,7 +39,7 @@ class NotulaDownloadController extends Controller
      */
     public function final(Notula $notula): StreamedResponse
     {
-        abort_unless($notula->status === Notula::STATUS_DISETUJUI && $notula->pdf_final, 403, 'Notula belum disetujui Kepala.');
+        abort_unless($notula->status === Notula::STATUS_DISETUJUI && $this->berkasAda($notula->pdf_final), 403, 'Notula belum disetujui Kepala, atau berkas PDF final tidak ditemukan di server.');
 
         $namaUnduhan = "notula-final-tw{$notula->periode->triwulan}-{$notula->periode->tahun}.pdf";
 
@@ -54,7 +54,7 @@ class NotulaDownloadController extends Controller
      */
     public function pratinjau(Notula $notula): StreamedResponse
     {
-        abort_unless($notula->pdf_gabungan, 404);
+        abort_unless($this->berkasAda($notula->pdf_gabungan), 404, 'Berkas PDF gabungan tidak ditemukan di server.');
 
         return Storage::disk('local')->response($notula->pdf_gabungan, null, [], 'inline');
     }
@@ -65,16 +65,27 @@ class NotulaDownloadController extends Controller
      */
     public function pratinjauBagian2(Notula $notula): StreamedResponse
     {
-        abort_unless($notula->bagian2_pdf, 404);
+        abort_unless($this->berkasAda($notula->bagian2_pdf), 404, 'Berkas PDF Bagian II tidak ditemukan di server — coba unggah ulang.');
 
         return Storage::disk('local')->response($notula->bagian2_pdf, null, [], 'inline');
     }
 
     public function pratinjauBagian3(Notula $notula): StreamedResponse
     {
-        abort_unless($notula->bagian3_pdf, 404);
+        abort_unless($this->berkasAda($notula->bagian3_pdf), 404, 'Berkas PDF Bagian III tidak ditemukan di server — coba unggah ulang.');
 
         return Storage::disk('local')->response($notula->bagian3_pdf, null, [], 'inline');
+    }
+
+    /**
+     * Kolom path PDF di Notula bisa saja terisi walau berkas fisiknya sudah tidak
+     * ada lagi di disk (mis. storage server sempat direset) — abort_unless() di
+     * atas harus mengecek KEDUANYA, bukan cuma kolomnya, supaya kasus itu jatuh ke
+     * 404 yang jelas alih-alih 500 mentah dari FileNotFoundException Storage::response().
+     */
+    private function berkasAda(?string $path): bool
+    {
+        return $path !== null && Storage::disk('local')->exists($path);
     }
 
     /**
