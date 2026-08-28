@@ -218,7 +218,23 @@ class KompilasiNotula extends Component
      */
     protected function dispatchKontenBagian1(): void
     {
-        $this->dispatch('bagian1-diperbarui', html: $this->bagian1EditText);
+        $this->dispatch('bagian1-diperbarui', html: $this->bagian1PreviewHtml());
+    }
+
+    /**
+     * $bagian1EditText untuk PRATINJAU/EDIT di layar ini: Bagian II/III disisipkan
+     * di posisi penanda {{bagian_2}}/{{bagian_3}} (lihat
+     * NotulaService::sisipkanBagianDuaTiga()) supaya urutannya sesuai template docx
+     * (sebelum tabel "Mengetahui/Kepala Satker/Notulis"), BUKAN ditempel di akhir
+     * seperti sebelumnya. $bagian1EditText SENDIRI (yang disimpan lewat
+     * simpanSuntinganBagian1()) tetap apa adanya dengan penanda mentahnya — hanya
+     * tampilannya di sini yang disisipi.
+     */
+    protected function bagian1PreviewHtml(): string
+    {
+        $notula = $this->notula();
+
+        return app(NotulaService::class)->sisipkanBagianDuaTiga($this->bagian1EditText, $notula->bagian2_html, $notula->bagian3_html);
     }
 
     public function simpanSuntinganBagian1(): void
@@ -293,6 +309,7 @@ class KompilasiNotula extends Component
             'kesiapanSasaran' => $this->kesiapanPerSasaran(),
             'riwayatDisetujui' => $this->riwayatDisetujui($notula),
             'daftarPegawai' => $this->daftarPegawai(),
+            'bagian1PreviewHtml' => $this->bagian1PreviewHtml(),
         ]);
     }
 }

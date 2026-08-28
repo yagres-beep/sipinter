@@ -16,10 +16,6 @@
   td, th { border: 1px solid #999; padding: 5px 6px; text-align: left; }
   th { background: #f2f2f2; }
 
-  {{-- Judul antar-bagian: pemisah RINGAN (garis tipis + jarak), BUKAN page-break —
-       Bagian II/III harus bisa menyambung di sisa ruang halaman sebelumnya. --}}
-  .bagian-judul { font-size: 13px; font-weight: bold; margin: 18px 0 6px; border-bottom: 1px solid #cbd5e1; padding-bottom: 3px; }
-
   {{-- Blok TTD SELALU di paling akhir (setelah Bagian III) — lihat NotulaService.
        page-break-inside:avoid HANYA di sini supaya tidak terpotong dua halaman,
        tapi tetap boleh menyambung di halaman yang sama bila muat. --}}
@@ -34,17 +30,10 @@
   <h1>NOTULA MONITORING KINERJA</h1>
   <div class="sub">Triwulan {{ $labelTriwulan }} {{ $tahun }} — BPS Kabupaten Buton Utara</div>
 
+  {{-- Bagian II/III SUDAH tersisip di posisi penanda {{bagian_2}}/{{bagian_3}} di
+       dalam $bagian1Html, judulnya pun sudah ikut terbawa dari berkas .docx yang
+       diunggah Tim SAKIP -- lihat NotulaService::sisipkanBagianDuaTiga(). --}}
   {!! $bagian1Html !!}
-
-  @if (trim((string) $bagian2Html) !== '')
-    <div class="bagian-judul">BAGIAN II — Peran BPS dalam Prioritas Nasional &amp; Isu Strategis</div>
-    {!! $bagian2Html !!}
-  @endif
-
-  @if (trim((string) $bagian3Html) !== '')
-    <div class="bagian-judul">BAGIAN III — Realisasi Anggaran &amp; Upaya Efisiensi</div>
-    {!! $bagian3Html !!}
-  @endif
 
   @if ($sertakanTtd)
     <div class="ttd-blok">

@@ -264,6 +264,40 @@ class NotulaService
     }
 
     /**
+     * Sisipkan Bagian II/III LANGSUNG di posisi penanda {{bagian_2}}/{{bagian_3}} di
+     * dalam $bagian1Html -- lihat NotulaBagian1DocxService::isiPenutup(), posisi ASLI
+     * kedua penanda ini di template docx SELALU sebelum tabel "Mengetahui/Kepala
+     * Satker/Notulis" (penanda hadir/tidaknya rapat, BUKAN blok TTD persetujuan akhir
+     * di renderNotulaUtuhHtml()) -- BUKAN ditempel di akhir dokumen seperti
+     * sebelumnya, supaya isi Bagian II/III tidak jatuh ke BAWAH tabel tsb.
+     *
+     * Judul "BAGIAN II/III — ..." TIDAK ditambahkan lagi di sini -- berkas .docx yang
+     * diunggah Tim SAKIP (lihat template_notula/SIPINTER_Template_Bagian_II_Prioritas.docx
+     * & _Bagian_III_Anggaran.docx) SUDAH memuat judulnya sendiri sebagai bagian dari
+     * konten yang dikonversi, jadi menambahkannya lagi di sini cuma bikin dobel.
+     *
+     * Fallback: bila $bagian1Html TIDAK memuat penanda (mis. template lama/kustom
+     * tanpa {{bagian_2}}/{{bagian_3}}), Bagian II/III tetap ditempel di akhir
+     * (perilaku lama) alih-alih hilang begitu saja.
+     */
+    public function sisipkanBagianDuaTiga(string $bagian1Html, ?string $bagian2Html, ?string $bagian3Html): string
+    {
+        $bagian2Html = trim((string) $bagian2Html);
+        $bagian3Html = trim((string) $bagian3Html);
+
+        $hasil = str_replace(['{{bagian_2}}', '{{bagian_3}}'], [$bagian2Html, $bagian3Html], $bagian1Html);
+
+        if (! str_contains($bagian1Html, '{{bagian_2}}')) {
+            $hasil .= $bagian2Html;
+        }
+        if (! str_contains($bagian1Html, '{{bagian_3}}')) {
+            $hasil .= $bagian3Html;
+        }
+
+        return $hasil;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function dataNotulaUtuh(Notula $notula, bool $sertakanTtd): array
@@ -271,9 +305,7 @@ class NotulaService
         $periode = $notula->periode;
 
         return [
-            'bagian1Html' => $notula->bagian1_html ?? '',
-            'bagian2Html' => $notula->bagian2_html ?? '',
-            'bagian3Html' => $notula->bagian3_html ?? '',
+            'bagian1Html' => $this->sisipkanBagianDuaTiga($notula->bagian1_html ?? '', $notula->bagian2_html, $notula->bagian3_html),
             'labelTriwulan' => ['I', 'II', 'III', 'IV'][$periode->triwulan - 1] ?? $periode->triwulan,
             'tahun' => $periode->tahun,
             'sertakanTtd' => $sertakanTtd,

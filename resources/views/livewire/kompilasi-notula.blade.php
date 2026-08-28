@@ -453,26 +453,22 @@
 
             <div class="word-canvas">
             <div class="notula" style="max-height:800px;overflow-y:auto">
+                {{-- Bagian II/III (bila sudah diunggah) tersisip di posisi penanda
+                     {{bagian_2}}/{{bagian_3}} di dalam $bagian1PreviewHtml -- sebelum
+                     tabel "Mengetahui/Kepala Satker/Notulis", persis seperti template
+                     docx aslinya -- BUKAN ditempel di bawahnya. Judulnya pun sudah ikut
+                     terbawa dari berkas .docx yang diunggah, tidak ditambahkan lagi di
+                     sini. Lihat KompilasiNotula::bagian1PreviewHtml(). --}}
                 <div class="notula-edit" contenteditable="true" wire:ignore spellcheck="false" x-ref="editor"
                     x-on:bagian1-diperbarui.window="$el.innerHTML = $event.detail.html"
                     @keyup="perbaruiStatus()" @mouseup="perbaruiStatus()"
                     @blur="$wire.set('bagian1EditText', $el.innerHTML)">
-                    @if (trim($bagian1EditText) === '')
+                    @if (trim($bagian1PreviewHtml) === '')
                         <p style="color:var(--faint);font-style:italic">Belum ada konten. Tekan "Susun Ulang Otomatis" atau mulai mengetik di sini.</p>
                     @else
-                        {!! $bagian1EditText !!}
+                        {!! $bagian1PreviewHtml !!}
                     @endif
                 </div>
-
-                @if (trim((string) $notula->bagian2_html) !== '')
-                    <div class="bagian-judul">BAGIAN II — Peran BPS dalam Prioritas Nasional &amp; Isu Strategis</div>
-                    {!! $notula->bagian2_html !!}
-                @endif
-
-                @if (trim((string) $notula->bagian3_html) !== '')
-                    <div class="bagian-judul">BAGIAN III — Realisasi Anggaran &amp; Upaya Efisiensi</div>
-                    {!! $notula->bagian3_html !!}
-                @endif
             </div>
             </div>
         </div>
