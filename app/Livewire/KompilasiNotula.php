@@ -231,12 +231,11 @@ class KompilasiNotula extends Component
     }
 
     /**
-     * Format yang didukung untuk Bagian II/III (lihat NotulaService::konversiKeKontenInline()):
-     * dokumen teks (docx/xlsx/dll., dikonversi ke HTML inline yang bisa reflow/menyambung),
-     * gambar (ditempel langsung), atau PDF (dirasterisasi jadi blok gambar per halaman —
-     * mis. untuk berkas hasil pindai/tanda tangan basah).
+     * Format yang didukung untuk Bagian II/III: hanya .docx, supaya bisa dikonversi
+     * ke HTML inline yang reflow/menyambung mengikuti tata letak Bagian I
+     * (lihat NotulaService::konversiKeKontenInline()).
      */
-    public const FORMAT_BAGIAN_DIDUKUNG = 'docx,doc,xlsx,xls,odt,ods,jpg,jpeg,png,pdf';
+    public const FORMAT_BAGIAN_DIDUKUNG = 'docx';
 
     public function unggahBagian(int $bagianKe): void
     {
@@ -245,7 +244,7 @@ class KompilasiNotula extends Component
         $this->validate([
             $field => ['required', 'file', 'mimes:'.self::FORMAT_BAGIAN_DIDUKUNG, 'max:10240'],
         ], [
-            "{$field}.mimes" => 'Berkas Bagian '.($bagianKe === 2 ? 'II' : 'III').' harus berformat docx/xlsx/odt/ods, gambar (jpg/png), atau PDF.',
+            "{$field}.mimes" => 'Berkas Bagian '.($bagianKe === 2 ? 'II' : 'III').' harus berformat .docx.',
         ]);
 
         try {

@@ -193,10 +193,8 @@
         <p style="color:var(--muted);font-size:12.5px;margin-bottom:16px">
             Satu dokumen utuh dari atas ke bawah, sama seperti membuka file Word yang sudah lengkap. Unggah
             berkas Bagian II &amp; III dulu di bawah ini, lalu sunting Bagian I langsung di pratinjau gabungan
-            paling bawah. Isi Bagian II &amp; III bebas mengikuti template Anda sendiri — cuma format
-            berkasnya yang disarankan <b>.docx (Word)</b> supaya hasil gabungannya rapi menyambung mengikuti
-            tata letak Bagian I (gambar/PDF hasil pindai tetap didukung, tapi tampil sebagai gambar statis,
-            tidak menyambung layoutnya).
+            paling bawah. Isi Bagian II &amp; III bebas mengikuti template Anda sendiri, tapi berkasnya harus
+            berformat <b>.docx (Word)</b> supaya hasil gabungannya rapi menyambung mengikuti tata letak Bagian I.
         </p>
 
         {{-- BAGIAN II — berkas unggahan, tampil sebagai kelanjutan dokumen yang sama --}}
@@ -217,8 +215,8 @@
             </div>
         @else
             <label class="upload upload-tinggi need" style="cursor:pointer;display:flex">
-                <div><div class="big">📤</div>Klik untuk unggah Bagian II (docx/xlsx/odt/ods, gambar, atau PDF)</div>
-                <input type="file" wire:model="bagian2File" accept=".docx,.doc,.xlsx,.xls,.odt,.ods,.jpg,.jpeg,.png,.pdf" style="display:none">
+                <div><div class="big">📤</div>Klik untuk unggah Bagian II (.docx)</div>
+                <input type="file" wire:model="bagian2File" accept=".docx" style="display:none">
             </label>
         @endif
         <div wire:loading wire:target="bagian2File" style="font-size:11.5px;color:var(--muted);margin-top:6px">Mengunggah…</div>
@@ -252,8 +250,8 @@
             </div>
         @else
             <label class="upload upload-tinggi need" style="cursor:pointer;display:flex">
-                <div><div class="big">📤</div>Klik untuk unggah Bagian III (docx/xlsx/odt/ods, gambar, atau PDF)</div>
-                <input type="file" wire:model="bagian3File" accept=".docx,.doc,.xlsx,.xls,.odt,.ods,.jpg,.jpeg,.png,.pdf" style="display:none">
+                <div><div class="big">📤</div>Klik untuk unggah Bagian III (.docx)</div>
+                <input type="file" wire:model="bagian3File" accept=".docx" style="display:none">
             </label>
         @endif
         <div wire:loading wire:target="bagian3File" style="font-size:11.5px;color:var(--muted);margin-top:6px">Mengunggah…</div>
