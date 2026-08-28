@@ -5,7 +5,7 @@
 @section('breadcrumb', 'Dasbor')
 
 @section('content')
-    @if (auth()->user()->namaRole() === 'Tim SAKIP')
+    @if (in_array(auth()->user()->namaRole(), ['Tim SAKIP', 'Kepala']))
         <div class="tabs-page" x-data="{ tab: 'utama' }">
             <div class="subtabs">
                 <button type="button" class="subtab" :class="tab === 'utama' ? 'on' : ''" @click="tab = 'utama'">🏠 Dasbor</button>

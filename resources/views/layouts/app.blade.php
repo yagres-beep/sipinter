@@ -54,7 +54,6 @@
                         <a wire:navigate href="{{ route('verifikasi-akun.index') }}" class="{{ request()->routeIs('verifikasi-akun.*', 'storage-accounts.*') ? 'active' : '' }}"><span class="ic">👥</span> Kelola Pengguna</a>
                     @elseif ($role === 'Kepala')
                         <a wire:navigate href="{{ route('persetujuan.index') }}" class="{{ request()->routeIs('persetujuan.*') ? 'active' : '' }}"><span class="ic">✍️</span> Persetujuan</a>
-                        <a wire:navigate href="{{ route('dasbor-kinerja.index') }}" class="{{ request()->routeIs('dasbor-kinerja.*') ? 'active' : '' }}"><span class="ic">📊</span> Dasbor Kinerja</a>
                         <a wire:navigate href="{{ route('notula-riwayat.index') }}" class="{{ request()->routeIs('notula-riwayat.*') ? 'active' : '' }}"><span class="ic">📄</span> Notula</a>
                     @endif
 
