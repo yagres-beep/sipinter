@@ -43,6 +43,16 @@ class DasborCapaian extends Component
         $this->muatNilaiSakip();
     }
 
+    /**
+     * Hanya Tim SAKIP yang boleh mengisi Nilai SAKIP — Kepala berbagi rute yang
+     * sama (role:Tim SAKIP,Kepala) tapi cuma meninjau, sama seperti gerbang
+     * isTimSakip() di LakinDetail.
+     */
+    public function isTimSakip(): bool
+    {
+        return auth()->user()->namaRole() === 'Tim SAKIP';
+    }
+
     protected function muatNilaiSakip(): void
     {
         $this->nilaiSakipInput = NilaiSakip::where('tahun', $this->tahun)->value('nilai');
@@ -55,6 +65,8 @@ class DasborCapaian extends Component
 
     public function simpanNilaiSakip(): void
     {
+        abort_unless($this->isTimSakip(), 403, 'Hanya Tim SAKIP yang dapat mengisi Nilai SAKIP.');
+
         $this->validate([
             'nilaiSakipInput' => ['nullable', 'numeric', 'min:0', 'max:100'],
         ], [], ['nilaiSakipInput' => 'Nilai SAKIP']);

@@ -49,6 +49,24 @@ class DasborCapaianTest extends TestCase
         $this->assertDatabaseHas('nilai_sakip', ['tahun' => 2026, 'nilai' => 65]);
     }
 
+    public function test_kepala_tidak_bisa_mengubah_nilai_sakip(): void
+    {
+        $peran = Role::create(['nama' => 'Kepala']);
+        $kepala = User::create([
+            'nama' => 'Kepala Uji', 'username' => 'kepala-dasbor@example.test', 'email' => 'kepala-dasbor@example.test',
+            'password' => 'password', 'role_id' => $peran->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+        $this->actingAs($kepala);
+
+        Livewire::test(DasborCapaian::class)
+            ->set('tahun', 2026)
+            ->set('nilaiSakipInput', 65)
+            ->call('simpanNilaiSakip')
+            ->assertForbidden();
+
+        $this->assertDatabaseMissing('nilai_sakip', ['tahun' => 2026]);
+    }
+
     public function test_info_sakip_menampilkan_predikat_tanpa_perhitungan_pko(): void
     {
         $this->loginSebagaiTimSakip();

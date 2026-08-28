@@ -51,16 +51,20 @@
 
         <div class="field" style="max-width:260px">
             <label>Nilai SAKIP {{ $tahun }} <span class="muted" style="font-weight:400;font-size:10px">— dari Inspektorat, satu angka untuk seluruh organisasi</span></label>
-            <div style="display:flex;gap:8px;align-items:center">
-                <input type="number" step="0.01" class="inp filled" style="width:120px" wire:model="nilaiSakipInput">
-                <button type="button" class="btn btn-ghost btn-sm" wire:click="simpanNilaiSakip" wire:loading.attr="disabled" wire:target="simpanNilaiSakip">
-                    <span wire:loading.remove wire:target="simpanNilaiSakip">Simpan</span>
-                    <span wire:loading wire:target="simpanNilaiSakip"><i class="spin"></i></span>
-                </button>
-            </div>
-            @error('nilaiSakipInput')
-                <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-            @enderror
+            @if ($this->isTimSakip())
+                <div style="display:flex;gap:8px;align-items:center">
+                    <input type="number" step="0.01" class="inp filled" style="width:120px" wire:model="nilaiSakipInput">
+                    <button type="button" class="btn btn-ghost btn-sm" wire:click="simpanNilaiSakip" wire:loading.attr="disabled" wire:target="simpanNilaiSakip">
+                        <span wire:loading.remove wire:target="simpanNilaiSakip">Simpan</span>
+                        <span wire:loading wire:target="simpanNilaiSakip"><i class="spin"></i></span>
+                    </button>
+                </div>
+                @error('nilaiSakipInput')
+                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                @enderror
+            @else
+                <div class="inp filled" style="width:120px;display:flex;align-items:center">{{ $nilaiSakipInput ?? '-' }}</div>
+            @endif
         </div>
 
         <div class="stat-grid" style="margin-top:14px">
