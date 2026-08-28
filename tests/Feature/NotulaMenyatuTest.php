@@ -16,7 +16,7 @@ use Tests\TestCase;
  * Notula menyatu (Bagian I+II+III dirender sebagai SATU dokumen mengalir, bukan
  * tiga PDF terpisah yang digabung) + blok TTD di paling akhir setelah Bagian III.
  *
- * Konversi berkas ASLI Bagian II/III (LibreOffice/Poppler) sengaja TIDAK diuji di
+ * Konversi berkas ASLI Bagian II/III (LibreOffice) sengaja TIDAK diuji di
  * sini karena butuh binari eksternal terpasang di mesin penguji — bagian2_html/
  * bagian3_html diisi manual, sama seperti pola NotulaSetujuiTest yang mengisi
  * bagian2_pdf/bagian3_pdf manual lewat dompdf tanpa LibreOffice.

@@ -1263,32 +1263,23 @@ class PengisianKegiatan extends Component
     }
 
     /**
-     * Saran nama PIC untuk IKU terpilih (datalist di form) — sumbernya Master IKU (kolom
-     * tim) + keanggotaan tim/penugasan manual. Hanya saran; rtlBaruPic tetap teks bebas.
+     * Saran PIC untuk IKU terpilih (datalist di form) — SELALU nama tim (master_iku.tim),
+     * BUKAN nama orang, supaya konsisten dengan yang benar-benar dipakai di notula
+     * (lihat NotulaBagian1DocxService::isiBagianIku(), yang mengabaikan rtlBaruPic dan
+     * selalu memakai $iku->tim). Hanya satu saran karena satu IKU hanya berada di satu tim.
      *
      * @return \Illuminate\Support\Collection<int, string>
      */
     protected function picOptions()
     {
-        if (! $this->iku_id) {
-            return collect();
-        }
+        $tim = $this->ikuTerpilih()?->tim;
 
-        // Di-cache per IKU (bukan per IKU+periode seperti cacheKeyPeriodeIku — penanggung
-        // jawab tidak tergantung tahun/bulan) supaya tidak query 'iku_penugasan'+'user_tim'
-        // di SETIAP render, termasuk aksi yang tidak menyentuh PIC sama sekali.
-        return Cache::remember("pengisian-kegiatan.pic-options.{$this->iku_id}", self::CACHE_TTL_DETIK, function () {
-            $iku = $this->ikuTerpilih();
-
-            return $iku ? $iku->semuaPenanggungJawab()->pluck('nama')->values() : collect();
-        });
+        return $tim ? collect([$tim]) : collect();
     }
 
     protected function pilihPicOtomatis(): void
     {
-        $default = $this->ikuTerpilih()?->penanggungJawabOtomatis()->first()?->nama;
-
-        $this->rtlBaruPic = $default ?? '';
+        $this->rtlBaruPic = $this->ikuTerpilih()?->tim ?? '';
     }
 
     protected function targetTriwulanBerikutnya(): array
@@ -2065,7 +2056,6 @@ class PengisianKegiatan extends Component
             'rtlBerjalanOptions' => $this->rtlBerjalanOptions(),
             'rtlBerjalanBelumTerlaksana' => $this->poinRtlBerjalanBelumTerlaksana(),
             'picOptions' => $this->picOptions(),
-            'namaTimIku' => $this->ikuTerpilih()?->tim,
             'bagianKustomAktif' => $bagianKustomAktif,
             'riwayatBagianKustom' => $bagianKustomAktif->mapWithKeys(fn ($b) => [$b->id => $this->riwayatBagianKustom($b)]),
             'statusKegiatanTerkunci' => self::STATUS_KEGIATAN_TERKUNCI,

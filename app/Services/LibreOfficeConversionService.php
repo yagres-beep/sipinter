@@ -75,15 +75,6 @@ class LibreOfficeConversionService
         return $kontenInline;
     }
 
-    /**
-     * Berkas berformat PDF tidak perlu dikonversi — dipakai pemanggil (NotulaService)
-     * untuk memutuskan apakah convertToPdf() perlu dipanggil sama sekali.
-     */
-    public function sudahPdf(string $filePath): bool
-    {
-        return strtolower(pathinfo($filePath, PATHINFO_EXTENSION)) === 'pdf';
-    }
-
     private function jalankanSoffice(string $inputPath, string $outputDir, string $format): string
     {
         if (! is_file($inputPath)) {
@@ -158,10 +149,7 @@ class LibreOfficeConversionService
      *
      * CATATAN FIDELITAS: rendering dompdf tidak 100% identik dengan Word — dompdf
      * memakai mesin CSS sendiri (bukan mesin render browser), jadi properti CSS
-     * yang jarang/kompleks dari LibreOffice bisa tampil sedikit berbeda. Untuk
-     * dokumen teks (docx/xlsx) ini tetap far lebih akurat & bisa reflow/menyambung
-     * dibanding rasterisasi (lihat PdfRasterService), yang HANYA dipakai untuk PDF
-     * yang memang harus tampil persis (mis. tanda tangan basah hasil pindai).
+     * yang jarang/kompleks dari LibreOffice bisa tampil sedikit berbeda.
      */
     private function ekstrakKontenInline(string $html, string $outputDir): string
     {

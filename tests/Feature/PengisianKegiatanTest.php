@@ -558,7 +558,7 @@ class PengisianKegiatanTest extends TestCase
         $this->assertTrue($poin2->refresh()->sudahDievaluasi());
     }
 
-    public function test_pic_tindak_lanjut_terisi_otomatis_dari_penanggung_jawab_iku(): void
+    public function test_pic_tindak_lanjut_terisi_otomatis_dari_nama_tim_iku(): void
     {
         $peranKetua = Role::create(['nama' => 'Ketua Tim']);
         $ketua = User::create([
@@ -573,7 +573,6 @@ class PengisianKegiatanTest extends TestCase
             'kode' => 'UJI-012',
             'indikator' => 'Indikator uji coba 12',
             'tim' => 'Uji Otomatis',
-            'penanggung_jawab' => 'Ketua Uji',
         ]);
 
         \App\Models\UserTim::create(['user_id' => $ketua->id, 'tim' => 'Uji Otomatis']);
@@ -583,7 +582,9 @@ class PengisianKegiatanTest extends TestCase
         $component = Livewire::test(PengisianKegiatan::class);
         $component->set('iku_id', $iku->id);
 
-        $this->assertSame($ketua->nama, $component->get('rtlBaruPic'));
+        // PIC Tindak Lanjut selalu nama tim (master_iku.tim), BUKAN nama orang —
+        // konsisten dengan yang dipakai di notula (NotulaBagian1DocxService::isiBagianIku()).
+        $this->assertSame('Uji Otomatis', $component->get('rtlBaruPic'));
     }
 
     public function test_riwayat_kendala_solusi_kumulatif_dari_triwulan_1_sampai_berjalan(): void

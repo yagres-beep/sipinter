@@ -547,15 +547,14 @@
 
                 <div class="row2" style="margin-top:14px">
                     <div class="field"><label>PIC Tindak Lanjut <span class="req">*</span></label>
-                        <input type="text" class="inp filled" list="daftar-pic-rtl" wire:model.live.blur="rtlBaruPic" placeholder="Ketik atau pilih nama PIC">
+                        <input type="text" class="inp filled" list="daftar-pic-rtl" wire:model.live.blur="rtlBaruPic" placeholder="Ketik atau pilih nama tim">
                         <datalist id="daftar-pic-rtl">
                             @foreach ($picOptions as $nama)
                                 <option value="{{ $nama }}"></option>
                             @endforeach
                         </datalist>
                         <div class="fhint">
-                            @if ($namaTimIku) Tim: <b>{{ $namaTimIku }}</b> · @endif
-                            Berlaku untuk seluruh poin RTL {{ $labelBerikutnya }} di atas. Pilih dari saran, atau ketik nama lain.
+                            PIC selalu nama tim (bukan perorangan). Berlaku untuk seluruh poin RTL {{ $labelBerikutnya }} di atas.
                         </div>
                         @error('rtlBaruPic')
                             <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>

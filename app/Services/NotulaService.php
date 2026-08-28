@@ -34,7 +34,6 @@ class NotulaService
 {
     public function __construct(
         protected LibreOfficeConversionService $konversi,
-        protected PdfRasterService $rasterisasi,
         protected FolderStructureService $folder,
         protected NotulaBagian1DocxService $docx,
     ) {}
@@ -300,12 +299,10 @@ class NotulaService
     }
 
     /**
-     * RF-42a/42b: terima unggahan Bagian II atau III (docx/xlsx/doc/xls/odt/ods,
-     * gambar, atau PDF), lalu simpan DUA bentuk:
-     * - bagian{2,3}_pdf: versi PDF (LibreOffice headless bila perlu dikonversi),
-     *   dipakai HANYA untuk pratinjau iframe di layar Kompilasi Notula.
-     * - bagian{2,3}_html: konten INLINE (HTML reflow untuk dokumen teks, atau
-     *   <img> data: URI untuk gambar/PDF rasterisasi), dipakai jalur render notula
+     * RF-42a/42b: terima unggahan Bagian II atau III (.docx), lalu simpan DUA bentuk:
+     * - bagian{2,3}_pdf: versi PDF (LibreOffice headless), dipakai HANYA untuk
+     *   pratinjau iframe di layar Kompilasi Notula.
+     * - bagian{2,3}_html: konten HTML inline (reflow), dipakai jalur render notula
      *   menyatu (lihat gabungkan()/setujui()) supaya bisa menyambung antar bagian.
      *
      * Mengganti berkas yang sudah ada sebelumnya (RF-42e) otomatis membatalkan
@@ -320,11 +317,8 @@ class NotulaService
         $pathAsli = $file->store('notula-sementara', 'local');
         $fullPathAsli = Storage::disk('local')->path($pathAsli);
         $dirKerja = dirname($fullPathAsli);
-        $ekstensiAsli = strtolower(pathinfo($fullPathAsli, PATHINFO_EXTENSION));
 
-        $fullPathPdf = $this->konversi->sudahPdf($fullPathAsli)
-            ? $fullPathAsli
-            : $this->konversi->convertToPdf($fullPathAsli, $dirKerja);
+        $fullPathPdf = $this->konversi->convertToPdf($fullPathAsli, $dirKerja);
 
         $relatifTujuanPdf = "notula/{$notula->id}/bagian{$bagianKe}.pdf";
         $fullPathTujuanPdf = Storage::disk('local')->path($relatifTujuanPdf);
@@ -332,11 +326,9 @@ class NotulaService
         copy($fullPathPdf, $fullPathTujuanPdf);
 
         // Konten inline dibaca SEBELUM berkas sementara dihapus di bawah.
-        $kontenInline = $this->konversiKeKontenInline($fullPathAsli, $ekstensiAsli, $dirKerja);
+        $kontenInline = $this->konversi->convertToHtml($fullPathAsli, $dirKerja);
 
-        if ($fullPathPdf !== $fullPathAsli) {
-            @unlink($fullPathPdf);
-        }
+        @unlink($fullPathPdf);
         @unlink($fullPathAsli);
 
         $kolomPdf = $bagianKe === 2 ? 'bagian2_pdf' : 'bagian3_pdf';
@@ -344,35 +336,6 @@ class NotulaService
         $notula->update([$kolomPdf => $relatifTujuanPdf, $kolomHtml => $kontenInline]);
 
         $notula->tandaiPerluDigabungUlang();
-    }
-
-    /**
-     * Pilih jalur konversi ke konten inline sesuai format berkas asli — lihat
-     * catatan fidelitas di LibreOfficeConversionService/PdfRasterService: dokumen
-     * teks (docx/xlsx/dll.) memakai jalur HTML supaya bisa reflow/menyambung;
-     * gambar ditempel langsung; PDF dirasterisasi jadi blok gambar per halaman.
-     */
-    private function konversiKeKontenInline(string $filePath, string $ekstensi, string $workDir): string
-    {
-        return match (true) {
-            in_array($ekstensi, ['docx', 'doc', 'xlsx', 'xls', 'odt', 'ods'], true) => $this->konversi->convertToHtml($filePath, $workDir),
-            in_array($ekstensi, ['jpg', 'jpeg', 'png', 'gif'], true) => $this->gambarKeInlineHtml($filePath, $ekstensi),
-            $ekstensi === 'pdf' => $this->rasterisasi->rasterizeToInlineHtml($filePath, $workDir),
-            default => throw new RuntimeException("Format berkas .{$ekstensi} tidak didukung untuk Bagian II/III."),
-        };
-    }
-
-    private function gambarKeInlineHtml(string $filePath, string $ekstensi): string
-    {
-        $mime = match ($ekstensi) {
-            'jpg', 'jpeg' => 'image/jpeg',
-            'gif' => 'image/gif',
-            default => 'image/png',
-        };
-
-        $dataUri = 'data:'.$mime.';base64,'.base64_encode((string) file_get_contents($filePath));
-
-        return '<div class="notula-inline"><img src="'.$dataUri.'" style="max-width:100%;display:block"></div>';
     }
 
     /**
