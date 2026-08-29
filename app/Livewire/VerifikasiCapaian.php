@@ -280,6 +280,20 @@ class VerifikasiCapaian extends Component
                 ->all();
         }
 
+        // RO tidak wajib mengikuti jumlah Kegiatan (satu kegiatan boleh 0, boleh banyak) —
+        // tapi supaya Tim SAKIP tidak harus klik "+ Tambah RO" dulu hanya untuk mulai
+        // mengisi, satu baris kosong disiapkan otomatis di Kegiatan PERTAMA yang bisa
+        // dikoreksi, hanya bila belum ada RO tersimpan sama sekali di seluruh Kegiatan.
+        if (array_sum(array_map('count', $this->rincianOutput)) === 0) {
+            $kegiatanPertama = $this->kegiatanList()->first(fn ($kegiatan) => $this->kegiatanBisaDikoreksi($kegiatan));
+
+            if ($kegiatanPertama) {
+                $this->rincianOutput[$kegiatanPertama->id]['baru-'.(string) Str::uuid()] = [
+                    'id' => null, 'uraian' => null, 'volume_ro' => null, 'progres_persen' => null,
+                ];
+            }
+        }
+
         foreach ($this->kendalaSolusiList() as $ks) {
             $this->koreksiKendala[$ks->id] = ['kendala' => $ks->kendala, 'solusi' => $ks->solusi];
             $this->catatanKendala[$ks->id] = $ks->catatan;

@@ -1000,7 +1000,10 @@ class VerifikasiCapaianTest extends TestCase
             ->call('tambahRo', $kegiatanId)
             ->call('tambahRo', $kegiatanId);
 
-        $this->assertCount(2, $component->get('rincianOutput')[$kegiatanId]);
+        // 3, bukan 2: mount() sudah menyiapkan satu baris kosong default di Kegiatan
+        // pertama (lihat komentar di VerifikasiCapaian::mount()), ditambah 2 baris dari
+        // tambahRo() di atas.
+        $this->assertCount(3, $component->get('rincianOutput')[$kegiatanId]);
 
         $kunci = array_keys($component->get('rincianOutput')[$kegiatanId]);
 
