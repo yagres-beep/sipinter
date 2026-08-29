@@ -661,7 +661,15 @@
                         <textarea class="inp filled" style="height:auto;display:block;font-style:italic;font-size:12px" rows="2"
                             wire:model="koreksiRtlRealisasi.{{ $poin->id }}" placeholder="— belum dilaporkan —"></textarea>
                         @foreach ($poin->berkas as $file)
-                            <div class="filechip" style="margin-top:6px"><span class="nm">📄 {{ $file->nama_file }}</span></div>
+                            <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}" style="margin-top:6px" wire:key="berkas-{{ $file->id }}">
+                                <span class="nm">
+                                    📄 {{ $file->nama_file }}
+                                    @if ($file->status_verifikasi === 'ditolak')
+                                        <span class="sub" style="color:var(--red)">Tidak Sesuai</span>
+                                    @endif
+                                </span>
+                                <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file->id }}">🔍 Periksa</button>
+                            </div>
                         @endforeach
 
                         @if ($this->rtlBisaDiverifikasi($poin->id))
