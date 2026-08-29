@@ -270,7 +270,8 @@
                                 <span wire:loading wire:target="tandaiUraianTolak({{ $kegiatan->id }})"><i class="spin"></i></span>
                             </button>
                         </div>
-                        <div class="field" style="margin-top:10px;margin-bottom:0">
+                        <div class="field" style="margin-top:10px;margin-bottom:0" x-cloak
+                            x-show="pendingMark === 'no' || (pendingMark === null && {{ $kegiatan->status_verifikasi_uraian === 'ditolak' ? 'true' : 'false' }})">
                             <label style="font-size:11.5px">Catatan (wajib bila tidak sesuai)</label>
                             <textarea class="inp filled" style="height:auto;display:block;font-size:11.5px" rows="2"
                                 wire:model="catatanUraian.{{ $kegiatan->id }}" placeholder="mis. Uraian belum menjelaskan output yang dihasilkan"
@@ -278,19 +279,19 @@
                             @error('catatanUraian.'.$kegiatan->id)
                                 <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                             @enderror
+                        </div>
 
-                            <div style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"
-                                x-show="pendingMark !== null || {{ $kegiatan->status_verifikasi_uraian !== 'menunggu' ? 'true' : 'false' }}">
-                                <button type="button" class="btn btn-ghost btn-sm"
-                                    x-on:click="(pendingMark === 'no' || (pendingMark === null && {{ $kegiatan->status_verifikasi_uraian === 'ditolak' ? 'true' : 'false' }})) ? $wire.tandaiUraianTolak({{ $kegiatan->id }}) : $wire.tandaiUraianSesuai({{ $kegiatan->id }})"
-                                    wire:loading.attr="disabled" wire:target="tandaiUraianSesuai({{ $kegiatan->id }}),tandaiUraianTolak({{ $kegiatan->id }})">
-                                    <span wire:loading.remove wire:target="tandaiUraianSesuai({{ $kegiatan->id }}),tandaiUraianTolak({{ $kegiatan->id }})">💾 Simpan Verifikasi</span>
-                                    <span wire:loading wire:target="tandaiUraianSesuai({{ $kegiatan->id }}),tandaiUraianTolak({{ $kegiatan->id }})"><i class="spin"></i> Menyimpan…</span>
-                                </button>
-                                @if ($kegiatan->status_verifikasi_uraian !== 'menunggu' && !$errors->has('catatanUraian.'.$kegiatan->id))
-                                    <span style="color:#16a34a;font-size:11.5px">✓ Tersimpan</span>
-                                @endif
-                            </div>
+                        <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"
+                            x-show="pendingMark !== null || {{ $kegiatan->status_verifikasi_uraian !== 'menunggu' ? 'true' : 'false' }}">
+                            <button type="button" class="btn btn-ghost btn-sm"
+                                x-on:click="(pendingMark === 'no' || (pendingMark === null && {{ $kegiatan->status_verifikasi_uraian === 'ditolak' ? 'true' : 'false' }})) ? $wire.tandaiUraianTolak({{ $kegiatan->id }}) : $wire.tandaiUraianSesuai({{ $kegiatan->id }})"
+                                wire:loading.attr="disabled" wire:target="tandaiUraianSesuai({{ $kegiatan->id }}),tandaiUraianTolak({{ $kegiatan->id }})">
+                                <span wire:loading.remove wire:target="tandaiUraianSesuai({{ $kegiatan->id }}),tandaiUraianTolak({{ $kegiatan->id }})">💾 Simpan Verifikasi</span>
+                                <span wire:loading wire:target="tandaiUraianSesuai({{ $kegiatan->id }}),tandaiUraianTolak({{ $kegiatan->id }})"><i class="spin"></i> Menyimpan…</span>
+                            </button>
+                            @if ($kegiatan->status_verifikasi_uraian !== 'menunggu' && !$errors->has('catatanUraian.'.$kegiatan->id))
+                                <span style="color:#16a34a;font-size:11.5px">✓ Tersimpan</span>
+                            @endif
                         </div>
                     </div>
                 @elseif ($kegiatan->catatan_uraian)
@@ -416,7 +417,8 @@
                                     <span wire:loading wire:target="tandaiKendalaTolak({{ $ks->id }})"><i class="spin"></i></span>
                                 </button>
                             </div>
-                            <div class="field" style="margin-top:10px;margin-bottom:0">
+                            <div class="field" style="margin-top:10px;margin-bottom:0" x-cloak
+                                x-show="pendingMark === 'no' || (pendingMark === null && {{ $ks->status_verifikasi === 'ditolak' ? 'true' : 'false' }})">
                                 <label style="font-size:11.5px">Catatan (wajib bila tidak sesuai)</label>
                                 {{-- @blur menyusulkan ulang tandaiKendalaTolak() begitu catatan selesai
                                     diisi (lihat catatan yang sama pada catatanBerkas di atas) — tanpa ini
@@ -428,19 +430,19 @@
                                 @error('catatanKendala.'.$ks->id)
                                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                                 @enderror
+                            </div>
 
-                                <div style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"
-                                    x-show="pendingMark !== null || {{ $ks->status_verifikasi !== 'menunggu' ? 'true' : 'false' }}">
-                                    <button type="button" class="btn btn-ghost btn-sm"
-                                        x-on:click="(pendingMark === 'no' || (pendingMark === null && {{ $ks->status_verifikasi === 'ditolak' ? 'true' : 'false' }})) ? $wire.tandaiKendalaTolak({{ $ks->id }}) : $wire.tandaiKendalaSesuai({{ $ks->id }})"
-                                        wire:loading.attr="disabled" wire:target="tandaiKendalaSesuai({{ $ks->id }}),tandaiKendalaTolak({{ $ks->id }})">
-                                        <span wire:loading.remove wire:target="tandaiKendalaSesuai({{ $ks->id }}),tandaiKendalaTolak({{ $ks->id }})">💾 Simpan Verifikasi</span>
-                                        <span wire:loading wire:target="tandaiKendalaSesuai({{ $ks->id }}),tandaiKendalaTolak({{ $ks->id }})"><i class="spin"></i> Menyimpan…</span>
-                                    </button>
-                                    @if ($ks->status_verifikasi !== 'menunggu' && !$errors->has('catatanKendala.'.$ks->id))
-                                        <span style="color:#16a34a;font-size:11.5px">✓ Tersimpan</span>
-                                    @endif
-                                </div>
+                            <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"
+                                x-show="pendingMark !== null || {{ $ks->status_verifikasi !== 'menunggu' ? 'true' : 'false' }}">
+                                <button type="button" class="btn btn-ghost btn-sm"
+                                    x-on:click="(pendingMark === 'no' || (pendingMark === null && {{ $ks->status_verifikasi === 'ditolak' ? 'true' : 'false' }})) ? $wire.tandaiKendalaTolak({{ $ks->id }}) : $wire.tandaiKendalaSesuai({{ $ks->id }})"
+                                    wire:loading.attr="disabled" wire:target="tandaiKendalaSesuai({{ $ks->id }}),tandaiKendalaTolak({{ $ks->id }})">
+                                    <span wire:loading.remove wire:target="tandaiKendalaSesuai({{ $ks->id }}),tandaiKendalaTolak({{ $ks->id }})">💾 Simpan Verifikasi</span>
+                                    <span wire:loading wire:target="tandaiKendalaSesuai({{ $ks->id }}),tandaiKendalaTolak({{ $ks->id }})"><i class="spin"></i> Menyimpan…</span>
+                                </button>
+                                @if ($ks->status_verifikasi !== 'menunggu' && !$errors->has('catatanKendala.'.$ks->id))
+                                    <span style="color:#16a34a;font-size:11.5px">✓ Tersimpan</span>
+                                @endif
                             </div>
                         </div>
                     @elseif ($ks->catatan)
@@ -483,7 +485,8 @@
                                         <span wire:loading wire:target="tandaiBagianKustomTolak({{ $poin->id }})"><i class="spin"></i></span>
                                     </button>
                                 </div>
-                                <div class="field" style="margin-top:10px;margin-bottom:0">
+                                <div class="field" style="margin-top:10px;margin-bottom:0" x-cloak
+                                    x-show="pendingMark === 'no' || (pendingMark === null && {{ $poin->status_verifikasi === 'ditolak' ? 'true' : 'false' }})">
                                     <label style="font-size:11.5px">Catatan (wajib bila tidak sesuai)</label>
                                     <textarea class="inp filled" style="height:auto;display:block;font-size:11.5px" rows="2"
                                         wire:model="catatanBagianKustom.{{ $poin->id }}" placeholder="mis. Narasi belum menjelaskan tindak lanjut yang dilakukan"
@@ -491,19 +494,19 @@
                                     @error('catatanBagianKustom.'.$poin->id)
                                         <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                                     @enderror
+                                </div>
 
-                                    <div style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"
-                                        x-show="pendingMark !== null || {{ $poin->status_verifikasi !== 'menunggu' ? 'true' : 'false' }}">
-                                        <button type="button" class="btn btn-ghost btn-sm"
-                                            x-on:click="(pendingMark === 'no' || (pendingMark === null && {{ $poin->status_verifikasi === 'ditolak' ? 'true' : 'false' }})) ? $wire.tandaiBagianKustomTolak({{ $poin->id }}) : $wire.tandaiBagianKustomSesuai({{ $poin->id }})"
-                                            wire:loading.attr="disabled" wire:target="tandaiBagianKustomSesuai({{ $poin->id }}),tandaiBagianKustomTolak({{ $poin->id }})">
-                                            <span wire:loading.remove wire:target="tandaiBagianKustomSesuai({{ $poin->id }}),tandaiBagianKustomTolak({{ $poin->id }})">💾 Simpan Verifikasi</span>
-                                            <span wire:loading wire:target="tandaiBagianKustomSesuai({{ $poin->id }}),tandaiBagianKustomTolak({{ $poin->id }})"><i class="spin"></i> Menyimpan…</span>
-                                        </button>
-                                        @if ($poin->status_verifikasi !== 'menunggu' && !$errors->has('catatanBagianKustom.'.$poin->id))
-                                            <span style="color:#16a34a;font-size:11.5px">✓ Tersimpan</span>
-                                        @endif
-                                    </div>
+                                <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"
+                                    x-show="pendingMark !== null || {{ $poin->status_verifikasi !== 'menunggu' ? 'true' : 'false' }}">
+                                    <button type="button" class="btn btn-ghost btn-sm"
+                                        x-on:click="(pendingMark === 'no' || (pendingMark === null && {{ $poin->status_verifikasi === 'ditolak' ? 'true' : 'false' }})) ? $wire.tandaiBagianKustomTolak({{ $poin->id }}) : $wire.tandaiBagianKustomSesuai({{ $poin->id }})"
+                                        wire:loading.attr="disabled" wire:target="tandaiBagianKustomSesuai({{ $poin->id }}),tandaiBagianKustomTolak({{ $poin->id }})">
+                                        <span wire:loading.remove wire:target="tandaiBagianKustomSesuai({{ $poin->id }}),tandaiBagianKustomTolak({{ $poin->id }})">💾 Simpan Verifikasi</span>
+                                        <span wire:loading wire:target="tandaiBagianKustomSesuai({{ $poin->id }}),tandaiBagianKustomTolak({{ $poin->id }})"><i class="spin"></i> Menyimpan…</span>
+                                    </button>
+                                    @if ($poin->status_verifikasi !== 'menunggu' && !$errors->has('catatanBagianKustom.'.$poin->id))
+                                        <span style="color:#16a34a;font-size:11.5px">✓ Tersimpan</span>
+                                    @endif
                                 </div>
                             </div>
                         @elseif ($poin->catatan)
@@ -590,7 +593,8 @@
                                 <span wire:loading.remove wire:target="tandaiTolak({{ $file->id }})">✕ Tidak Sesuai</span>
                                 <span wire:loading wire:target="tandaiTolak({{ $file->id }})"><i class="spin"></i></span>
                             </button>
-                            <div class="field" style="margin-top:12px">
+                            <div class="field" style="margin-top:12px" x-cloak
+                                x-show="pendingMark === 'no' || (pendingMark === null && {{ $file->status_verifikasi === 'ditolak' ? 'true' : 'false' }})">
                                 <label style="font-size:11.5px">Catatan (wajib bila tidak sesuai)</label>
                                 {{-- Klik "Tidak Sesuai" saat catatan masih kosong ditolak validasi (lihat
                                     tandaiTolak()) — tombolnya SUDAH terlanjur merah lewat pendingMark
@@ -605,29 +609,29 @@
                                 @error('catatanBerkas.'.$file->id)
                                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                                 @enderror
+                            </div>
 
-                                {{-- Tombol simpan eksplisit untuk penandaan Sesuai/Tidak Sesuai
-                                    beserta catatannya — @blur di atas sudah menyusulkan simpan
-                                    otomatis, tapi pengguna tidak selalu sadar itu terjadi (mis.
-                                    langsung menutup modal setelah mengetik). Tombol ini memicu
-                                    penyimpanan yang sama secara eksplisit, dan label "✓ Tersimpan"
-                                    di sampingnya (dibaca langsung dari status_verifikasi, bukan
-                                    state Alpine) memberi kepastian nyata bahwa penandaan + catatan
-                                    sudah ada di database, bukan cuma tampak begitu. Catatan hanya
-                                    relevan untuk "Tidak Sesuai" — tandaiSesuai() di komponen
-                                    SELALU mengosongkannya (lihat catatan di sana). --}}
-                                <div style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"
-                                    x-show="pendingMark !== null || {{ $file->status_verifikasi !== 'menunggu' ? 'true' : 'false' }}">
-                                    <button type="button" class="btn btn-ghost btn-sm"
-                                        x-on:click="(pendingMark === 'no' || (pendingMark === null && {{ $file->status_verifikasi === 'ditolak' ? 'true' : 'false' }})) ? $wire.tandaiTolak({{ $file->id }}) : $wire.tandaiSesuai({{ $file->id }})"
-                                        wire:loading.attr="disabled" wire:target="tandaiSesuai({{ $file->id }}),tandaiTolak({{ $file->id }})">
-                                        <span wire:loading.remove wire:target="tandaiSesuai({{ $file->id }}),tandaiTolak({{ $file->id }})">💾 Simpan Verifikasi</span>
-                                        <span wire:loading wire:target="tandaiSesuai({{ $file->id }}),tandaiTolak({{ $file->id }})"><i class="spin"></i> Menyimpan…</span>
-                                    </button>
-                                    @if ($file->status_verifikasi !== 'menunggu' && !$errors->has('catatanBerkas.'.$file->id))
-                                        <span style="color:#16a34a;font-size:11.5px">✓ Tersimpan</span>
-                                    @endif
-                                </div>
+                            {{-- Tombol simpan eksplisit untuk penandaan Sesuai/Tidak Sesuai
+                                beserta catatannya — @blur di atas sudah menyusulkan simpan
+                                otomatis, tapi pengguna tidak selalu sadar itu terjadi (mis.
+                                langsung menutup modal setelah mengetik). Tombol ini memicu
+                                penyimpanan yang sama secara eksplisit, dan label "✓ Tersimpan"
+                                di sampingnya (dibaca langsung dari status_verifikasi, bukan
+                                state Alpine) memberi kepastian nyata bahwa penandaan + catatan
+                                sudah ada di database, bukan cuma tampak begitu. Catatan hanya
+                                relevan untuk "Tidak Sesuai" — tandaiSesuai() di komponen
+                                SELALU mengosongkannya (lihat catatan di sana). --}}
+                            <div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"
+                                x-show="pendingMark !== null || {{ $file->status_verifikasi !== 'menunggu' ? 'true' : 'false' }}">
+                                <button type="button" class="btn btn-ghost btn-sm"
+                                    x-on:click="(pendingMark === 'no' || (pendingMark === null && {{ $file->status_verifikasi === 'ditolak' ? 'true' : 'false' }})) ? $wire.tandaiTolak({{ $file->id }}) : $wire.tandaiSesuai({{ $file->id }})"
+                                    wire:loading.attr="disabled" wire:target="tandaiSesuai({{ $file->id }}),tandaiTolak({{ $file->id }})">
+                                    <span wire:loading.remove wire:target="tandaiSesuai({{ $file->id }}),tandaiTolak({{ $file->id }})">💾 Simpan Verifikasi</span>
+                                    <span wire:loading wire:target="tandaiSesuai({{ $file->id }}),tandaiTolak({{ $file->id }})"><i class="spin"></i> Menyimpan…</span>
+                                </button>
+                                @if ($file->status_verifikasi !== 'menunggu' && !$errors->has('catatanBerkas.'.$file->id))
+                                    <span style="color:#16a34a;font-size:11.5px">✓ Tersimpan</span>
+                                @endif
                             </div>
                         @else
                             <span class="mark {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}" style="cursor:default">{{ $file->status_verifikasi === 'terverifikasi' ? '✓ Sesuai' : ($file->status_verifikasi === 'ditolak' ? '✕ Tidak Sesuai' : '… Menunggu') }}</span>
@@ -660,17 +664,6 @@
                         <div class="mc-lbl">Realisasi Dilaporkan</div>
                         <textarea class="inp filled" style="height:auto;display:block;font-style:italic;font-size:12px" rows="2"
                             wire:model="koreksiRtlRealisasi.{{ $poin->id }}" placeholder="— belum dilaporkan —"></textarea>
-                        @foreach ($poin->berkas as $file)
-                            <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}" style="margin-top:6px" wire:key="berkas-{{ $file->id }}">
-                                <span class="nm">
-                                    📄 {{ $file->nama_file }}
-                                    @if ($file->status_verifikasi === 'ditolak')
-                                        <span class="sub" style="color:var(--red)">Tidak Sesuai</span>
-                                    @endif
-                                </span>
-                                <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file->id }}">🔍 Periksa</button>
-                            </div>
-                        @endforeach
 
                         @if ($this->rtlBisaDiverifikasi($poin->id))
                             <div x-data="{ pendingMark: null }" style="margin-top:8px">
@@ -690,7 +683,9 @@
                                         <span wire:loading wire:target="tandaiRtlTolak({{ $poin->id }})"><i class="spin"></i></span>
                                     </button>
                                 </div>
-                                <div class="field" style="margin-top:8px;margin-bottom:0">
+
+                                <div class="field" style="margin-top:10px;margin-bottom:0" x-cloak
+                                    x-show="pendingMark === 'no' || (pendingMark === null && {{ $poin->status_verifikasi === 'ditolak' ? 'true' : 'false' }})">
                                     <label style="font-size:11.5px">Catatan (wajib bila tidak sesuai)</label>
                                     <textarea class="inp filled" style="height:auto;display:block;font-size:11.5px" rows="2"
                                         wire:model="catatanRtl.{{ $poin->id }}" placeholder="mis. Realisasi belum sesuai dengan RTL yang direncanakan"
@@ -698,19 +693,19 @@
                                     @error('catatanRtl.'.$poin->id)
                                         <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                                     @enderror
+                                </div>
 
-                                    <div style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"
-                                        x-show="pendingMark !== null || {{ $poin->status_verifikasi !== 'menunggu' ? 'true' : 'false' }}">
-                                        <button type="button" class="btn btn-ghost btn-sm"
-                                            x-on:click="(pendingMark === 'no' || (pendingMark === null && {{ $poin->status_verifikasi === 'ditolak' ? 'true' : 'false' }})) ? $wire.tandaiRtlTolak({{ $poin->id }}) : $wire.tandaiRtlSesuai({{ $poin->id }})"
-                                            wire:loading.attr="disabled" wire:target="tandaiRtlSesuai({{ $poin->id }}),tandaiRtlTolak({{ $poin->id }})">
-                                            <span wire:loading.remove wire:target="tandaiRtlSesuai({{ $poin->id }}),tandaiRtlTolak({{ $poin->id }})">💾 Simpan Verifikasi</span>
-                                            <span wire:loading wire:target="tandaiRtlSesuai({{ $poin->id }}),tandaiRtlTolak({{ $poin->id }})"><i class="spin"></i> Menyimpan…</span>
-                                        </button>
-                                        @if ($poin->status_verifikasi !== 'menunggu' && !$errors->has('catatanRtl.'.$poin->id))
-                                            <span style="color:#16a34a;font-size:11.5px">✓ Tersimpan</span>
-                                        @endif
-                                    </div>
+                                <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"
+                                    x-show="pendingMark !== null || {{ $poin->status_verifikasi !== 'menunggu' ? 'true' : 'false' }}">
+                                    <button type="button" class="btn btn-ghost btn-sm"
+                                        x-on:click="(pendingMark === 'no' || (pendingMark === null && {{ $poin->status_verifikasi === 'ditolak' ? 'true' : 'false' }})) ? $wire.tandaiRtlTolak({{ $poin->id }}) : $wire.tandaiRtlSesuai({{ $poin->id }})"
+                                        wire:loading.attr="disabled" wire:target="tandaiRtlSesuai({{ $poin->id }}),tandaiRtlTolak({{ $poin->id }})">
+                                        <span wire:loading.remove wire:target="tandaiRtlSesuai({{ $poin->id }}),tandaiRtlTolak({{ $poin->id }})">💾 Simpan Verifikasi</span>
+                                        <span wire:loading wire:target="tandaiRtlSesuai({{ $poin->id }}),tandaiRtlTolak({{ $poin->id }})"><i class="spin"></i> Menyimpan…</span>
+                                    </button>
+                                    @if ($poin->status_verifikasi !== 'menunggu' && !$errors->has('catatanRtl.'.$poin->id))
+                                        <span style="color:#16a34a;font-size:11.5px">✓ Tersimpan</span>
+                                    @endif
                                 </div>
                             </div>
                         @elseif ($poin->catatan)
@@ -719,6 +714,18 @@
                                 <p style="font-size:12.5px;color:var(--muted);margin:0">{{ $poin->catatan }}</p>
                             </div>
                         @endif
+
+                        @foreach ($poin->berkas as $file)
+                            <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}" style="margin-top:10px" wire:key="berkas-{{ $file->id }}">
+                                <span class="nm">
+                                    📄 {{ $file->nama_file }}
+                                    @if ($file->status_verifikasi === 'ditolak')
+                                        <span class="sub" style="color:var(--red)">Tidak Sesuai</span>
+                                    @endif
+                                </span>
+                                <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file->id }}">🔍 Periksa</button>
+                            </div>
+                        @endforeach
                     </div>
                 </div>
             @endforeach
