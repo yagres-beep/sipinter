@@ -1152,6 +1152,51 @@ class VerifikasiCapaian extends Component
         $this->dispatch('notify', type: 'success', message: 'Progres pemeriksaan disimpan sementara.');
     }
 
+    /**
+     * Kumpulan label ringkas tiap isian yang statusnya masih "menunggu" (belum
+     * ditandai Sesuai/Tidak Sesuai) -- dipakai verifikasiSelesai() &amp;
+     * kembalikanKeKetuaTim() supaya pesan error menyebutkan PERSIS isian mana yang
+     * kurang, bukan cuma "seluruh isian harus ditandai" yang mengharuskan Tim SAKIP
+     * menyisir ulang seluruh halaman satu per satu.
+     *
+     * @return list<string>
+     */
+    protected function daftarIsianBelumDitandai(): array
+    {
+        $daftar = [];
+
+        foreach ($this->berkasList()->where('status_verifikasi', 'menunggu') as $b) {
+            $daftar[] = "Berkas \"{$b->nama_file}\"";
+        }
+
+        foreach ($this->kegiatanList()->where('status_verifikasi_uraian', 'menunggu') as $k) {
+            $daftar[] = 'Uraian kegiatan "'.Str::limit($k->uraian_kegiatan ?: '(kosong)', 40).'"';
+        }
+
+        foreach ($this->kendalaSolusiList()->where('status_verifikasi', 'menunggu') as $k) {
+            $daftar[] = 'Kendala & solusi "'.Str::limit($k->kendala ?: '(kosong)', 40).'"';
+        }
+
+        foreach ($this->bagianKustomList()->where('status_verifikasi', 'menunggu') as $p) {
+            $daftar[] = 'Bagian Kustom "'.Str::limit($p->teks ?: '(kosong)', 40).'" ('.$p->bagianKustom->nama.')';
+        }
+
+        foreach ($this->rtlEvaluasiSebelumnya()->filter(fn ($p) => filled($p->realisasi))->where('status_verifikasi', 'menunggu') as $p) {
+            $daftar[] = 'Realisasi RTL "'.Str::limit($p->rtl_teks ?: '(kosong)', 40).'"';
+        }
+
+        return $daftar;
+    }
+
+    /**
+     * Pesan error lengkap dari daftarIsianBelumDitandai() -- dipakai berbarengan
+     * untuk banner @error('berkas') (persisten) &amp; toast notify (6 detik).
+     */
+    protected function pesanIsianBelumDitandai(array $daftar): string
+    {
+        return 'Isian berikut belum ditandai "Sesuai"/"Tidak Sesuai": '.implode('; ', $daftar).'.';
+    }
+
     public function verifikasiSelesai(): void
     {
         if (! $this->bisaDiverifikasi()) {
@@ -1164,15 +1209,12 @@ class VerifikasiCapaian extends Component
         $bagianKustom = $this->bagianKustomList();
         $rtl = $this->rtlEvaluasiSebelumnya()->filter(fn ($p) => filled($p->realisasi));
 
-        if (
-            $berkas->contains(fn ($b) => $b->status_verifikasi === 'menunggu')
-            || $kendala->contains(fn ($k) => $k->status_verifikasi === 'menunggu')
-            || $kegiatanList->contains(fn ($k) => $k->status_verifikasi_uraian === 'menunggu')
-            || $bagianKustom->contains(fn ($p) => $p->status_verifikasi === 'menunggu')
-            || $rtl->contains(fn ($p) => $p->status_verifikasi === 'menunggu')
-        ) {
-            $this->addError('berkas', 'Seluruh isian (berkas, uraian kegiatan, kendala & solusi, Bagian Kustom, dan realisasi RTL) harus ditandai "Sesuai" atau "Tidak Sesuai" terlebih dahulu.');
-            $this->dispatch('notify', type: 'error', message: 'Seluruh isian harus ditandai terlebih dahulu.');
+        $belumDitandai = $this->daftarIsianBelumDitandai();
+
+        if ($belumDitandai !== []) {
+            $pesan = $this->pesanIsianBelumDitandai($belumDitandai);
+            $this->addError('berkas', $pesan);
+            $this->dispatch('notify', type: 'error', message: $pesan);
 
             return;
         }
@@ -1242,15 +1284,12 @@ class VerifikasiCapaian extends Component
         $bagianKustom = $this->bagianKustomList();
         $rtl = $this->rtlEvaluasiSebelumnya()->filter(fn ($p) => filled($p->realisasi));
 
-        if (
-            $berkas->contains(fn ($b) => $b->status_verifikasi === 'menunggu')
-            || $kendala->contains(fn ($k) => $k->status_verifikasi === 'menunggu')
-            || $kegiatanList->contains(fn ($k) => $k->status_verifikasi_uraian === 'menunggu')
-            || $bagianKustom->contains(fn ($p) => $p->status_verifikasi === 'menunggu')
-            || $rtl->contains(fn ($p) => $p->status_verifikasi === 'menunggu')
-        ) {
-            $this->addError('berkas', 'Seluruh isian (berkas, uraian kegiatan, kendala & solusi, Bagian Kustom, dan realisasi RTL) harus ditandai "Sesuai" atau "Tidak Sesuai" terlebih dahulu.');
-            $this->dispatch('notify', type: 'error', message: 'Seluruh isian harus ditandai terlebih dahulu.');
+        $belumDitandai = $this->daftarIsianBelumDitandai();
+
+        if ($belumDitandai !== []) {
+            $pesan = $this->pesanIsianBelumDitandai($belumDitandai);
+            $this->addError('berkas', $pesan);
+            $this->dispatch('notify', type: 'error', message: $pesan);
 
             return;
         }
