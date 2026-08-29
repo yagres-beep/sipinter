@@ -64,12 +64,12 @@ class PengaturanTemplatePengingat extends Model
         ],
         'iku_dikembalikan' => [
             'label' => 'IKU Dikembalikan',
-            'deskripsi' => 'Tim SAKIP mengembalikan capaian IKU untuk diperbaiki. Baris "Catatan: ..." (kalau diisi) selalu ditambahkan otomatis setelah pesan ini.',
+            'deskripsi' => 'Capaian IKU dikembalikan untuk diperbaiki — oleh Tim SAKIP saat verifikasi, atau langsung oleh Kepala saat meninjau notula. Baris "Catatan: ..." (kalau diisi) selalu ditambahkan otomatis setelah pesan ini.',
             'token' => [
                 'indikator' => 'Nama indikator IKU',
                 'periode' => 'Bulan & tahun periode, mis. "Agustus 2026"',
             ],
-            'default' => "Pengingat SIPINTER:\nIKU \"{indikator}\" ({periode}) dikembalikan Tim SAKIP, perlu diperbaiki.",
+            'default' => "Pengingat SIPINTER:\nIKU \"{indikator}\" ({periode}) dikembalikan, perlu diperbaiki.",
         ],
         'iku_lengkap' => [
             'label' => 'IKU Triwulan Lengkap',

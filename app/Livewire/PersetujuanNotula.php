@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use App\Exceptions\InvalidStatusTransitionException;
+use App\Models\Capaian;
 use App\Models\Notula;
 use App\Services\NotulaService;
 use Illuminate\Support\Facades\Auth;
@@ -26,6 +27,15 @@ class PersetujuanNotula extends Component
     public bool $tampilkanFormKembalikan = false;
 
     /**
+     * Form "kembalikan isian ini" per-baris IKU (lihat kembalikanIsian() di bawah) — beda
+     * dari catatanPengembalian/tampilkanFormKembalikan di atas yang mengembalikan SELURUH
+     * notula. capaianDikembalikanId null berarti tidak ada baris yang sedang dibuka formnya.
+     */
+    public ?int $capaianDikembalikanId = null;
+
+    public string $catatanKembalikanIsian = '';
+
+    /**
      * Cache dalam satu siklus request — notula() dipanggil beberapa kali per
      * render (langsung + di dalam riwayatDisetujui()); $cacheNotulaDihitung
      * menandai "sudah pernah dihitung" karena hasilnya sendiri boleh null.
@@ -42,12 +52,63 @@ class PersetujuanNotula extends Component
 
     public function updatedTahun(): void
     {
-        $this->reset(['catatanPengembalian', 'tampilkanFormKembalikan']);
+        $this->reset(['catatanPengembalian', 'tampilkanFormKembalikan', 'capaianDikembalikanId', 'catatanKembalikanIsian']);
     }
 
     public function updatedTriwulan(): void
     {
-        $this->reset(['catatanPengembalian', 'tampilkanFormKembalikan']);
+        $this->reset(['catatanPengembalian', 'tampilkanFormKembalikan', 'capaianDikembalikanId', 'catatanKembalikanIsian']);
+    }
+
+    /**
+     * Daftar IKU (Capaian) triwulan yang sedang ditinjau, supaya Kepala bisa melihat rincian
+     * per-IKU (bukan cuma PDF gabungan) dan menunjuk isian mana yang perlu dikembalikan —
+     * lihat kembalikanIsian(). "diverifikasi" adalah satu-satunya status yang tombol
+     * pengembaliannya aktif (lihat Capaian::bisaDikembalikanOlehKepala()); status lain
+     * (dikembalikan/disetujui) ditampilkan sebagai konteks saja.
+     */
+    protected function daftarCapaian()
+    {
+        return Capaian::with('masterIku')
+            ->whereHas('periode', fn ($q) => $q->where('tahun', $this->tahun)->where('triwulan', $this->triwulan))
+            ->whereIn('status', [Capaian::STATUS_DIVERIFIKASI, Capaian::STATUS_DIKEMBALIKAN, Capaian::STATUS_DISETUJUI])
+            ->get()
+            ->sortBy(fn ($c) => $c->masterIku?->kode)
+            ->values();
+    }
+
+    public function bukaFormKembalikanIsian(int $capaianId): void
+    {
+        $this->capaianDikembalikanId = $capaianId;
+        $this->catatanKembalikanIsian = '';
+    }
+
+    public function batalKembalikanIsian(): void
+    {
+        $this->reset(['capaianDikembalikanId', 'catatanKembalikanIsian']);
+    }
+
+    public function kembalikanIsian(): void
+    {
+        $this->validate([
+            'catatanKembalikanIsian' => ['required', 'string', 'min:5'],
+        ], [], ['catatanKembalikanIsian' => 'catatan pengembalian']);
+
+        $capaian = $this->capaianDikembalikanId ? Capaian::find($this->capaianDikembalikanId) : null;
+
+        if (! $capaian) {
+            return;
+        }
+
+        try {
+            app(NotulaService::class)->kembalikanIsian($capaian, Auth::user(), $this->catatanKembalikanIsian);
+
+            session()->flash('status', 'Isian dikembalikan langsung ke Ketua Tim.');
+            $this->reset(['capaianDikembalikanId', 'catatanKembalikanIsian']);
+            $this->cacheNotulaDihitung = false;
+        } catch (InvalidStatusTransitionException $e) {
+            $this->addError('aksiIsian', $e->getMessage());
+        }
     }
 
     protected function notula(): ?Notula
@@ -135,6 +196,7 @@ class PersetujuanNotula extends Component
         return view('livewire.persetujuan-notula', [
             'notula' => $notula,
             'riwayatDisetujui' => $this->riwayatDisetujui($notula),
+            'daftarCapaian' => $this->daftarCapaian(),
         ]);
     }
 }

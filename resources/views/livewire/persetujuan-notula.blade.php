@@ -95,6 +95,50 @@
         </div>
     @endif
 
+    @if ($notula && $daftarCapaian->isNotEmpty())
+        <div class="card" style="margin-top:16px">
+            <div class="sec"><span>Rincian per IKU</span></div>
+            <div class="info teal">📌 Tinjau isian per IKU di bawah. Kalau ada yang bermasalah, kembalikan isian itu saja langsung ke Ketua Tim — tidak perlu menunggu Tim SAKIP meneruskannya, dan Tim SAKIP tetap diberi tahu otomatis (email + riwayat status) supaya bisa menunggu perbaikannya.</div>
+
+            @error('aksiIsian')
+                <div style="color:var(--red);font-size:11.5px;margin-bottom:10px">{{ $message }}</div>
+            @enderror
+
+            <div style="display:flex;flex-direction:column;gap:10px">
+                @foreach ($daftarCapaian as $capaian)
+                    <div class="filechip" wire:key="capaian-{{ $capaian->id }}" style="flex-direction:column;align-items:stretch;gap:8px">
+                        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                            <span class="nm" style="flex:1">{{ $capaian->masterIku?->indikator ?? "IKU #{$capaian->iku_id}" }}</span>
+                            <x-badge-status :status="$capaian->status" />
+
+                            @if ($capaian->bisaDikembalikanOlehKepala() && $capaianDikembalikanId !== $capaian->id)
+                                <button type="button" class="btn btn-red btn-sm" wire:click="bukaFormKembalikanIsian({{ $capaian->id }})">↩ Kembalikan Isian Ini</button>
+                            @endif
+                        </div>
+
+                        @if ($capaianDikembalikanId === $capaian->id)
+                            <div class="field" style="margin:0">
+                                <label>Catatan Pengembalian <span class="req">*</span></label>
+                                <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model="catatanKembalikanIsian"
+                                    placeholder="Jelaskan yang perlu diperbaiki Ketua Tim pada IKU ini..."></textarea>
+                                @error('catatanKembalikanIsian')
+                                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                                @enderror
+                            </div>
+                            <div class="btn-row">
+                                <button type="button" class="btn btn-ghost btn-sm" wire:click="batalKembalikanIsian" wire:loading.attr="disabled" wire:target="kembalikanIsian">Batal</button>
+                                <button type="button" class="btn btn-red btn-sm" wire:click="kembalikanIsian" wire:loading.attr="disabled" wire:target="kembalikanIsian">
+                                    <span wire:loading.remove wire:target="kembalikanIsian">Kirim Pengembalian</span>
+                                    <span wire:loading wire:target="kembalikanIsian"><i class="spin"></i> Mengirim…</span>
+                                </button>
+                            </div>
+                        @endif
+                    </div>
+                @endforeach
+            </div>
+        </div>
+    @endif
+
     @if ($riwayatDisetujui->isNotEmpty())
         <div class="card" style="margin-top:16px">
             <div class="sec"><span>Riwayat Versi Ber-TTD</span></div>

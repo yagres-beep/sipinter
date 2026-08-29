@@ -31,7 +31,7 @@
                 @foreach ($riwayatStatus as $riwayat)
                     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
                         <x-badge-status :status="$riwayat->status" />
-                        <span style="font-size:12.5px">{{ $riwayat->user?->nama ?? 'Sistem' }}</span>
+                        <span style="font-size:12.5px">{{ $riwayat->user?->nama ?? 'Sistem' }}@if ($riwayat->user) <span style="color:var(--muted)">({{ $riwayat->user->namaRole() }})</span>@endif</span>
                         <span style="font-size:11.5px;color:var(--muted)">{{ $riwayat->created_at->wita()->translatedFormat('d F Y, H:i') }} WITA</span>
                         @if ($riwayat->catatan)
                             <span style="font-size:11.5px;color:var(--muted);width:100%">📝 {{ $riwayat->catatan }}</span>

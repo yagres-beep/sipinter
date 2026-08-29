@@ -213,4 +213,16 @@ class Capaian extends Model
         return $this->hasMany(Kegiatan::class, 'iku_id', 'iku_id')
             ->where('periode_id', $this->periode_id);
     }
+
+    /**
+     * Kepala boleh mengembalikan isian ini langsung ke Ketua Tim (lihat
+     * NotulaService::kembalikanIsian()) HANYA selagi berstatus "diverifikasi" — yaitu saat
+     * notula yang memuatnya sedang ditinjau Kepala. Sebelum diverifikasi bukan urusan Kepala
+     * (masih di tangan Tim SAKIP); sesudah disetujui, pembukaan kembali sudah difasilitasi
+     * jalur terpisah (lihat VerifikasiCapaian::bukaKembali(), khusus Tim SAKIP).
+     */
+    public function bisaDikembalikanOlehKepala(): bool
+    {
+        return $this->status === self::STATUS_DIVERIFIKASI;
+    }
 }

@@ -29,12 +29,18 @@ class Kegiatan extends Model
      * Alur status dokumen sesuai SIPINTER_Flowchart.html (swimlane Ketua Tim / Tim SAKIP / Kepala):
      *
      *   draft ──ajukan()──> diajukan ──verifikasi()──> diverifikasi ──setujui()──> disetujui
-     *                           │                            (dikonfirmasi lewat kompilasi notula
-     *                           └──kembalikan()──> dikembalikan ──ajukan()──┘ oleh Kepala — lihat catatan setujui())
+     *                           │                            │  (dikonfirmasi lewat kompilasi notula
+     *                           │                            │   oleh Kepala — lihat catatan setujui())
+     *                           └──kembalikan()──> dikembalikan ──ajukan()──┘
+     *                                                    ▲
+     *                           diverifikasi ──kembalikan()──┘
      *
      * "Berkas sesuai?" pada diagram adalah keputusan Tim SAKIP saat status masih diajukan:
-     * Ya → diverifikasi, Tidak → dikembalikan. Ketua Tim memperbaiki isian yang dikembalikan
-     * lalu mengajukan ulang (dikembalikan → diajukan).
+     * Ya → diverifikasi, Tidak → dikembalikan. Kegiatan yang sudah diverifikasi juga bisa
+     * ditarik balik ke dikembalikan bila Kepala menemukan isian tsb bermasalah saat meninjau
+     * notula (lihat NotulaService::kembalikanIsian()) — jalur cepat langsung ke Ketua Tim
+     * tanpa menunggu Tim SAKIP meneruskannya secara manual. Ketua Tim memperbaiki isian yang
+     * dikembalikan (dari kedua sumber ini) lalu mengajukan ulang (dikembalikan → diajukan).
      *
      * @var array<string, list<string>>
      */
@@ -42,7 +48,7 @@ class Kegiatan extends Model
         self::STATUS_DRAFT => [self::STATUS_DIAJUKAN],
         self::STATUS_DIAJUKAN => [self::STATUS_DIVERIFIKASI, self::STATUS_DIKEMBALIKAN],
         self::STATUS_DIKEMBALIKAN => [self::STATUS_DIAJUKAN],
-        self::STATUS_DIVERIFIKASI => [self::STATUS_DISETUJUI],
+        self::STATUS_DIVERIFIKASI => [self::STATUS_DISETUJUI, self::STATUS_DIKEMBALIKAN],
         self::STATUS_DISETUJUI => [],
     ];
 
@@ -172,7 +178,10 @@ class Kegiatan extends Model
     }
 
     /**
-     * Tim SAKIP mengembalikan isian ke Ketua Tim karena ada berkas tidak sesuai (diajukan → dikembalikan).
+     * Mengembalikan isian ke Ketua Tim untuk diperbaiki — dipicu Tim SAKIP saat ada berkas
+     * tidak sesuai (diajukan → dikembalikan), ATAU Kepala saat meninjau notula dan menemukan
+     * isian yang sudah diverifikasi ternyata bermasalah (diverifikasi → dikembalikan, lihat
+     * NotulaService::kembalikanIsian()).
      */
     public function kembalikan(): void
     {

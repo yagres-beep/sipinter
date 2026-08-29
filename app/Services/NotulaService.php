@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\InvalidStatusTransitionException;
 use App\Models\BagianKustom;
 use App\Models\Berkas;
 use App\Models\Capaian;
@@ -541,6 +542,45 @@ class NotulaService
     public function kembalikan(Notula $notula, string $catatan): void
     {
         $notula->kembalikan($catatan);
+    }
+
+    /**
+     * Kepala mengembalikan SATU isian IKU+periode langsung ke Ketua Tim, tanpa menunggu Tim
+     * SAKIP meneruskannya secara manual (skip satu hop) — dipakai dari halaman Persetujuan
+     * Notula, terpisah dari kembalikan() di atas yang mengembalikan SELURUH dokumen notula.
+     *
+     * Tim SAKIP tetap "tahu" TANPA kode notifikasi baru: catatStatus() di bawah menembak
+     * event CapaianStatusDiubah (listener KirimPengingatStatusCapaian mengirim email ke
+     * penanggung jawab IKU/Ketua Tim) dan, karena Notula ikut ditarik ke "dikembalikan",
+     * Notula::kembalikan() menembak NotulaStatusDiubah (listener KirimPengingatStatusNotula
+     * mengirim email ke Tim SAKIP) — keduanya listener yang sudah ada sebelumnya.
+     *
+     * Kegiatan yang sudah "diverifikasi" di bawah Capaian ini ikut ditarik ke "dikembalikan"
+     * (bukan per-berkas seperti VerifikasiCapaian::kembalikanKeKetuaTim(), karena Kepala
+     * meninjau di level IKU, bukan sampai ke rincian berkas/kendala-solusi).
+     */
+    public function kembalikanIsian(Capaian $capaian, User $kepala, string $catatan): void
+    {
+        if (! $capaian->bisaDikembalikanOlehKepala()) {
+            throw new InvalidStatusTransitionException($capaian->status, Capaian::STATUS_DIKEMBALIKAN);
+        }
+
+        $capaian->loadMissing(['periode', 'masterIku']);
+
+        DB::transaction(function () use ($capaian, $kepala, $catatan) {
+            foreach ($capaian->kegiatanList()->where('status_dokumen', Kegiatan::STATUS_DIVERIFIKASI)->get() as $kegiatan) {
+                $kegiatan->kembalikan();
+            }
+
+            $capaian->catatStatus(Capaian::STATUS_DIKEMBALIKAN, $kepala, $catatan);
+
+            $notula = $this->untukTriwulan($capaian->periode->tahun, $capaian->periode->triwulan);
+
+            if ($notula->status === Notula::STATUS_MENUNGGU_PERSETUJUAN) {
+                $indikator = $capaian->masterIku->indikator ?? "IKU #{$capaian->iku_id}";
+                $notula->kembalikan("Isian IKU \"{$indikator}\" dikembalikan langsung ke Ketua Tim oleh Kepala. Catatan: {$catatan}");
+            }
+        });
     }
 
     /**
