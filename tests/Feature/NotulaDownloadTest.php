@@ -90,6 +90,31 @@ class NotulaDownloadTest extends TestCase
             ->assertHeader('content-disposition');
     }
 
+    /**
+     * Berkas bagian2_pdf (hasil konversi LibreOffice saat unggah) bisa saja hilang dari
+     * disk (mis. storage sempat dibersihkan/direset) walau kolom bagian2_html di DB
+     * masih utuh -- pratinjau harus tetap bisa dibuka (dirender ulang dari HTML lewat
+     * dompdf), BUKAN 404, karena isinya sendiri sebenarnya masih valid.
+     */
+    public function test_pratinjau_bagian2_dirender_ulang_dari_html_bila_berkas_pdf_sudah_hilang_dari_disk(): void
+    {
+        Storage::fake('local');
+        $this->loginSebagai('Tim SAKIP');
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $notula = Notula::create([
+            'periode_id' => $periode->id,
+            // Menunjuk ke berkas yang TIDAK PERNAH dibuat di disk fake ini -- mensimulasikan
+            // berkas hilang walau kolomnya masih terisi.
+            'bagian2_pdf' => "notula/{$periode->id}/bagian2-hilang.pdf",
+            'bagian2_html' => '<p>Konten Bagian II tersimpan</p>',
+        ]);
+
+        $this->get(route('notula.pratinjau-bagian2', $notula))
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+    }
+
     public function test_ketua_tim_tidak_bisa_mengakses_pratinjau_bagian2(): void
     {
         $this->loginSebagai('Ketua Tim');

@@ -7,6 +7,7 @@ use App\Services\NotulaBagian1DocxService;
 use App\Services\NotulaService;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -62,19 +63,37 @@ class NotulaDownloadController extends Controller
     /**
      * Pratinjau inline berkas PDF Bagian II/III yang sudah dikonversi — dipakai di
      * layar Kompilasi Notula supaya Tim SAKIP bisa melihat isinya tanpa mengunduh.
+     * Jatuh ke NotulaService::renderPratinjauBagianPdf() (render ulang dari
+     * bagian{2,3}_html tersimpan) bila berkas PDF hasil konversi LibreOffice-nya
+     * sudah tidak ada lagi di disk walau kontennya sendiri masih ada di DB — 404
+     * murni HANYA bila belum pernah diunggah sama sekali (bagian{2,3}_html kosong).
      */
-    public function pratinjauBagian2(Notula $notula): StreamedResponse
+    public function pratinjauBagian2(Notula $notula, NotulaService $notulaService): Response
     {
-        abort_unless($this->berkasAda($notula->bagian2_pdf), 404, 'Berkas PDF Bagian II tidak ditemukan di server — coba unggah ulang.');
-
-        return Storage::disk('local')->response($notula->bagian2_pdf, null, [], 'inline');
+        return $this->pratinjauBagian($notula, 2, $notulaService);
     }
 
-    public function pratinjauBagian3(Notula $notula): StreamedResponse
+    public function pratinjauBagian3(Notula $notula, NotulaService $notulaService): Response
     {
-        abort_unless($this->berkasAda($notula->bagian3_pdf), 404, 'Berkas PDF Bagian III tidak ditemukan di server — coba unggah ulang.');
+        return $this->pratinjauBagian($notula, 3, $notulaService);
+    }
 
-        return Storage::disk('local')->response($notula->bagian3_pdf, null, [], 'inline');
+    private function pratinjauBagian(Notula $notula, int $bagianKe, NotulaService $notulaService): Response
+    {
+        $kolomPdf = $bagianKe === 2 ? 'bagian2_pdf' : 'bagian3_pdf';
+        $kolomHtml = $bagianKe === 2 ? 'bagian2_html' : 'bagian3_html';
+        $romawi = $bagianKe === 2 ? 'II' : 'III';
+
+        if ($this->berkasAda($notula->{$kolomPdf})) {
+            return Storage::disk('local')->response($notula->{$kolomPdf}, null, [], 'inline');
+        }
+
+        abort_unless(filled($notula->{$kolomHtml}), 404, "Berkas PDF Bagian {$romawi} tidak ditemukan di server — coba unggah ulang.");
+
+        return response($notulaService->renderPratinjauBagianPdf($notula, $bagianKe), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline',
+        ]);
     }
 
     /**

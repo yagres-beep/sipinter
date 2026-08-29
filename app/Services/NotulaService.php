@@ -104,25 +104,36 @@ class NotulaService
         $periode = $notula->periode;
         $tw = $periode->triwulan;
 
-        // Capaian per IKU pada periode ini dimuat DULUAN (bukan di bawah seperti
-        // sebelumnya) supaya bisa dipakai memfilter $sasaranPerIku: HANYA IKU yang
-        // Capaian::status-nya sudah "diverifikasi"/"disetujui" (SEMUA bukti & kendala-
-        // solusinya sudah "Sesuai", lihat Capaian::STATUS_DIVERIFIKASI) yang tampil di
-        // notula — IKU yang belum sampai situ (draft/diajukan/sedang ditangani/
-        // dikembalikan, atau belum ada Capaian sama sekali triwulan ini) TIDAK
-        // ditampilkan sama sekali, supaya notula (dokumen resmi yang diunduh/dibagikan)
-        // tidak pernah memuat data yang belum final diperiksa Tim SAKIP.
-        $capaianPerIku = Capaian::where('periode_id', $periode->id)->get()->keyBy('iku_id');
+        // IKU dianggap "sudah diverifikasi Tim SAKIP" bila SALAH SATU baris Capaian-nya
+        // pada TRIWULAN ini (dicari lewat relasi periode->tahun/triwulan, BUKAN
+        // $periode->id notula yang selalu bulan PERTAMA triwulan -- lihat
+        // NotulaService::untukTriwulan()) berstatus "diverifikasi"/"disetujui". Perlu
+        // dicari lintas SELURUH bulan triwulan (bukan cuma bulan pertama) karena satu
+        // IKU boleh punya baris Capaian terpisah per bulan bila Kegiatan tambahan
+        // diajukan di bulan berbeda dalam triwulan yang sama (lihat
+        // PengisianKegiatan::ajukanIsian(), Capaian::firstOrCreate per iku_id+periode_id
+        // bulan tsb) -- kalau hanya dicek bulan pertama, IKU yang verifikasinya baru
+        // selesai di bulan kedua/ketiga triwulan salah hilang dari notula.
+        //
+        // IKU yang belum sampai situ (draft/diajukan/sedang ditangani/dikembalikan, atau
+        // belum ada Capaian sama sekali triwulan ini) TIDAK ditampilkan sama sekali di
+        // Bagian I (dipakai baik jalur pratinjau HTML maupun unduhan .docx, keduanya
+        // lewat method ini), supaya notula (dokumen resmi yang diunduh/dibagikan) tidak
+        // pernah memuat data yang belum final diperiksa Tim SAKIP.
+        $ikuTerverifikasiIds = Capaian::whereHas('periode', fn ($q) => $q->where('tahun', $periode->tahun)->where('triwulan', $tw))
+            ->whereIn('status', [Capaian::STATUS_DIVERIFIKASI, Capaian::STATUS_DISETUJUI])
+            ->pluck('iku_id');
 
         $sasaranPerIku = MasterIku::whereNotNull('sasaran')->where('sasaran', '!=', '')
             ->orderBy('kode')
             ->get()
-            ->filter(fn (MasterIku $iku) => in_array(
-                $capaianPerIku->get($iku->id)?->status,
-                [Capaian::STATUS_DIVERIFIKASI, Capaian::STATUS_DISETUJUI],
-                true
-            ))
+            ->filter(fn (MasterIku $iku) => $ikuTerverifikasiIds->contains($iku->id))
             ->groupBy('sasaran');
+
+        // Capaian per IKU pada BULAN PERTAMA triwulan ini (periode notula-nya sendiri) --
+        // dipakai HANYA untuk catatan/analisis_capaian per-IKU di isiSatuIku(), TIDAK
+        // untuk gerbang verifikasi di atas (lihat $ikuTerverifikasiIds).
+        $capaianPerIku = Capaian::where('periode_id', $periode->id)->get()->keyBy('iku_id');
 
         $kegiatanPerIku = Kegiatan::with(['masterIku', 'rincianOutput'])
             ->whereHas('periode', fn ($q) => $q->where('tahun', $periode->tahun)->where('triwulan', $tw))
@@ -402,6 +413,24 @@ class NotulaService
     public function renderPratinjauPdf(Notula $notula, string $outputPath): string
     {
         return $this->renderNotulaUtuhPdf($notula, sertakanTtd: false, outputPath: $outputPath);
+    }
+
+    /**
+     * Render ULANG pratinjau PDF Bagian II/III langsung dari bagian{2,3}_html
+     * tersimpan — dipakai NotulaDownloadController sebagai fallback bila berkas
+     * bagian{2,3}_pdf hasil konversi LibreOffice saat unggah (terimaUploadBagian())
+     * sudah tidak ada lagi di disk (mis. storage sempat dibersihkan/direset) walau
+     * kontennya sendiri masih utuh di DB — supaya pratinjau tetap bisa dibuka tanpa
+     * memaksa Tim SAKIP mengunggah ulang berkas yang isinya sebenarnya masih valid.
+     * TIDAK disimpan balik ke bagian{2,3}_pdf (sekali-pakai, sama seperti
+     * renderPratinjauPdf() di atas) — biar tetap konsisten dengan sumber aslinya
+     * (bagian{2,3}_html) tiap kali diminta, bukan cache yang bisa basi lagi.
+     */
+    public function renderPratinjauBagianPdf(Notula $notula, int $bagianKe): string
+    {
+        $html = $bagianKe === 2 ? $notula->bagian2_html : $notula->bagian3_html;
+
+        return PdfFacade::loadHTML($html ?? '')->output();
     }
 
     /**
