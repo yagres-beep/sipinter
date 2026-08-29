@@ -130,10 +130,18 @@ class NotulaService
             ->filter(fn (MasterIku $iku) => $ikuTerverifikasiIds->contains($iku->id))
             ->groupBy('sasaran');
 
-        // Capaian per IKU pada BULAN PERTAMA triwulan ini (periode notula-nya sendiri) --
-        // dipakai HANYA untuk catatan/analisis_capaian per-IKU di isiSatuIku(), TIDAK
-        // untuk gerbang verifikasi di atas (lihat $ikuTerverifikasiIds).
-        $capaianPerIku = Capaian::where('periode_id', $periode->id)->get()->keyBy('iku_id');
+        // Capaian per IKU dipakai untuk catatan/analisis_capaian per-IKU di isiSatuIku()
+        // (TIDAK untuk gerbang verifikasi di atas, lihat $ikuTerverifikasiIds) -- dicari
+        // lintas SELURUH bulan triwulan ini (bukan cuma periode_id notula/bulan pertama
+        // triwulan) dengan alasan yang SAMA seperti $ikuTerverifikasiIds: Capaian bisa
+        // tersimpan di bulan mana pun triwulan ini tergantung kapan Kegiatan diajukan.
+        // Diurutkan naik lalu keyBy() supaya baris TERBARU (id terbesar) per IKU yang
+        // menang bila kebetulan ada lebih dari satu Capaian untuk IKU yang sama di
+        // triwulan ini (satu per bulan yang disentuh).
+        $capaianPerIku = Capaian::whereHas('periode', fn ($q) => $q->where('tahun', $periode->tahun)->where('triwulan', $tw))
+            ->orderBy('id')
+            ->get()
+            ->keyBy('iku_id');
 
         $kegiatanPerIku = Kegiatan::with(['masterIku', 'rincianOutput'])
             ->whereHas('periode', fn ($q) => $q->where('tahun', $periode->tahun)->where('triwulan', $tw))

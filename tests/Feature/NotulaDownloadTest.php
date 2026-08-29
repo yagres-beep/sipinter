@@ -6,6 +6,7 @@ use App\Models\Capaian;
 use App\Models\CapaianTahunan;
 use App\Models\FolderConfig;
 use App\Models\Kegiatan;
+use App\Models\KendalaSolusi;
 use App\Models\MasterIku;
 use App\Models\Notula;
 use App\Models\Periode;
@@ -195,6 +196,11 @@ class NotulaDownloadTest extends TestCase
         $this->assertStringNotContainsString('{{sasaran}}', $xml);
         $this->assertStringNotContainsString('{{kode}}', $xml);
         $this->assertStringNotContainsString('{{indikator}}', $xml);
+        // IKU ini bukan bersatuan Persen -- paragraf rumus (blok_formula) harus dibuang
+        // TOTAL (bukan cuma dikosongkan jadi "…"), tidak menyisakan macro mentah.
+        $this->assertStringNotContainsString('{{blok_formula}}', $xml);
+        $this->assertStringNotContainsString('{{/blok_formula}}', $xml);
+        $this->assertStringNotContainsString('{{formula_capaian}}', $xml);
     }
 
     /**
@@ -336,6 +342,91 @@ class NotulaDownloadTest extends TestCase
     }
 
     /**
+     * Regresi: notula selalu memakai periode BULAN PERTAMA triwulan (lihat
+     * NotulaService::untukTriwulan()), tapi Capaian bisa tersimpan di periode bulan
+     * LAIN dalam triwulan yang sama (bulan Kegiatan-nya sendiri diajukan) --
+     * analisis_capaian harus tetap tampil walau Capaian-nya bukan milik periode
+     * bulan pertama itu.
+     */
+    public function test_docx_bagian1_analisis_capaian_tampil_walau_capaian_di_bulan_kedua_triwulan(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $iku = MasterIku::create([
+            'kode' => '2006', 'indikator' => 'Indikator Uji Analisis Bulan Kedua', 'tim' => 'Tim Uji', 'penanggung_jawab' => 'Uji', 'sasaran' => 'Sasaran Uji RO',
+        ]);
+
+        // Notula Triwulan III 2026 memakai periode Juli (bulan pertama), tapi Kegiatan
+        // & Capaian IKU ini baru diajukan/diverifikasi di Agustus (bulan kedua).
+        $periodeJuli = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $periodeAgustus = Periode::create(['tahun' => 2026, 'bulan' => 8, 'triwulan' => 3, 'bulan_ke' => 2, 'flag_bulan_terlewat' => false]);
+
+        Capaian::create([
+            'iku_id' => $iku->id,
+            'periode_id' => $periodeAgustus->id,
+            'status' => Capaian::STATUS_DIVERIFIKASI,
+            'analisis_capaian' => 'Narasi analisis capaian uji bulan Agustus',
+        ]);
+
+        Kegiatan::create([
+            'iku_id' => $iku->id,
+            'periode_id' => $periodeAgustus->id,
+            'uraian_kegiatan' => 'Kegiatan uji bulan Agustus',
+            'jenis' => 'bukan_survei_sensus',
+            'status_dokumen' => Kegiatan::STATUS_DIVERIFIKASI,
+        ]);
+
+        $notula = Notula::create(['periode_id' => $periodeJuli->id]);
+
+        $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
+
+        $this->assertStringContainsString('Narasi analisis capaian uji bulan Agustus', $xml);
+    }
+
+    /**
+     * Kendala/Solusi harus dicetak sebagai daftar bernomor yang pindah baris SETELAH
+     * label ("Kendala :"), bukan menempel di baris yang sama ("Kendala : 1. ...") --
+     * NotulaBagian1DocxService::set() sebelumnya memakai trim() yang membuang newline
+     * pembuka dari daftarBernomor(), jadi poin 1 selalu menempel ke label walau poin
+     * berikutnya sudah pindah baris.
+     */
+    public function test_docx_bagian1_kendala_solusi_poin_pertama_pindah_baris_dari_label(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $iku = MasterIku::create([
+            'kode' => '2007', 'indikator' => 'Indikator Uji Kendala Solusi', 'tim' => 'Tim Uji', 'penanggung_jawab' => 'Uji', 'sasaran' => 'Sasaran Uji RO',
+        ]);
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $this->verifikasiCapaian($iku, $periode);
+
+        Kegiatan::create([
+            'iku_id' => $iku->id,
+            'periode_id' => $periode->id,
+            'uraian_kegiatan' => 'Kegiatan uji kendala solusi',
+            'jenis' => 'bukan_survei_sensus',
+            'status_dokumen' => Kegiatan::STATUS_DIVERIFIKASI,
+        ]);
+
+        KendalaSolusi::create([
+            'iku_id' => $iku->id,
+            'periode_id' => $periode->id,
+            'kendala' => 'Kendala pertama uji',
+            'solusi' => 'Solusi pertama uji',
+        ]);
+
+        $notula = Notula::create(['periode_id' => $periode->id]);
+
+        $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
+
+        // "Kendala : " diikuti LANGSUNG <w:br/> (pindah baris) baru "1. Kendala pertama
+        // uji" -- BUKAN "Kendala : 1. Kendala pertama uji" menempel di baris yang sama.
+        $this->assertStringContainsString('Kendala : </w:t></w:r><w:r><w:rPr><w:b w:val="0"/><w:i w:val="0"/><w:color w:val="1F4E79"/></w:rPr><w:t></w:t><w:br/><w:t>1. Kendala pertama uji', $xml);
+        $this->assertStringContainsString('Solusi : </w:t></w:r><w:r><w:rPr><w:b w:val="0"/><w:i w:val="0"/><w:color w:val="1F4E79"/></w:rPr><w:t></w:t><w:br/><w:t>1. Solusi pertama uji', $xml);
+    }
+
+    /**
      * Indikator SAKIP/BerAKHLAK pada .docx harus memakai format khusus (tabel Indikator
      * Proksi / narasi tanpa tabel RO), sama seperti jalur pratinjau PDF -- dideteksi dari
      * teks indikator, bukan kode (yang bisa berbeda tiap satker & berubah kapan pun).
@@ -397,6 +488,15 @@ class NotulaDownloadTest extends TestCase
         $this->assertStringContainsString('Jumlah Publikasi Berkualitas', $xml);
         $this->assertStringContainsString('Jumlah Seluruh Publikasi', $xml);
         $this->assertStringContainsString('Target 2026: N = 8 mencakup: Laporan A, Laporan B.', $xml);
+        // Baris rumus ("y = n/N x 100% = 2.00/8.00 x 100%") dicetak sebagai paragraf
+        // TERSENDIRI rata tengah (blok_formula/{{formula_capaian}}), terpisah dari
+        // "dimana:.../rincian" yang tetap rata kiri -- posisi paragraf rata-tengah
+        // ("<w:jc w:val="center"/>") harus MUNCUL SEBELUM teks rumusnya di XML.
+        $posisiRataTengah = strpos($xml, '<w:jc w:val="center"/>', strpos($xml, 'Dasar Hitung dan Basis Data Realisasi IKU'));
+        $posisiRumus = strpos($xml, '2.00/8.00');
+        $this->assertNotFalse($posisiRataTengah);
+        $this->assertNotFalse($posisiRumus);
+        $this->assertTrue($posisiRataTengah < $posisiRumus, 'Paragraf rumus harus rata tengah (marker jc=center sebelum teks rumus).');
     }
 
     /**

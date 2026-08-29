@@ -103,10 +103,16 @@ class NotulaBagian1DocxService
      * Satu nilai teks bebas -- newline TETAP newline asli (TemplateProcessor::setValue
      * otomatis mengubahnya jadi <w:br/> lewat replaceCarriageReturns(), sudah diverifikasi
      * lewat smoke test manual), null jadi placeholder "…".
+     *
+     * rtrim() (BUKAN trim()) SENGAJA -- daftarBernomor() menaruh "\n" PEMBUKA supaya
+     * poin 1 pindah baris baru dari label di depannya (mis. "Kendala : {{kendala}}");
+     * trim() akan membuang newline pembuka itu lagi dan poin 1 menempel lagi ke baris
+     * label seperti bug sebelumnya. Whitespace/newline di AKHIR tetap dibuang (rtrim)
+     * supaya isian bebas dari textarea tidak menyisakan baris kosong nganggur.
      */
     private function set(TemplateProcessor $p, string $nama, ?string $nilai): void
     {
-        $bersih = $nilai !== null ? trim($nilai) : '';
+        $bersih = $nilai !== null ? rtrim($nilai) : '';
         $p->setValue($nama, $bersih !== '' ? $bersih : '…', -1);
     }
 
@@ -234,11 +240,18 @@ class NotulaBagian1DocxService
         // tercetak (satu baris placeholder "...") walau IKU ini belum punya RO sama
         // sekali, padahal seharusnya seluruh blok baru muncul begitu ada isiannya.
         $tampilkanRo = ! $isSakip && ! $isBerakhlak && empty($rekap['realisasi'] ?? null) && $roIku->isNotEmpty();
+        // Baris rumus "y = n/N x 100%" (paragraf TERSENDIRI rata tengah, lihat
+        // formulaBaris()) hanya tampil untuk IKU % yang datanya lengkap -- sama seperti
+        // blok_sakip/blok_ro, dibuang total (bukan dikosongkan jadi "…") bila tidak berlaku
+        // supaya tidak menyisakan paragraf rata-tengah kosong.
+        $formulaBaris = $this->formulaBaris($iku, $rekap);
+        $tampilkanFormula = $formulaBaris !== null;
 
         $xml = $blokTemplate;
         $xml = $this->resolveBlokKondisional($xml, 'blok_sakip', $isSakip);
         $xml = $this->resolveBlokKondisional($xml, 'blok_berakhlak', $isBerakhlak);
         $xml = $this->resolveBlokKondisional($xml, 'blok_ro', $tampilkanRo);
+        $xml = $this->resolveBlokKondisional($xml, 'blok_formula', $tampilkanFormula, 'p');
         if ($tampilkanRo) {
             $xml = $this->gandakanBarisRo($xml, $roIku);
         }
@@ -299,16 +312,22 @@ class NotulaBagian1DocxService
 
         // IKU bersatuan Persen SEMUA memakai rumus baku "y = n/N x 100%" (beda dari
         // IKU bersatuan Poin yang rumusnya unik per indikator, mis. IPP/TPSS) --
-        // dirakit otomatis di formulaPersenOtomatis() supaya Tim SAKIP tidak perlu
-        // mengetik ulang rumus & memperbarui angkanya tiap triwulan. Kolom
-        // dasar_hitung sendiri (kalau diisi) TETAP ditampilkan sebagai keterangan
-        // tambahan setelahnya (mis. rincian "Target 2026: N = 2 mencakup: ..."),
-        // bukan lagi wajib memuat rumus lengkap.
-        //
-        // [[a|b]] (pecahan bersusun di PDF, lihat App\Support\RumusMarkup) diratakan
-        // jadi notasi biasa "a/b" -- .docx tidak mendukung pecahan bersusun lewat
-        // penggantian teks biasa (TemplateProcessor::setValue).
-        $dasarHitungGabungan = collect([$this->formulaPersenOtomatis($iku, $rekap, $data['periode']), $iku->dasar_hitung])
+        // dirakit otomatis di formulaBaris() supaya Tim SAKIP tidak perlu mengetik
+        // ulang rumus & memperbarui angkanya tiap triwulan, dicetak sebagai paragraf
+        // TERSENDIRI rata tengah (blok_formula, lihat $tampilkanFormula di atas) --
+        // beda dari "dimana:.../rincian n-N" & kolom dasar_hitung manual di bawahnya
+        // yang tetap rata kiri. [[a|b]] (pecahan bersusun di PDF, lihat
+        // App\Support\RumusMarkup) diratakan jadi notasi biasa "a/b" -- .docx tidak
+        // mendukung pecahan bersusun lewat penggantian teks biasa
+        // (TemplateProcessor::setValue).
+        if ($tampilkanFormula) {
+            $this->set($sub, 'formula_capaian', RumusMarkup::keTeksPolos($formulaBaris));
+        }
+
+        // Kolom dasar_hitung sendiri (kalau diisi) TETAP ditampilkan sebagai keterangan
+        // tambahan setelah "dimana:.../rincian" (mis. rincian "Target 2026: N = 2
+        // mencakup: ..."), bukan lagi wajib memuat rumus lengkap.
+        $dasarHitungGabungan = collect([$this->formulaKeterangan($iku, $rekap, $data['periode']), $iku->dasar_hitung])
             ->filter(fn ($t) => filled($t))
             ->implode("\n\n");
         $dasarHitungTeks = RumusMarkup::keTeksPolos($dasarHitungGabungan);
@@ -332,12 +351,11 @@ class NotulaBagian1DocxService
     }
 
     /**
-     * Rumus "Dasar Hitung" baku untuk IKU bersatuan Persen: "y = n/N x 100%" --
-     * SEMUA IKU % memakai pola yang SAMA (beda dari IKU bersatuan Poin, mis. IPP/
-     * TPSS, yang rumusnya unik per indikator dan tetap diketik manual). n & N di
-     * sini BUKAN pasangan yang dipakai capaian_tw/capaian_pk (itu memakai kumulatif
-     * TW I s.d. TW berjalan, lihat CapaianTahunan::realisasiKumulatif() -- TIDAK
-     * disentuh):
+     * Baris rumus baku untuk IKU bersatuan Persen: "y = n/N x 100%" -- SEMUA IKU %
+     * memakai pola yang SAMA (beda dari IKU bersatuan Poin, mis. IPP/TPSS, yang
+     * rumusnya unik per indikator dan tetap diketik manual). n & N di sini BUKAN
+     * pasangan yang dipakai capaian_tw/capaian_pk (itu memakai kumulatif TW I s.d.
+     * TW berjalan, lihat CapaianTahunan::realisasiKumulatif() -- TIDAK disentuh):
      * - n = nilai MENTAH triwulan berjalan SAJA (rekap['x_realisasi_tw'], apa adanya
      *   yang diketik Tim SAKIP di Verifikasi Capaian, BUKAN kumulatif).
      * - N = Target Tahunan Y (rekap['y_target'], konstan sepanjang tahun -- BUKAN
@@ -346,18 +364,11 @@ class NotulaBagian1DocxService
      * Null (bukan dirakit) bila datanya belum lengkap (satuan bukan Persen, atau
      * Deskripsi X/Y / target Y / realisasi triwulan berjalan belum diisi) -- supaya
      * jatuh ke isian manual kolom `dasar_hitung` apa adanya, bukan menampilkan
-     * rumus dengan bagian kosong.
-     *
-     * SEMUA IKU % (satuan Persen hanya terjadi untuk MasterIku::pakaiRasio(), lihat
-     * MasterIku::booted()) mendapat TAMBAHAN rincian nyata item-item n/N (lihat
-     * rincianNMencakupTeks()) -- Tim SAKIP tidak perlu lagi mengetik ulang
-     * daftarnya secara manual tiap triwulan ke kolom dasar_hitung (mis. "N = 4
-     * mencakup: ..."), karena sumbernya sudah App\Models\RincianN yang diisi
-     * sekali di awal tahun (App\Livewire\TargetTahunan) & dipilih per triwulan
-     * (App\Livewire\VerifikasiCapaian). Null (belum ada satu pun item RincianN)
-     * berarti bagian ini dilewatkan.
+     * rumus dengan bagian kosong. Dicetak sebagai paragraf TERSENDIRI rata tengah
+     * ({{formula_capaian}}, blok_formula) TERPISAH dari formulaKeterangan() di
+     * bawah -- lihat isiSatuIku().
      */
-    private function formulaPersenOtomatis(MasterIku $iku, array $rekap, Periode $periode): ?string
+    private function formulaBaris(MasterIku $iku, array $rekap): ?string
     {
         if ($iku->satuan !== 'Persen' || ! $iku->deskripsi_x || ! $iku->deskripsi_y) {
             return null;
@@ -372,16 +383,41 @@ class NotulaBagian1DocxService
         $nTeks = PengaturanCapaian::formatAngka($n);
         $besarNTeks = PengaturanCapaian::formatAngka($besarN);
 
-        $formula = "y = [[n|N]] × 100% = [[{$nTeks}|{$besarNTeks}]] × 100%\n\ndimana:\ny = {$iku->indikator}\nn = {$iku->deskripsi_x}\nN = {$iku->deskripsi_y}";
+        return "y = [[n|N]] × 100% = [[{$nTeks}|{$besarNTeks}]] × 100%";
+    }
+
+    /**
+     * Keterangan "dimana: y=.../n=.../N=..." + rincian nyata item n/N (lihat
+     * rincianNMencakupTeks()) yang MENYERTAI formulaBaris() -- dipisah supaya
+     * formulaBaris() bisa dicetak rata tengah sementara keterangan ini (mis. "N = 4
+     * mencakup: ...") tetap rata kiri seperti isian dasar_hitung manual lainnya.
+     * Null bila formulaBaris() sendiri null (rumus tidak berlaku untuk IKU ini) --
+     * keterangan tanpa rumusnya sendiri tidak bermakna.
+     *
+     * SEMUA IKU % (satuan Persen hanya terjadi untuk MasterIku::pakaiRasio(), lihat
+     * MasterIku::booted()) mendapat TAMBAHAN rincian nyata item-item n/N -- Tim
+     * SAKIP tidak perlu lagi mengetik ulang daftarnya secara manual tiap triwulan
+     * ke kolom dasar_hitung (mis. "N = 4 mencakup: ..."), karena sumbernya sudah
+     * App\Models\RincianN yang diisi sekali di awal tahun (App\Livewire\TargetTahunan)
+     * & dipilih per triwulan (App\Livewire\VerifikasiCapaian). Null (belum ada satu
+     * pun item RincianN) berarti bagian rincian ini dilewatkan.
+     */
+    private function formulaKeterangan(MasterIku $iku, array $rekap, Periode $periode): ?string
+    {
+        if ($this->formulaBaris($iku, $rekap) === null) {
+            return null;
+        }
+
+        $keterangan = "dimana:\ny = {$iku->indikator}\nn = {$iku->deskripsi_x}\nN = {$iku->deskripsi_y}";
 
         $rincian = $this->rincianNMencakupTeks($iku, $periode);
 
-        return $rincian !== null ? "{$formula}\n\n{$rincian}" : $formula;
+        return $rincian !== null ? "{$keterangan}\n\n{$rincian}" : $keterangan;
     }
 
     /**
      * Rincian nyata isi n (item yang triwulan_realisasi-nya = triwulan Notula ini,
-     * BUKAN kumulatif -- sama seperti n mentah di formulaPersenOtomatis()) dan N
+     * BUKAN kumulatif -- sama seperti n mentah di formulaBaris()) dan N
      * (SELURUH item tahun ini) untuk IKU bermetode Rasio, format
      * "n = 1 mencakup:\n• uraian\n\nN = 4 mencakup:\n• uraian...", persis contoh
      * manual yang sebelumnya diketik Tim SAKIP sendiri ke kolom dasar_hitung.
@@ -407,13 +443,15 @@ class NotulaBagian1DocxService
     }
 
     /**
-     * {{blok_x}}...{{/blok_x}} -- kalau $tampilkan true, baris marker-nya dibuang tapi ISINYA
-     * dipertahankan; kalau false, marker DAN isinya sekaligus dibuang (tidak ada blok lain yang
-     * dipilih untuk IKU ini, mis. sudah ada realisasi & bukan SAKIP/BerAKHLAK).
+     * {{blok_x}}...{{/blok_x}} -- kalau $tampilkan true, baris/paragraf marker-nya dibuang tapi
+     * ISINYA dipertahankan; kalau false, marker DAN isinya sekaligus dibuang (tidak ada blok lain
+     * yang dipilih untuk IKU ini, mis. sudah ada realisasi & bukan SAKIP/BerAKHLAK). $unit 'tr'
+     * untuk blok SATU BARIS TABEL (blok_sakip/blok_berakhlak/blok_ro), 'p' untuk blok SATU
+     * PARAGRAF di dalam sel yang sama (blok_formula, lihat isiSatuIku()).
      */
-    private function resolveBlokKondisional(string $xml, string $namaBlok, bool $tampilkan): string
+    private function resolveBlokKondisional(string $xml, string $namaBlok, bool $tampilkan, string $unit = 'tr'): string
     {
-        [$before, $inner, $after] = $this->splitOnMarkers($xml, "{{{$namaBlok}}}", "{{/{$namaBlok}}}", 'tr');
+        [$before, $inner, $after] = $this->splitOnMarkers($xml, "{{{$namaBlok}}}", "{{/{$namaBlok}}}", $unit);
 
         return $before.($tampilkan ? $inner : '').$after;
     }
