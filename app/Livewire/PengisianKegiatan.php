@@ -95,6 +95,8 @@ class PengisianKegiatan extends Component
 
     protected ?\Illuminate\Support\Collection $cacheRtlBerikutnyaDitolak = null;
 
+    protected ?\Illuminate\Support\Collection $cacheRtlBerikutnyaAktif = null;
+
     protected ?MasterIku $cacheIkuTerpilih = null;
 
     protected bool $cacheIkuTerpilihDihitung = false;
@@ -624,7 +626,7 @@ class PengisianKegiatan extends Component
      */
     protected function lupakanCachePeriodeIku(): void
     {
-        foreach (['riwayat', 'rtl-berjalan', 'rtl-berikutnya-ada', 'rtl-berjalan-terpakai', 'capaian-status', 'catatan-penolakan', 'periode'] as $bagian) {
+        foreach (['riwayat', 'rtl-berjalan', 'rtl-berikutnya-ada', 'rtl-berikutnya-aktif', 'rtl-berjalan-terpakai', 'capaian-status', 'catatan-penolakan', 'periode'] as $bagian) {
             Cache::forget($this->cacheKeyPeriodeIku($bagian));
         }
 
@@ -1457,6 +1459,40 @@ class PengisianKegiatan extends Component
     }
 
     /**
+     * Poin RTL berikutnya yang AKTIF (menunggu ATAU sudah terverifikasi Tim SAKIP —
+     * kebalikan dari rtlBerikutnyaDitolak() di atas) — dipakai blade untuk MENAMPILKAN
+     * isi rencana yang sudah ditetapkan begitu rtlTriwulanBerikutnyaSudahAda() true,
+     * bukan cuma badge "Sudah ditetapkan" tanpa detail (beda dari bagian lain di form
+     * ini yang semuanya tetap menampilkan isian sebelumnya).
+     *
+     * @return \Illuminate\Support\Collection<int, RtlEvaluasiModel>
+     */
+    protected function rtlBerikutnyaAktif()
+    {
+        if ($this->cacheRtlBerikutnyaAktif !== null) {
+            return $this->cacheRtlBerikutnyaAktif;
+        }
+
+        if (! $this->iku_id) {
+            return $this->cacheRtlBerikutnyaAktif = collect();
+        }
+
+        return $this->cacheRtlBerikutnyaAktif = Cache::remember(
+            $this->cacheKeyPeriodeIku('rtl-berikutnya-aktif'),
+            self::CACHE_TTL_DETIK,
+            function () {
+                $target = $this->targetTriwulanBerikutnya();
+
+                return RtlEvaluasiModel::where('iku_id', $this->iku_id)
+                    ->where('status_verifikasi', '!=', 'ditolak')
+                    ->whereHas('periode', fn ($q) => $q->where('tahun', $target['tahun'])->where('triwulan', $target['triwulan']))
+                    ->orderBy('id')
+                    ->get();
+            }
+        );
+    }
+
+    /**
      * Muat ulang $rtlBaru — kosong (satu blok baru) secara bawaan, ATAU diisi dari
      * poin-poin yang ditolak Tim SAKIP (lengkap dengan id-nya, supaya penyimpanan
      * berikutnya meng-UPDATE baris lama, bukan membuat duplikat baru — lihat blok
@@ -2262,6 +2298,7 @@ class PengisianKegiatan extends Component
             'rtlSebelumnya' => $this->rtlTriwulanBerjalan(),
             'sudahAdaRtlBerikutnya' => $this->rtlTriwulanBerikutnyaSudahAda(),
             'rtlBerikutnyaDitolak' => $this->rtlBerikutnyaDitolak(),
+            'rtlBerikutnyaAktif' => $this->rtlBerikutnyaAktif(),
             'labelBerikutnya' => $this->labelTriwulanBerikutnya(),
             'bulanTargetBerikutnya' => collect($this->bulanBulanTarget())->mapWithKeys(fn ($b) => [$b => $this->namaBulanIndo($b)]),
             'rtlBerjalanOptions' => $this->rtlBerjalanOptions(),

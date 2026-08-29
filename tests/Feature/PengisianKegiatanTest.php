@@ -492,6 +492,38 @@ class PengisianKegiatanTest extends TestCase
         $this->assertNull($data['rtl']->catatan);
     }
 
+    public function test_rtl_berikutnya_sudah_ditetapkan_menampilkan_isi_yang_pernah_diisi(): void
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $ketua = User::create([
+            'nama' => 'Ketua Uji RTL Aktif', 'username' => 'ketua-uji-rtl-aktif@example.test', 'email' => 'ketua-uji-rtl-aktif@example.test',
+            'password' => 'password', 'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create(['kode' => 'UJI-RTLA', 'indikator' => 'Indikator uji RTL aktif', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji']);
+        $periodeBerikutnya = Periode::create(['tahun' => 2026, 'bulan' => 10, 'triwulan' => 4, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+
+        RtlEvaluasi::create([
+            'iku_id' => $iku->id, 'periode_id' => $periodeBerikutnya->id,
+            'rtl_teks' => 'Rencana yang sudah ditetapkan sebelumnya', 'berlaku_bulan' => 'RTL untuk Oktober, November, dan Desember',
+            'pic' => 'Uji Aktif', 'batas_waktu' => '2026-12-31', 'status_verifikasi' => 'menunggu',
+        ]);
+
+        $this->actingAs($ketua);
+
+        // Beda dari sebelumnya yang cuma menampilkan badge "Sudah ditetapkan" tanpa
+        // detail — sekarang isian yang sudah diisi Ketua Tim (rencana, PIC, batas
+        // waktu) tetap terlihat, konsisten dengan bagian-bagian lain di form ini.
+        Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 9)
+            ->set('iku_id', $iku->id)
+            ->assertSee('Sudah ditetapkan')
+            ->assertSee('Rencana yang sudah ditetapkan sebelumnya')
+            ->assertSee('Uji Aktif')
+            ->assertSee('Menunggu Verifikasi Tim SAKIP');
+    }
+
     public function test_kegiatan_yang_cocok_dengan_rtl_berjalan_menautkan_rtl_evaluasi_id(): void
     {
         $peranKetua = Role::create(['nama' => 'Ketua Tim']);

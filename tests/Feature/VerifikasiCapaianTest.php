@@ -452,6 +452,13 @@ class VerifikasiCapaianTest extends TestCase
         $this->assertSame('diajukan', $data['capaian']->fresh()->status);
     }
 
+    /**
+     * "Dievaluasi" (lihat RtlEvaluasi::sudahDievaluasi(), dipakai
+     * VerifikasiCapaian::rtlBisaDiverifikasi()) berarti minimal satu bukti realisasi
+     * TERUNGGAH — bukan kolom teks realisasi (sudah dihapus dari alur pengisian Ketua
+     * Tim), jadi baris berkas di bawah wajib ada supaya poin ini bisa ditandai
+     * Sesuai/Tidak Sesuai Tim SAKIP.
+     */
     protected function siapkanRtlDenganRealisasi(array $data): RtlEvaluasi
     {
         $periodeRtl = Periode::create([
@@ -462,12 +469,21 @@ class VerifikasiCapaianTest extends TestCase
             'flag_bulan_terlewat' => false,
         ]);
 
-        return RtlEvaluasi::create([
+        $rtl = RtlEvaluasi::create([
             'iku_id' => $data['iku']->id,
             'periode_id' => $periodeRtl->id,
             'rtl_teks' => 'RTL triwulan sebelumnya',
-            'realisasi' => 'Sudah dilaksanakan sesuai rencana',
         ]);
+
+        Berkas::create([
+            'ref_id' => $rtl->id,
+            'ref_type' => RtlEvaluasi::class,
+            'kategori' => 'evaluasi_rtl',
+            'nama_file' => 'realisasi.pdf',
+            'status_verifikasi' => 'menunggu',
+        ]);
+
+        return $rtl;
     }
 
     public function test_tandai_rtl_sesuai_menandai_terverifikasi(): void
@@ -524,8 +540,8 @@ class VerifikasiCapaianTest extends TestCase
 
         $this->assertFalse($component->instance()->rtlBisaDiverifikasi($rtl->id));
 
-        // Poin RTL yang belum dilaporkan (realisasi kosong) tidak ikut menghalangi
-        // "Verifikasi Selesai" — tidak ada apa pun untuk diperiksa di poin itu.
+        // Poin RTL yang belum dilaporkan (belum ada bukti terunggah sama sekali) tidak
+        // ikut menghalangi "Verifikasi Selesai" — tidak ada apa pun untuk diperiksa.
         $component->call('tandaiSesuai', $data['berkas1']->id)
             ->call('tandaiSesuai', $data['berkas2']->id)
             ->call('tandaiUraianSesuai', $data['kegiatan1']->id)
@@ -536,6 +552,64 @@ class VerifikasiCapaianTest extends TestCase
             ->assertHasNoErrors();
 
         $this->assertSame('menunggu', $rtl->fresh()->status_verifikasi);
+    }
+
+    /**
+     * Regresi: sebelumnya rtlBisaDiverifikasi() menggerbang pada filled($poin->realisasi)
+     * — kolom teks yang SUDAH TIDAK PERNAH diisi Ketua Tim (dihapus dari form Bagian 4,
+     * lihat RtlEvaluasi::sudahDievaluasi()) — sehingga Tim SAKIP TIDAK PERNAH bisa
+     * menandai Sesuai/Tidak Sesuai poin RTL walau Ketua Tim sudah unggah bukti, dan poin
+     * itu juga tidak pernah menghalangi "Verifikasi Selesai". Ketua Tim HANYA unggah
+     * bukti (realisasi tetap null) — Tim SAKIP HANYA perlu memverifikasi.
+     */
+    public function test_rtl_dengan_bukti_terunggah_tanpa_teks_realisasi_wajib_diverifikasi(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+
+        $periodeRtl = Periode::create([
+            'tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false,
+        ]);
+
+        $rtl = RtlEvaluasi::create([
+            'iku_id' => $data['iku']->id,
+            'periode_id' => $periodeRtl->id,
+            'rtl_teks' => 'RTL triwulan sebelumnya',
+            'realisasi' => null,
+        ]);
+
+        $berkasRtl = Berkas::create([
+            'ref_id' => $rtl->id,
+            'ref_type' => RtlEvaluasi::class,
+            'kategori' => 'evaluasi_rtl',
+            'nama_file' => 'realisasi.pdf',
+            'status_verifikasi' => 'menunggu',
+        ]);
+
+        $component = Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']]);
+
+        $this->assertTrue($component->instance()->rtlBisaDiverifikasi($rtl->id));
+
+        // Belum ditandai Tim SAKIP -> harus menghalangi "Verifikasi Selesai" (baik
+        // berkasnya sendiri MAUPUN poin RTL-nya wajib ditandai, dua lapis terpisah).
+        $component->call('tandaiSesuai', $data['berkas1']->id)
+            ->call('tandaiSesuai', $data['berkas2']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan1']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan2']->id)
+            ->call('tandaiSesuai', $berkasRtl->id)
+            ->set('alokasi_tw3', 50)
+            ->set('realisasi_tw3', 45)
+            ->call('verifikasiSelesai')
+            ->assertHasErrors(['berkas']);
+
+        $this->assertSame('menunggu', $rtl->fresh()->status_verifikasi);
+
+        // Setelah ditandai Sesuai, verifikasi selesai baru boleh lanjut.
+        $component->call('tandaiRtlSesuai', $rtl->id)
+            ->call('verifikasiSelesai')
+            ->assertHasNoErrors();
+
+        $this->assertSame('terverifikasi', $rtl->fresh()->status_verifikasi);
     }
 
     /**

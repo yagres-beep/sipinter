@@ -837,7 +837,10 @@ class VerifikasiCapaian extends Component
     /**
      * Realisasi RTL hanya bisa diverifikasi bila sudah dilaporkan Ketua Tim
      * (realisasi tidak kosong) — poin yang belum dilaporkan ("— belum dilaporkan —"
-     * di blade) tidak punya apa pun untuk diperiksa.
+     * di blade) tidak punya apa pun untuk diperiksa. Dicek lewat sudahDievaluasi()
+     * (minimal satu bukti terunggah) — BUKAN filled($poin->realisasi), karena kolom
+     * teks realisasi itu sendiri sudah dihapus dari alur pengisian Ketua Tim (lihat
+     * RtlEvaluasi::sudahDievaluasi()); Ketua Tim sekarang hanya mengunggah bukti.
      */
     public function rtlBisaDiverifikasi(int $rtlId): bool
     {
@@ -847,7 +850,7 @@ class VerifikasiCapaian extends Component
 
         $poin = $this->rtlEvaluasiSebelumnya()->firstWhere('id', $rtlId);
 
-        return $poin && filled($poin->realisasi);
+        return $poin && $poin->sudahDievaluasi();
     }
 
     public function tandaiRtlSesuai(int $rtlId): void
@@ -1310,7 +1313,7 @@ class VerifikasiCapaian extends Component
             $daftar[] = 'Bagian Kustom "'.Str::limit($p->teks ?: '(kosong)', 40).'" ('.$p->bagianKustom->nama.')';
         }
 
-        foreach ($this->rtlEvaluasiSebelumnya()->filter(fn ($p) => filled($p->realisasi))->where('status_verifikasi', 'menunggu') as $p) {
+        foreach ($this->rtlEvaluasiSebelumnya()->filter(fn ($p) => $p->sudahDievaluasi())->where('status_verifikasi', 'menunggu') as $p) {
             $daftar[] = 'Realisasi RTL "'.Str::limit($p->rtl_teks ?: '(kosong)', 40).'"';
         }
 
@@ -1340,7 +1343,7 @@ class VerifikasiCapaian extends Component
         $kendala = $this->kendalaSolusiList();
         $kegiatanList = $this->kegiatanList();
         $bagianKustom = $this->bagianKustomList();
-        $rtl = $this->rtlEvaluasiSebelumnya()->filter(fn ($p) => filled($p->realisasi));
+        $rtl = $this->rtlEvaluasiSebelumnya()->filter(fn ($p) => $p->sudahDievaluasi());
         $rtlBerikutnya = $this->rtlBerikutnyaBaruDitetapkan();
 
         $belumDitandai = $this->daftarIsianBelumDitandai();
@@ -1417,7 +1420,7 @@ class VerifikasiCapaian extends Component
         $kendala = $this->kendalaSolusiList();
         $kegiatanList = $this->kegiatanList();
         $bagianKustom = $this->bagianKustomList();
-        $rtl = $this->rtlEvaluasiSebelumnya()->filter(fn ($p) => filled($p->realisasi));
+        $rtl = $this->rtlEvaluasiSebelumnya()->filter(fn ($p) => $p->sudahDievaluasi());
         $rtlBerikutnya = $this->rtlBerikutnyaBaruDitetapkan();
 
         $belumDitandai = $this->daftarIsianBelumDitandai();

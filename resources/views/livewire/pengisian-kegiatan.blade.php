@@ -531,9 +531,30 @@
 
             @if ($sudahAdaRtlBerikutnya)
                 <div class="badge b-approve" style="display:inline-block;margin-bottom:10px">Sudah ditetapkan</div>
-                <p style="color:var(--muted);font-size:12.5px">
+                <p style="color:var(--muted);font-size:12.5px;margin-bottom:12px">
                     RTL untuk {{ $labelBerikutnya }} sudah ditetapkan dan tampil hanya-baca sampai triwulan tersebut berjalan.
                 </p>
+
+                @foreach ($rtlBerikutnyaAktif as $poin)
+                    <div class="poin-single" wire:key="rtlberikutnya-aktif-{{ $poin->id }}">
+                        <span class="k-num stat-in">Poin RTL {{ $loop->iteration }}</span>
+                        <div class="field" style="margin-bottom:8px">
+                            <label>Rencana kegiatan</label>
+                            <p style="margin:0;font-size:13px">{{ $poin->rtl_teks }}</p>
+                        </div>
+                        <div class="row2">
+                            <div class="field" style="margin-bottom:0"><label>PIC Tindak Lanjut</label><p style="margin:0;font-size:13px">{{ $poin->pic }}</p></div>
+                            <div class="field" style="margin-bottom:0"><label>Batas Waktu</label><p style="margin:0;font-size:13px">{{ $poin->batas_waktu?->translatedFormat('d F Y') }}</p></div>
+                        </div>
+                        <div style="margin-top:8px">
+                            @if ($poin->status_verifikasi === 'terverifikasi')
+                                <x-badge-status status="disetujui" label="Terverifikasi Tim SAKIP" />
+                            @else
+                                <x-badge-status status="diajukan" label="Menunggu Verifikasi Tim SAKIP" />
+                            @endif
+                        </div>
+                    </div>
+                @endforeach
             @else
                 @if ($rtlBerikutnyaDitolak->isNotEmpty())
                     <div class="info red" style="margin-bottom:10px">
