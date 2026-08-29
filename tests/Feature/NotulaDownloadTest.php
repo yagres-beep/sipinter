@@ -422,8 +422,45 @@ class NotulaDownloadTest extends TestCase
 
         // "Kendala : " diikuti LANGSUNG <w:br/> (pindah baris) baru "1. Kendala pertama
         // uji" -- BUKAN "Kendala : 1. Kendala pertama uji" menempel di baris yang sama.
-        $this->assertStringContainsString('Kendala : </w:t></w:r><w:r><w:rPr><w:b w:val="0"/><w:i w:val="0"/><w:color w:val="1F4E79"/></w:rPr><w:t></w:t><w:br/><w:t>1. Kendala pertama uji', $xml);
-        $this->assertStringContainsString('Solusi : </w:t></w:r><w:r><w:rPr><w:b w:val="0"/><w:i w:val="0"/><w:color w:val="1F4E79"/></w:rPr><w:t></w:t><w:br/><w:t>1. Solusi pertama uji', $xml);
+        $this->assertStringContainsString('Kendala : </w:t></w:r><w:r><w:rPr><w:b w:val="0"/><w:i w:val="0"/><w:color w:val="000000"/></w:rPr><w:t></w:t><w:br/><w:t>1. Kendala pertama uji', $xml);
+        $this->assertStringContainsString('Solusi : </w:t></w:r><w:r><w:rPr><w:b w:val="0"/><w:i w:val="0"/><w:color w:val="000000"/></w:rPr><w:t></w:t><w:br/><w:t>1. Solusi pertama uji', $xml);
+    }
+
+    /**
+     * Warna teks isian di Bagian I HARUS hitam (000000), KECUALI dua tautan bukti
+     * dukung (link folder Drive) yang tetap biru (1F4E79) supaya masih kelihatan
+     * sebagai tautan -- sebelumnya SEMUA isian (termasuk yang bukan tautan sama
+     * sekali, mis. Kendala/Solusi/Dasar Hitung) ikut biru.
+     */
+    public function test_docx_bagian1_warna_isian_hitam_kecuali_tautan(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $iku = MasterIku::create([
+            'kode' => '2008', 'indikator' => 'Indikator Uji Warna Font', 'tim' => 'Tim Uji', 'penanggung_jawab' => 'Uji', 'sasaran' => 'Sasaran Uji RO',
+        ]);
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $this->verifikasiCapaian($iku, $periode);
+
+        Kegiatan::create([
+            'iku_id' => $iku->id,
+            'periode_id' => $periode->id,
+            'uraian_kegiatan' => 'Kegiatan uji warna font',
+            'jenis' => 'bukan_survei_sensus',
+            'status_dokumen' => Kegiatan::STATUS_DIVERIFIKASI,
+        ]);
+
+        $notula = Notula::create(['periode_id' => $periode->id]);
+
+        $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
+
+        // Kedua baris "Tautan Bukti Dukung ...:" tetap biru (1F4E79) -- placeholder
+        // "…" pun tetap biru karena warnanya atribut tetap template, bukan tergantung
+        // ada/tidaknya link sungguhan.
+        $this->assertSame(2, substr_count($xml, 'w:val="1F4E79"'));
+        // Sasaran (bukan tautan) harus hitam.
+        $this->assertStringContainsString('<w:color w:val="000000"/></w:rPr><w:t>Sasaran Uji RO</w:t>', $xml);
     }
 
     /**
