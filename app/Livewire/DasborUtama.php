@@ -119,15 +119,25 @@ class DasborUtama extends Component
      * "Diverifikasi" dua kali) karena tiap Kegiatan punya status_dokumen sendiri;
      * sekarang statusnya SATU per IKU+bulan (Capaian::status), jadi satu baris cukup.
      *
+     * Status "draft" SENGAJA disembunyikan dari Tim SAKIP — isian itu milik Ketua
+     * Tim yang belum pernah diajukan sama sekali (lihat Capaian::STATUS_DRAFT), jadi
+     * Tim SAKIP tidak perlu (dan tidak boleh) melihatnya sampai benar-benar diajukan.
+     * Peran lain tetap melihat baris draft milik mereka sendiri (Ketua Tim perlu
+     * lihat draftnya sendiri di dasbor).
+     *
      * @return \Illuminate\Support\Collection<int, Capaian>
      */
-    protected function daftarCapaian()
+    protected function daftarCapaian(string $role)
     {
         $query = Capaian::query()
             ->join('master_iku', 'capaian.iku_id', '=', 'master_iku.id')
             ->join('periode', 'capaian.periode_id', '=', 'periode.id')
             ->select('capaian.*')
             ->with(['masterIku', 'periode']);
+
+        if ($role === 'Tim SAKIP') {
+            $query->where('capaian.status', '!=', Capaian::STATUS_DRAFT);
+        }
 
         if (filled($this->filterTriwulan)) {
             $query->where('periode.triwulan', $this->filterTriwulan);
@@ -194,6 +204,48 @@ class DasborUtama extends Component
     }
 
     /**
+     * Poin RTL evaluasi triwulan berjalan per Capaian, SATU query untuk seluruh
+     * daftar (sama polanya dengan kegiatanPerCapaian() di atas) — dipakai supaya
+     * badge status besar Capaian (mis. "Dikembalikan") tetap bisa ditelusuri sampai
+     * ke bukti RTL yang jadi penyebabnya, bukan hanya bukti Kegiatan (lihat
+     * RtlEvaluasi::rincianStatusVerifikasi()).
+     *
+     * Dicocokkan lewat (iku_id, tahun, triwulan) — BUKAN periode_id — karena poin RTL
+     * dievaluasi pada triwulan yang sama dengan Capaian tapi bisa saja tersimpan di
+     * baris Periode (bulan) yang berbeda dalam triwulan itu (sama seperti
+     * App\Livewire\VerifikasiCapaian::rtlEvaluasiSebelumnya()). Hanya poin yang
+     * realisasinya sudah dilaporkan Ketua Tim yang disertakan — poin yang belum
+     * dilaporkan tidak relevan dengan status verifikasi apa pun.
+     *
+     * @param  \Illuminate\Support\Collection<int, Capaian>  $daftarCapaian
+     * @return \Illuminate\Support\Collection<int, \Illuminate\Support\Collection<int, RtlEvaluasi>>
+     */
+    protected function rtlPerCapaian($daftarCapaian)
+    {
+        if ($daftarCapaian->isEmpty()) {
+            return collect();
+        }
+
+        $kunciPasangan = fn ($ikuId, $tahun, $triwulan) => "{$ikuId}-{$tahun}-{$triwulan}";
+
+        $pasanganDicari = $daftarCapaian->map(
+            fn ($c) => $kunciPasangan($c->iku_id, $c->periode->tahun, $c->periode->triwulan)
+        )->unique();
+
+        $perPasangan = RtlEvaluasi::whereIn('iku_id', $daftarCapaian->pluck('iku_id'))
+            ->whereNotNull('realisasi')
+            ->where('realisasi', '!=', '')
+            ->with('periode:id,tahun,triwulan')
+            ->get(['id', 'iku_id', 'periode_id', 'realisasi', 'status_verifikasi'])
+            ->filter(fn ($r) => $pasanganDicari->contains($kunciPasangan($r->iku_id, $r->periode->tahun, $r->periode->triwulan)))
+            ->groupBy(fn ($r) => $kunciPasangan($r->iku_id, $r->periode->tahun, $r->periode->triwulan));
+
+        return $daftarCapaian->mapWithKeys(
+            fn ($c) => [$c->id => $perPasangan->get($kunciPasangan($c->iku_id, $c->periode->tahun, $c->periode->triwulan), collect())]
+        );
+    }
+
+    /**
      * Tautan baris sesuai peran yang login — Tim SAKIP menuju detail verifikasi
      * langsung (baris SUDAH berupa Capaian, tidak perlu lagi dicocokkan lewat query
      * terpisah seperti sebelumnya), Ketua Tim &amp; Kepala menuju halaman kerja utama
@@ -251,8 +303,9 @@ class DasborUtama extends Component
     public function render()
     {
         $role = auth()->user()->namaRole();
-        $daftarCapaian = $this->daftarCapaian();
+        $daftarCapaian = $this->daftarCapaian($role);
         $kegiatanPerCapaian = $this->kegiatanPerCapaian($daftarCapaian);
+        $rtlPerCapaian = $this->rtlPerCapaian($daftarCapaian);
 
         return view('livewire.dasbor-utama', [
             'role' => $role,
@@ -260,6 +313,7 @@ class DasborUtama extends Component
             'daftarCapaian' => $daftarCapaian,
             'jumlahKegiatan' => $kegiatanPerCapaian->map->count(),
             'rincianStatusKegiatan' => $kegiatanPerCapaian->map(fn ($g) => Kegiatan::rincianStatus($g)),
+            'rincianStatusRtl' => $rtlPerCapaian->map(fn ($g) => RtlEvaluasi::rincianStatusVerifikasi($g)),
             'tautanBaris' => $this->tautanSemuaBaris($daftarCapaian, $role),
             'ikuBelumTerisiTriwulanIni' => $this->ikuBelumTerisiTriwulanIni(),
             'triwulanBerjalan' => (int) ceil(now()->month / 3),

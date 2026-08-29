@@ -8,6 +8,7 @@ use App\Models\Kegiatan;
 use App\Models\MasterIku;
 use App\Models\Periode;
 use App\Models\Role;
+use App\Models\RtlEvaluasi;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -27,8 +28,12 @@ class DasborUtamaTest extends TestCase
 
         Kegiatan::create(['iku_id' => $ikuA->id, 'periode_id' => $periode->id, 'uraian_kegiatan' => 'K1', 'jenis' => 'bukan_survei_sensus', 'status_dokumen' => 'diajukan']);
         Kegiatan::create(['iku_id' => $ikuB->id, 'periode_id' => $periode->id, 'uraian_kegiatan' => 'K2', 'jenis' => 'bukan_survei_sensus', 'status_dokumen' => 'diverifikasi']);
-        Capaian::create(['iku_id' => $ikuA->id, 'periode_id' => $periode->id]);
-        Capaian::create(['iku_id' => $ikuB->id, 'periode_id' => $periode->id]);
+        // Status "diajukan" (bukan default "draft") — kedua isian ini SUDAH diajukan ke
+        // Tim SAKIP di fixture ini (lihat status_dokumen Kegiatan di atas), jadi harus
+        // tetap terlihat Tim SAKIP di dasbor (Capaian::status draft khusus isian yang
+        // belum pernah diajukan sama sekali, lihat DasborUtama::daftarCapaian()).
+        Capaian::create(['iku_id' => $ikuA->id, 'periode_id' => $periode->id, 'status' => Capaian::STATUS_DIAJUKAN]);
+        Capaian::create(['iku_id' => $ikuB->id, 'periode_id' => $periode->id, 'status' => Capaian::STATUS_DIAJUKAN]);
     }
 
     public function test_ringkasan_menghitung_capaian_sedang_ditangani_sebagai_menunggu_verifikasi(): void
@@ -159,5 +164,54 @@ class DasborUtamaTest extends TestCase
 
         // Tetap SATU baris untuk IKU+bulan ini, bukan 5 baris.
         $this->assertDatabaseCount('capaian', 1);
+    }
+
+    public function test_capaian_draft_disembunyikan_dari_tim_sakip_tapi_tetap_terlihat_ketua_tim(): void
+    {
+        // Kedua role dibuat lebih dulu (SEBELUM render Livewire pertama) — Role::semuaNama()
+        // di-cache PERMANEN sejak akses pertama (lihat App\Models\Role), jadi kalau role
+        // "Ketua Tim" baru dibuat SETELAH dasbor Tim SAKIP sempat dirender, cache lama
+        // (tanpa "Ketua Tim") akan bikin auth()->user()->namaRole() balik null.
+        Role::firstOrCreate(['nama' => 'Tim SAKIP']);
+        Role::firstOrCreate(['nama' => 'Ketua Tim']);
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 8, 'triwulan' => 3, 'bulan_ke' => 2, 'flag_bulan_terlewat' => false]);
+        $iku = MasterIku::create(['kode' => 'EPSILON-5', 'indikator' => 'Indikator Epsilon', 'tim' => 'Tim E', 'penanggung_jawab' => 'PJ E']);
+        Capaian::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'status' => Capaian::STATUS_DRAFT]);
+        // Kegiatan draft ini SENGAJA disertakan supaya EPSILON-5 tidak juga muncul di
+        // peringatan "IKU belum ada isian triwulan ini" (lihat
+        // DasborUtama::ikuBelumTerisiTriwulanIni(), tidak terkait fitur yang diuji di sini).
+        Kegiatan::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'uraian_kegiatan' => 'Draf K1', 'jenis' => 'bukan_survei_sensus', 'status_dokumen' => 'draft']);
+
+        $this->loginSebagai('Tim SAKIP');
+        Livewire::test(DasborUtama::class)->assertDontSee('EPSILON-5');
+
+        $this->loginSebagai('Ketua Tim');
+        Livewire::test(DasborUtama::class)->assertSee('EPSILON-5');
+    }
+
+    public function test_rincian_bukti_rtl_ditolak_tampil_di_dasbor(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $periodeRtl = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $periodeCapaian = Periode::create(['tahun' => 2026, 'bulan' => 8, 'triwulan' => 3, 'bulan_ke' => 2, 'flag_bulan_terlewat' => false]);
+        $iku = MasterIku::create(['kode' => 'ZETA-6', 'indikator' => 'Indikator Zeta', 'tim' => 'Tim Z', 'penanggung_jawab' => 'PJ Z']);
+
+        // Capaian ini "Dikembalikan" KARENA bukti RTL ditolak — semua Kegiatan-nya
+        // sendiri sudah "Diverifikasi", jadi tanpa rincian RTL, penyebabnya tidak
+        // terlihat sama sekali di tabel dasbor (lihat RtlEvaluasi::rincianStatusVerifikasi()).
+        Capaian::create(['iku_id' => $iku->id, 'periode_id' => $periodeCapaian->id, 'status' => Capaian::STATUS_DIKEMBALIKAN]);
+        Kegiatan::create(['iku_id' => $iku->id, 'periode_id' => $periodeCapaian->id, 'uraian_kegiatan' => 'K1', 'jenis' => 'bukan_survei_sensus', 'status_dokumen' => 'diverifikasi']);
+
+        RtlEvaluasi::create([
+            'iku_id' => $iku->id, 'periode_id' => $periodeRtl->id, 'rtl_teks' => 'RTL 1',
+            'realisasi' => 'Sudah dilaksanakan', 'status_verifikasi' => 'ditolak', 'catatan' => 'Belum sesuai',
+        ]);
+
+        Livewire::test(DasborUtama::class)
+            ->assertSee('ZETA-6')
+            ->assertSee('1 Diverifikasi')
+            ->assertSee('RTL 1 Tidak Sesuai');
     }
 }

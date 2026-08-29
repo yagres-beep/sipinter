@@ -73,8 +73,10 @@ class PengisianKegiatan extends Component
     public array $rtlBaru = [];
 
     /**
-     * Teks bebas — datalist "daftar-pic-rtl" menawarkan nama dari picOptions() sebagai
-     * saran, tapi boleh diketik nama lain di luar itu (mis. staf yang belum tercatat).
+     * SELALU diisi otomatis dari nama tim IKU terpilih (lihat pilihPicOtomatis()) &
+     * dikunci hanya-baca di form — PIC tindak lanjut wajib nama tim, bukan perorangan
+     * (lihat catatan di ajukanIsian() bagian "4) RTL triwulan berikutnya", nilai
+     * tersimpan diambil ulang dari MasterIku::tim di server, bukan dari properti ini).
      */
     public string $rtlBaruPic = '';
 
@@ -295,7 +297,7 @@ class PengisianKegiatan extends Component
 
     public function addBlock(): void
     {
-        if ($this->formTerkunciDisetujui()) {
+        if ($this->formTerkunciDisetujui() || $this->formTerkunciSedangDitangani()) {
             return;
         }
 
@@ -461,6 +463,10 @@ class PengisianKegiatan extends Component
 
     public function addKendalaBlock(): void
     {
+        if ($this->formTerkunciSedangDitangani()) {
+            return;
+        }
+
         $this->kendalaBlocks[] = $this->emptyKendalaBlock();
     }
 
@@ -472,6 +478,10 @@ class PengisianKegiatan extends Component
 
     public function addBagianKustomBlock(int $bagianId): void
     {
+        if ($this->formTerkunciSedangDitangani()) {
+            return;
+        }
+
         $this->bagianKustomBlocks[$bagianId][] = $this->emptyBagianKustomBlock();
     }
 
@@ -498,6 +508,10 @@ class PengisianKegiatan extends Component
 
     public function addRtlBlock(): void
     {
+        if ($this->formTerkunciSedangDitangani()) {
+            return;
+        }
+
         $this->rtlBaru[] = $this->emptyRtlBlock();
     }
 
@@ -925,6 +939,45 @@ class PengisianKegiatan extends Component
     }
 
     /**
+     * Selagi Capaian berstatus "sedang ditangani" (Tim SAKIP sudah mulai menandai
+     * sebagian bukti/kendala-solusi & "Simpan Sementara", lihat
+     * Capaian::STATUS_SEDANG_DITANGANI), isian ini dikunci hanya-baca TOTAL bagi
+     * Ketua Tim — tidak bisa menambah kegiatan/kendala/RTL/Bagian Kustom baru maupun
+     * menyimpan draf/mengajukan — supaya data yang sedang dipegang & di-cache Tim
+     * SAKIP (lihat App\Livewire\VerifikasiCapaian::kegiatanList() dkk., di-cache per
+     * request) tidak diam-diam berubah di bawahnya selagi diperiksa. BEDA dari
+     * formTerkunciDisetujui(): begitu Tim SAKIP selesai (Verifikasi Selesai/
+     * Kembalikan ke Ketua Tim), status berpindah ke diverifikasi/dikembalikan dan
+     * form ini otomatis terbuka lagi (dikembalikan) atau tetap terkunci lewat
+     * STATUS_KEGIATAN_TERKUNCI per-blok seperti biasa (diverifikasi).
+     *
+     * Dipakai untuk UI (sembunyikan/nonaktifkan tombol) — SELALU dicek ULANG tanpa
+     * cache di simpanDraft()/ajukanIsian() sebelum benar-benar menyimpan apa pun,
+     * sama seperti formTerkunciDisetujui() di atas (defense in depth).
+     */
+    public function formTerkunciSedangDitangani(): bool
+    {
+        return $this->statusCapaianSaatIni() === Capaian::STATUS_SEDANG_DITANGANI;
+    }
+
+    /**
+     * Versi TANPA cache dari formTerkunciSedangDitangani() — satu-satunya yang boleh
+     * dipakai sebagai gerbang sebelum benar-benar menyimpan (simpanDraft()/ajukanIsian()).
+     */
+    protected function formTerkunciSedangDitanganiFresh(): bool
+    {
+        $periode = $this->iku_id ? $this->periodeSaatIni() : null;
+
+        if (! $periode) {
+            return false;
+        }
+
+        $status = Capaian::where('iku_id', $this->iku_id)->where('periode_id', $periode->id)->value('status');
+
+        return $status === Capaian::STATUS_SEDANG_DITANGANI;
+    }
+
+    /**
      * Muat kegiatan (+ berkas) yang sudah ada untuk IKU+periode terpilih ke $this->blocks
      * supaya isian yang pernah dibuat (termasuk yang dikembalikan Tim SAKIP) tampil lagi
      * saat form dibuka ulang — bukan selalu kosong seperti sebelumnya. Kegiatan berstatus
@@ -1262,21 +1315,6 @@ class PengisianKegiatan extends Component
         return null;
     }
 
-    /**
-     * Saran PIC untuk IKU terpilih (datalist di form) — SELALU nama tim (master_iku.tim),
-     * BUKAN nama orang, supaya konsisten dengan yang benar-benar dipakai di notula
-     * (lihat NotulaBagian1DocxService::isiBagianIku(), yang mengabaikan rtlBaruPic dan
-     * selalu memakai $iku->tim). Hanya satu saran karena satu IKU hanya berada di satu tim.
-     *
-     * @return \Illuminate\Support\Collection<int, string>
-     */
-    protected function picOptions()
-    {
-        $tim = $this->ikuTerpilih()?->tim;
-
-        return $tim ? collect([$tim]) : collect();
-    }
-
     protected function pilihPicOtomatis(): void
     {
         $this->rtlBaruPic = $this->ikuTerpilih()?->tim ?? '';
@@ -1593,6 +1631,12 @@ class PengisianKegiatan extends Component
             return;
         }
 
+        if ($this->formTerkunciSedangDitanganiFresh()) {
+            $this->dispatch('notify', type: 'error', message: 'Isian ini sedang ditangani Tim SAKIP dan tidak bisa diubah sampai verifikasi selesai.');
+
+            return;
+        }
+
         try {
             $this->validate([
                 'tahun' => ['required', 'integer', 'min:2020', 'max:2100'],
@@ -1722,6 +1766,12 @@ class PengisianKegiatan extends Component
             return;
         }
 
+        if ($this->formTerkunciSedangDitanganiFresh()) {
+            $this->dispatch('notify', type: 'error', message: 'Isian ini sedang ditangani Tim SAKIP dan tidak bisa diubah sampai verifikasi selesai.');
+
+            return;
+        }
+
         try {
             $this->buatValidator()->validate();
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -1763,6 +1813,15 @@ class PengisianKegiatan extends Component
             // "diajukan" di request ini — supaya mengklik "Ajukan" saat semua blok sudah
             // terkunci (tidak ada perubahan sama sekali) tidak menambah riwayat kosong.
             $adaKegiatanDiajukan = false;
+
+            // Sama seperti $adaKegiatanDiajukan, tapi untuk PERBAIKAN di luar blok Kegiatan
+            // (kendala & solusi, bukti evaluasi RTL, Bagian Kustom) — bila Capaian ini
+            // "dikembalikan" KARENA salah satu bagian ini (bukan karena Kegiatan), isian
+            // tetap harus balik ke "diajukan" begitu diperbaiki+diajukan ulang. Sebelumnya
+            // hanya $adaKegiatanDiajukan yang dicek di bawah, jadi memperbaiki HANYA bukti
+            // evaluasi RTL yang ditolak (semua Kegiatan lain sudah terkunci/tidak berubah)
+            // tidak pernah memindahkan status Capaian keluar dari "dikembalikan".
+            $adaPerbaikanLainDiajukan = false;
 
             // 1) Kegiatan + bukti capaian (bukti melekat langsung ke kegiatan, RF-23)
             foreach ($this->blocks as $block) {
@@ -1851,15 +1910,14 @@ class PengisianKegiatan extends Component
                 }
             }
 
-            if ($adaKegiatanDiajukan) {
-                $capaian->catatStatus(Kegiatan::STATUS_DIAJUKAN, auth()->user());
-            }
-
             // 2) Kendala & Solusi (blok kosong dilewati — bagian ini opsional per periode).
             // UPDATE, bukan create, bila blok ini punya id (pasangan lama yang ditolak
             // Tim SAKIP dan sedang diperbaiki — lihat muatKendalaBlocks()), supaya tidak
-            // duplikat; status_verifikasi ditarik balik ke "menunggu" karena diajukan
-            // ulang, mengikuti pola yang sama dengan Kegiatan::ajukan().
+            // duplikat. status_verifikasi & catatan SENGAJA TIDAK direset ke "menunggu" —
+            // tanda "Tidak Sesuai" + alasannya tetap tampil ke Tim SAKIP sampai mereka
+            // sendiri menandainya ulang (tandaiKendalaSesuai()/tandaiKendalaTolak()),
+            // supaya mereka masih ingat apa yang salah sebelumnya saat memeriksa
+            // perbaikan ini. Baru kosong begitu ditandai "Sesuai".
             foreach ($this->kendalaBlocks as $block) {
                 if (trim($block['kendala']) === '' && trim($block['solusi']) === '') {
                     continue;
@@ -1869,8 +1927,6 @@ class PengisianKegiatan extends Component
                     KendalaSolusiModel::whereKey($block['id'])->update([
                         'kendala' => $block['kendala'],
                         'solusi' => $block['solusi'] ?: null,
-                        'status_verifikasi' => 'menunggu',
-                        'catatan' => null,
                     ]);
                 } else {
                     KendalaSolusiModel::create([
@@ -1880,6 +1936,8 @@ class PengisianKegiatan extends Component
                         'solusi' => $block['solusi'] ?: null,
                     ]);
                 }
+
+                $adaPerbaikanLainDiajukan = true;
             }
 
             // 3) Evaluasi RTL triwulan sebelumnya — cukup bukti realisasi (SEMUA poin wajib
@@ -1892,6 +1950,15 @@ class PengisianKegiatan extends Component
 
                 $poin = RtlEvaluasiModel::with(['periode', 'masterIku'])->findOrFail($rtlId);
                 $namaBerkasDasar = 'Evaluasi RTL '.$poin->rtl_teks;
+                $adaPerbaikanLainDiajukan = true;
+
+                // status_verifikasi & catatan SENGAJA TIDAK direset ke "menunggu" di sini
+                // walau bukti baru baru saja diunggah — tanda "Tidak Sesuai" + alasannya
+                // TETAP tampil ke Tim SAKIP sampai mereka sendiri yang menandainya ulang
+                // (tandaiRtlSesuai()/tandaiRtlTolak()), supaya mereka masih ingat apa yang
+                // salah sebelumnya saat memeriksa bukti baru ini. Baru kosong begitu Tim
+                // SAKIP menandai "Sesuai". Sama seperti bukti Kegiatan (Berkas lama yang
+                // "ditolak" juga tidak pernah direset otomatis di sini).
 
                 foreach ($data['bukti'] as $file) {
                     $path = $file->store('bukti-evaluasi-rtl', 'local');
@@ -1935,13 +2002,20 @@ class PengisianKegiatan extends Component
                 $namaBulanTarget = collect($this->bulanBulanTarget())->map(fn ($b) => $this->namaBulanIndo($b));
                 $berlakuBulan = 'RTL untuk '.$namaBulanTarget->join(', ', ', dan ');
 
+                // PIC SELALU nama tim IKU ini (App\Models\MasterIku::tim), BUKAN nilai
+                // mentah $this->rtlBaruPic — input di form hanya bacaan/pratinjau (lihat
+                // pilihPicOtomatis(), diisi otomatis & terkunci di blade), tapi disimpan
+                // dari sini langsung supaya tidak bergantung pada nilai yang dikirim
+                // klien (defense in depth, bukan cuma dikunci di UI).
+                $picTim = $this->ikuTerpilih()?->tim ?? trim($this->rtlBaruPic);
+
                 foreach ($this->rtlBaru as $blok) {
                     RtlEvaluasiModel::create([
                         'iku_id' => $this->iku_id,
                         'periode_id' => $periodeTarget->id,
                         'rtl_teks' => $blok['rtl_teks'],
                         'berlaku_bulan' => $berlakuBulan,
-                        'pic' => trim($this->rtlBaruPic),
+                        'pic' => $picTim,
                         'batas_waktu' => $this->rtlBaruBatasWaktu,
                     ]);
                 }
@@ -1965,6 +2039,8 @@ class PengisianKegiatan extends Component
                             continue;
                         }
 
+                        // status_verifikasi & catatan SENGAJA TIDAK direset — sama seperti
+                        // Kendala & Solusi/Evaluasi RTL di atas, lihat penjelasan di sana.
                         $poin->update(['teks' => $blok['teks']]);
                     } else {
                         $poin = BagianKustomPoin::create([
@@ -1975,6 +2051,7 @@ class PengisianKegiatan extends Component
                         ]);
                     }
 
+                    $adaPerbaikanLainDiajukan = true;
                     $namaBerkasDasar = $bagian->nama.' '.$poin->teks;
 
                     foreach ($blok['bukti'] as $file) {
@@ -2007,13 +2084,27 @@ class PengisianKegiatan extends Component
                     }
                 }
             }
+
+            // Dicek TERAKHIR, setelah SELURUH bagian (Kegiatan, Kendala & Solusi, Evaluasi
+            // RTL, Bagian Kustom) selesai diproses di atas — supaya perbaikan pada bagian
+            // MANA PUN yang tadinya jadi alasan "dikembalikan" ikut memindahkan Capaian ini
+            // balik ke "diajukan", bukan cuma perbaikan pada Kegiatan.
+            if ($adaKegiatanDiajukan || $adaPerbaikanLainDiajukan) {
+                $capaian->catatStatus(Kegiatan::STATUS_DIAJUKAN, auth()->user());
+            }
         });
 
         $this->stream(to: 'progres-unggah', content: '', replace: true);
 
+        // Menyebutkan IKU + triwulan/tahun secara eksplisit — Ketua Tim biasanya mengisi
+        // beberapa IKU berturut-turut, jadi pesan generik "berhasil diajukan" saja tidak
+        // cukup jelas isian YANG MANA yang baru saja terkirim.
+        $angkaRomawiTriwulan = ['I', 'II', 'III', 'IV'][$this->triwulanDari($this->bulan) - 1];
+        $labelIsian = "{$iku->kode} — {$iku->indikator} (Triwulan {$angkaRomawiTriwulan} {$this->tahun}, {$this->namaBulanIndo($this->bulan)})";
+
         session()->flash(
             'status',
-            'Isian kegiatan, kendala & solusi, dan evaluasi RTL berhasil diajukan ke Tim SAKIP. '
+            "Isian {$labelIsian} berhasil diajukan ke Tim SAKIP. "
                 .(empty($driveGagal)
                     ? 'Semua berkas bukti berhasil disalin ke Google Drive.'
                     : 'Sebagian berkas bukti BELUM tersalin ke Google Drive — lihat rincian di bawah.')
@@ -2055,7 +2146,6 @@ class PengisianKegiatan extends Component
             'bulanTargetBerikutnya' => collect($this->bulanBulanTarget())->mapWithKeys(fn ($b) => [$b => $this->namaBulanIndo($b)]),
             'rtlBerjalanOptions' => $this->rtlBerjalanOptions(),
             'rtlBerjalanBelumTerlaksana' => $this->poinRtlBerjalanBelumTerlaksana(),
-            'picOptions' => $this->picOptions(),
             'bagianKustomAktif' => $bagianKustomAktif,
             'riwayatBagianKustom' => $bagianKustomAktif->mapWithKeys(fn ($b) => [$b->id => $this->riwayatBagianKustom($b)]),
             'statusKegiatanTerkunci' => self::STATUS_KEGIATAN_TERKUNCI,
@@ -2063,6 +2153,7 @@ class PengisianKegiatan extends Component
             'adaDikembalikan' => collect($this->blocks)->contains(fn ($b) => ($b['status_dokumen'] ?? null) === Kegiatan::STATUS_DIKEMBALIKAN)
                 || collect($this->kendalaBlocks)->contains(fn ($b) => ($b['status_verifikasi'] ?? null) === 'ditolak'),
             'formTerkunciDisetujui' => $this->formTerkunciDisetujui(),
+            'formTerkunciSedangDitangani' => $this->formTerkunciSedangDitangani(),
         ]);
     }
 }

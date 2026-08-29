@@ -52,7 +52,6 @@ class PengisianKegiatanTest extends TestCase
             ->set('kendalaBlocks.0.kendala', 'Kendala uji coba')
             ->set('kendalaBlocks.0.solusi', '')
             ->set('rtlBaru.0.rtl_teks', 'RTL uji coba triwulan berikutnya')
-            ->set('rtlBaruPic', 'PIC Uji')
             ->call('ajukanIsian')
             ->assertHasNoErrors();
 
@@ -80,7 +79,9 @@ class PengisianKegiatanTest extends TestCase
 
         $rtlBaru = RtlEvaluasi::first();
         $this->assertSame('RTL uji coba triwulan berikutnya', $rtlBaru->rtl_teks);
-        $this->assertSame('PIC Uji', $rtlBaru->pic);
+        // PIC SELALU nama tim IKU ini ('Uji'), bukan nilai bebas yang diketik —
+        // lihat "PIC nya harus nama tim bukan nama orang" di ajukanIsian().
+        $this->assertSame('Uji', $rtlBaru->pic);
     }
 
     public function test_ajukan_isian_mencatat_riwayat_status_diajukan(): void
@@ -124,6 +125,42 @@ class PengisianKegiatanTest extends TestCase
         $riwayat = $capaian->riwayatStatus->first();
         $this->assertSame('diajukan', $riwayat->status);
         $this->assertSame($ketua->id, $riwayat->user_id);
+    }
+
+    /**
+     * Pesan sukses menyebutkan IKU + triwulan/tahun secara eksplisit — Ketua Tim
+     * biasanya mengisi beberapa IKU berturut-turut, jadi "berhasil diajukan" saja
+     * tidak cukup jelas isian yang mana yang baru saja terkirim.
+     */
+    public function test_pesan_sukses_ajukan_menyebutkan_iku_triwulan_dan_tahun(): void
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $ketua = User::create([
+            'nama' => 'Ketua Uji Pesan', 'username' => 'ketua-uji-pesan@example.test', 'email' => 'ketua-uji-pesan@example.test',
+            'password' => 'password', 'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create([
+            'kode' => 'UJI-PESAN', 'indikator' => 'Indikator uji pesan sukses', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji',
+        ]);
+
+        $this->actingAs($ketua);
+
+        Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 9)
+            ->set('iku_id', $iku->id)
+            ->set('blocks.0.uraian_kegiatan', 'Kegiatan uji pesan')
+            ->set('blocks.0.jenis', 'bukan_survei_sensus')
+            ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
+            ->set('rtlBaru.0.rtl_teks', 'RTL uji pesan')
+            ->call('ajukanIsian')
+            ->assertHasNoErrors();
+
+        $pesan = session('status');
+        $this->assertStringContainsString('UJI-PESAN', $pesan);
+        $this->assertStringContainsString('Triwulan III 2026', $pesan);
+        $this->assertStringContainsString('September', $pesan);
     }
 
     public function test_kendala_solusi_kosong_tidak_disimpan(): void
@@ -786,6 +823,62 @@ class PengisianKegiatanTest extends TestCase
         $this->assertDatabaseCount('kegiatan', 1);
     }
 
+    public function test_isian_yang_sedang_ditangani_tim_sakip_terkunci_hanya_baca_bagi_ketua_tim(): void
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $ketua = User::create([
+            'nama' => 'Ketua Uji Ditangani', 'username' => 'ketua-uji-ditangani@example.test', 'email' => 'ketua-uji-ditangani@example.test',
+            'password' => 'password', 'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create([
+            'kode' => 'UJI-DITANGANI', 'indikator' => 'Indikator uji ditangani', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji',
+        ]);
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 9, 'triwulan' => 3, 'bulan_ke' => 3, 'flag_bulan_terlewat' => false]);
+
+        Capaian::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'status' => Capaian::STATUS_SEDANG_DITANGANI]);
+
+        Kegiatan::create([
+            'iku_id' => $iku->id, 'periode_id' => $periode->id,
+            'uraian_kegiatan' => 'Kegiatan yang sedang ditangani', 'jenis' => 'bukan_survei_sensus',
+            'status_dokumen' => Kegiatan::STATUS_DIAJUKAN,
+        ]);
+
+        $this->actingAs($ketua);
+
+        $component = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 9)
+            ->set('iku_id', $iku->id);
+
+        $this->assertTrue($component->instance()->formTerkunciSedangDitangani());
+
+        // addBlock()/addKendalaBlock()/addRtlBlock()/addBagianKustomBlock() tidak boleh
+        // menambah apa pun selagi Tim SAKIP sedang menangani — supaya data yang sedang
+        // dipegang Tim SAKIP (VerifikasiCapaian::kegiatanList() dkk., di-cache per
+        // request) tidak berubah di bawahnya.
+        $jumlahBlokSebelum = count($component->get('blocks'));
+        $component->call('addBlock');
+        $this->assertCount($jumlahBlokSebelum, $component->get('blocks'));
+
+        $jumlahKendalaSebelum = count($component->get('kendalaBlocks'));
+        $component->call('addKendalaBlock');
+        $this->assertCount($jumlahKendalaSebelum, $component->get('kendalaBlocks'));
+
+        $jumlahRtlSebelum = count($component->get('rtlBaru'));
+        $component->call('addRtlBlock');
+        $this->assertCount($jumlahRtlSebelum, $component->get('rtlBaru'));
+
+        // Pertahanan berlapis: simpanDraft()/ajukanIsian() juga menolak, bukan cuma
+        // disembunyikan di UI, kalau-kalau dipanggil langsung lewat request lain.
+        $component->call('simpanDraft');
+        $this->assertDatabaseCount('kegiatan', 1);
+
+        $component->call('ajukanIsian');
+        $this->assertSame('sedang_ditangani', Capaian::where('iku_id', $iku->id)->value('status'));
+    }
+
     /**
      * Siapkan satu kegiatan "dikembalikan" dengan satu berkas "ditolak" (+ catatan)
      * — dipakai ketiga test hapusBuktiLama() di bawah.
@@ -951,12 +1044,15 @@ class PengisianKegiatanTest extends TestCase
             ->assertHasNoErrors();
 
         // Baris LAMA diperbarui di tempat (bukan duplikat) — tetap satu baris saja
-        // untuk pasangan ini, statusnya kembali "menunggu" karena diajukan ulang.
+        // untuk pasangan ini. status_verifikasi & catatan penolakan LAMA SENGAJA
+        // tetap "ditolak" (bukan ditarik balik ke "menunggu") — supaya Tim SAKIP masih
+        // ingat apa yang salah sebelumnya saat memeriksa perbaikan ini; baru kosong
+        // begitu mereka sendiri menandai "Sesuai" (lihat catatan di ajukanIsian()).
         $this->assertDatabaseCount('kendala_solusi', 1);
         $ks->refresh();
         $this->assertSame('Kendala sudah diperbaiki', $ks->kendala);
-        $this->assertSame('menunggu', $ks->status_verifikasi);
-        $this->assertNull($ks->catatan);
+        $this->assertSame('ditolak', $ks->status_verifikasi);
+        $this->assertSame('Solusi belum konkret', $ks->catatan);
     }
 
     public function test_kendala_diterima_terkunci_dari_form_edit_tapi_tampil_di_riwayat(): void
@@ -1151,6 +1247,69 @@ class PengisianKegiatanTest extends TestCase
             ->call('hapusBuktiLamaBagianKustom', $data['poin']->id, $berkas->id);
 
         $this->assertDatabaseHas('berkas', ['id' => $berkas->id]);
+    }
+
+    /**
+     * Regresi: Capaian "dikembalikan" KARENA realisasi RTL ditolak (Kegiatan-nya
+     * sendiri sudah "diverifikasi", tidak berubah sama sekali di request ini).
+     * Sebelum diperbaiki, ajukanIsian() hanya memindahkan Capaian::status ke
+     * "diajukan" bila ADA Kegiatan yang ikut berpindah status — jadi mengunggah
+     * ulang bukti evaluasi RTL SENDIRIAN (tanpa menyentuh Kegiatan apa pun) tidak
+     * pernah memindahkan isian keluar dari "dikembalikan" sama sekali.
+     */
+    public function test_ajukan_ulang_setelah_perbaiki_bukti_rtl_memindahkan_status_ke_diajukan(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $ketua = User::create([
+            'nama' => 'Ketua Uji RTL Ditolak', 'username' => 'ketua-uji-rtl-ditolak@example.test', 'email' => 'ketua-uji-rtl-ditolak@example.test',
+            'password' => 'password', 'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create([
+            'kode' => 'UJI-RTL-DITOLAK', 'indikator' => 'Indikator uji RTL ditolak', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji',
+        ]);
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 8, 'triwulan' => 3, 'bulan_ke' => 2, 'flag_bulan_terlewat' => false]);
+        $periodeRtl = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+
+        Capaian::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'status' => Capaian::STATUS_DIKEMBALIKAN]);
+
+        // Kegiatan-nya SENDIRI sudah "diverifikasi" (terkunci, tidak akan ikut berubah
+        // di request ini) — satu-satunya penyebab "dikembalikan" adalah RTL di bawah.
+        Kegiatan::create([
+            'iku_id' => $iku->id, 'periode_id' => $periode->id,
+            'uraian_kegiatan' => 'Kegiatan sudah diverifikasi', 'jenis' => 'bukan_survei_sensus',
+            'status_dokumen' => Kegiatan::STATUS_DIVERIFIKASI,
+        ]);
+
+        $poin = RtlEvaluasi::create([
+            'iku_id' => $iku->id, 'periode_id' => $periodeRtl->id,
+            'rtl_teks' => 'Rencana uji RTL ditolak', 'berlaku_bulan' => 'RTL untuk Juli, Agustus, dan September',
+            'pic' => 'PIC Uji', 'batas_waktu' => '2026-09-30', 'realisasi' => 'Sudah dilaksanakan',
+            'status_verifikasi' => 'ditolak', 'catatan' => 'Bukti belum sesuai',
+        ]);
+
+        $this->actingAs($ketua);
+
+        Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $iku->id)
+            ->set("evaluasi.{$poin->id}.bukti", [UploadedFile::fake()->create('realisasi-baru.pdf', 100, 'application/pdf')])
+            ->call('ajukanIsian')
+            ->assertHasNoErrors();
+
+        $this->assertSame(Capaian::STATUS_DIAJUKAN, Capaian::where('iku_id', $iku->id)->value('status'));
+
+        // status_verifikasi & catatan penolakan LAMA tetap "ditolak" (bukan ditarik
+        // balik ke "menunggu") — supaya Tim SAKIP masih ingat apa yang salah
+        // sebelumnya saat memeriksa bukti baru ini; baru kosong begitu mereka
+        // sendiri menandai "Sesuai".
+        $poin->refresh();
+        $this->assertSame('ditolak', $poin->status_verifikasi);
+        $this->assertSame('Bukti belum sesuai', $poin->catatan);
     }
 
     public function test_hapus_bukti_lama_evaluasi_menghapus_berkas_yang_ditolak(): void

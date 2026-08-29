@@ -45,6 +45,12 @@
         </div>
     @endif
 
+    @if ($formTerkunciSedangDitangani)
+        <div class="info" style="margin-bottom:14px">
+            🔒 <b>Isian ini sedang ditangani Tim SAKIP</b> — tidak bisa ditambah/diubah dari sini sampai Tim SAKIP menyelesaikan pemeriksaan (Verifikasi Selesai atau Kembalikan ke Ketua Tim).
+        </div>
+    @endif
+
     @if ($adaDikembalikan)
         <div class="info red" style="margin-bottom:14px">
             🔴 <b>Isian ini dikembalikan oleh Tim SAKIP untuk periode ini</b> — perbaiki bagian yang ditandai merah di bawah, lalu ajukan ulang.
@@ -315,7 +321,7 @@
             @endif
         @endforeach
 
-        <button type="button" class="btn btn-ghost btn-sm" wire:click="addBlock" wire:loading.attr="disabled" wire:target="addBlock" @disabled($formTerkunciDisetujui)>
+        <button type="button" class="btn btn-ghost btn-sm" wire:click="addBlock" wire:loading.attr="disabled" wire:target="addBlock" @disabled($formTerkunciDisetujui || $formTerkunciSedangDitangani)>
             <span wire:loading.remove wire:target="addBlock">＋ Tambah Kegiatan</span>
             <span wire:loading wire:target="addBlock">Menambahkan…</span>
         </button>
@@ -343,13 +349,19 @@
                         <div style="display:grid;gap:8px">
                             @foreach ($entriTriwulan as $entri)
                                 <div style="padding:12px 14px;border:1.5px solid var(--line);border-radius:11px;background:var(--bg);font-size:12.5px">
-                                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
                                         <span style="font-size:10.5px;color:var(--muted)">🔒 Terkunci — sudah diterima Tim SAKIP</span>
                                     </div>
-                                    <div><b>Kendala:</b> {{ $entri->kendala }}</div>
-                                    @if ($entri->solusi)
-                                        <div style="margin-top:4px"><b>Solusi:</b> {{ $entri->solusi }}</div>
-                                    @endif
+                                    <div class="row2">
+                                        <div>
+                                            <div style="font-size:10.5px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px">Kendala</div>
+                                            <div>{{ $entri->kendala }}</div>
+                                        </div>
+                                        <div>
+                                            <div style="font-size:10.5px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px">Solusi</div>
+                                            <div>{{ $entri->solusi ?: '—' }}</div>
+                                        </div>
+                                    </div>
                                 </div>
                             @endforeach
                         </div>
@@ -392,7 +404,7 @@
             </div>
         @endforeach
 
-        <button type="button" class="btn btn-ghost btn-sm" wire:click="addKendalaBlock" wire:loading.attr="disabled" wire:target="addKendalaBlock">
+        <button type="button" class="btn btn-ghost btn-sm" wire:click="addKendalaBlock" wire:loading.attr="disabled" wire:target="addKendalaBlock" @disabled($formTerkunciSedangDitangani)>
             <span wire:loading.remove wire:target="addKendalaBlock">＋ Tambah Pasangan Kendala &amp; Solusi</span>
             <span wire:loading wire:target="addKendalaBlock">Menambahkan…</span>
         </button>
@@ -540,21 +552,16 @@
                     </div>
                 @endforeach
 
-                <button type="button" class="btn btn-ghost btn-sm" wire:click="addRtlBlock" wire:loading.attr="disabled" wire:target="addRtlBlock">
+                <button type="button" class="btn btn-ghost btn-sm" wire:click="addRtlBlock" wire:loading.attr="disabled" wire:target="addRtlBlock" @disabled($formTerkunciSedangDitangani)>
                     <span wire:loading.remove wire:target="addRtlBlock">＋ Tambah Poin RTL</span>
                     <span wire:loading wire:target="addRtlBlock">Menambahkan…</span>
                 </button>
 
                 <div class="row2" style="margin-top:14px">
                     <div class="field"><label>PIC Tindak Lanjut <span class="req">*</span></label>
-                        <input type="text" class="inp filled" list="daftar-pic-rtl" wire:model.live.blur="rtlBaruPic" placeholder="Ketik atau pilih nama tim">
-                        <datalist id="daftar-pic-rtl">
-                            @foreach ($picOptions as $nama)
-                                <option value="{{ $nama }}"></option>
-                            @endforeach
-                        </datalist>
+                        <input type="text" class="inp filled" wire:model="rtlBaruPic" readonly style="cursor:not-allowed;opacity:0.8">
                         <div class="fhint">
-                            PIC selalu nama tim (bukan perorangan). Berlaku untuk seluruh poin RTL {{ $labelBerikutnya }} di atas.
+                            Diisi otomatis dari nama tim penanggung jawab IKU ini — selalu nama tim, bukan perorangan, jadi tidak bisa diketik manual. Berlaku untuk seluruh poin RTL {{ $labelBerikutnya }} di atas.
                         </div>
                         @error('rtlBaruPic')
                             <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
@@ -707,7 +714,7 @@
                     </div>
                 @endforeach
 
-                <button type="button" class="btn btn-ghost btn-sm" wire:click="addBagianKustomBlock({{ $bagian->id }})" wire:loading.attr="disabled" wire:target="addBagianKustomBlock({{ $bagian->id }})">
+                <button type="button" class="btn btn-ghost btn-sm" wire:click="addBagianKustomBlock({{ $bagian->id }})" wire:loading.attr="disabled" wire:target="addBagianKustomBlock({{ $bagian->id }})" @disabled($formTerkunciSedangDitangani)>
                     <span wire:loading.remove wire:target="addBagianKustomBlock({{ $bagian->id }})">＋ Tambah Poin {{ $bagian->nama }}</span>
                     <span wire:loading wire:target="addBagianKustomBlock({{ $bagian->id }})">Menambahkan…</span>
                 </button>
@@ -719,11 +726,11 @@
     </div>
 
     <div class="btn-row">
-        <button type="button" class="btn btn-ghost" wire:click="simpanDraft" wire:loading.attr="disabled" wire:target="simpanDraft" @disabled($formTerkunciDisetujui)>
+        <button type="button" class="btn btn-ghost" wire:click="simpanDraft" wire:loading.attr="disabled" wire:target="simpanDraft" @disabled($formTerkunciDisetujui || $formTerkunciSedangDitangani)>
             <span wire:loading.remove wire:target="simpanDraft">💾 Simpan Draft</span>
             <span wire:loading wire:target="simpanDraft">Menyimpan…</span>
         </button>
-        <button type="button" class="btn btn-primary" wire:click="ajukanIsian" wire:loading.attr="disabled" wire:target="ajukanIsian" @disabled($formTerkunciDisetujui || ! $this->formLengkap())>
+        <button type="button" class="btn btn-primary" wire:click="ajukanIsian" wire:loading.attr="disabled" wire:target="ajukanIsian" @disabled($formTerkunciDisetujui || $formTerkunciSedangDitangani || ! $this->formLengkap())>
             <span wire:loading.remove wire:target="ajukanIsian">Ajukan ke Tim SAKIP →</span>
             <span wire:loading wire:target="ajukanIsian">Mengirim…</span>
         </button>

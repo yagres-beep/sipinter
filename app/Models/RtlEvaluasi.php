@@ -94,4 +94,29 @@ class RtlEvaluasi extends Model
             default => self::STATUS_TIDAK_COCOK,
         };
     }
+
+    /**
+     * Rincian jumlah poin RTL per status_verifikasi (menunggu/terverifikasi/ditolak)
+     * dalam satu Capaian (IKU+bulan) — sama persis polanya dengan
+     * Kegiatan::rincianStatus(), dipakai di tabel dasbor supaya badge status besar
+     * Capaian (mis. "Dikembalikan") tetap bisa ditelusuri sampai ke bukti RTL yang
+     * jadi penyebabnya, bukan hanya bukti Kegiatan — sebelumnya rincian di dasbor
+     * hanya menghitung Kegiatan::status_dokumen, jadi Capaian bisa tampil
+     * "Dikembalikan" padahal semua Kegiatan-nya sendiri sudah "Diverifikasi" (poin
+     * penolakan sebenarnya ada di realisasi RTL, tidak kelihatan sama sekali).
+     *
+     * @param  \Illuminate\Support\Collection<int, self>  $rtlSatuIkuPeriode
+     * @return \Illuminate\Support\Collection<string, int>
+     */
+    public static function rincianStatusVerifikasi($rtlSatuIkuPeriode)
+    {
+        $jumlahPerStatus = $rtlSatuIkuPeriode->countBy('status_verifikasi');
+
+        return collect([
+            'menunggu',
+            'terverifikasi',
+            'ditolak',
+        ])->mapWithKeys(fn ($status) => [$status => $jumlahPerStatus->get($status, 0)])
+            ->filter(fn ($jumlah) => $jumlah > 0);
+    }
 }
