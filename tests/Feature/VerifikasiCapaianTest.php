@@ -408,12 +408,16 @@ class VerifikasiCapaianTest extends TestCase
         $this->actingAs($this->buatSakip());
         $data = $this->siapkanIkuDenganDuaKegiatan();
         $poin = $this->siapkanBagianKustomPoin($data);
+        $poin->update(['catatan_bukti_dihapus' => 'Bukti lama tidak relevan']);
 
         Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
             ->call('tandaiBagianKustomSesuai', $poin->id)
             ->assertHasNoErrors();
 
-        $this->assertSame('terverifikasi', $poin->fresh()->status_verifikasi);
+        $poin->refresh();
+        $this->assertSame('terverifikasi', $poin->status_verifikasi);
+        // Pengingat "bukti dihapus" sudah tidak relevan begitu poin ini "Sesuai".
+        $this->assertNull($poin->catatan_bukti_dihapus);
     }
 
     public function test_tandai_bagian_kustom_tolak_wajib_catatan(): void
@@ -471,12 +475,16 @@ class VerifikasiCapaianTest extends TestCase
         $this->actingAs($this->buatSakip());
         $data = $this->siapkanIkuDenganDuaKegiatan();
         $rtl = $this->siapkanRtlDenganRealisasi($data);
+        $rtl->update(['catatan_bukti_dihapus' => 'Bukti lama tidak relevan']);
 
         Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
             ->call('tandaiRtlSesuai', $rtl->id)
             ->assertHasNoErrors();
 
-        $this->assertSame('terverifikasi', $rtl->fresh()->status_verifikasi);
+        $rtl->refresh();
+        $this->assertSame('terverifikasi', $rtl->status_verifikasi);
+        // Pengingat "bukti dihapus" sudah tidak relevan begitu poin ini "Sesuai".
+        $this->assertNull($rtl->catatan_bukti_dihapus);
     }
 
     public function test_tandai_rtl_tolak_wajib_catatan(): void

@@ -747,9 +747,13 @@ class VerifikasiCapaian extends Component
 
         $this->catatanBagianKustom[$poinId] = null;
 
+        // catatan_bukti_dihapus (pengingat bukti tertolak yang sudah dihapus Ketua Tim,
+        // lihat App\Livewire\PengisianKegiatan::hapusBuktiLamaBagianKustom()) ikut
+        // dikosongkan — begitu poin ini "Sesuai", pengingatnya sudah tidak relevan.
         BagianKustomPoin::whereKey($poinId)->update([
             'status_verifikasi' => 'terverifikasi',
             'catatan' => null,
+            'catatan_bukti_dihapus' => null,
         ]);
     }
 
@@ -798,9 +802,11 @@ class VerifikasiCapaian extends Component
 
         $this->catatanRtl[$rtlId] = null;
 
+        // catatan_bukti_dihapus ikut dikosongkan — sama seperti tandaiBagianKustomSesuai().
         RtlEvaluasi::whereKey($rtlId)->update([
             'status_verifikasi' => 'terverifikasi',
             'catatan' => null,
+            'catatan_bukti_dihapus' => null,
         ]);
     }
 

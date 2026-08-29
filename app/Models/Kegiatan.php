@@ -53,6 +53,7 @@ class Kegiatan extends Model
         'uraian_kegiatan',
         'status_verifikasi_uraian',
         'catatan_uraian',
+        'catatan_bukti_dihapus',
         'jenis',
         'tahapan_survei',
         'nama_folder_auto',
@@ -160,10 +161,14 @@ class Kegiatan extends Model
 
     /**
      * Tim SAKIP menandai isian terverifikasi setelah seluruh berkas sesuai (diajukan → diverifikasi).
+     * catatan_bukti_dihapus (pengingat bukti tertolak yang sudah dihapus Ketua Tim, lihat
+     * migrasi 2026_08_29_000001) ikut dikosongkan di sini — begitu Kegiatan ini
+     * "diverifikasi", pengingatnya sudah tidak relevan lagi.
      */
     public function verifikasi(): void
     {
         $this->transitionTo(self::STATUS_DIVERIFIKASI);
+        $this->update(['catatan_bukti_dihapus' => null]);
     }
 
     /**

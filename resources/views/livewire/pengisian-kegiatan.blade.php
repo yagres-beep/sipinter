@@ -251,6 +251,12 @@
                 <div class="field" style="margin-bottom:0">
                     <label>Bukti Capaian (PDF) @if (empty($block['existing_bukti']))<span class="req">wajib</span>@endif</label>
 
+                    @if ($block['catatan_bukti_dihapus'] ?? null)
+                        <div class="info red" style="margin-bottom:8px;font-size:11.5px">
+                            🗑️ <b>Bukti sebelumnya dihapus karena:</b> "{{ $block['catatan_bukti_dihapus'] }}" — pastikan bukti pengganti sudah memperbaiki hal ini.
+                        </div>
+                    @endif
+
                     @if (! empty($block['existing_bukti']))
                         <div class="filechip-grid">
                             @foreach ($block['existing_bukti'] as $file)
@@ -286,7 +292,11 @@
                         @else
                             <div class="filechip-grid">
                                 @foreach ($block['bukti'] as $fi => $file)
-                                    <div class="filechip ok">
+                                    {{-- TANPA kelas "ok" (hijau) — berkas ini baru dipilih, belum
+                                         pernah diperiksa Tim SAKIP sama sekali, jadi belum punya
+                                         status apa-apa (bukan "Sesuai"). Hijau baru muncul begitu
+                                         benar-benar ditandai "Sesuai" (lihat existing_bukti di atas). --}}
+                                    <div class="filechip">
                                         <span class="nm">📄 {{ $file->getClientOriginalName() }}</span>
                                         <span class="x" style="cursor:pointer" title="Hapus bukti" wire:click="removeBuktiKegiatan({{ $i }}, {{ $fi }})" wire:loading.class="btn-busy" wire:target="removeBuktiKegiatan({{ $i }}, {{ $fi }})">🗑️</span>
                                     </div>
@@ -456,6 +466,12 @@
                                 <span style="color:var(--muted);font-weight:500">opsional bulan ini</span>
                             @endif
                         </label>
+
+                        @if ($poin->catatan_bukti_dihapus)
+                            <div class="info red" style="margin-bottom:8px;font-size:11.5px">
+                                🗑️ <b>Bukti sebelumnya dihapus karena:</b> "{{ $poin->catatan_bukti_dihapus }}" — pastikan bukti pengganti sudah memperbaiki hal ini.
+                            </div>
+                        @endif
 
                         <div class="filechip-grid">
                             @foreach ($poin->berkas as $file)
@@ -658,6 +674,12 @@
                                 @endif
                             </label>
 
+                            @if ($blok['catatan_bukti_dihapus'] ?? null)
+                                <div class="info red" style="margin-bottom:8px;font-size:11.5px">
+                                    🗑️ <b>Bukti sebelumnya dihapus karena:</b> "{{ $blok['catatan_bukti_dihapus'] }}" — pastikan bukti pengganti sudah memperbaiki hal ini.
+                                </div>
+                            @endif
+
                             @if (! empty($blok['existing_bukti']))
                                 <div class="filechip-grid">
                                     @foreach ($blok['existing_bukti'] as $file)
@@ -686,7 +708,9 @@
                             @else
                                 <div class="filechip-grid">
                                     @foreach ($blok['bukti'] as $fi => $file)
-                                        <div class="filechip ok">
+                                        {{-- TANPA kelas "ok" (hijau) — sama seperti bukti Kegiatan di
+                                             atas, belum pernah diperiksa Tim SAKIP sama sekali. --}}
+                                        <div class="filechip">
                                             <span class="nm">📄 {{ $file->getClientOriginalName() }}</span>
                                             <span class="x" style="cursor:pointer" title="Hapus bukti" wire:click="removeBuktiBagianKustom({{ $bagian->id }}, {{ $i }}, {{ $fi }})" wire:loading.class="btn-busy" wire:target="removeBuktiBagianKustom({{ $bagian->id }}, {{ $i }}, {{ $fi }})">🗑️</span>
                                         </div>

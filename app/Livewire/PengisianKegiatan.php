@@ -177,6 +177,7 @@ class PengisianKegiatan extends Component
             'tahapan_survei' => '',
             'bukti' => [],
             'existing_bukti' => [],
+            'catatan_bukti_dihapus' => null,
         ];
     }
 
@@ -226,6 +227,7 @@ class PengisianKegiatan extends Component
             'teks' => '',
             'bukti' => [],
             'existing_bukti' => [],
+            'catatan_bukti_dihapus' => null,
         ];
     }
 
@@ -355,6 +357,16 @@ class PengisianKegiatan extends Component
             return;
         }
 
+        // Catatan penolakan disalin ke Kegiatan-nya SENDIRI sebelum berkasnya benar-benar
+        // hilang — begitu berkas ini dihapus, baris & catatannya lenyap dari tabel
+        // `berkas`, jadi Tim SAKIP tidak akan tahu lagi APA yang tadinya salah saat
+        // memeriksa bukti pengganti. Pengingat ini dikosongkan lagi begitu Kegiatan
+        // ditandai "diverifikasi" (lihat Kegiatan::verifikasi()).
+        if ($berkas->catatan) {
+            Kegiatan::whereKey($block['id'])->update(['catatan_bukti_dihapus' => $berkas->catatan]);
+            $this->blocks[$blockIndex]['catatan_bukti_dihapus'] = $berkas->catatan;
+        }
+
         if ($berkas->path) {
             Storage::disk('local')->delete($berkas->path);
         }
@@ -402,6 +414,13 @@ class PengisianKegiatan extends Component
             return;
         }
 
+        // Sama seperti hapusBuktiLama() untuk Kegiatan — salin catatan penolakan ke
+        // poin ini sendiri sebelum berkasnya hilang. Dikosongkan lagi begitu poin
+        // ditandai "Sesuai" (lihat VerifikasiCapaian::tandaiBagianKustomSesuai()).
+        if ($berkas->catatan) {
+            $poin->update(['catatan_bukti_dihapus' => $berkas->catatan]);
+        }
+
         if ($berkas->path) {
             Storage::disk('local')->delete($berkas->path);
         }
@@ -422,6 +441,10 @@ class PengisianKegiatan extends Component
                 ->reject(fn ($file) => $file['id'] === $berkasId)
                 ->values()
                 ->all();
+
+            if ($berkas->catatan) {
+                $this->bagianKustomBlocks[$poin->bagian_kustom_id][$i]['catatan_bukti_dihapus'] = $berkas->catatan;
+            }
         }
     }
 
@@ -449,6 +472,13 @@ class PengisianKegiatan extends Component
 
         if (! $berkas) {
             return;
+        }
+
+        // Sama seperti hapusBuktiLama() untuk Kegiatan — salin catatan penolakan ke
+        // poin RTL ini sendiri sebelum berkasnya hilang. Dikosongkan lagi begitu poin
+        // ditandai "Sesuai" (lihat VerifikasiCapaian::tandaiRtlSesuai()).
+        if ($berkas->catatan) {
+            $poin->update(['catatan_bukti_dihapus' => $berkas->catatan]);
         }
 
         if ($berkas->path) {
@@ -1019,6 +1049,7 @@ class PengisianKegiatan extends Component
                 'status_verifikasi' => $b->status_verifikasi,
                 'catatan' => $b->catatan,
             ]))->all(),
+            'catatan_bukti_dihapus' => $kegiatan->catatan_bukti_dihapus,
         ])->values()->all();
     }
 
@@ -1128,6 +1159,7 @@ class PengisianKegiatan extends Component
                     'status_verifikasi' => $b->status_verifikasi,
                     'catatan' => $b->catatan,
                 ]))->all(),
+                'catatan_bukti_dihapus' => $poin->catatan_bukti_dihapus,
             ])->values()->all();
         }
     }

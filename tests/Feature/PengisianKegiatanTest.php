@@ -937,6 +937,28 @@ class PengisianKegiatanTest extends TestCase
         $this->assertDatabaseMissing('berkas', ['id' => $data['berkas']->id]);
         \Illuminate\Support\Facades\Storage::disk('local')->assertMissing($data['berkas']->path);
         $this->assertEmpty($component->get("blocks.{$blockIndex}.existing_bukti"));
+
+        // Catatan penolakan ("Tanggal tidak jelas", lihat fixture) tersalin ke Kegiatan
+        // itu sendiri sebelum berkasnya lenyap — supaya Tim SAKIP masih ingat apa yang
+        // salah sebelumnya saat memeriksa bukti pengganti.
+        $data['kegiatan']->refresh();
+        $this->assertSame('Tanggal tidak jelas', $data['kegiatan']->catatan_bukti_dihapus);
+        $this->assertSame('Tanggal tidak jelas', $component->get("blocks.{$blockIndex}.catatan_bukti_dihapus"));
+    }
+
+    /**
+     * Pasangan dari test di atas — begitu Tim SAKIP menandai Kegiatan ini
+     * "diverifikasi" (lewat Kegiatan::verifikasi()), pengingat catatan_bukti_dihapus
+     * sudah tidak relevan lagi dan harus ikut kosong.
+     */
+    public function test_verifikasi_kegiatan_mengosongkan_catatan_bukti_dihapus(): void
+    {
+        $data = $this->siapkanKegiatanDikembalikanDenganBerkasDitolak();
+        $data['kegiatan']->update(['status_dokumen' => Kegiatan::STATUS_DIAJUKAN, 'catatan_bukti_dihapus' => 'Tanggal tidak jelas']);
+
+        $data['kegiatan']->verifikasi();
+
+        $this->assertNull($data['kegiatan']->fresh()->catatan_bukti_dihapus);
     }
 
     public function test_hapus_bukti_lama_menolak_berkas_yang_belum_ditolak(): void
@@ -1227,6 +1249,11 @@ class PengisianKegiatanTest extends TestCase
         $this->assertDatabaseMissing('berkas', ['id' => $berkas->id]);
         \Illuminate\Support\Facades\Storage::disk('local')->assertMissing($berkas->path);
         $this->assertEmpty($component->get("bagianKustomBlocks.{$data['bagian']->id}.0.existing_bukti"));
+
+        // Catatan penolakan tersalin ke poin itu sendiri sebelum berkasnya lenyap —
+        // sama seperti hapusBuktiLama() untuk Kegiatan.
+        $this->assertSame('Belum relevan', $data['poin']->fresh()->catatan_bukti_dihapus);
+        $this->assertSame('Belum relevan', $component->get("bagianKustomBlocks.{$data['bagian']->id}.0.catatan_bukti_dihapus"));
     }
 
     public function test_hapus_bukti_lama_bagian_kustom_menolak_berkas_yang_belum_ditolak(): void
@@ -1352,5 +1379,9 @@ class PengisianKegiatanTest extends TestCase
 
         $this->assertDatabaseMissing('berkas', ['id' => $berkas->id]);
         \Illuminate\Support\Facades\Storage::disk('local')->assertMissing($berkas->path);
+
+        // Catatan penolakan tersalin ke poin RTL itu sendiri sebelum berkasnya lenyap —
+        // sama seperti hapusBuktiLama() untuk Kegiatan (lihat test di atas).
+        $this->assertSame('Belum sesuai rencana', $poin->fresh()->catatan_bukti_dihapus);
     }
 }

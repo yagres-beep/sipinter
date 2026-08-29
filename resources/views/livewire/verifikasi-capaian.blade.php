@@ -301,6 +301,12 @@
                     </div>
                 @endif
 
+                @if ($kegiatan->catatan_bukti_dihapus)
+                    <div class="info red" style="margin-top:8px;font-size:11.5px">
+                        🗑️ <b>Ketua Tim menghapus bukti sebelumnya</b> — alasan penolakan sebelumnya: "{{ $kegiatan->catatan_bukti_dihapus }}". Periksa apakah bukti pengganti di bawah sudah memperbaikinya.
+                    </div>
+                @endif
+
                 @forelse ($berkasKegiatan as $file)
                     <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}" style="margin-top:8px" wire:key="berkas-{{ $file->id }}">
                         <span class="nm">
@@ -516,6 +522,12 @@
                             </div>
                         @endif
 
+                        @if ($poin->catatan_bukti_dihapus)
+                            <div class="info red" style="margin-bottom:8px;font-size:11.5px">
+                                🗑️ <b>Ketua Tim menghapus bukti sebelumnya</b> — alasan penolakan sebelumnya: "{{ $poin->catatan_bukti_dihapus }}". Periksa apakah bukti pengganti di bawah sudah memperbaikinya.
+                            </div>
+                        @endif
+
                         @forelse ($berkasPoin as $file)
                             <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}" wire:key="berkas-{{ $file->id }}">
                                 <span class="nm">📄 {{ $file->nama_file }} <span class="sub">Bukti dukung</span></span>
@@ -712,6 +724,12 @@
                             <div class="field" style="margin-top:8px;margin-bottom:0">
                                 <label style="font-size:11.5px">Catatan</label>
                                 <p style="font-size:12.5px;color:var(--muted);margin:0">{{ $poin->catatan }}</p>
+                            </div>
+                        @endif
+
+                        @if ($poin->catatan_bukti_dihapus)
+                            <div class="info red" style="margin-top:8px;font-size:11.5px">
+                                🗑️ <b>Ketua Tim menghapus bukti sebelumnya</b> — alasan penolakan sebelumnya: "{{ $poin->catatan_bukti_dihapus }}". Periksa apakah bukti pengganti di bawah sudah memperbaikinya.
                             </div>
                         @endif
 

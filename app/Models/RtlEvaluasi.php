@@ -41,6 +41,7 @@ class RtlEvaluasi extends Model
         'status_cocok',
         'status_verifikasi',
         'catatan',
+        'catatan_bukti_dihapus',
     ];
 
     protected function casts(): array

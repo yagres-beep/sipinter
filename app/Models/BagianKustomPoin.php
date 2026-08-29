@@ -25,6 +25,7 @@ class BagianKustomPoin extends Model
         'teks',
         'status_verifikasi',
         'catatan',
+        'catatan_bukti_dihapus',
     ];
 
     public function bagianKustom(): BelongsTo
