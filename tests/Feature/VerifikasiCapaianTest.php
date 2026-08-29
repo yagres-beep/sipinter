@@ -963,15 +963,16 @@ class VerifikasiCapaianTest extends TestCase
         $this->actingAs($this->buatSakip());
         $data = $this->siapkanIkuDenganDuaKegiatan();
 
-        $component = Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
-            ->call('tambahRo', $data['kegiatan1']->id);
+        $component = Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']]);
 
-        $kunciRo = array_key_first($component->get('rincianOutput')[$data['kegiatan1']->id]);
+        // mount() sudah menyiapkan satu baris kosong default (lihat komentar di
+        // VerifikasiCapaian::mount()) -- tidak perlu tambahRo() manual di sini.
+        $kunciRo = array_key_first($component->get('rincianOutput'));
 
         $component
-            ->set("rincianOutput.{$data['kegiatan1']->id}.{$kunciRo}.uraian", 'Publikasi/Laporan Statistik')
-            ->set("rincianOutput.{$data['kegiatan1']->id}.{$kunciRo}.volume_ro", '2 publikasi')
-            ->set("rincianOutput.{$data['kegiatan1']->id}.{$kunciRo}.progres_persen", 80)
+            ->set("rincianOutput.{$kunciRo}.uraian", 'Publikasi/Laporan Statistik')
+            ->set("rincianOutput.{$kunciRo}.volume_ro", '2 publikasi')
+            ->set("rincianOutput.{$kunciRo}.progres_persen", 80)
             ->set('catatan', 'Penjelasan tambahan dari Tim SAKIP')
             ->call('tandaiSesuai', $data['berkas1']->id)
             ->call('tandaiSesuai', $data['berkas2']->id)
@@ -990,35 +991,37 @@ class VerifikasiCapaianTest extends TestCase
         $this->assertSame('Penjelasan tambahan dari Tim SAKIP', $data['capaian']->fresh()->catatan);
     }
 
-    public function test_tambah_dan_hapus_ro_bekerja_untuk_lebih_dari_satu_ro_per_kegiatan(): void
+    public function test_tambah_dan_hapus_ro_bekerja_untuk_lebih_dari_satu_ro(): void
     {
         $this->actingAs($this->buatSakip());
         $data = $this->siapkanIkuDenganDuaKegiatan();
         $kegiatanId = $data['kegiatan1']->id;
 
         $component = Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
-            ->call('tambahRo', $kegiatanId)
-            ->call('tambahRo', $kegiatanId);
+            ->call('tambahRo')
+            ->call('tambahRo');
 
-        // 3, bukan 2: mount() sudah menyiapkan satu baris kosong default di Kegiatan
-        // pertama (lihat komentar di VerifikasiCapaian::mount()), ditambah 2 baris dari
-        // tambahRo() di atas.
-        $this->assertCount(3, $component->get('rincianOutput')[$kegiatanId]);
+        // 3, bukan 2: mount() sudah menyiapkan satu baris kosong default (lihat
+        // komentar di VerifikasiCapaian::mount()), ditambah 2 baris dari tambahRo()
+        // di atas. RO tidak dikelompokkan per Kegiatan lagi -- daftar datar lintas
+        // IKU (lihat komentar di properti $rincianOutput), tapi kegiatan_id-nya tetap
+        // otomatis terisi Kegiatan pertama yang bisa dikoreksi (kegiatan1 di sini).
+        $this->assertCount(3, $component->get('rincianOutput'));
 
-        $kunci = array_keys($component->get('rincianOutput')[$kegiatanId]);
+        $kunci = array_keys($component->get('rincianOutput'));
 
         $component
-            ->set("rincianOutput.{$kegiatanId}.{$kunci[0]}.uraian", 'RO Pertama')
-            ->set("rincianOutput.{$kegiatanId}.{$kunci[0]}.volume_ro", '1 publikasi')
-            ->set("rincianOutput.{$kegiatanId}.{$kunci[1]}.uraian", 'RO Kedua')
-            ->set("rincianOutput.{$kegiatanId}.{$kunci[1]}.volume_ro", '2 publikasi')
+            ->set("rincianOutput.{$kunci[0]}.uraian", 'RO Pertama')
+            ->set("rincianOutput.{$kunci[0]}.volume_ro", '1 publikasi')
+            ->set("rincianOutput.{$kunci[1]}.uraian", 'RO Kedua')
+            ->set("rincianOutput.{$kunci[1]}.volume_ro", '2 publikasi')
             ->call('simpanPerubahan')
             ->assertHasNoErrors();
 
         $this->assertCount(2, RincianOutput::where('kegiatan_id', $kegiatanId)->get());
 
         // Hapus salah satu baris yang SUDAH tersimpan -- harus langsung hilang dari DB.
-        $component->call('hapusRo', $kegiatanId, $kunci[0]);
+        $component->call('hapusRo', $kunci[0]);
 
         $this->assertCount(1, RincianOutput::where('kegiatan_id', $kegiatanId)->get());
         $this->assertSame('RO Kedua', RincianOutput::where('kegiatan_id', $kegiatanId)->first()->uraian);

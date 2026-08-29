@@ -329,54 +329,49 @@
     @if ($kegiatanList->isNotEmpty())
         <div class="card">
             <div class="sec"><span>Rincian Output (RO)</span></div>
-            <div class="info">ℹ️ Opsional — isi hanya bila IKU ini belum punya realisasi triwulan berjalan, agar tabel Realisasi Volume RO &amp; Progres Pelaksanaan Kegiatan di notula terisi benar. Satu kegiatan boleh punya lebih dari satu RO — tidak wajib diisi untuk tiap kegiatan/IKU.</div>
+            <div class="info">ℹ️ Opsional — isi hanya bila IKU ini belum punya realisasi triwulan berjalan, agar tabel Realisasi Volume RO &amp; Progres Pelaksanaan Kegiatan di notula terisi benar. RO dihitung mandiri per IKU (tidak saling terhubung, tidak mengikuti jumlah Kegiatan) — boleh diisi berapa pun, boleh juga tidak sama sekali.</div>
 
             @php $nomorRo = 0; @endphp
-            @foreach ($kegiatanList as $kegiatan)
-                @php $bisaDikoreksi = $this->kegiatanBisaDikoreksi($kegiatan); @endphp
-                <div class="keg" wire:key="ro-keg-{{ $kegiatan->id }}" @if (!$bisaDikoreksi) style="opacity:.8" @endif>
-                    @foreach (($rincianOutput[$kegiatan->id] ?? []) as $kunciRo => $baris)
-                        @php $nomorRo++; @endphp
-                        <div class="keg" style="margin-top:8px" wire:key="ro-{{ $kegiatan->id }}-{{ $kunciRo }}">
-                            <div class="keg-head">
-                                <span class="t">RO {{ $nomorRo }}</span>
-                                @if ($bisaDikoreksi)
-                                    <button type="button" class="btn btn-ghost btn-sm" wire:click="hapusRo({{ $kegiatan->id }}, '{{ $kunciRo }}')" wire:loading.attr="disabled" wire:target="hapusRo({{ $kegiatan->id }}, '{{ $kunciRo }}')">✕ Hapus</button>
-                                @endif
-                            </div>
+            @foreach ($rincianOutput as $kunciRo => $baris)
+                @php $bisaDikoreksi = $this->rincianOutputBisaDikoreksi($baris); $nomorRo++; @endphp
+                <div class="keg" style="margin-top:8px" wire:key="ro-{{ $kunciRo }}" @if (!$bisaDikoreksi) style="opacity:.8" @endif>
+                    <div class="keg-head">
+                        <span class="t">RO {{ $nomorRo }}</span>
+                        @if ($bisaDikoreksi)
+                            <button type="button" class="btn btn-ghost btn-sm" wire:click="hapusRo('{{ $kunciRo }}')" wire:loading.attr="disabled" wire:target="hapusRo('{{ $kunciRo }}')">✕ Hapus</button>
+                        @endif
+                    </div>
 
-                            <div class="field">
-                                <label>Rincian Output (RO)</label>
-                                <input type="text" class="inp filled" wire:model="rincianOutput.{{ $kegiatan->id }}.{{ $kunciRo }}.uraian" @readonly(!$bisaDikoreksi) placeholder="mis. Publikasi/Laporan Statistik Sumber Daya Mineral dan Konstruksi">
-                                @error("rincianOutput.{$kegiatan->id}.{$kunciRo}.uraian")
-                                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-                                @enderror
-                            </div>
+                    <div class="field">
+                        <label>Rincian Output (RO)</label>
+                        <input type="text" class="inp filled" wire:model="rincianOutput.{{ $kunciRo }}.uraian" @readonly(!$bisaDikoreksi) placeholder="mis. Publikasi/Laporan Statistik Sumber Daya Mineral dan Konstruksi">
+                        @error("rincianOutput.{$kunciRo}.uraian")
+                            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                        @enderror
+                    </div>
 
-                            <div class="row2" style="margin-top:6px">
-                                <div class="field">
-                                    <label>Realisasi Volume RO</label>
-                                    <input type="text" class="inp filled" wire:model="rincianOutput.{{ $kegiatan->id }}.{{ $kunciRo }}.volume_ro" @readonly(!$bisaDikoreksi) placeholder="mis. 1 publikasi">
-                                    @error("rincianOutput.{$kegiatan->id}.{$kunciRo}.volume_ro")
-                                        <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-                                    @enderror
-                                </div>
-                                <div class="field">
-                                    <label>Progres Pelaksanaan Kegiatan (%)</label>
-                                    <input type="number" step="0.01" min="0" max="100" class="inp filled" wire:model="rincianOutput.{{ $kegiatan->id }}.{{ $kunciRo }}.progres_persen" @readonly(!$bisaDikoreksi) placeholder="mis. 100">
-                                    @error("rincianOutput.{$kegiatan->id}.{$kunciRo}.progres_persen")
-                                        <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-                                    @enderror
-                                </div>
-                            </div>
+                    <div class="row2" style="margin-top:6px">
+                        <div class="field">
+                            <label>Realisasi Volume RO</label>
+                            <input type="text" class="inp filled" wire:model="rincianOutput.{{ $kunciRo }}.volume_ro" @readonly(!$bisaDikoreksi) placeholder="mis. 1 publikasi">
+                            @error("rincianOutput.{$kunciRo}.volume_ro")
+                                <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                            @enderror
                         </div>
-                    @endforeach
-
-                    @if ($bisaDikoreksi)
-                        <button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px" wire:click="tambahRo({{ $kegiatan->id }})" wire:loading.attr="disabled" wire:target="tambahRo({{ $kegiatan->id }})">+ Tambah RO</button>
-                    @endif
+                        <div class="field">
+                            <label>Progres Pelaksanaan Kegiatan (%)</label>
+                            <input type="number" step="0.01" min="0" max="100" class="inp filled" wire:model="rincianOutput.{{ $kunciRo }}.progres_persen" @readonly(!$bisaDikoreksi) placeholder="mis. 100">
+                            @error("rincianOutput.{$kunciRo}.progres_persen")
+                                <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                            @enderror
+                        </div>
+                    </div>
                 </div>
             @endforeach
+
+            @if ($this->kegiatanList()->contains(fn ($kegiatan) => $this->kegiatanBisaDikoreksi($kegiatan)))
+                <button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px" wire:click="tambahRo" wire:loading.attr="disabled" wire:target="tambahRo">+ Tambah RO</button>
+            @endif
         </div>
     @endif
 
