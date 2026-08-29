@@ -104,14 +104,24 @@ class NotulaService
         $periode = $notula->periode;
         $tw = $periode->triwulan;
 
-        // Seluruh Sasaran/IKU resmi ditampilkan sebagai kerangka baku (RF-42, sesuai
-        // Template Notula Monitoring Kinerja Triwulanan BPS), bukan cuma IKU yang
-        // kebetulan sudah punya kegiatan triwulan ini — supaya dokumen selalu tampil
-        // lengkap sebagai "template siap isi" dan Tim SAKIP tinggal melengkapi sel
-        // yang masih kosong, bukan menambah baris/tabel baru secara manual.
+        // Capaian per IKU pada periode ini dimuat DULUAN (bukan di bawah seperti
+        // sebelumnya) supaya bisa dipakai memfilter $sasaranPerIku: HANYA IKU yang
+        // Capaian::status-nya sudah "diverifikasi"/"disetujui" (SEMUA bukti & kendala-
+        // solusinya sudah "Sesuai", lihat Capaian::STATUS_DIVERIFIKASI) yang tampil di
+        // notula — IKU yang belum sampai situ (draft/diajukan/sedang ditangani/
+        // dikembalikan, atau belum ada Capaian sama sekali triwulan ini) TIDAK
+        // ditampilkan sama sekali, supaya notula (dokumen resmi yang diunduh/dibagikan)
+        // tidak pernah memuat data yang belum final diperiksa Tim SAKIP.
+        $capaianPerIku = Capaian::where('periode_id', $periode->id)->get()->keyBy('iku_id');
+
         $sasaranPerIku = MasterIku::whereNotNull('sasaran')->where('sasaran', '!=', '')
             ->orderBy('kode')
             ->get()
+            ->filter(fn (MasterIku $iku) => in_array(
+                $capaianPerIku->get($iku->id)?->status,
+                [Capaian::STATUS_DIVERIFIKASI, Capaian::STATUS_DISETUJUI],
+                true
+            ))
             ->groupBy('sasaran');
 
         $kegiatanPerIku = Kegiatan::with(['masterIku', 'rincianOutput'])
@@ -132,8 +142,6 @@ class NotulaService
                 return $kegiatan->rincianOutput->each(fn ($ro) => $ro->setRelation('kegiatan', $kegiatan));
             });
         });
-
-        $capaianPerIku = Capaian::where('periode_id', $periode->id)->get()->keyBy('iku_id');
 
         // Target PK/Target TW/Realisasi/Capaian % — sumber tunggalnya CapaianTahunan
         // (diisi Tim SAKIP sekali per tahun, lihat App\Livewire\VerifikasiCapaian),

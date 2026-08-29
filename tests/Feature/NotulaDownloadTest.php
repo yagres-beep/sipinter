@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Capaian;
 use App\Models\CapaianTahunan;
 use App\Models\FolderConfig;
 use App\Models\Kegiatan;
@@ -50,6 +51,17 @@ class NotulaDownloadTest extends TestCase
         $this->actingAs($user);
 
         return $user;
+    }
+
+    /**
+     * Sejak NotulaService::kumpulkanDataBagianSatu() memfilter Bagian I hanya untuk IKU
+     * yang Capaian::status-nya sudah "diverifikasi"/"disetujui", fixture di bawah perlu
+     * baris Capaian ini secara eksplisit -- sebelumnya cukup Kegiatan::STATUS_DIVERIFIKASI
+     * saja karena seluruh Sasaran/IKU resmi selalu tampil sebagai kerangka baku.
+     */
+    protected function verifikasiCapaian(MasterIku $iku, Periode $periode): void
+    {
+        Capaian::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'status' => Capaian::STATUS_DIVERIFIKASI]);
     }
 
     public function test_pratinjau_bagian2_404_bila_belum_diunggah(): void
@@ -137,7 +149,7 @@ class NotulaDownloadTest extends TestCase
     {
         $this->loginSebagai('Tim SAKIP');
 
-        MasterIku::create([
+        $iku = MasterIku::create([
             'kode' => '1001',
             'indikator' => 'Persentase Publikasi Statistik Uji',
             'tim' => 'Tim Uji',
@@ -146,6 +158,7 @@ class NotulaDownloadTest extends TestCase
         ]);
 
         $periode = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $this->verifikasiCapaian($iku, $periode);
         $notula = Notula::create(['periode_id' => $periode->id]);
 
         $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
@@ -177,6 +190,7 @@ class NotulaDownloadTest extends TestCase
         ]);
 
         $periode = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $this->verifikasiCapaian($iku, $periode);
 
         $kegiatan = Kegiatan::create([
             'iku_id' => $iku->id,
@@ -217,6 +231,7 @@ class NotulaDownloadTest extends TestCase
         ]);
 
         $periode = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $this->verifikasiCapaian($iku, $periode);
 
         Kegiatan::create([
             'iku_id' => $iku->id,
@@ -246,6 +261,7 @@ class NotulaDownloadTest extends TestCase
         ]);
 
         $periode = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $this->verifikasiCapaian($iku, $periode);
 
         $kegiatan = Kegiatan::create([
             'iku_id' => $iku->id,
@@ -277,6 +293,7 @@ class NotulaDownloadTest extends TestCase
         ]);
 
         $periode = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $this->verifikasiCapaian($iku, $periode);
 
         Kegiatan::create([
             'iku_id' => $iku->id,
@@ -302,10 +319,12 @@ class NotulaDownloadTest extends TestCase
     {
         $this->loginSebagai('Tim SAKIP');
 
-        MasterIku::create(['kode' => '9008', 'indikator' => 'Nilai SAKIP oleh Inspektorat', 'sasaran' => 'Dukungan Manajemen', 'tim' => 'Uji', 'penanggung_jawab' => 'A']);
-        MasterIku::create(['kode' => '9009', 'indikator' => 'Indeks Implementasi BerAKHLAK', 'sasaran' => 'Dukungan Manajemen', 'tim' => 'Uji', 'penanggung_jawab' => 'A']);
+        $ikuSakip = MasterIku::create(['kode' => '9008', 'indikator' => 'Nilai SAKIP oleh Inspektorat', 'sasaran' => 'Dukungan Manajemen', 'tim' => 'Uji', 'penanggung_jawab' => 'A']);
+        $ikuBerakhlak = MasterIku::create(['kode' => '9009', 'indikator' => 'Indeks Implementasi BerAKHLAK', 'sasaran' => 'Dukungan Manajemen', 'tim' => 'Uji', 'penanggung_jawab' => 'A']);
 
         $periode = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $this->verifikasiCapaian($ikuSakip, $periode);
+        $this->verifikasiCapaian($ikuBerakhlak, $periode);
         $notula = Notula::create(['periode_id' => $periode->id]);
 
         $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
@@ -335,6 +354,7 @@ class NotulaDownloadTest extends TestCase
         ]);
 
         $periode = Periode::create(['tahun' => 2026, 'bulan' => 4, 'triwulan' => 2, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $this->verifikasiCapaian($iku, $periode);
 
         // TW I mentah = 5, TW II mentah = 2 (kumulatifnya 7) -- rumus HARUS pakai 2
         // (mentah TW II saja), bukan 7 (kumulatif TW I+II).
@@ -372,6 +392,7 @@ class NotulaDownloadTest extends TestCase
         ]);
 
         $periode = Periode::create(['tahun' => 2026, 'bulan' => 5, 'triwulan' => 2, 'bulan_ke' => 2, 'flag_bulan_terlewat' => false]);
+        $this->verifikasiCapaian($iku, $periode);
 
         CapaianTahunan::create([
             'iku_id' => $iku->id, 'tahun' => 2026, 'y_target' => 4,
@@ -416,6 +437,7 @@ class NotulaDownloadTest extends TestCase
         ]);
 
         $periode = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $this->verifikasiCapaian($iku, $periode);
 
         RtlEvaluasi::create([
             'iku_id' => $iku->id,
@@ -452,6 +474,7 @@ class NotulaDownloadTest extends TestCase
         // sengaja diisi tanggal yang SALAH (Desember) untuk membuktikan kolom ini
         // tidak lagi dipakai apa adanya.
         $periode = Periode::create(['tahun' => 2026, 'bulan' => 4, 'triwulan' => 2, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $this->verifikasiCapaian($iku, $periode);
 
         RtlEvaluasi::create([
             'iku_id' => $iku->id,
@@ -539,11 +562,12 @@ class NotulaDownloadTest extends TestCase
             'template_notula_nama_asli' => 'custom.docx',
         ]);
 
-        MasterIku::create([
+        $iku = MasterIku::create([
             'kode' => '9999', 'indikator' => 'Indikator Uji Template Unggahan', 'sasaran' => 'Sasaran Uji Template Unggahan',
             'tim' => 'Uji', 'penanggung_jawab' => 'Uji',
         ]);
         $periode = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $this->verifikasiCapaian($iku, $periode);
         $notula = Notula::create(['periode_id' => $periode->id]);
 
         $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));

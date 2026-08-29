@@ -132,7 +132,7 @@ class KompilasiNotulaTest extends TestCase
     public function test_rekap_capaian_dihitung_dari_capaian_tahunan_dan_mengecualikan_iku_tanpa_nilai(): void
     {
         $ikuBernilai = MasterIku::create(['kode' => '9003', 'indikator' => 'Uji IKU Tiga', 'sasaran' => 'Sasaran Uji', 'tim' => 'Uji', 'penanggung_jawab' => 'A']);
-        MasterIku::create(['kode' => '9004', 'indikator' => 'Uji IKU Empat Tanpa Nilai', 'sasaran' => 'Sasaran Uji', 'tim' => 'Uji', 'penanggung_jawab' => 'A']);
+        $ikuTanpaNilai = MasterIku::create(['kode' => '9004', 'indikator' => 'Uji IKU Empat Tanpa Nilai', 'sasaran' => 'Sasaran Uji', 'tim' => 'Uji', 'penanggung_jawab' => 'A']);
 
         CapaianTahunan::create([
             'iku_id' => $ikuBernilai->id,
@@ -143,6 +143,14 @@ class KompilasiNotulaTest extends TestCase
         ]);
 
         $notula = app(NotulaService::class)->untukTriwulan(2026, 1);
+        // Bagian I sejak sekarang hanya menampilkan IKU yang Capaian::status-nya sudah
+        // diverifikasi (lihat NotulaService::kumpulkanDataBagianSatu()) -- kedua IKU
+        // perlu baris Capaian diverifikasi supaya keduanya tetap ikut dihitung, murni
+        // untuk membuktikan yang TANPA NILAI di CapaianTahunan-lah yang dikecualikan
+        // dari rata-rata, bukan karena belum diverifikasi.
+        Capaian::create(['iku_id' => $ikuBernilai->id, 'periode_id' => $notula->periode_id, 'status' => Capaian::STATUS_DIVERIFIKASI]);
+        Capaian::create(['iku_id' => $ikuTanpaNilai->id, 'periode_id' => $notula->periode_id, 'status' => Capaian::STATUS_DIVERIFIKASI]);
+
         $data = app(NotulaService::class)->kumpulkanDataBagianSatu($notula);
 
         $this->assertSame(100.0, $data['rataCapaianTw']);
@@ -220,6 +228,7 @@ class KompilasiNotulaTest extends TestCase
         Capaian::create([
             'iku_id' => $iku->id,
             'periode_id' => $periode->id,
+            'status' => Capaian::STATUS_DIVERIFIKASI,
             'catatan' => 'Penjelasan tambahan hasil rapat',
         ]);
 

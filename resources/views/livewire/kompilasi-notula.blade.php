@@ -191,10 +191,10 @@
     <div class="card">
         <div class="sec"><span>Pratinjau &amp; Sunting Notula — Bagian I, II, III</span></div>
         <p style="color:var(--muted);font-size:12.5px;margin-bottom:16px">
-            Satu dokumen utuh dari atas ke bawah, sama seperti membuka file Word yang sudah lengkap. Unggah
-            berkas Bagian II &amp; III dulu di bawah ini, lalu sunting Bagian I langsung di pratinjau gabungan
-            paling bawah. Isi Bagian II &amp; III bebas mengikuti template Anda sendiri, tapi berkasnya harus
-            berformat <b>.docx (Word)</b> supaya hasil gabungannya rapi menyambung mengikuti tata letak Bagian I.
+            Satu dokumen utuh dari atas ke bawah, sama seperti membuka file Word yang sudah lengkap. Unduh
+            template Bagian II/III di bawah, isi di Word mengikuti strukturnya (jangan diubah tata letaknya),
+            baru unggah kembali — supaya hasil gabungannya rapi menyambung mengikuti tata letak Bagian I dan
+            tidak berantakan. Berkasnya harus berformat <b>.docx (Word)</b>.
         </p>
 
         {{-- BAGIAN II — berkas unggahan, tampil sebagai kelanjutan dokumen yang sama --}}
@@ -202,6 +202,7 @@
             <span class="doc-bagian-badge">Bagian II</span> Peran BPS dalam Prioritas Nasional &amp; Isu Strategis
             <span class="st {{ $bagian2Siap ? 'ok' : 'no' }}" style="margin-left:auto">{{ $bagian2Siap ? '✓ Siap' : '✕ Belum lengkap' }}</span>
         </div>
+        <a href="{{ route('notula.template-bagian2') }}" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-block;margin-bottom:8px">⬇ Unduh Template Bagian II (.docx, isi lalu unggah kembali)</a>
 
         @if ($bagian2Siap)
             <div class="doc-preview-frame">
@@ -237,6 +238,7 @@
             <span class="doc-bagian-badge">Bagian III</span> Realisasi Anggaran &amp; Upaya Efisiensi
             <span class="st {{ $bagian3Siap ? 'ok' : 'no' }}" style="margin-left:auto">{{ $bagian3Siap ? '✓ Siap' : '✕ Belum lengkap' }}</span>
         </div>
+        <a href="{{ route('notula.template-bagian3') }}" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-block;margin-bottom:8px">⬇ Unduh Template Bagian III (.docx, isi lalu unggah kembali)</a>
 
         @if ($bagian3Siap)
             <div class="doc-preview-frame">
