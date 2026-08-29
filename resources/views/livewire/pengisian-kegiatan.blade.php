@@ -535,6 +535,19 @@
                     RTL untuk {{ $labelBerikutnya }} sudah ditetapkan dan tampil hanya-baca sampai triwulan tersebut berjalan.
                 </p>
             @else
+                @if ($rtlBerikutnyaDitolak->isNotEmpty())
+                    <div class="info red" style="margin-bottom:10px">
+                        ❌ <b>Tim SAKIP mengembalikan rencana {{ $labelBerikutnya }} ini untuk diperbaiki:</b>
+                        <ul style="margin:6px 0 0;padding-left:18px">
+                            @foreach ($rtlBerikutnyaDitolak as $poin)
+                                @if ($poin->catatan)
+                                    <li>{{ $poin->catatan }}</li>
+                                @endif
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
+
                 {{-- Sisi klien menghitung sendiri "bulan terakhir triwulan?" (murni dari
                      $bulan, tidak butuh query) lewat bisaDiisiTw — jadi bagian ini langsung
                      berubah begitu bulan dipilih, tidak menunggu balasan server. --}}
@@ -553,7 +566,7 @@
                 @foreach ($rtlBaru as $i => $blok)
                     <div class="poin-single" wire:key="rtlbaru-{{ $i }}">
                         <span class="k-num stat-in">Poin RTL {{ $i + 1 }}</span>
-                        @if (count($rtlBaru) > 1)
+                        @if (count($rtlBaru) > 1 && ! $blok['id'])
                             <button type="button" class="btn btn-red btn-sm" style="position:absolute;top:8px;right:8px" wire:click="removeRtlBlock({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="removeRtlBlock({{ $i }})">🗑</button>
                         @endif
 

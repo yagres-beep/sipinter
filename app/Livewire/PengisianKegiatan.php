@@ -93,6 +93,8 @@ class PengisianKegiatan extends Component
 
     protected ?bool $cacheRtlBerikutnyaSudahAda = null;
 
+    protected ?\Illuminate\Support\Collection $cacheRtlBerikutnyaDitolak = null;
+
     protected ?MasterIku $cacheIkuTerpilih = null;
 
     protected bool $cacheIkuTerpilihDihitung = false;
@@ -163,6 +165,7 @@ class PengisianKegiatan extends Component
             $this->muatBlocksKegiatan();
             $this->muatKendalaBlocks();
             $this->muatBagianKustomBlocks();
+            $this->muatRtlBaruBlocks();
             $this->pilihPicOtomatis();
         }
     }
@@ -216,6 +219,7 @@ class PengisianKegiatan extends Component
     protected function emptyRtlBlock(): array
     {
         return [
+            'id' => null,
             'rtl_teks' => '',
         ];
     }
@@ -547,6 +551,10 @@ class PengisianKegiatan extends Component
 
     public function removeRtlBlock(int $index): void
     {
+        if (($this->rtlBaru[$index]['id'] ?? null) !== null) {
+            return;
+        }
+
         unset($this->rtlBaru[$index]);
         $this->rtlBaru = array_values($this->rtlBaru);
     }
@@ -557,6 +565,7 @@ class PengisianKegiatan extends Component
         $this->muatBlocksKegiatan();
         $this->muatKendalaBlocks();
         $this->muatBagianKustomBlocks();
+        $this->muatRtlBaruBlocks();
         $this->pilihPicOtomatis();
     }
 
@@ -566,8 +575,7 @@ class PengisianKegiatan extends Component
         $this->muatBlocksKegiatan();
         $this->muatKendalaBlocks();
         $this->muatBagianKustomBlocks();
-        $this->rtlBaru = [$this->emptyRtlBlock()];
-        $this->rtlBaruBatasWaktu = $this->akhirTriwulanBerikutnya()->toDateString();
+        $this->muatRtlBaruBlocks();
     }
 
     public function updatedTahun(): void
@@ -576,8 +584,7 @@ class PengisianKegiatan extends Component
         $this->muatBlocksKegiatan();
         $this->muatKendalaBlocks();
         $this->muatBagianKustomBlocks();
-        $this->rtlBaru = [$this->emptyRtlBlock()];
-        $this->rtlBaruBatasWaktu = $this->akhirTriwulanBerikutnya()->toDateString();
+        $this->muatRtlBaruBlocks();
     }
 
     protected function triwulanDari(int $bulan): int
@@ -1382,6 +1389,17 @@ class PengisianKegiatan extends Component
         return Carbon::create(2000, $bulan, 1)->locale('id')->translatedFormat('F');
     }
 
+    /**
+     * "Sudah ada" berarti ada poin RTL berikutnya yang masih AKTIF (menunggu atau
+     * sudah terverifikasi Tim SAKIP) — poin yang DITOLAK (lihat rtlBerikutnyaDitolak())
+     * SENGAJA tidak dihitung di sini, supaya Bagian 5 otomatis terbuka lagi untuk
+     * diperbaiki begitu Tim SAKIP menandai "Tidak Sesuai" (lihat
+     * VerifikasiCapaian::tandaiRtlBerikutnyaTolak()), bukan terkunci selamanya. Sama
+     * seperti catatanPenolakan(), penolakan baru dianggap FINAL (Bagian 5 terbuka)
+     * setelah verifikasiTerlihat() — selagi Tim SAKIP masih memeriksa (belum tentu
+     * jadi "Kembalikan ke Ketua Tim" beneran), tanda "Tidak Sesuai" sementara tidak
+     * langsung membuka form ini.
+     */
     protected function rtlTriwulanBerikutnyaSudahAda(): bool
     {
         if ($this->cacheRtlBerikutnyaSudahAda !== null) {
@@ -1398,11 +1416,62 @@ class PengisianKegiatan extends Component
             function () {
                 $target = $this->targetTriwulanBerikutnya();
 
-                return RtlEvaluasiModel::where('iku_id', $this->iku_id)
-                    ->whereHas('periode', fn ($q) => $q->where('tahun', $target['tahun'])->where('triwulan', $target['triwulan']))
-                    ->exists();
+                $query = RtlEvaluasiModel::where('iku_id', $this->iku_id)
+                    ->whereHas('periode', fn ($q) => $q->where('tahun', $target['tahun'])->where('triwulan', $target['triwulan']));
+
+                if ($this->verifikasiTerlihat()) {
+                    $query->where('status_verifikasi', '!=', 'ditolak');
+                }
+
+                return $query->exists();
             }
         );
+    }
+
+    /**
+     * Poin RTL berikutnya yang DITOLAK FINAL Tim SAKIP (lihat VerifikasiCapaian::
+     * tandaiRtlBerikutnyaTolak(), digerbang verifikasiTerlihat() sama seperti
+     * rtlTriwulanBerikutnyaSudahAda() di atas) — dipakai muatRtlBaruBlocks() untuk
+     * membuka kembali Bagian 5 berisi poin-poin ini (siap diperbaiki & diajukan
+     * ulang) dan blade untuk menampilkan alasan penolakannya.
+     *
+     * @return \Illuminate\Support\Collection<int, RtlEvaluasiModel>
+     */
+    protected function rtlBerikutnyaDitolak()
+    {
+        if ($this->cacheRtlBerikutnyaDitolak !== null) {
+            return $this->cacheRtlBerikutnyaDitolak;
+        }
+
+        if (! $this->iku_id || ! $this->verifikasiTerlihat()) {
+            return $this->cacheRtlBerikutnyaDitolak = collect();
+        }
+
+        $target = $this->targetTriwulanBerikutnya();
+
+        return $this->cacheRtlBerikutnyaDitolak = RtlEvaluasiModel::where('iku_id', $this->iku_id)
+            ->where('status_verifikasi', 'ditolak')
+            ->whereHas('periode', fn ($q) => $q->where('tahun', $target['tahun'])->where('triwulan', $target['triwulan']))
+            ->orderBy('id')
+            ->get();
+    }
+
+    /**
+     * Muat ulang $rtlBaru — kosong (satu blok baru) secara bawaan, ATAU diisi dari
+     * poin-poin yang ditolak Tim SAKIP (lengkap dengan id-nya, supaya penyimpanan
+     * berikutnya meng-UPDATE baris lama, bukan membuat duplikat baru — lihat blok
+     * simpan langkah 4 di ajukanIsian()). Dipanggil di titik yang sama dengan
+     * muatBagianKustomBlocks() (mount/updatedIkuId/updatedBulan/updatedTahun).
+     */
+    protected function muatRtlBaruBlocks(): void
+    {
+        $this->rtlBaruBatasWaktu = $this->akhirTriwulanBerikutnya()->toDateString();
+
+        $ditolak = $this->rtlBerikutnyaDitolak();
+
+        $this->rtlBaru = $ditolak->isEmpty()
+            ? [$this->emptyRtlBlock()]
+            : $ditolak->map(fn ($poin) => ['id' => $poin->id, 'rtl_teks' => $poin->rtl_teks])->values()->all();
     }
 
     protected function labelTriwulanBerikutnya(): string
@@ -2041,7 +2110,25 @@ class PengisianKegiatan extends Component
                 // klien (defense in depth, bukan cuma dikunci di UI).
                 $picTim = $this->ikuTerpilih()?->tim ?? trim($this->rtlBaruPic);
 
+                // Blok dengan id terisi berarti poin lama yang DITOLAK Tim SAKIP (dimuat
+                // lewat muatRtlBaruBlocks(), lihat rtlBerikutnyaDitolak()) — di-UPDATE di
+                // tempat & status_verifikasi direset ke "menunggu" supaya kembali masuk
+                // antrean verifikasi, BUKAN dibuat baris duplikat. Pola sama seperti
+                // BagianKustomPoin di langkah 5 di bawah.
                 foreach ($this->rtlBaru as $blok) {
+                    if (! empty($blok['id'])) {
+                        RtlEvaluasiModel::whereKey($blok['id'])->update([
+                            'rtl_teks' => $blok['rtl_teks'],
+                            'berlaku_bulan' => $berlakuBulan,
+                            'pic' => $picTim,
+                            'batas_waktu' => $this->rtlBaruBatasWaktu,
+                            'status_verifikasi' => 'menunggu',
+                            'catatan' => null,
+                        ]);
+
+                        continue;
+                    }
+
                     RtlEvaluasiModel::create([
                         'iku_id' => $this->iku_id,
                         'periode_id' => $periodeTarget->id,
@@ -2174,6 +2261,7 @@ class PengisianKegiatan extends Component
             'riwayatKendala' => $this->riwayatKendalaSolusi(),
             'rtlSebelumnya' => $this->rtlTriwulanBerjalan(),
             'sudahAdaRtlBerikutnya' => $this->rtlTriwulanBerikutnyaSudahAda(),
+            'rtlBerikutnyaDitolak' => $this->rtlBerikutnyaDitolak(),
             'labelBerikutnya' => $this->labelTriwulanBerikutnya(),
             'bulanTargetBerikutnya' => collect($this->bulanBulanTarget())->mapWithKeys(fn ($b) => [$b => $this->namaBulanIndo($b)]),
             'rtlBerjalanOptions' => $this->rtlBerjalanOptions(),

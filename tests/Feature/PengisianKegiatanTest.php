@@ -430,6 +430,68 @@ class PengisianKegiatanTest extends TestCase
         $this->assertDatabaseCount('kegiatan', 0);
     }
 
+    protected function siapkanRtlBerikutnyaDitolak(): array
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $ketua = User::create([
+            'nama' => 'Ketua Uji RTL Berikutnya', 'username' => 'ketua-uji-rtl-berikutnya@example.test', 'email' => 'ketua-uji-rtl-berikutnya@example.test',
+            'password' => 'password', 'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create(['kode' => 'UJI-RTLB', 'indikator' => 'Indikator uji RTL berikutnya', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji']);
+
+        $periodeIni = Periode::create(['tahun' => 2026, 'bulan' => 9, 'triwulan' => 3, 'bulan_ke' => 3, 'flag_bulan_terlewat' => false]);
+        $periodeBerikutnya = Periode::create(['tahun' => 2026, 'bulan' => 10, 'triwulan' => 4, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+
+        // Capaian triwulan INI harus "dikembalikan" (salah satu status verifikasiTerlihat())
+        // supaya penolakan RTL berikutnya di bawah dianggap FINAL — lihat
+        // PengisianKegiatan::rtlBerikutnyaDitolak().
+        Capaian::create(['iku_id' => $iku->id, 'periode_id' => $periodeIni->id, 'status' => Capaian::STATUS_DIKEMBALIKAN]);
+
+        $rtl = RtlEvaluasi::create([
+            'iku_id' => $iku->id, 'periode_id' => $periodeBerikutnya->id,
+            'rtl_teks' => 'Rencana lama yang ditolak', 'berlaku_bulan' => 'RTL untuk Oktober, November, dan Desember',
+            'pic' => 'Uji', 'batas_waktu' => '2026-12-31',
+            'status_verifikasi' => 'ditolak', 'catatan' => 'Rencana belum jelas PIC-nya',
+        ]);
+
+        return compact('ketua', 'iku', 'periodeIni', 'periodeBerikutnya', 'rtl');
+    }
+
+    public function test_rtl_berikutnya_ditolak_dimuat_ulang_ke_form_dan_diperbaiki_di_baris_yang_sama(): void
+    {
+        $data = $this->siapkanRtlBerikutnyaDitolak();
+
+        $this->actingAs($data['ketua']);
+
+        $component = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 9)
+            ->set('iku_id', $data['iku']->id);
+
+        // Bagian 5 terbuka lagi (BUKAN "Sudah ditetapkan" hanya-baca) — poin lama
+        // dimuat lengkap dengan id-nya, siap diperbaiki, beserta banner alasannya.
+        $component->assertSet('rtlBaru.0.id', $data['rtl']->id)
+            ->assertSet('rtlBaru.0.rtl_teks', 'Rencana lama yang ditolak')
+            ->assertDontSee('Sudah ditetapkan')
+            ->assertSee('Tim SAKIP mengembalikan rencana')
+            ->assertSee('Rencana belum jelas PIC-nya');
+
+        $component->set('blocks.0.uraian_kegiatan', 'Kegiatan uji RTL berikutnya')
+            ->set('blocks.0.jenis', 'bukan_survei_sensus')
+            ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
+            ->set('rtlBaru.0.rtl_teks', 'Rencana sudah diperbaiki')
+            ->call('ajukanIsian')
+            ->assertHasNoErrors();
+
+        // Baris LAMA diperbarui di tempat (bukan duplikat) & status balik "menunggu".
+        $this->assertDatabaseCount('rtl_evaluasi', 1);
+        $data['rtl']->refresh();
+        $this->assertSame('Rencana sudah diperbaiki', $data['rtl']->rtl_teks);
+        $this->assertSame('menunggu', $data['rtl']->status_verifikasi);
+        $this->assertNull($data['rtl']->catatan);
+    }
+
     public function test_kegiatan_yang_cocok_dengan_rtl_berjalan_menautkan_rtl_evaluasi_id(): void
     {
         $peranKetua = Role::create(['nama' => 'Ketua Tim']);

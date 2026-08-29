@@ -538,6 +538,112 @@ class VerifikasiCapaianTest extends TestCase
         $this->assertSame('menunggu', $rtl->fresh()->status_verifikasi);
     }
 
+    /**
+     * Poin RTL yang BARU DITETAPKAN Ketua Tim triwulan ini untuk triwulan BERIKUTNYA
+     * (periode_id-nya TW4 2026, satu triwulan SETELAH periode capaian TW3 2026 milik
+     * siapkanIkuDenganDuaKegiatan()) — beda dari siapkanRtlDenganRealisasi() yang
+     * periodenya SAMA dengan capaian (realisasi RTL triwulan sebelumnya).
+     */
+    protected function siapkanRtlBerikutnyaBaruDitetapkan(array $data, string $statusVerifikasi = 'menunggu'): RtlEvaluasi
+    {
+        $periodeBerikutnya = Periode::create([
+            'tahun' => 2026, 'bulan' => 10, 'triwulan' => 4, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false,
+        ]);
+
+        return RtlEvaluasi::create([
+            'iku_id' => $data['iku']->id,
+            'periode_id' => $periodeBerikutnya->id,
+            'rtl_teks' => 'Rencana triwulan berikutnya',
+            'berlaku_bulan' => 'RTL untuk Oktober, November, dan Desember',
+            'pic' => 'Uji',
+            'batas_waktu' => '2026-12-31',
+            'status_verifikasi' => $statusVerifikasi,
+        ]);
+    }
+
+    public function test_rtl_berikutnya_baru_ditetapkan_wajib_ditandai_sebelum_verifikasi_selesai(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+        $rtlBerikutnya = $this->siapkanRtlBerikutnyaBaruDitetapkan($data);
+
+        Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
+            ->assertSee('Rencana triwulan berikutnya')
+            ->call('tandaiSesuai', $data['berkas1']->id)
+            ->call('tandaiSesuai', $data['berkas2']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan1']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan2']->id)
+            ->set('alokasi_tw3', 50)
+            ->set('realisasi_tw3', 45)
+            // rtlBerikutnya sengaja TIDAK ditandai — harus menghalangi Verifikasi Selesai.
+            ->call('verifikasiSelesai')
+            ->assertHasErrors(['berkas']);
+
+        $this->assertSame('diajukan', $data['kegiatan1']->fresh()->status_dokumen);
+        $this->assertSame('menunggu', $rtlBerikutnya->fresh()->status_verifikasi);
+    }
+
+    public function test_rtl_berikutnya_sesuai_meloloskan_verifikasi_selesai(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+        $rtlBerikutnya = $this->siapkanRtlBerikutnyaBaruDitetapkan($data);
+
+        Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
+            ->call('tandaiSesuai', $data['berkas1']->id)
+            ->call('tandaiSesuai', $data['berkas2']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan1']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan2']->id)
+            ->call('tandaiRtlBerikutnyaSesuai', $rtlBerikutnya->id)
+            ->set('alokasi_tw3', 50)
+            ->set('realisasi_tw3', 45)
+            ->call('verifikasiSelesai')
+            ->assertHasNoErrors();
+
+        $this->assertSame('terverifikasi', $rtlBerikutnya->fresh()->status_verifikasi);
+        $this->assertSame('diverifikasi', $data['capaian']->fresh()->status);
+    }
+
+    public function test_tandai_rtl_berikutnya_tolak_wajib_catatan(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+        $rtlBerikutnya = $this->siapkanRtlBerikutnyaBaruDitetapkan($data);
+
+        Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
+            ->call('tandaiRtlBerikutnyaTolak', $rtlBerikutnya->id)
+            ->assertHasErrors(['catatanRtlBerikutnya.'.$rtlBerikutnya->id]);
+
+        $this->assertSame('menunggu', $rtlBerikutnya->fresh()->status_verifikasi);
+    }
+
+    public function test_kembalikan_ke_ketua_tim_bisa_dipicu_rtl_berikutnya_ditolak(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+        $rtlBerikutnya = $this->siapkanRtlBerikutnyaBaruDitetapkan($data);
+
+        Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
+            ->call('tandaiSesuai', $data['berkas1']->id)
+            ->call('tandaiSesuai', $data['berkas2']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan1']->id)
+            ->set('catatanRtlBerikutnya.'.$rtlBerikutnya->id, 'Rencana belum spesifik')
+            ->call('tandaiRtlBerikutnyaTolak', $rtlBerikutnya->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan2']->id)
+            ->set('alokasi_tw3', 50)
+            ->set('realisasi_tw3', 45)
+            ->call('kembalikanKeKetuaTim')
+            ->assertHasNoErrors();
+
+        $rtlBerikutnya->refresh();
+        $this->assertSame('ditolak', $rtlBerikutnya->status_verifikasi);
+        $this->assertSame('Rencana belum spesifik', $rtlBerikutnya->catatan);
+        $this->assertSame('dikembalikan', $data['capaian']->fresh()->status);
+
+        $riwayat = $data['capaian']->fresh()->riwayatStatus->first();
+        $this->assertStringContainsString('Rencana belum spesifik', (string) $riwayat->catatan);
+    }
+
     public function test_berkas_list_menggabungkan_bukti_capaian_dan_rtl(): void
     {
         $this->actingAs($this->buatSakip());

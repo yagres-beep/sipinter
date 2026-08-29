@@ -208,6 +208,17 @@ class VerifikasiCapaian extends Component
     public array $catatanRtl = [];
 
     /**
+     * Catatan penolakan RENCANA RTL triwulan berikutnya (Bagian 5, baru ditetapkan
+     * Ketua Tim triwulan ini) — dikunci pada id rtl_evaluasi juga, tapi TERPISAH dari
+     * $catatanRtl di atas karena keduanya memverifikasi hal berbeda: $catatanRtl soal
+     * REALISASI (hasil), ini soal RENCANA (teks) itu sendiri. Lihat
+     * rtlBerikutnyaBaruDitetapkan().
+     *
+     * @var array<int, string|null>
+     */
+    public array $catatanRtlBerikutnya = [];
+
+    /**
      * Cache dalam satu siklus request (di-reset otomatis tiap request baru) — DB
      * remote (Supabase, Seoul) makan ~400ms per query, dan tiap koleksi ini dipakai
      * ulang di banyak tempat (mount, render, verifikasiSelesai, kembalikanKeKetuaTim)
@@ -218,6 +229,8 @@ class VerifikasiCapaian extends Component
     protected ?Collection $cacheKendalaSolusiList = null;
 
     protected ?Collection $cacheRtlSebelumnya = null;
+
+    protected ?Collection $cacheRtlBerikutnya = null;
 
     protected ?Collection $cacheBerkasKegiatan = null;
 
@@ -520,6 +533,30 @@ class VerifikasiCapaian extends Component
         return $this->cacheRtlSebelumnya = RtlEvaluasi::with('berkas')
             ->where('iku_id', $this->capaian->iku_id)
             ->whereHas('periode', fn ($q) => $q->where('tahun', $periode->tahun)->where('triwulan', $periode->triwulan))
+            ->get();
+    }
+
+    /**
+     * Poin RTL yang BARU DITETAPKAN Ketua Tim triwulan INI untuk dilaksanakan pada
+     * triwulan BERIKUTNYA (Bagian 5 "Rencana Tindak Lanjut", lihat
+     * PengisianKegiatan::ajukanIsian() langkah 4) — beda dari rtlEvaluasiSebelumnya()
+     * di atas yang memverifikasi REALISASI RTL yang ditetapkan triwulan lalu. Di sini
+     * yang diverifikasi adalah TEKS RENCANA itu sendiri (belum ada realisasi apa pun,
+     * triwulan sasarannya belum berjalan) — supaya rencana ini tidak lolos tanpa
+     * pernah diperiksa siapa pun (sebelumnya tidak pernah muncul di layar manapun).
+     */
+    public function rtlBerikutnyaBaruDitetapkan()
+    {
+        if ($this->cacheRtlBerikutnya !== null) {
+            return $this->cacheRtlBerikutnya;
+        }
+
+        $periode = $this->capaian->periode;
+        $triwulanBerikutnya = $periode->triwulan === 4 ? 1 : $periode->triwulan + 1;
+        $tahunBerikutnya = $periode->triwulan === 4 ? $periode->tahun + 1 : $periode->tahun;
+
+        return $this->cacheRtlBerikutnya = RtlEvaluasi::where('iku_id', $this->capaian->iku_id)
+            ->whereHas('periode', fn ($q) => $q->where('tahun', $tahunBerikutnya)->where('triwulan', $triwulanBerikutnya))
             ->get();
     }
 
@@ -840,6 +877,51 @@ class VerifikasiCapaian extends Component
         if ($catatan === '') {
             $this->addError('catatanRtl.'.$rtlId, 'Catatan wajib diisi saat menandai realisasi RTL ini "Tidak Sesuai" — supaya Ketua Tim tahu apa yang perlu diperbaiki.');
             $this->dispatch('notify', type: 'error', message: 'Catatan wajib diisi saat menandai realisasi RTL "Tidak Sesuai".');
+
+            return;
+        }
+
+        RtlEvaluasi::whereKey($rtlId)->update([
+            'status_verifikasi' => 'ditolak',
+            'catatan' => $catatan,
+        ]);
+    }
+
+    /**
+     * Beda dari rtlBisaDiverifikasi() — TANPA syarat realisasi terisi, karena di sini
+     * yang diverifikasi teks RENCANA-nya sendiri (rtlBerikutnyaBaruDitetapkan()),
+     * bukan realisasinya (memang belum ada, triwulan sasarannya belum berjalan).
+     */
+    public function rtlBerikutnyaBisaDiverifikasi(int $rtlId): bool
+    {
+        return $this->bisaDiverifikasi() && $this->rtlBerikutnyaBaruDitetapkan()->contains('id', $rtlId);
+    }
+
+    public function tandaiRtlBerikutnyaSesuai(int $rtlId): void
+    {
+        if (! $this->rtlBerikutnyaBisaDiverifikasi($rtlId)) {
+            return;
+        }
+
+        $this->catatanRtlBerikutnya[$rtlId] = null;
+
+        RtlEvaluasi::whereKey($rtlId)->update([
+            'status_verifikasi' => 'terverifikasi',
+            'catatan' => null,
+        ]);
+    }
+
+    public function tandaiRtlBerikutnyaTolak(int $rtlId): void
+    {
+        if (! $this->rtlBerikutnyaBisaDiverifikasi($rtlId)) {
+            return;
+        }
+
+        $catatan = trim((string) ($this->catatanRtlBerikutnya[$rtlId] ?? ''));
+
+        if ($catatan === '') {
+            $this->addError('catatanRtlBerikutnya.'.$rtlId, 'Catatan wajib diisi saat menandai rencana RTL ini "Tidak Sesuai" — supaya Ketua Tim tahu apa yang perlu diperbaiki.');
+            $this->dispatch('notify', type: 'error', message: 'Catatan wajib diisi saat menandai rencana RTL "Tidak Sesuai".');
 
             return;
         }
@@ -1232,6 +1314,10 @@ class VerifikasiCapaian extends Component
             $daftar[] = 'Realisasi RTL "'.Str::limit($p->rtl_teks ?: '(kosong)', 40).'"';
         }
 
+        foreach ($this->rtlBerikutnyaBaruDitetapkan()->where('status_verifikasi', 'menunggu') as $p) {
+            $daftar[] = 'Rencana RTL berikutnya "'.Str::limit($p->rtl_teks ?: '(kosong)', 40).'"';
+        }
+
         return $daftar;
     }
 
@@ -1255,6 +1341,7 @@ class VerifikasiCapaian extends Component
         $kegiatanList = $this->kegiatanList();
         $bagianKustom = $this->bagianKustomList();
         $rtl = $this->rtlEvaluasiSebelumnya()->filter(fn ($p) => filled($p->realisasi));
+        $rtlBerikutnya = $this->rtlBerikutnyaBaruDitetapkan();
 
         $belumDitandai = $this->daftarIsianBelumDitandai();
 
@@ -1272,6 +1359,7 @@ class VerifikasiCapaian extends Component
             || $kegiatanList->contains(fn ($k) => $k->status_verifikasi_uraian === 'ditolak')
             || $bagianKustom->contains(fn ($p) => $p->status_verifikasi === 'ditolak')
             || $rtl->contains(fn ($p) => $p->status_verifikasi === 'ditolak')
+            || $rtlBerikutnya->contains(fn ($p) => $p->status_verifikasi === 'ditolak')
         ) {
             $this->addError('berkas', 'Terdapat isian yang ditolak — gunakan tombol "Kembalikan ke Ketua Tim", bukan "Verifikasi Selesai".');
             $this->dispatch('notify', type: 'error', message: 'Ada isian yang ditolak — gunakan "Kembalikan ke Ketua Tim".');
@@ -1330,6 +1418,7 @@ class VerifikasiCapaian extends Component
         $kegiatanList = $this->kegiatanList();
         $bagianKustom = $this->bagianKustomList();
         $rtl = $this->rtlEvaluasiSebelumnya()->filter(fn ($p) => filled($p->realisasi));
+        $rtlBerikutnya = $this->rtlBerikutnyaBaruDitetapkan();
 
         $belumDitandai = $this->daftarIsianBelumDitandai();
 
@@ -1346,8 +1435,9 @@ class VerifikasiCapaian extends Component
         $adaUraianDitolak = $kegiatanList->contains(fn ($k) => $k->status_verifikasi_uraian === 'ditolak');
         $adaBagianKustomDitolak = $bagianKustom->contains(fn ($p) => $p->status_verifikasi === 'ditolak');
         $adaRtlDitolak = $rtl->contains(fn ($p) => $p->status_verifikasi === 'ditolak');
+        $adaRtlBerikutnyaDitolak = $rtlBerikutnya->contains(fn ($p) => $p->status_verifikasi === 'ditolak');
 
-        if (! $adaBerkasDitolak && ! $adaKendalaDitolak && ! $adaUraianDitolak && ! $adaBagianKustomDitolak && ! $adaRtlDitolak) {
+        if (! $adaBerkasDitolak && ! $adaKendalaDitolak && ! $adaUraianDitolak && ! $adaBagianKustomDitolak && ! $adaRtlDitolak && ! $adaRtlBerikutnyaDitolak) {
             $this->addError('berkas', 'Tandai minimal satu isian sebagai "Tidak Sesuai" beserta catatan sebelum mengembalikan isian.');
             $this->dispatch('notify', type: 'error', message: 'Tandai minimal satu isian "Tidak Sesuai" sebelum mengembalikan isian.');
 
@@ -1387,6 +1477,7 @@ class VerifikasiCapaian extends Component
                     ->concat($this->kegiatanList()->where('status_verifikasi_uraian', 'ditolak')->pluck('catatan_uraian'))
                     ->concat($this->bagianKustomList()->where('status_verifikasi', 'ditolak')->pluck('catatan'))
                     ->concat($this->rtlEvaluasiSebelumnya()->where('status_verifikasi', 'ditolak')->pluck('catatan'))
+                    ->concat($this->rtlBerikutnyaBaruDitetapkan()->where('status_verifikasi', 'ditolak')->pluck('catatan'))
                     ->filter()
                     ->unique()
                     ->implode(' | ');
@@ -1417,6 +1508,7 @@ class VerifikasiCapaian extends Component
             'kegiatanList' => $kegiatanList,
             'kendalaSolusiList' => $kendalaSolusiList,
             'rtlSebelumnya' => $this->rtlEvaluasiSebelumnya(),
+            'rtlBerikutnya' => $this->rtlBerikutnyaBaruDitetapkan(),
             'berkasPerKegiatan' => $kegiatanList->mapWithKeys(fn ($k) => [$k->id => $this->berkasUntukKegiatan($k->id)]),
             'bagianKustomList' => $bagianKustomList,
             'berkasPerBagianKustom' => $bagianKustomList->mapWithKeys(fn ($p) => [$p->id => $this->berkasUntukBagianKustom($p->id)]),
