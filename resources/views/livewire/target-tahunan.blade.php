@@ -94,7 +94,7 @@
                                     <div class="muted" style="font-size:10.5px;margin-bottom:4px">Rincian N — {{ count($rincianN[$iku->id] ?? []) }} item = Alokasi Y</div>
                                     <div style="max-height:140px;overflow-y:auto;display:flex;flex-direction:column;gap:4px">
                                         @foreach (($rincianN[$iku->id] ?? []) as $kunci => $baris)
-                                            <div style="display:flex;gap:4px;align-items:center">
+                                            <div wire:key="rincian-n-{{ $iku->id }}-{{ $kunci }}" style="display:flex;gap:4px;align-items:center">
                                                 <input type="text" class="inp filled" style="flex:1;font-size:11.5px;padding:4px 6px" placeholder="Uraian item" wire:model="rincianN.{{ $iku->id }}.{{ $kunci }}.uraian">
                                                 <button type="button" class="btn btn-red btn-sm" style="padding:2px 6px" wire:click="hapusN({{ $iku->id }}, '{{ $kunci }}')" title="Hapus item">✕</button>
                                             </div>
