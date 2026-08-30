@@ -663,12 +663,18 @@
             <div class="sec"><span>Rencana Tindak Lanjut Triwulan Berikutnya (Baru Ditetapkan)</span></div>
             <div class="info">ℹ️ Ketua Tim baru menetapkan rencana ini untuk triwulan berikutnya (belum berjalan, belum ada realisasi) — periksa kejelasan/kelayakan rencananya. Kalau ditandai "Tidak Sesuai", seluruh rencana IKU ini akan dibuka kembali untuk diperbaiki Ketua Tim.</div>
 
+            {{-- PIC & Batas Waktu berlaku untuk SELURUH poin di bawah (satu nilai per
+                 batch, bukan per poin — sama seperti cara Ketua Tim mengisinya) — cukup
+                 ditampilkan sekali di sini, tidak diulang di tiap poin. --}}
+            @if ($rtlBerikutnya->isNotEmpty())
+                <div class="muted" style="font-size:11px;margin-bottom:10px">PIC: {{ $rtlBerikutnya->first()->pic }} · Batas waktu: {{ $rtlBerikutnya->first()->batas_waktu?->translatedFormat('d F Y') }}</div>
+            @endif
+
             @foreach ($rtlBerikutnya as $poin)
                 <div class="match-row" wire:key="rtl-berikutnya-{{ $poin->id }}">
                     <div class="match-col" style="flex:1">
                         <div class="mc-lbl">Rencana Kegiatan</div>
                         <div class="mc-txt">{{ $poin->rtl_teks }}</div>
-                        <div class="muted" style="font-size:11px;margin-top:4px">PIC: {{ $poin->pic }} · Batas waktu: {{ $poin->batas_waktu?->translatedFormat('d F Y') }}</div>
 
                         @if ($this->rtlBerikutnyaBisaDiverifikasi($poin->id))
                             <div x-data="{ pendingMark: null }" style="margin-top:10px">
