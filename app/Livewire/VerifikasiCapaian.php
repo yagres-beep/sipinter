@@ -557,6 +557,7 @@ class VerifikasiCapaian extends Component
 
         return $this->cacheRtlBerikutnya = RtlEvaluasi::where('iku_id', $this->capaian->iku_id)
             ->whereHas('periode', fn ($q) => $q->where('tahun', $tahunBerikutnya)->where('triwulan', $triwulanBerikutnya))
+            ->orderBy('id')
             ->get();
     }
 

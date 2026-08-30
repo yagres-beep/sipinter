@@ -671,62 +671,65 @@
             @endif
 
             @foreach ($rtlBerikutnya as $poin)
-                <div class="match-row" wire:key="rtl-berikutnya-{{ $poin->id }}">
-                    <div class="match-col" style="flex:1">
-                        <div class="mc-lbl">Rencana Kegiatan</div>
-                        <div class="mc-txt">{{ $poin->rtl_teks }}</div>
+                <div class="poin-single" wire:key="rtl-berikutnya-{{ $poin->id }}">
+                    <span class="k-num stat-in">Poin RTL {{ $loop->iteration }}</span>
 
-                        @if ($this->rtlBerikutnyaBisaDiverifikasi($poin->id))
-                            <div x-data="{ pendingMark: null }" style="margin-top:10px">
-                                <div style="display:flex;gap:8px">
-                                    <button type="button" class="mark"
-                                        :class="{ ok: pendingMark === 'ok' || (pendingMark === null && {{ $poin->status_verifikasi === 'terverifikasi' ? 'true' : 'false' }}) }"
-                                        @click="pendingMark = 'ok'"
-                                        wire:click="tandaiRtlBerikutnyaSesuai({{ $poin->id }})" wire:loading.attr="disabled" wire:target="tandaiRtlBerikutnyaSesuai({{ $poin->id }}),tandaiRtlBerikutnyaTolak({{ $poin->id }})">
-                                        <span wire:loading.remove wire:target="tandaiRtlBerikutnyaSesuai({{ $poin->id }})">✓ Sesuai</span>
-                                        <span wire:loading wire:target="tandaiRtlBerikutnyaSesuai({{ $poin->id }})"><i class="spin"></i></span>
-                                    </button>
-                                    <button type="button" class="mark"
-                                        :class="{ no: pendingMark === 'no' || (pendingMark === null && {{ $poin->status_verifikasi === 'ditolak' ? 'true' : 'false' }}) }"
-                                        @click="pendingMark = 'no'"
-                                        wire:click="tandaiRtlBerikutnyaTolak({{ $poin->id }})" wire:loading.attr="disabled" wire:target="tandaiRtlBerikutnyaSesuai({{ $poin->id }}),tandaiRtlBerikutnyaTolak({{ $poin->id }})">
-                                        <span wire:loading.remove wire:target="tandaiRtlBerikutnyaTolak({{ $poin->id }})">✕ Tidak Sesuai</span>
-                                        <span wire:loading wire:target="tandaiRtlBerikutnyaTolak({{ $poin->id }})"><i class="spin"></i></span>
-                                    </button>
-                                </div>
-
-                                <div class="field" style="margin-top:10px;margin-bottom:0" x-cloak
-                                    x-show="pendingMark === 'no' || (pendingMark === null && {{ $poin->status_verifikasi === 'ditolak' ? 'true' : 'false' }})">
-                                    <label style="font-size:11.5px">Catatan (wajib bila tidak sesuai)</label>
-                                    <textarea class="inp filled" style="height:auto;display:block;font-size:11.5px" rows="2"
-                                        wire:model="catatanRtlBerikutnya.{{ $poin->id }}" placeholder="mis. Rencana belum spesifik/tidak jelas PIC-nya"
-                                        x-on:blur="if (pendingMark === 'no') $wire.tandaiRtlBerikutnyaTolak({{ $poin->id }})"></textarea>
-                                    @error('catatanRtlBerikutnya.'.$poin->id)
-                                        <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-                                    @enderror
-                                </div>
-
-                                <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"
-                                    x-show="pendingMark !== null || {{ $poin->status_verifikasi !== 'menunggu' ? 'true' : 'false' }}">
-                                    <button type="button" class="btn btn-ghost btn-sm"
-                                        x-on:click="(pendingMark === 'no' || (pendingMark === null && {{ $poin->status_verifikasi === 'ditolak' ? 'true' : 'false' }})) ? $wire.tandaiRtlBerikutnyaTolak({{ $poin->id }}) : $wire.tandaiRtlBerikutnyaSesuai({{ $poin->id }})"
-                                        wire:loading.attr="disabled" wire:target="tandaiRtlBerikutnyaSesuai({{ $poin->id }}),tandaiRtlBerikutnyaTolak({{ $poin->id }})">
-                                        <span wire:loading.remove wire:target="tandaiRtlBerikutnyaSesuai({{ $poin->id }}),tandaiRtlBerikutnyaTolak({{ $poin->id }})">💾 Simpan Verifikasi</span>
-                                        <span wire:loading wire:target="tandaiRtlBerikutnyaSesuai({{ $poin->id }}),tandaiRtlBerikutnyaTolak({{ $poin->id }})"><i class="spin"></i> Menyimpan…</span>
-                                    </button>
-                                    @if ($poin->status_verifikasi !== 'menunggu' && !$errors->has('catatanRtlBerikutnya.'.$poin->id))
-                                        <span style="color:#16a34a;font-size:11.5px">✓ Tersimpan</span>
-                                    @endif
-                                </div>
-                            </div>
-                        @elseif ($poin->catatan)
-                            <div class="field" style="margin-top:8px;margin-bottom:0">
-                                <label style="font-size:11.5px">Catatan</label>
-                                <p style="font-size:12.5px;color:var(--muted);margin:0">{{ $poin->catatan }}</p>
-                            </div>
-                        @endif
+                    <div class="field" style="margin-bottom:10px">
+                        <label>Rencana Kegiatan</label>
+                        <p style="margin:0;font-size:13px">{{ $poin->rtl_teks }}</p>
                     </div>
+
                     <x-badge-status :status="$poin->status_verifikasi === 'terverifikasi' ? 'disetujui' : ($poin->status_verifikasi === 'ditolak' ? 'dikembalikan' : 'diajukan')" :label="$poin->status_verifikasi === 'terverifikasi' ? 'Sesuai' : ($poin->status_verifikasi === 'ditolak' ? 'Tidak Sesuai' : 'Menunggu')" />
+
+                    @if ($this->rtlBerikutnyaBisaDiverifikasi($poin->id))
+                        <div x-data="{ pendingMark: null }" style="margin-top:10px">
+                            <div style="display:flex;gap:8px">
+                                <button type="button" class="mark"
+                                    :class="{ ok: pendingMark === 'ok' || (pendingMark === null && {{ $poin->status_verifikasi === 'terverifikasi' ? 'true' : 'false' }}) }"
+                                    @click="pendingMark = 'ok'"
+                                    wire:click="tandaiRtlBerikutnyaSesuai({{ $poin->id }})" wire:loading.attr="disabled" wire:target="tandaiRtlBerikutnyaSesuai({{ $poin->id }}),tandaiRtlBerikutnyaTolak({{ $poin->id }})">
+                                    <span wire:loading.remove wire:target="tandaiRtlBerikutnyaSesuai({{ $poin->id }})">✓ Sesuai</span>
+                                    <span wire:loading wire:target="tandaiRtlBerikutnyaSesuai({{ $poin->id }})"><i class="spin"></i></span>
+                                </button>
+                                <button type="button" class="mark"
+                                    :class="{ no: pendingMark === 'no' || (pendingMark === null && {{ $poin->status_verifikasi === 'ditolak' ? 'true' : 'false' }}) }"
+                                    @click="pendingMark = 'no'"
+                                    wire:click="tandaiRtlBerikutnyaTolak({{ $poin->id }})" wire:loading.attr="disabled" wire:target="tandaiRtlBerikutnyaSesuai({{ $poin->id }}),tandaiRtlBerikutnyaTolak({{ $poin->id }})">
+                                    <span wire:loading.remove wire:target="tandaiRtlBerikutnyaTolak({{ $poin->id }})">✕ Tidak Sesuai</span>
+                                    <span wire:loading wire:target="tandaiRtlBerikutnyaTolak({{ $poin->id }})"><i class="spin"></i></span>
+                                </button>
+                            </div>
+
+                            <div class="field" style="margin-top:10px;margin-bottom:0" x-cloak
+                                x-show="pendingMark === 'no' || (pendingMark === null && {{ $poin->status_verifikasi === 'ditolak' ? 'true' : 'false' }})">
+                                <label style="font-size:11.5px">Catatan (wajib bila tidak sesuai)</label>
+                                <textarea class="inp filled" style="height:auto;display:block;font-size:11.5px" rows="2"
+                                    wire:model="catatanRtlBerikutnya.{{ $poin->id }}" placeholder="mis. Rencana belum spesifik/tidak jelas PIC-nya"
+                                    x-on:blur="if (pendingMark === 'no') $wire.tandaiRtlBerikutnyaTolak({{ $poin->id }})"></textarea>
+                                @error('catatanRtlBerikutnya.'.$poin->id)
+                                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                                @enderror
+                            </div>
+
+                            <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"
+                                x-show="pendingMark !== null || {{ $poin->status_verifikasi !== 'menunggu' ? 'true' : 'false' }}">
+                                <button type="button" class="btn btn-ghost btn-sm"
+                                    x-on:click="(pendingMark === 'no' || (pendingMark === null && {{ $poin->status_verifikasi === 'ditolak' ? 'true' : 'false' }})) ? $wire.tandaiRtlBerikutnyaTolak({{ $poin->id }}) : $wire.tandaiRtlBerikutnyaSesuai({{ $poin->id }})"
+                                    wire:loading.attr="disabled" wire:target="tandaiRtlBerikutnyaSesuai({{ $poin->id }}),tandaiRtlBerikutnyaTolak({{ $poin->id }})">
+                                    <span wire:loading.remove wire:target="tandaiRtlBerikutnyaSesuai({{ $poin->id }}),tandaiRtlBerikutnyaTolak({{ $poin->id }})">💾 Simpan Verifikasi</span>
+                                    <span wire:loading wire:target="tandaiRtlBerikutnyaSesuai({{ $poin->id }}),tandaiRtlBerikutnyaTolak({{ $poin->id }})"><i class="spin"></i> Menyimpan…</span>
+                                </button>
+                                @if ($poin->status_verifikasi !== 'menunggu' && !$errors->has('catatanRtlBerikutnya.'.$poin->id))
+                                    <span style="color:#16a34a;font-size:11.5px">✓ Tersimpan</span>
+                                @endif
+                            </div>
+                        </div>
+                    @elseif ($poin->catatan)
+                        <div class="field" style="margin-top:8px;margin-bottom:0">
+                            <label style="font-size:11.5px">Catatan</label>
+                            <p style="font-size:12.5px;color:var(--muted);margin:0">{{ $poin->catatan }}</p>
+                        </div>
+                    @endif
                 </div>
             @endforeach
         </div>

@@ -635,6 +635,44 @@ class VerifikasiCapaianTest extends TestCase
         ]);
     }
 
+    /**
+     * Regresi: rtlBerikutnyaBaruDitetapkan() sebelumnya tidak punya orderBy() —
+     * urutan baris dari DB tidak dijamin stabil antar query (terutama Postgres di
+     * produksi), jadi tiap kali Tim SAKIP menandai satu poin Sesuai/Tidak Sesuai
+     * (memicu render ulang & query ulang), urutan poin di layar bisa berubah-ubah
+     * — terlihat seperti poin "berpindah posisi" sendiri.
+     */
+    public function test_urutan_rtl_berikutnya_tetap_stabil_setelah_satu_poin_ditandai(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+
+        $periodeBerikutnya = Periode::create([
+            'tahun' => 2026, 'bulan' => 10, 'triwulan' => 4, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false,
+        ]);
+
+        $poin1 = RtlEvaluasi::create([
+            'iku_id' => $data['iku']->id, 'periode_id' => $periodeBerikutnya->id,
+            'rtl_teks' => 'csaca', 'pic' => 'Uji', 'batas_waktu' => '2026-12-31',
+        ]);
+        $poin2 = RtlEvaluasi::create([
+            'iku_id' => $data['iku']->id, 'periode_id' => $periodeBerikutnya->id,
+            'rtl_teks' => 'dasdfas', 'pic' => 'Uji', 'batas_waktu' => '2026-12-31',
+        ]);
+        $poin3 = RtlEvaluasi::create([
+            'iku_id' => $data['iku']->id, 'periode_id' => $periodeBerikutnya->id,
+            'rtl_teks' => 'fascfa', 'pic' => 'Uji', 'batas_waktu' => '2026-12-31',
+        ]);
+
+        $component = Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
+            ->call('tandaiRtlBerikutnyaSesuai', $poin2->id);
+
+        $this->assertSame(
+            [$poin1->id, $poin2->id, $poin3->id],
+            $component->instance()->rtlBerikutnyaBaruDitetapkan()->pluck('id')->all()
+        );
+    }
+
     public function test_rtl_berikutnya_baru_ditetapkan_wajib_ditandai_sebelum_verifikasi_selesai(): void
     {
         $this->actingAs($this->buatSakip());
