@@ -542,11 +542,7 @@
                             <label>Rencana kegiatan</label>
                             <p style="margin:0;font-size:13px">{{ $poin->rtl_teks }}</p>
                         </div>
-                        <div class="row2">
-                            <div class="field" style="margin-bottom:0"><label>PIC Tindak Lanjut</label><p style="margin:0;font-size:13px">{{ $poin->pic }}</p></div>
-                            <div class="field" style="margin-bottom:0"><label>Batas Waktu</label><p style="margin:0;font-size:13px">{{ $poin->batas_waktu?->translatedFormat('d F Y') }}</p></div>
-                        </div>
-                        <div style="margin-top:8px">
+                        <div>
                             @if ($poin->status_verifikasi === 'terverifikasi')
                                 <x-badge-status status="disetujui" label="Terverifikasi Tim SAKIP" />
                             @else
@@ -555,6 +551,17 @@
                         </div>
                     </div>
                 @endforeach
+
+                {{-- PIC & Batas Waktu berlaku untuk SELURUH poin di atas (satu nilai per
+                     batch, bukan per poin — sama seperti form pengisiannya, lihat baris
+                     "Berlaku untuk seluruh poin RTL ... di atas" pada form edit) — cukup
+                     ditampilkan sekali di sini, tidak diulang di tiap kartu poin. --}}
+                @if ($rtlBerikutnyaAktif->isNotEmpty())
+                    <div class="row2" style="margin-top:4px">
+                        <div class="field" style="margin-bottom:0"><label>PIC Tindak Lanjut</label><p style="margin:0;font-size:13px">{{ $rtlBerikutnyaAktif->first()->pic }}</p></div>
+                        <div class="field" style="margin-bottom:0"><label>Batas Waktu</label><p style="margin:0;font-size:13px">{{ $rtlBerikutnyaAktif->first()->batas_waktu?->translatedFormat('d F Y') }}</p></div>
+                    </div>
+                @endif
             @else
                 @if ($rtlBerikutnyaDitolak->isNotEmpty())
                     <div class="info red" style="margin-bottom:10px">
