@@ -587,7 +587,7 @@
                 @foreach ($rtlBaru as $i => $blok)
                     <div class="poin-single" wire:key="rtlbaru-{{ $i }}">
                         <span class="k-num stat-in">Poin RTL {{ $i + 1 }}</span>
-                        @if (count($rtlBaru) > 1 && ! $blok['id'])
+                        @if (count($rtlBaru) > 1 && ! ($blok['id'] ?? null))
                             <button type="button" class="btn btn-red btn-sm" style="position:absolute;top:8px;right:8px" wire:click="removeRtlBlock({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="removeRtlBlock({{ $i }})">🗑</button>
                         @endif
 

@@ -382,6 +382,42 @@ class PengisianKegiatanTest extends TestCase
         $this->assertTrue($component->instance()->rtlBaruBisaDiisi());
     }
 
+    /**
+     * Regresi produksi: browser yang sudah membuka form SEBELUM key 'id' ditambahkan
+     * ke emptyRtlBlock() (lihat riwayat) masih mengirim snapshot Livewire lama —
+     * blok rtlBaru TANPA key 'id' sama sekali — ke kode server yang baru. Blade
+     * SEMPAT mengakses $blok['id'] langsung tanpa `?? null`, menyebabkan "Undefined
+     * array key" (ErrorException) begitu form Bagian 5 dirender dengan >1 poin.
+     */
+    public function test_form_tidak_error_bila_rtl_baru_kiriman_lama_tanpa_key_id(): void
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $ketua = User::create([
+            'nama' => 'Ketua Uji Snapshot Lama', 'username' => 'ketua-uji-snapshot@example.test', 'email' => 'ketua-uji-snapshot@example.test',
+            'password' => 'password', 'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create(['kode' => 'UJI-SNAPSHOT', 'indikator' => 'Indikator uji snapshot lama', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji']);
+
+        $this->actingAs($ketua);
+
+        // set() sendiri sudah menjalankan satu siklus render penuh di server — kalau
+        // blade masih mengakses $blok['id'] langsung tanpa `?? null`, baris di bawah
+        // ini SENDIRI yang akan melempar ErrorException "Undefined array key" (persis
+        // error produksinya), tanpa perlu assertSee apa pun sesudahnya.
+        Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 9)
+            ->set('iku_id', $iku->id)
+            // Simulasikan snapshot lama: array RTL tanpa key 'id' sama sekali (lebih
+            // dari satu blok, supaya tombol hapus yang dulu memicu bug ini dievaluasi).
+            ->set('rtlBaru', [
+                ['rtl_teks' => 'Poin lama tanpa id 1'],
+                ['rtl_teks' => 'Poin lama tanpa id 2'],
+            ])
+            ->assertOk();
+    }
+
     public function test_ajukan_diblokir_jika_rtl_berjalan_belum_terlaksana(): void
     {
         $peranKetua = Role::create(['nama' => 'Ketua Tim']);
@@ -490,6 +526,43 @@ class PengisianKegiatanTest extends TestCase
         $this->assertSame('Rencana sudah diperbaiki', $data['rtl']->rtl_teks);
         $this->assertSame('menunggu', $data['rtl']->status_verifikasi);
         $this->assertNull($data['rtl']->catatan);
+    }
+
+    public function test_halaman_pengisian_penuh_bisa_dibuka_lewat_deep_link_bulan_terakhir_triwulan(): void
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $ketua = User::create([
+            'nama' => 'Ketua Uji Deep Link', 'username' => 'ketua-uji-deeplink@example.test', 'email' => 'ketua-uji-deeplink@example.test',
+            'password' => 'password', 'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create(['kode' => 'UJI-DEEPLINK', 'indikator' => 'Indikator uji deep link', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji']);
+
+        $this->actingAs($ketua);
+
+        $this->get("/pengisian?iku_id={$iku->id}&tahun=2026&bulan=9")->assertOk();
+    }
+
+    public function test_halaman_pengisian_penuh_bisa_dibuka_dengan_rtl_berikutnya_sudah_ditetapkan(): void
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $ketua = User::create([
+            'nama' => 'Ketua Uji Deep Link 2', 'username' => 'ketua-uji-deeplink2@example.test', 'email' => 'ketua-uji-deeplink2@example.test',
+            'password' => 'password', 'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create(['kode' => 'UJI-DEEPLINK2', 'indikator' => 'Indikator uji deep link 2', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji']);
+        $periodeBerikutnya = Periode::create(['tahun' => 2026, 'bulan' => 10, 'triwulan' => 4, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+
+        RtlEvaluasi::create([
+            'iku_id' => $iku->id, 'periode_id' => $periodeBerikutnya->id,
+            'rtl_teks' => 'Rencana sudah ada', 'berlaku_bulan' => 'RTL untuk Oktober, November, dan Desember',
+            'pic' => 'Uji', 'batas_waktu' => '2026-12-31', 'status_verifikasi' => 'menunggu',
+        ]);
+
+        $this->actingAs($ketua);
+
+        $this->get("/pengisian?iku_id={$iku->id}&tahun=2026&bulan=9")->assertOk();
     }
 
     public function test_rtl_berikutnya_sudah_ditetapkan_menampilkan_isi_yang_pernah_diisi(): void
