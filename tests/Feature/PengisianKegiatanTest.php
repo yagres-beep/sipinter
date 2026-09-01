@@ -112,7 +112,7 @@ class PengisianKegiatanTest extends TestCase
             ->set('blocks.0.uraian_kegiatan', 'Kegiatan uji riwayat')
             ->set('blocks.0.jenis', 'bukan_survei_sensus')
             ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
-            ->set('kendalaBlocks.0.kendala', '')
+            ->set('kendalaBlocks.0.kendala', 'Kendala uji riwayat')
             ->set('kendalaBlocks.0.solusi', '')
             ->set('rtlBaru.0.rtl_teks', 'RTL uji riwayat')
             ->set('rtlBaruPic', 'PIC Uji Riwayat')
@@ -153,6 +153,7 @@ class PengisianKegiatanTest extends TestCase
             ->set('blocks.0.uraian_kegiatan', 'Kegiatan uji pesan')
             ->set('blocks.0.jenis', 'bukan_survei_sensus')
             ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
+            ->set('kendalaBlocks.0.kendala', 'Kendala uji pesan')
             ->set('rtlBaru.0.rtl_teks', 'RTL uji pesan')
             ->call('ajukanIsian')
             ->assertHasNoErrors();
@@ -197,6 +198,78 @@ class PengisianKegiatanTest extends TestCase
             ->assertHasNoErrors();
 
         $this->assertDatabaseCount('kendala_solusi', 0);
+    }
+
+    /**
+     * Kendala & Solusi boleh dikosongkan bulan demi bulan (lihat
+     * test_kendala_solusi_kosong_tidak_disimpan() di atas, bulan 8/bukan bulan
+     * terakhir) — TAPI begitu sampai bulan TERAKHIR triwulan, minimal satu pasangan
+     * wajib sudah tercatat untuk triwulan itu sebelum bisa diajukan ke Tim SAKIP.
+     */
+    public function test_kendala_solusi_wajib_minimal_satu_di_bulan_terakhir_triwulan(): void
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+
+        $ketua = User::create([
+            'nama' => 'Ketua Uji', 'username' => 'ketua-uji-kendala-wajib@example.test', 'email' => 'ketua-uji-kendala-wajib@example.test',
+            'password' => 'password', 'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create(['kode' => 'UJI-KENDALA-WAJIB', 'indikator' => 'Indikator uji kendala wajib', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji']);
+
+        $this->actingAs($ketua);
+
+        Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 9) // bulan terakhir Triwulan III.
+            ->set('iku_id', $iku->id)
+            ->set('blocks.0.uraian_kegiatan', 'Kegiatan tanpa kendala')
+            ->set('blocks.0.jenis', 'bukan_survei_sensus')
+            ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
+            ->set('rtlBaru.0.rtl_teks', 'RTL tanpa kendala')
+            ->set('rtlBaruPic', 'PIC Uji')
+            ->call('ajukanIsian')
+            ->assertHasErrors('kendalaBlocks');
+
+        $this->assertDatabaseCount('kegiatan', 0);
+        $this->assertDatabaseCount('kendala_solusi', 0);
+    }
+
+    /**
+     * Syarat minimal satu pasangan di bulan terakhir triwulan boleh dipenuhi dari
+     * bulan-bulan SEBELUMNYA di triwulan yang sama (tidak wajib diisi ulang di bulan
+     * terakhir itu sendiri) — lihat riwayatKendalaSolusi() yang dipakai di
+     * buatValidator().
+     */
+    public function test_kendala_solusi_dari_bulan_sebelumnya_triwulan_yang_sama_memenuhi_syarat_bulan_terakhir(): void
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+
+        $ketua = User::create([
+            'nama' => 'Ketua Uji', 'username' => 'ketua-uji-kendala-riwayat@example.test', 'email' => 'ketua-uji-kendala-riwayat@example.test',
+            'password' => 'password', 'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create(['kode' => 'UJI-KENDALA-RIWAYAT', 'indikator' => 'Indikator uji kendala riwayat', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji']);
+
+        $periodeBulanPertama = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => true]);
+        KendalaSolusi::create(['iku_id' => $iku->id, 'periode_id' => $periodeBulanPertama->id, 'kendala' => 'Kendala bulan pertama triwulan']);
+
+        $this->actingAs($ketua);
+
+        Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 9) // bulan terakhir triwulan yang sama dengan periode di atas.
+            ->set('iku_id', $iku->id)
+            ->set('blocks.0.uraian_kegiatan', 'Kegiatan bulan terakhir')
+            ->set('blocks.0.jenis', 'bukan_survei_sensus')
+            ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
+            ->set('rtlBaru.0.rtl_teks', 'RTL bulan terakhir')
+            ->set('rtlBaruPic', 'PIC Uji')
+            ->call('ajukanIsian')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseCount('kegiatan', 1);
     }
 
     public function test_solusi_tanpa_bukti_tidak_ditolak_validasi(): void
@@ -379,6 +452,7 @@ class PengisianKegiatanTest extends TestCase
         // Melanjutkan & benar-benar mengajukan HARUS mengubah baris yang SAMA (bukan
         // duplikat) jadi "diajukan" — baru di titik ini terkunci "Sudah ditetapkan".
         $component->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti-rtl-draf.pdf', 100, 'application/pdf')])
+            ->set('kendalaBlocks.0.kendala', 'Kendala RTL draf')
             ->call('ajukanIsian')
             ->assertHasNoErrors();
 
@@ -516,6 +590,7 @@ class PengisianKegiatanTest extends TestCase
         $component->set('blocks.0.uraian_kegiatan', 'Kegiatan lengkap')
             ->set('blocks.0.jenis', 'bukan_survei_sensus')
             ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
+            ->set('kendalaBlocks.0.kendala', 'Kendala lengkap')
             ->set('rtlBaru.0.rtl_teks', 'RTL lengkap')
             ->set('rtlBaruPic', 'PIC Lengkap');
 
@@ -679,6 +754,7 @@ class PengisianKegiatanTest extends TestCase
         $component->set('blocks.0.uraian_kegiatan', 'Kegiatan uji RTL berikutnya')
             ->set('blocks.0.jenis', 'bukan_survei_sensus')
             ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
+            ->set('kendalaBlocks.0.kendala', 'Kendala uji RTL berikutnya')
             ->set('rtlBaru.0.rtl_teks', 'Rencana sudah diperbaiki')
             ->call('ajukanIsian')
             ->assertHasNoErrors();
@@ -801,6 +877,7 @@ class PengisianKegiatanTest extends TestCase
             ->set('blocks.0.jenis', 'bukan_survei_sensus')
             ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
             ->set("evaluasi.{$poinRtl->id}.bukti", [UploadedFile::fake()->create('realisasi.pdf', 100, 'application/pdf')])
+            ->set('kendalaBlocks.0.kendala', 'Kendala uji 10')
             ->set('rtlBaru.0.rtl_teks', 'RTL baru')
             ->set('rtlBaruPic', 'PIC Uji 10')
             ->call('ajukanIsian')
@@ -915,6 +992,7 @@ class PengisianKegiatanTest extends TestCase
             ->set('blocks.2.bukti', [UploadedFile::fake()->create('bukti2.pdf', 100, 'application/pdf')])
             ->set("evaluasi.{$poin1->id}.bukti", [UploadedFile::fake()->create('realisasi1.pdf', 100, 'application/pdf')])
             ->set("evaluasi.{$poin2->id}.bukti", [UploadedFile::fake()->create('realisasi2.pdf', 100, 'application/pdf')])
+            ->set('kendalaBlocks.0.kendala', 'Kendala uji evaluasi')
             ->set('rtlBaru.0.rtl_teks', 'RTL uji coba triwulan berikutnya')
             ->set('rtlBaruPic', 'PIC Uji')
             ->call('ajukanIsian')
@@ -983,6 +1061,7 @@ class PengisianKegiatanTest extends TestCase
             ->set('blocks.0.uraian_kegiatan', 'Kegiatan uji PIC kosong')
             ->set('blocks.0.jenis', 'bukan_survei_sensus')
             ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
+            ->set('kendalaBlocks.0.kendala', 'Kendala uji PIC kosong')
             ->set('rtlBaru.0.rtl_teks', 'RTL uji coba tanpa PIC');
 
         $this->assertSame('', $component->get('rtlBaruPic'));
@@ -1057,6 +1136,7 @@ class PengisianKegiatanTest extends TestCase
             ->set('blocks.0.uraian_kegiatan', 'Kegiatan cache uji')
             ->set('blocks.0.jenis', 'bukan_survei_sensus')
             ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
+            ->set('kendalaBlocks.0.kendala', 'Kendala cache uji')
             ->set('rtlBaru.0.rtl_teks', 'RTL cache uji')
             ->set('rtlBaruPic', 'PIC Uji 13')
             ->call('ajukanIsian')

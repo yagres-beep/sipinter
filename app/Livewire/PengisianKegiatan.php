@@ -1797,6 +1797,27 @@ class PengisianKegiatan extends Component
                 }
             }
 
+            // Kendala & Solusi boleh dikosongkan tiap bulan (lihat info banner di blade),
+            // TAPI minimal satu pasangan wajib sudah tercatat untuk triwulan ini begitu
+            // sampai bulan TERAKHIR triwulan — baik yang diisi bulan ini (kendalaBlocks)
+            // maupun yang sudah diajukan di bulan-bulan sebelumnya triwulan yang sama
+            // (riwayatKendalaSolusi(), sudah di-scope per triwulan lewat groupBy di sana).
+            if ($this->bulanKeDari($this->bulan) === 3) {
+                $adaDiFormIni = collect($this->kendalaBlocks)
+                    ->contains(fn ($blok) => filled($blok['kendala'] ?? null));
+
+                $adaDiBulanSebelumnya = $this->riwayatKendalaSolusi()
+                    ->get($this->triwulanDari($this->bulan), collect())
+                    ->isNotEmpty();
+
+                if (! $adaDiFormIni && ! $adaDiBulanSebelumnya) {
+                    $validator->errors()->add(
+                        'kendalaBlocks',
+                        'Minimal satu pasangan Kendala & Solusi wajib diisi sebelum diajukan pada bulan terakhir triwulan ini.'
+                    );
+                }
+            }
+
             $belumTerlaksana = $this->poinRtlBerjalanBelumTerlaksana();
 
             if ($belumTerlaksana->isNotEmpty()) {

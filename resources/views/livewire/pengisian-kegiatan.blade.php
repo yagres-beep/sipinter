@@ -422,7 +422,11 @@
         <div wire:loading wire:target="iku_id,bulan,tahun" class="info">⏳ Memuat kendala &amp; solusi yang sudah pernah diisi untuk IKU &amp; periode ini, kalau ada…</div>
 
         <div wire:loading.remove wire:target="iku_id,bulan,tahun">
-        <div class="info">ℹ️ Boleh dikosongkan bila tidak ada kendala periode ini.</div>
+        <div class="info">ℹ️ {{ $bulanKe === 3 ? 'Wajib minimal satu pasangan Kendala & Solusi untuk triwulan ini sebelum diajukan (boleh sudah diisi pada bulan sebelumnya di triwulan yang sama).' : 'Boleh dikosongkan bulan ini bila tidak ada kendala — tapi wajib minimal satu pasangan sudah tercatat sebelum diajukan pada bulan terakhir triwulan.' }}</div>
+
+        @error('kendalaBlocks')
+            <div class="info red">⚠️ {{ $message }}</div>
+        @enderror
 
         @if ($iku_id && $riwayatKendala->isNotEmpty())
             <div style="margin-bottom:16px">
