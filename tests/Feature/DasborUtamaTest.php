@@ -5,11 +5,14 @@ namespace Tests\Feature;
 use App\Livewire\DasborUtama;
 use App\Models\Capaian;
 use App\Models\Kegiatan;
+use App\Models\KendalaSolusi;
 use App\Models\MasterIku;
 use App\Models\Periode;
+use App\Models\RiwayatStatusCapaian;
 use App\Models\Role;
 use App\Models\RtlEvaluasi;
 use App\Models\User;
+use App\Models\UserTim;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Livewire\Livewire;
@@ -213,5 +216,71 @@ class DasborUtamaTest extends TestCase
             ->assertSee('ZETA-6')
             ->assertSee('1 Diverifikasi')
             ->assertSee('RTL 1 Tidak Sesuai');
+    }
+
+    /**
+     * Skenario dari laporan pengguna: 1 IKU, 2 kegiatan + 3 Kendala & Solusi + 3 RTL
+     * (semuanya "diajukan"/"menunggu") — kolom "Item" harus menghitung SELURUH jenis
+     * (2+3+3=8), bukan cuma Kegiatan seperti sebelumnya, supaya kalau salah satu
+     * Kendala & Solusi nanti ditolak Tim SAKIP tetap kelihatan di rincian (bukan
+     * cuma lewat badge status besar Capaian::status).
+     */
+    public function test_item_menghitung_kegiatan_kendala_solusi_dan_rtl_gabungan(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 9, 'triwulan' => 3, 'bulan_ke' => 3, 'flag_bulan_terlewat' => false]);
+        $iku = MasterIku::create(['kode' => 'ETA-7', 'indikator' => 'Indikator Eta', 'tim' => 'Tim H', 'penanggung_jawab' => 'PJ H']);
+
+        Capaian::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'status' => Capaian::STATUS_DIAJUKAN]);
+
+        Kegiatan::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'uraian_kegiatan' => 'K1', 'jenis' => 'bukan_survei_sensus', 'status_dokumen' => 'diajukan']);
+        Kegiatan::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'uraian_kegiatan' => 'K2', 'jenis' => 'bukan_survei_sensus', 'status_dokumen' => 'diajukan']);
+
+        for ($i = 1; $i <= 3; $i++) {
+            KendalaSolusi::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'kendala' => "Kendala {$i}", 'solusi' => "Solusi {$i}"]);
+        }
+
+        for ($i = 1; $i <= 3; $i++) {
+            RtlEvaluasi::create([
+                'iku_id' => $iku->id, 'periode_id' => $periode->id, 'rtl_teks' => "RTL {$i}",
+                'realisasi' => "Sudah dilaksanakan {$i}",
+            ]);
+        }
+
+        $capaian = Capaian::where('iku_id', $iku->id)->firstOrFail();
+
+        $component = Livewire::test(DasborUtama::class)
+            ->assertSee('ETA-7')
+            ->assertSee('K&S 3 Menunggu');
+
+        $this->assertSame(8, $component->viewData('jumlahItem')->get($capaian->id));
+    }
+
+    /**
+     * Skenario dari laporan pengguna: MasterIku::tim kosong (sejumlah IKU lama belum
+     * pernah diisi kolom ini) tapi Ketua Tim yang mengajukan isian ini SUDAH terdaftar
+     * di satu tim (App\Models\UserTim, diisi saat registrasi) — kolom "Tim" di dasbor
+     * sebelumnya tetap tampil "—" walau info timnya sebenarnya sudah ada, sekarang
+     * harus jatuh ke tim Ketua Tim pengaju.
+     */
+    public function test_kolom_tim_jatuh_ke_tim_ketua_tim_pengaju_saat_master_iku_tim_kosong(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+        $ketuaTim = User::create([
+            'nama' => 'Ketua Uji', 'username' => 'ketuauji', 'email' => 'ketuauji@example.test',
+            'password' => 'password', 'role_id' => Role::firstOrCreate(['nama' => 'Ketua Tim'])->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+        UserTim::create(['user_id' => $ketuaTim->id, 'tim' => 'Tim Statistik Sosial']);
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 9, 'triwulan' => 3, 'bulan_ke' => 3, 'flag_bulan_terlewat' => false]);
+        $iku = MasterIku::create(['kode' => 'THETA-8', 'indikator' => 'Indikator Theta', 'tim' => null, 'penanggung_jawab' => 'PJ H']);
+
+        $capaian = Capaian::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'status' => Capaian::STATUS_DIAJUKAN]);
+        RiwayatStatusCapaian::create(['capaian_id' => $capaian->id, 'status' => Capaian::STATUS_DIAJUKAN, 'user_id' => $ketuaTim->id]);
+
+        Livewire::test(DasborUtama::class)
+            ->assertSee('THETA-8')
+            ->assertSee('Tim Statistik Sosial');
     }
 }

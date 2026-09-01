@@ -4,6 +4,8 @@ namespace App\Livewire;
 
 use App\Models\Capaian;
 use App\Models\Kegiatan;
+use App\Models\KendalaSolusi;
+use App\Models\RtlEvaluasi;
 use Livewire\Component;
 
 /**
@@ -189,15 +191,88 @@ class VerifikasiList extends Component
         );
     }
 
+    /**
+     * Kendala &amp; Solusi per Capaian, sama polanya dengan kegiatanPerCapaian() di
+     * atas — dipakai SEKALIGUS untuk turunkan total "item" MAUPUN rincian statusnya
+     * (lihat KendalaSolusi::rincianStatusVerifikasi()), supaya kendala-solusi yang
+     * ditolak Tim SAKIP kelihatan di sini juga, bukan cuma lewat badge status besar.
+     *
+     * @param  \Illuminate\Support\Collection<int, Capaian>  $daftarCapaian
+     * @return \Illuminate\Support\Collection<int, \Illuminate\Support\Collection<int, KendalaSolusi>>
+     */
+    protected function kendalaSolusiPerCapaian($daftarCapaian)
+    {
+        if ($daftarCapaian->isEmpty()) {
+            return collect();
+        }
+
+        $perPasangan = KendalaSolusi::whereIn('iku_id', $daftarCapaian->pluck('iku_id'))
+            ->whereIn('periode_id', $daftarCapaian->pluck('periode_id'))
+            ->get(['iku_id', 'periode_id', 'status_verifikasi'])
+            ->groupBy(fn ($k) => $k->iku_id.'-'.$k->periode_id);
+
+        return $daftarCapaian->mapWithKeys(
+            fn ($c) => [$c->id => $perPasangan->get($c->iku_id.'-'.$c->periode_id, collect())]
+        );
+    }
+
+    /**
+     * Poin RTL evaluasi triwulan berjalan per Capaian — sama polanya dengan
+     * DasborUtama::rtlPerCapaian(), lihat komentar di sana untuk alasan dicocokkan
+     * lewat (iku_id, tahun, triwulan) bukan periode_id, dan kenapa hanya poin yang
+     * realisasinya sudah dilaporkan Ketua Tim yang disertakan.
+     *
+     * @param  \Illuminate\Support\Collection<int, Capaian>  $daftarCapaian
+     * @return \Illuminate\Support\Collection<int, \Illuminate\Support\Collection<int, RtlEvaluasi>>
+     */
+    protected function rtlPerCapaian($daftarCapaian)
+    {
+        if ($daftarCapaian->isEmpty()) {
+            return collect();
+        }
+
+        $kunciPasangan = fn ($ikuId, $tahun, $triwulan) => "{$ikuId}-{$tahun}-{$triwulan}";
+
+        $pasanganDicari = $daftarCapaian->map(
+            fn ($c) => $kunciPasangan($c->iku_id, $c->periode->tahun, $c->periode->triwulan)
+        )->unique();
+
+        $perPasangan = RtlEvaluasi::whereIn('iku_id', $daftarCapaian->pluck('iku_id'))
+            ->whereNotNull('realisasi')
+            ->where('realisasi', '!=', '')
+            ->with('periode:id,tahun,triwulan')
+            ->get(['id', 'iku_id', 'periode_id', 'realisasi', 'status_verifikasi'])
+            ->filter(fn ($r) => $pasanganDicari->contains($kunciPasangan($r->iku_id, $r->periode->tahun, $r->periode->triwulan)))
+            ->groupBy(fn ($r) => $kunciPasangan($r->iku_id, $r->periode->tahun, $r->periode->triwulan));
+
+        return $daftarCapaian->mapWithKeys(
+            fn ($c) => [$c->id => $perPasangan->get($kunciPasangan($c->iku_id, $c->periode->tahun, $c->periode->triwulan), collect())]
+        );
+    }
+
     public function render()
     {
         $daftarCapaian = $this->daftarCapaian();
         $kegiatanPerCapaian = $this->kegiatanPerCapaian($daftarCapaian);
+        $kendalaSolusiPerCapaian = $this->kendalaSolusiPerCapaian($daftarCapaian);
+        $rtlPerCapaian = $this->rtlPerCapaian($daftarCapaian);
+
+        // "Item" = seluruh jenis isian pendukung satu Capaian (Kegiatan + Kendala &
+        // Solusi + RTL yang sudah dilaporkan) — lihat DasborUtama::render() untuk
+        // alasan yang sama.
+        $jumlahItem = $daftarCapaian->mapWithKeys(fn ($c) => [$c->id => (
+            $kegiatanPerCapaian->get($c->id, collect())->count()
+            + $kendalaSolusiPerCapaian->get($c->id, collect())->count()
+            + $rtlPerCapaian->get($c->id, collect())->count()
+        )]);
 
         return view('livewire.verifikasi-list', [
             'daftarCapaian' => $daftarCapaian,
-            'jumlahKegiatan' => $kegiatanPerCapaian->map->count(),
+            'timPerCapaian' => Capaian::timTampilBanyak($daftarCapaian),
+            'jumlahItem' => $jumlahItem,
             'rincianStatusKegiatan' => $kegiatanPerCapaian->map(fn ($g) => Kegiatan::rincianStatus($g)),
+            'rincianStatusKendala' => $kendalaSolusiPerCapaian->map(fn ($g) => KendalaSolusi::rincianStatusVerifikasi($g)),
+            'rincianStatusRtl' => $rtlPerCapaian->map(fn ($g) => RtlEvaluasi::rincianStatusVerifikasi($g)),
             'statusTersedia' => self::statusTersedia(),
         ]);
     }

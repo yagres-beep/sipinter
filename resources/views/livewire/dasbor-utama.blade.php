@@ -79,8 +79,8 @@
                             <th class="th-sort {{ $urutanKolom === 'tim' ? 'active' : '' }}" wire:click="urutkan('tim')">
                                 Tim <span class="th-arrow">{{ $urutanKolom === 'tim' ? ($urutanArah === 'asc' ? '▲' : '▼') : '↕' }}</span>
                             </th>
-                            <th>Kegiatan</th>
-                            <th>Rincian Status Kegiatan</th>
+                            <th>Item</th>
+                            <th>Rincian Status Item</th>
                             <th class="th-sort {{ $urutanKolom === 'status' ? 'active' : '' }}" wire:click="urutkan('status')">
                                 Status <span class="th-arrow">{{ $urutanKolom === 'status' ? ($urutanArah === 'asc' ? '▲' : '▼') : '↕' }}</span>
                             </th>
@@ -94,9 +94,9 @@
                                 <td>{{ $capaian->masterIku->indikator ?? '—' }}</td>
                                 <td>{{ $namaBulan[$capaian->periode->bulan ?? 0] ?? '—' }}</td>
                                 <td class="muted">{{ $angkaRomawi[$capaian->periode->triwulan ?? 0] ?? '—' }}</td>
-                                <td class="muted">{{ $capaian->masterIku->tim ?? '—' }}</td>
-                                <td class="muted">{{ $jumlahKegiatan->get($capaian->id, 0) }}</td>
-                                <td><x-rincian-status-kegiatan :rincian="$rincianStatusKegiatan->get($capaian->id, collect())" :rincianRtl="$rincianStatusRtl->get($capaian->id, collect())" /></td>
+                                <td class="muted">{{ $timPerCapaian->get($capaian->id) ?: '—' }}</td>
+                                <td class="muted">{{ $jumlahItem->get($capaian->id, 0) }}</td>
+                                <td><x-rincian-status-kegiatan :rincian="$rincianStatusKegiatan->get($capaian->id, collect())" :rincianKendala="$rincianStatusKendala->get($capaian->id, collect())" :rincianRtl="$rincianStatusRtl->get($capaian->id, collect())" /></td>
                                 <td><x-badge-status :status="$capaian->status" /></td>
                             </tr>
                         @endforeach

@@ -94,7 +94,7 @@ class VerifikasiListTest extends TestCase
         $this->assertSame(3, $component->get('triwulan'));
     }
 
-    public function test_jumlah_kegiatan_pendukung_tampil_benar_tanpa_n_plus_1(): void
+    public function test_jumlah_item_tampil_benar_tanpa_n_plus_1(): void
     {
         $peran = Role::create(['nama' => 'Tim SAKIP']);
         $this->actingAs(User::create([
@@ -112,7 +112,7 @@ class VerifikasiListTest extends TestCase
         Livewire::test(VerifikasiList::class)
             ->set('tahun', 2026)
             ->set('triwulan', 3)
-            ->assertSee('2 kegiatan');
+            ->assertSee('2 item');
     }
 
     /**
@@ -145,7 +145,7 @@ class VerifikasiListTest extends TestCase
             ->set('tahun', 2026)
             ->set('triwulan', 3)
             ->set('status', ['dikembalikan'])
-            ->assertSee('5 kegiatan')
+            ->assertSee('5 item')
             ->assertSee('3 Diverifikasi')
             ->assertSee('2 Dikembalikan');
     }
@@ -178,7 +178,7 @@ class VerifikasiListTest extends TestCase
             ->set('tahun', 2026)
             ->set('triwulan', 3)
             ->set('status', ['diajukan'])
-            ->assertSee('5 kegiatan')
+            ->assertSee('5 item')
             ->assertSee('4 Diverifikasi')
             ->assertSee('1 Diajukan');
     }

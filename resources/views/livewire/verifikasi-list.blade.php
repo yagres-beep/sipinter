@@ -85,8 +85,8 @@
                         <th class="th-sort {{ $urutanKolom === 'tim' ? 'active' : '' }}" wire:click="urutkan('tim')">
                             Tim <span class="th-arrow">{{ $urutanKolom === 'tim' ? ($urutanArah === 'asc' ? '▲' : '▼') : '↕' }}</span>
                         </th>
-                        <th>Kegiatan Pendukung</th>
-                        <th>Rincian Status Kegiatan</th>
+                        <th>Item</th>
+                        <th>Rincian Status Item</th>
                         <th>Status</th>
                         <th style="text-align:right">Tindakan</th>
                     </tr>
@@ -96,9 +96,9 @@
                         <tr wire:key="capaian-{{ $capaian->id }}">
                             <td>{{ $capaian->masterIku->kode }} — {{ $capaian->masterIku->indikator }}</td>
                             <td>{{ $namaBulan[$capaian->periode->bulan - 1] }} {{ $capaian->periode->tahun }}</td>
-                            <td class="muted">{{ $capaian->masterIku->tim }}</td>
-                            <td>{{ $jumlahKegiatan->get($capaian->id, 0) }} kegiatan</td>
-                            <td><x-rincian-status-kegiatan :rincian="$rincianStatusKegiatan->get($capaian->id, collect())" /></td>
+                            <td class="muted">{{ $timPerCapaian->get($capaian->id) ?: '—' }}</td>
+                            <td>{{ $jumlahItem->get($capaian->id, 0) }} item</td>
+                            <td><x-rincian-status-kegiatan :rincian="$rincianStatusKegiatan->get($capaian->id, collect())" :rincianKendala="$rincianStatusKendala->get($capaian->id, collect())" :rincianRtl="$rincianStatusRtl->get($capaian->id, collect())" /></td>
                             <td><x-badge-status :status="$capaian->status" /></td>
                             <td style="text-align:right">
                                 <a wire:navigate href="{{ route('verifikasi.show', $capaian) }}" class="btn btn-primary btn-sm">{{ $capaian->status === 'diajukan' ? 'Periksa →' : 'Lihat →' }}</a>

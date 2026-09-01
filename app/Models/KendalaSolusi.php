@@ -30,4 +30,25 @@ class KendalaSolusi extends Model
     {
         return $this->belongsTo(Periode::class, 'periode_id');
     }
+
+    /**
+     * Rincian jumlah Kendala &amp; Solusi per status_verifikasi dalam satu Capaian
+     * (IKU+bulan) — pola sama persis dengan RtlEvaluasi::rincianStatusVerifikasi(),
+     * dipakai di tabel dasbor/daftar verifikasi supaya kendala-solusi yang ditolak
+     * Tim SAKIP kelihatan rinciannya juga, bukan cuma lewat badge besar Capaian::status.
+     *
+     * @param  \Illuminate\Support\Collection<int, self>  $kendalaSatuIkuPeriode
+     * @return \Illuminate\Support\Collection<string, int>
+     */
+    public static function rincianStatusVerifikasi($kendalaSatuIkuPeriode)
+    {
+        $jumlahPerStatus = $kendalaSatuIkuPeriode->countBy('status_verifikasi');
+
+        return collect([
+            'menunggu',
+            'terverifikasi',
+            'ditolak',
+        ])->mapWithKeys(fn ($status) => [$status => $jumlahPerStatus->get($status, 0)])
+            ->filter(fn ($jumlah) => $jumlah > 0);
+    }
 }

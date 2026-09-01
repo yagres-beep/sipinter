@@ -225,4 +225,38 @@ class Capaian extends Model
     {
         return $this->status === self::STATUS_DIVERIFIKASI;
     }
+
+    /**
+     * Tim yang ditampilkan untuk sekumpulan Capaian — MasterIku::tim bila terisi;
+     * kalau kosong (sejumlah IKU lama belum pernah diisi kolom ini), jatuh ke tim
+     * Ketua Tim yang benar-benar mengajukan isian ini (keanggotaan tim lewat
+     * App\Models\UserTim, diisi saat registrasi) supaya kolom "Tim" di dasbor/daftar
+     * verifikasi tidak tampil "—" padahal Ketua Tim pengaju sebenarnya sudah
+     * terdaftar di satu/lebih tim. SATU query batch untuk seluruh daftar (bukan N+1
+     * lewat relasi riwayatStatus() per baris), sama polanya dengan
+     * DasborUtama::kegiatanPerCapaian().
+     *
+     * @param  \Illuminate\Support\Collection<int, self>  $daftarCapaian
+     * @return \Illuminate\Support\Collection<int, string>  capaian_id => nama tim (string kosong bila benar-benar tidak diketahui)
+     */
+    public static function timTampilBanyak($daftarCapaian)
+    {
+        $perluFallback = $daftarCapaian->filter(fn ($c) => blank($c->masterIku->tim ?? null));
+
+        $timPengaju = collect();
+
+        if ($perluFallback->isNotEmpty()) {
+            $timPengaju = RiwayatStatusCapaian::whereIn('capaian_id', $perluFallback->pluck('id'))
+                ->where('status', self::STATUS_DIAJUKAN)
+                ->with('user.timList')
+                ->latest('id')
+                ->get()
+                ->unique('capaian_id')
+                ->mapWithKeys(fn ($r) => [$r->capaian_id => implode(', ', $r->user?->namaTimList() ?? [])]);
+        }
+
+        return $daftarCapaian->mapWithKeys(fn ($c) => [
+            $c->id => filled($c->masterIku->tim ?? null) ? $c->masterIku->tim : $timPengaju->get($c->id, ''),
+        ]);
+    }
 }

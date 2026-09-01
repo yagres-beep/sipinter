@@ -4,6 +4,7 @@ namespace App\Livewire;
 
 use App\Models\Capaian;
 use App\Models\Kegiatan;
+use App\Models\KendalaSolusi;
 use App\Models\MasterIku;
 use App\Models\RtlEvaluasi;
 use App\Models\StorageAccount;
@@ -204,6 +205,34 @@ class DasborUtama extends Component
     }
 
     /**
+     * Kendala &amp; Solusi per Capaian yang tampil di halaman ini, SATU query untuk
+     * seluruh daftar — pola sama persis dengan kegiatanPerCapaian() di atas, dipakai
+     * SEKALIGUS untuk turunkan total "item" MAUPUN rincian statusnya (lihat
+     * KendalaSolusi::rincianStatusVerifikasi()). Sebelumnya kolom "Kegiatan" &amp;
+     * rincian statusnya di tabel ini hanya menghitung Kegiatan — Kendala &amp; Solusi
+     * yang ditolak Tim SAKIP tidak kelihatan sama sekali di sini, cuma lewat badge
+     * besar Capaian::status.
+     *
+     * @param  \Illuminate\Support\Collection<int, Capaian>  $daftarCapaian
+     * @return \Illuminate\Support\Collection<int, \Illuminate\Support\Collection<int, KendalaSolusi>>
+     */
+    protected function kendalaSolusiPerCapaian($daftarCapaian)
+    {
+        if ($daftarCapaian->isEmpty()) {
+            return collect();
+        }
+
+        $perPasangan = KendalaSolusi::whereIn('iku_id', $daftarCapaian->pluck('iku_id'))
+            ->whereIn('periode_id', $daftarCapaian->pluck('periode_id'))
+            ->get(['iku_id', 'periode_id', 'status_verifikasi'])
+            ->groupBy(fn ($k) => $k->iku_id.'-'.$k->periode_id);
+
+        return $daftarCapaian->mapWithKeys(
+            fn ($c) => [$c->id => $perPasangan->get($c->iku_id.'-'.$c->periode_id, collect())]
+        );
+    }
+
+    /**
      * Poin RTL evaluasi triwulan berjalan per Capaian, SATU query untuk seluruh
      * daftar (sama polanya dengan kegiatanPerCapaian() di atas) — dipakai supaya
      * badge status besar Capaian (mis. "Dikembalikan") tetap bisa ditelusuri sampai
@@ -305,14 +334,27 @@ class DasborUtama extends Component
         $role = auth()->user()->namaRole();
         $daftarCapaian = $this->daftarCapaian($role);
         $kegiatanPerCapaian = $this->kegiatanPerCapaian($daftarCapaian);
+        $kendalaSolusiPerCapaian = $this->kendalaSolusiPerCapaian($daftarCapaian);
         $rtlPerCapaian = $this->rtlPerCapaian($daftarCapaian);
+
+        // "Item" = seluruh jenis isian pendukung satu Capaian (Kegiatan + Kendala &
+        // Solusi + RTL yang sudah dilaporkan), BUKAN cuma Kegiatan seperti sebelumnya —
+        // supaya "8 item diajukan" (mis. 2 kegiatan + 3 kendala&solusi + 3 RTL) tetap
+        // tertotal utuh di kolom ini walau salah satu jenisnya nanti ditolak Tim SAKIP.
+        $jumlahItem = $daftarCapaian->mapWithKeys(fn ($c) => [$c->id => (
+            $kegiatanPerCapaian->get($c->id, collect())->count()
+            + $kendalaSolusiPerCapaian->get($c->id, collect())->count()
+            + $rtlPerCapaian->get($c->id, collect())->count()
+        )]);
 
         return view('livewire.dasbor-utama', [
             'role' => $role,
             'ringkasan' => $this->ringkasan(),
             'daftarCapaian' => $daftarCapaian,
-            'jumlahKegiatan' => $kegiatanPerCapaian->map->count(),
+            'timPerCapaian' => Capaian::timTampilBanyak($daftarCapaian),
+            'jumlahItem' => $jumlahItem,
             'rincianStatusKegiatan' => $kegiatanPerCapaian->map(fn ($g) => Kegiatan::rincianStatus($g)),
+            'rincianStatusKendala' => $kendalaSolusiPerCapaian->map(fn ($g) => KendalaSolusi::rincianStatusVerifikasi($g)),
             'rincianStatusRtl' => $rtlPerCapaian->map(fn ($g) => RtlEvaluasi::rincianStatusVerifikasi($g)),
             'tautanBaris' => $this->tautanSemuaBaris($daftarCapaian, $role),
             'ikuBelumTerisiTriwulanIni' => $this->ikuBelumTerisiTriwulanIni(),
