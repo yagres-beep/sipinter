@@ -1331,10 +1331,17 @@ class PengisianKegiatanTest extends TestCase
         $this->assertNull($data['kegiatan']->fresh()->catatan_bukti_dihapus);
     }
 
-    public function test_hapus_bukti_lama_menolak_berkas_yang_belum_ditolak(): void
+    /**
+     * Selagi Kegiatan-nya masih editable (draft/dikembalikan), Ketua Tim boleh
+     * membuang bukti APAPUN status_verifikasi-nya (bukan cuma yang "ditolak") —
+     * supaya bukti yang salah unggah sendiri bisa diperbaiki sebelum diajukan ulang.
+     */
+    public function test_hapus_bukti_lama_menghapus_berkas_yang_belum_ditolak_selagi_masih_bisa_diedit(): void
     {
+        \Illuminate\Support\Facades\Storage::fake('local');
         $data = $this->siapkanKegiatanDikembalikanDenganBerkasDitolak();
         $data['berkas']->update(['status_verifikasi' => 'terverifikasi']);
+        \Illuminate\Support\Facades\Storage::disk('local')->put($data['berkas']->path, 'isi pdf palsu');
 
         $this->actingAs($data['ketua']);
 
@@ -1344,6 +1351,31 @@ class PengisianKegiatanTest extends TestCase
             ->set('iku_id', $data['iku']->id);
 
         $blockIndex = collect($component->get('blocks'))->search(fn ($b) => $b['id'] === $data['kegiatan']->id);
+
+        $component->call('hapusBuktiLama', $blockIndex, $data['berkas']->id);
+
+        $this->assertDatabaseMissing('berkas', ['id' => $data['berkas']->id]);
+    }
+
+    /**
+     * Begitu Kegiatan-nya sudah terkunci (mis. sudah diajukan/diverifikasi/disetujui),
+     * hapusBuktiLama() menolak permintaan sama sekali — defense in depth, bukan cuma
+     * disembunyikan tombolnya di blade.
+     */
+    public function test_hapus_bukti_lama_menolak_saat_kegiatan_sudah_terkunci(): void
+    {
+        $data = $this->siapkanKegiatanDikembalikanDenganBerkasDitolak();
+        $data['kegiatan']->update(['status_dokumen' => Kegiatan::STATUS_DIAJUKAN]);
+
+        $this->actingAs($data['ketua']);
+
+        $component = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $data['iku']->id);
+
+        $blockIndex = collect($component->get('blocks'))->search(fn ($b) => $b['id'] === $data['kegiatan']->id);
+        $this->assertNotFalse($blockIndex);
 
         $component->call('hapusBuktiLama', $blockIndex, $data['berkas']->id);
 
@@ -1626,13 +1658,45 @@ class PengisianKegiatanTest extends TestCase
         $this->assertSame('Belum relevan', $component->get("bagianKustomBlocks.{$data['bagian']->id}.0.catatan_bukti_dihapus"));
     }
 
-    public function test_hapus_bukti_lama_bagian_kustom_menolak_berkas_yang_belum_ditolak(): void
+    /**
+     * Selagi Capaian-nya masih editable (draft/dikembalikan), Ketua Tim boleh
+     * membuang bukti bagian kustom APAPUN status_verifikasi-nya — sama seperti
+     * hapusBuktiLama() untuk Kegiatan di atas.
+     */
+    public function test_hapus_bukti_lama_bagian_kustom_menghapus_berkas_yang_belum_ditolak_selagi_masih_bisa_diedit(): void
     {
+        \Illuminate\Support\Facades\Storage::fake('local');
         $data = $this->siapkanBagianKustomDikembalikan();
 
         $berkas = Berkas::create([
             'ref_id' => $data['poin']->id, 'ref_type' => \App\Models\BagianKustomPoin::class, 'kategori' => 'bagian_kustom',
             'nama_file' => 'bukti.pdf', 'path' => 'bukti-bagian-kustom/bukti.pdf', 'status_verifikasi' => 'menunggu',
+        ]);
+        \Illuminate\Support\Facades\Storage::disk('local')->put($berkas->path, 'isi pdf palsu');
+
+        $this->actingAs($data['ketua']);
+
+        Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $data['iku']->id)
+            ->call('hapusBuktiLamaBagianKustom', $data['poin']->id, $berkas->id);
+
+        $this->assertDatabaseMissing('berkas', ['id' => $berkas->id]);
+    }
+
+    /**
+     * Begitu Capaian-nya sedang ditangani Tim SAKIP, hapusBuktiLamaBagianKustom()
+     * menolak permintaan — defense in depth, sama seperti hapusBuktiLama() untuk Kegiatan.
+     */
+    public function test_hapus_bukti_lama_bagian_kustom_menolak_saat_capaian_sedang_ditangani(): void
+    {
+        $data = $this->siapkanBagianKustomDikembalikan();
+        Capaian::where('iku_id', $data['iku']->id)->update(['status' => Capaian::STATUS_SEDANG_DITANGANI]);
+
+        $berkas = Berkas::create([
+            'ref_id' => $data['poin']->id, 'ref_type' => \App\Models\BagianKustomPoin::class, 'kategori' => 'bagian_kustom',
+            'nama_file' => 'bukti.pdf', 'path' => 'bukti-bagian-kustom/bukti.pdf', 'status_verifikasi' => 'ditolak', 'catatan' => 'Belum relevan',
         ]);
 
         $this->actingAs($data['ketua']);

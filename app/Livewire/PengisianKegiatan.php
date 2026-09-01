@@ -368,10 +368,13 @@ class PengisianKegiatan extends Component
             return;
         }
 
+        if (in_array($block['status_dokumen'], self::STATUS_KEGIATAN_TERKUNCI, true)) {
+            return;
+        }
+
         $berkas = Berkas::where('id', $berkasId)
             ->where('ref_type', Kegiatan::class)
             ->where('ref_id', $block['id'])
-            ->where('status_verifikasi', 'ditolak')
             ->first();
 
         if (! $berkas) {
@@ -412,7 +415,7 @@ class PengisianKegiatan extends Component
     {
         $periode = $this->iku_id ? $this->periodeSaatIni() : null;
 
-        if (! $periode) {
+        if (! $periode || in_array($this->statusCapaianSaatIni(), self::STATUS_KEGIATAN_TERKUNCI, true)) {
             return;
         }
 
@@ -428,7 +431,6 @@ class PengisianKegiatan extends Component
         $berkas = Berkas::where('id', $berkasId)
             ->where('ref_type', BagianKustomPoin::class)
             ->where('ref_id', $poin->id)
-            ->where('status_verifikasi', 'ditolak')
             ->first();
 
         if (! $berkas) {
@@ -479,6 +481,10 @@ class PengisianKegiatan extends Component
      */
     public function hapusBuktiLamaEvaluasi(int $rtlId, int $berkasId): void
     {
+        if (in_array($this->statusCapaianSaatIni(), self::STATUS_KEGIATAN_TERKUNCI, true)) {
+            return;
+        }
+
         $poin = $this->rtlTriwulanBerjalan()->firstWhere('id', $rtlId);
 
         if (! $poin) {
@@ -488,7 +494,6 @@ class PengisianKegiatan extends Component
         $berkas = Berkas::where('id', $berkasId)
             ->where('ref_type', RtlEvaluasiModel::class)
             ->where('ref_id', $poin->id)
-            ->where('status_verifikasi', 'ditolak')
             ->first();
 
         if (! $berkas) {
@@ -2431,6 +2436,7 @@ class PengisianKegiatan extends Component
                 || collect($this->kendalaBlocks)->contains(fn ($b) => ($b['status_verifikasi'] ?? null) === 'ditolak'),
             'formTerkunciDisetujui' => $this->formTerkunciDisetujui(),
             'formTerkunciSedangDitangani' => $this->formTerkunciSedangDitangani(),
+            'evaluasiTerkunci' => in_array($this->statusCapaianSaatIni(), self::STATUS_KEGIATAN_TERKUNCI, true),
         ]);
     }
 }

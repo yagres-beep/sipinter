@@ -346,9 +346,7 @@
                                         @endif
                                     </span>
                                     <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file['id'] }}">🔍 Lihat</button>
-                                    @if ($file['status_verifikasi'] === 'ditolak')
-                                        <span class="x" style="cursor:pointer" title="Hapus bukti yang ditolak ini" @click="pendingHapus = { method: 'hapusBuktiLama', args: [{{ $i }}, {{ $file['id'] }}] }" wire:loading.class="btn-busy" wire:target="hapusBuktiLama({{ $i }}, {{ $file['id'] }})">🗑️</span>
-                                    @endif
+                                    <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLama', args: [{{ $i }}, {{ $file['id'] }}] }" wire:loading.class="btn-busy" wire:target="hapusBuktiLama({{ $i }}, {{ $file['id'] }})">🗑️</span>
                                 </div>
                             @endforeach
                         </div>
@@ -560,8 +558,8 @@
                                             <span class="sub" style="color:var(--red)">{{ $file->catatan }}</span>
                                         @endif
                                     </span>
-                                    @if ($file->status_verifikasi === 'ditolak')
-                                        <span class="x" style="cursor:pointer" title="Hapus bukti yang ditolak ini" @click="pendingHapus = { method: 'hapusBuktiLamaEvaluasi', args: [{{ $poin->id }}, {{ $file->id }}] }" wire:loading.class="btn-busy" wire:target="hapusBuktiLamaEvaluasi({{ $poin->id }}, {{ $file->id }})">🗑️</span>
+                                    @if (! $evaluasiTerkunci)
+                                        <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLamaEvaluasi', args: [{{ $poin->id }}, {{ $file->id }}] }" wire:loading.class="btn-busy" wire:target="hapusBuktiLamaEvaluasi({{ $poin->id }}, {{ $file->id }})">🗑️</span>
                                     @endif
                                 </div>
                             @endforeach
@@ -814,9 +812,7 @@
                                                     <span class="sub" style="color:var(--red)">{{ $file['catatan'] }}</span>
                                                 @endif
                                             </span>
-                                            @if ($file['status_verifikasi'] === 'ditolak')
-                                                <span class="x" style="cursor:pointer" title="Hapus bukti yang ditolak ini" @click="pendingHapus = { method: 'hapusBuktiLamaBagianKustom', args: [{{ $blok['id'] }}, {{ $file['id'] }}] }" wire:loading.class="btn-busy" wire:target="hapusBuktiLamaBagianKustom({{ $blok['id'] }}, {{ $file['id'] }})">🗑️</span>
-                                            @endif
+                                            <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLamaBagianKustom', args: [{{ $blok['id'] }}, {{ $file['id'] }}] }" wire:loading.class="btn-busy" wire:target="hapusBuktiLamaBagianKustom({{ $blok['id'] }}, {{ $file['id'] }})">🗑️</span>
                                         </div>
                                     @endforeach
                                 </div>
@@ -927,12 +923,12 @@
     <div class="modal-overlay" x-show="pendingHapus" x-cloak style="display:none" @click.self="pendingHapus = null" @keydown.escape.window="pendingHapus = null">
         <div class="modal" style="max-width:420px;height:auto">
             <div class="modal-top">
-                <div class="mt-t">🗑️ Hapus Bukti Ditolak</div>
+                <div class="mt-t">🗑️ Hapus Bukti</div>
                 <button type="button" class="x" @click="pendingHapus = null">✕</button>
             </div>
             <div class="modal-body" style="flex-direction:column;padding:18px;gap:16px">
                 <p style="margin:0;font-size:13px;color:var(--ink);line-height:1.6">
-                    Bukti ini akan dihapus dan tidak bisa dikembalikan. Anda perlu mengunggah bukti pengganti sebelum mengajukan ulang.
+                    Bukti ini akan dihapus dan tidak bisa dikembalikan. Pastikan untuk mengunggah bukti pengganti bila memang masih diperlukan.
                 </p>
                 <div style="display:flex;gap:10px;justify-content:flex-end">
                     <button type="button" class="btn btn-ghost btn-sm" @click="pendingHapus = null">Batal</button>
