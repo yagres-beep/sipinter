@@ -187,6 +187,19 @@ class VerifikasiCapaian extends Component
     public array $koreksiRtlRealisasi = [];
 
     /**
+     * Koreksi teks RENCANA RTL triwulan berikutnya (Bagian 5, baru ditetapkan Ketua
+     * Tim triwulan ini), dikunci pada id rtl_evaluasi — TERPISAH dari
+     * $koreksiRtlRealisasi di atas karena keduanya mengoreksi hal berbeda: itu soal
+     * REALISASI (hasil RTL triwulan sebelumnya), ini soal teks RENCANA itu sendiri
+     * (rtl_teks). Sama seperti $koreksiKendala, selalu bisa disunting & disimpan
+     * lewat simpanPerubahan() tanpa syarat bisaDiverifikasi() — lihat
+     * simpanKoreksiTeks().
+     *
+     * @var array<int, string>
+     */
+    public array $koreksiRtlBerikutnya = [];
+
+    /**
      * Catatan penolakan uraian kegiatan, dikunci pada id kegiatan — pola sama
      * persis dengan $catatanBerkas/$catatanKendala.
      *
@@ -335,6 +348,10 @@ class VerifikasiCapaian extends Component
         foreach ($this->rtlEvaluasiSebelumnya() as $poin) {
             $this->koreksiRtlRealisasi[$poin->id] = $poin->realisasi;
             $this->catatanRtl[$poin->id] = $poin->catatan;
+        }
+
+        foreach ($this->rtlBerikutnyaBaruDitetapkan() as $poin) {
+            $this->koreksiRtlBerikutnya[$poin->id] = $poin->rtl_teks;
         }
 
         $this->picRtlBerikutnya = $this->rtlBerikutnyaBaruDitetapkan()->first()?->pic;
@@ -949,6 +966,28 @@ class VerifikasiCapaian extends Component
         ]);
     }
 
+    /**
+     * Hapus satu poin rencana RTL berikutnya (Bagian 5) — gerbangnya sama persis
+     * dengan rtlBerikutnyaBisaDiverifikasi() (hanya selagi Capaian masih
+     * "diajukan"/"sedang ditangani"), supaya Tim SAKIP bisa membuang poin yang salah
+     * ketik/duplikat/tidak relevan tanpa harus menandainya "Tidak Sesuai" dulu untuk
+     * mengembalikannya ke Ketua Tim. Poin yang sudah terverifikasi/disetujui pada
+     * batch sebelumnya TIDAK bisa dihapus lewat sini (bukan bagian dari
+     * rtlBerikutnyaBaruDitetapkan() batch berjalan).
+     */
+    public function hapusRtlBerikutnya(int $rtlId): void
+    {
+        if (! $this->rtlBerikutnyaBisaDiverifikasi($rtlId)) {
+            return;
+        }
+
+        RtlEvaluasi::whereKey($rtlId)->delete();
+
+        unset($this->koreksiRtlBerikutnya[$rtlId], $this->catatanRtlBerikutnya[$rtlId]);
+
+        $this->cacheRtlBerikutnya = null;
+    }
+
     protected function rules(): array
     {
         return [
@@ -961,6 +1000,7 @@ class VerifikasiCapaian extends Component
             'koreksiKendala.*.kendala' => ['required', 'string'],
             'koreksiKendala.*.solusi' => ['nullable', 'string'],
             'koreksiRtlRealisasi.*' => ['nullable', 'string'],
+            'koreksiRtlBerikutnya.*' => ['required', 'string'],
             'rincianNPilih.*' => ['boolean'],
             'alokasi_tw1' => ['nullable', 'numeric', 'min:0'],
             'alokasi_tw2' => ['nullable', 'numeric', 'min:0'],
@@ -997,6 +1037,7 @@ class VerifikasiCapaian extends Component
             'rincianOutput.*.uraian' => 'rincian output',
             'rincianOutput.*.volume_ro' => 'realisasi volume RO',
             'rincianOutput.*.progres_persen' => 'progres pelaksanaan kegiatan (%)',
+            'koreksiRtlBerikutnya.*' => 'rencana RTL berikutnya',
             'alokasi_tw1' => 'Alokasi Target TW I',
             'alokasi_tw2' => 'Alokasi Target TW II',
             'alokasi_tw3' => 'Alokasi Target TW III',
@@ -1192,6 +1233,10 @@ class VerifikasiCapaian extends Component
             if (filled($teks)) {
                 RtlEvaluasi::whereKey($id)->update(['realisasi' => $teks]);
             }
+        }
+
+        foreach ($this->koreksiRtlBerikutnya as $id => $teks) {
+            RtlEvaluasi::whereKey($id)->update(['rtl_teks' => $teks]);
         }
 
         // PIC Tindak Lanjut boleh belum diisi Ketua Tim (lihat App\Livewire\

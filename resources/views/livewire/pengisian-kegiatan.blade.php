@@ -612,7 +612,7 @@
             @if ($sudahAdaRtlBerikutnya)
                 <div class="badge b-approve" style="display:inline-block;margin-bottom:10px">Sudah ditetapkan</div>
                 <p style="color:var(--muted);font-size:12.5px;margin-bottom:12px">
-                    RTL untuk {{ $labelBerikutnya }} sudah ditetapkan dan tampil hanya-baca sampai triwulan tersebut berjalan.
+                    RTL untuk {{ $labelBerikutnya }} sudah ditetapkan dan tampil hanya-baca — tidak bisa diubah lagi dari sini, tapi Anda masih bisa menambahkan poin baru di bawah selagi isian ini belum selesai diverifikasi Tim SAKIP.
                 </p>
 
                 @foreach ($rtlBerikutnyaAktif as $poin)
@@ -635,65 +635,75 @@
                 {{-- PIC & Batas Waktu berlaku untuk SELURUH poin di atas (satu nilai per
                      batch, bukan per poin — sama seperti form pengisiannya, lihat baris
                      "Berlaku untuk seluruh poin RTL ... di atas" pada form edit) — cukup
-                     ditampilkan sekali di sini, tidak diulang di tiap kartu poin. --}}
+                     ditampilkan sekali di sini, tidak diulang di tiap kartu poin. Poin
+                     BARU yang ditambahkan di bawah otomatis ikut PIC & Batas Waktu yang
+                     sama ini (lihat PengisianKegiatan::simpanBagianIsian()). --}}
                 @if ($rtlBerikutnyaAktif->isNotEmpty())
                     <div class="row2" style="margin-top:4px">
                         <div class="field" style="margin-bottom:0"><label>PIC Tindak Lanjut</label><p style="margin:0;font-size:13px">{{ $rtlBerikutnyaAktif->first()->pic }}</p></div>
                         <div class="field" style="margin-bottom:0"><label>Batas Waktu</label><p style="margin:0;font-size:13px">{{ $rtlBerikutnyaAktif->first()->batas_waktu?->translatedFormat('d F Y') }}</p></div>
                     </div>
                 @endif
-            @else
-                @if ($rtlBerikutnyaDitolak->isNotEmpty())
-                    <div class="info red" style="margin-bottom:10px">
-                        ❌ <b>Tim SAKIP mengembalikan rencana {{ $labelBerikutnya }} ini untuk diperbaiki:</b>
-                        <ul style="margin:6px 0 0;padding-left:18px">
-                            @foreach ($rtlBerikutnyaDitolak as $poin)
-                                @if ($poin->catatan)
-                                    <li>{{ $poin->catatan }}</li>
-                                @endif
-                            @endforeach
-                        </ul>
-                    </div>
-                @endif
+            @endif
 
-                {{-- Sisi klien menghitung sendiri "bulan terakhir triwulan?" (murni dari
-                     $bulan, tidak butuh query) lewat bisaDiisiTw — jadi bagian ini langsung
-                     berubah begitu bulan dipilih, tidak menunggu balasan server. --}}
-                <div x-show="!bisaDiisiTw" x-cloak class="info warn">
-                    ⏳ RTL untuk {{ $labelBerikutnya }} baru bisa diisi pada bulan terakhir triwulan berjalan
-                    (<b>{{ $this->labelBulanTerakhirTriwulanIni() }}</b>).
+            @if ($rtlBerikutnyaDitolak->isNotEmpty())
+                <div class="info red" style="margin-bottom:10px">
+                    ❌ <b>Tim SAKIP mengembalikan rencana {{ $labelBerikutnya }} ini untuk diperbaiki:</b>
+                    <ul style="margin:6px 0 0;padding-left:18px">
+                        @foreach ($rtlBerikutnyaDitolak as $poin)
+                            @if ($poin->catatan)
+                                <li>{{ $poin->catatan }}</li>
+                            @endif
+                        @endforeach
+                    </ul>
                 </div>
+            @endif
 
-                <div x-show="bisaDiisiTw" x-cloak>
-                <div class="info warn">⚠️ Tulis RTL per poin untuk {{ $labelBerikutnya }} secara keseluruhan. Poin ini dicek realisasinya pada triwulan berikutnya.</div>
+            {{-- Sisi klien menghitung sendiri "bulan terakhir triwulan?" (murni dari
+                 $bulan, tidak butuh query) lewat bisaDiisiTw — jadi bagian ini langsung
+                 berubah begitu bulan dipilih, tidak menunggu balasan server. --}}
+            <div x-show="!bisaDiisiTw" x-cloak class="info warn">
+                ⏳ RTL untuk {{ $labelBerikutnya }} baru bisa diisi pada bulan terakhir triwulan berjalan
+                (<b>{{ $this->labelBulanTerakhirTriwulanIni() }}</b>).
+            </div>
 
-                @error('rtlBaru')
-                    <div style="color:var(--red);font-size:11.5px;margin-bottom:10px">{{ $message }}</div>
-                @enderror
+            <div x-show="bisaDiisiTw" x-cloak>
+            <div class="info warn">
+                @if ($sudahAdaRtlBerikutnya)
+                    ➕ Tambahkan poin RTL baru untuk {{ $labelBerikutnya }} di bawah bila ada (opsional) — poin yang sudah ditetapkan di atas tidak bisa diubah lagi dari sini.
+                @else
+                    ⚠️ Tulis RTL per poin untuk {{ $labelBerikutnya }} secara keseluruhan. Poin ini dicek realisasinya pada triwulan berikutnya.
+                @endif
+            </div>
 
-                @foreach ($rtlBaru as $i => $blok)
-                    <div class="poin-single" wire:key="rtlbaru-{{ $i }}">
-                        <span class="k-num stat-in">Poin RTL {{ $i + 1 }}</span>
-                        @if (count($rtlBaru) > 1 && ! ($blok['id'] ?? null))
-                            <button type="button" class="btn btn-red btn-sm" style="position:absolute;top:8px;right:8px" wire:click="removeRtlBlock({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="removeRtlBlock({{ $i }})">🗑</button>
-                        @endif
+            @error('rtlBaru')
+                <div style="color:var(--red);font-size:11.5px;margin-bottom:10px">{{ $message }}</div>
+            @enderror
 
-                        <div class="field" style="margin-bottom:0">
-                            <label>Rencana kegiatan <span class="req">*</span></label>
-                            <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model.live.blur="rtlBaru.{{ $i }}.rtl_teks"
-                                placeholder="mis. Pelatihan innas dan persiapan Susenas September 2026"></textarea>
-                            @error("rtlBaru.{$i}.rtl_teks")
-                                <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-                            @enderror
-                        </div>
+            @foreach ($rtlBaru as $i => $blok)
+                <div class="poin-single" wire:key="rtlbaru-{{ $i }}">
+                    <span class="k-num stat-in">Poin RTL {{ $i + 1 }}{{ $sudahAdaRtlBerikutnya && ! ($blok['id'] ?? null) ? ' (Baru)' : '' }}</span>
+                    @if (count($rtlBaru) > 1 && ! ($blok['id'] ?? null))
+                        <button type="button" class="btn btn-red btn-sm" style="position:absolute;top:8px;right:8px" wire:click="removeRtlBlock({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="removeRtlBlock({{ $i }})">🗑</button>
+                    @endif
+
+                    <div class="field" style="margin-bottom:0">
+                        <label>Rencana kegiatan @unless ($sudahAdaRtlBerikutnya)<span class="req">*</span>@endunless</label>
+                        <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model.live.blur="rtlBaru.{{ $i }}.rtl_teks"
+                            placeholder="mis. Pelatihan innas dan persiapan Susenas September 2026"></textarea>
+                        @error("rtlBaru.{$i}.rtl_teks")
+                            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                        @enderror
                     </div>
-                @endforeach
+                </div>
+            @endforeach
 
-                <button type="button" class="btn btn-ghost btn-sm" x-on:click="jagaScroll(() => $wire.addRtlBlock())" wire:loading.attr="disabled" wire:target="addRtlBlock" @disabled($formTerkunciSedangDitangani)>
-                    <span wire:loading.remove wire:target="addRtlBlock">＋ Tambah Poin RTL</span>
-                    <span wire:loading wire:target="addRtlBlock">Menambahkan…</span>
-                </button>
+            <button type="button" class="btn btn-ghost btn-sm" x-on:click="jagaScroll(() => $wire.addRtlBlock())" wire:loading.attr="disabled" wire:target="addRtlBlock" @disabled($formTerkunciSedangDitangani)>
+                <span wire:loading.remove wire:target="addRtlBlock">＋ Tambah Poin RTL</span>
+                <span wire:loading wire:target="addRtlBlock">Menambahkan…</span>
+            </button>
 
+            @unless ($sudahAdaRtlBerikutnya)
                 <div class="row2" style="margin-top:14px">
                     <div class="field"><label>PIC Tindak Lanjut</label>
                         <select class="inp filled" wire:model="rtlBaruPic">
@@ -717,8 +727,8 @@
                         @enderror
                     </div>
                 </div>
-                </div>
-            @endif
+            @endunless
+            </div>
 
             @foreach ($bagianKustomAktif as $bagian)
                 <div class="sec" style="margin-top:20px"><span class="n">🧩</span><span>{{ $bagian->nama }}</span></div>

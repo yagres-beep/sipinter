@@ -1709,6 +1709,12 @@ class PengisianKegiatan extends Component
             $rules['rtlBaru.*.rtl_teks'] = ['required', 'string'];
             $rules['rtlBaruPic'] = ['nullable', 'string', 'max:255'];
             $rules['rtlBaruBatasWaktu'] = ['required', 'date'];
+        } elseif ($this->rtlBaruBisaDiisi()) {
+            // RTL triwulan berikutnya sudah pernah ditetapkan (lihat blade: poin lama
+            // tampil hanya-baca) — menambah poin BARU ke batch yang sama di sini
+            // bersifat OPSIONAL (Ketua Tim boleh mengajukan perubahan lain tanpa wajib
+            // menambah RTL), beda dari penetapan pertama kali di atas yang wajib.
+            $rules['rtlBaru.*.rtl_teks'] = ['nullable', 'string'];
         }
 
         return $rules;
@@ -2158,11 +2164,19 @@ class PengisianKegiatan extends Component
         }
         unset($data);
 
-        // 4) RTL triwulan berikutnya (hanya bila belum pernah ditetapkan, dan hanya
-        // boleh diisi di bulan terakhir triwulan berjalan — dicek jugu di buatValidator()
-        // saat mengajukan). Poin dengan teks masih kosong dilewati saat draft (belum
-        // ada validator yang mewajibkannya di sini).
-        if ($this->rtlBaruBisaDiisi() && ! $this->rtlTriwulanBerikutnyaSudahAda()) {
+        // 4) RTL triwulan berikutnya — hanya boleh diisi di bulan terakhir triwulan
+        // berjalan (dicek jugu di buatValidator() saat mengajukan). TIDAK LAGI
+        // digerbang pada "belum pernah ditetapkan": begitu batch pertama sudah
+        // ditetapkan, poin-poin lamanya tampil hanya-baca di blade (tidak pernah
+        // masuk $rtlBaru lagi kecuali ditolak Tim SAKIP), tapi Ketua Tim tetap boleh
+        // menambah poin BARU ke batch yang sama sebelum Tim SAKIP menyelesaikan
+        // pemeriksaan — sama seperti Kegiatan/Kendala & Solusi/Bagian Kustom yang
+        // juga tetap bisa ditambah selagi Capaian masih "diajukan" (lihat addBlock()).
+        // Poin dengan teks masih kosong dilewati saat draft (belum ada validator yang
+        // mewajibkannya di sini).
+        if ($this->rtlBaruBisaDiisi()) {
+            $sudahAda = $this->rtlTriwulanBerikutnyaSudahAda();
+
             $target = $this->targetTriwulanBerikutnya();
             $bulanPertamaTarget = ($target['triwulan'] - 1) * 3 + 1;
 
@@ -2180,6 +2194,18 @@ class PengisianKegiatan extends Component
             // blade) — boleh dikosongkan; kalau kosong, jatuh ke nama tim IKU ini
             // (App\Models\MasterIku::tim) sebagai bawaan.
             $picTim = trim($this->rtlBaruPic) !== '' ? trim($this->rtlBaruPic) : $this->ikuTerpilih()?->tim;
+
+            // Batch sudah ditetapkan sebelumnya — poin BARU yang ditambahkan harus
+            // ikut PIC batch yang sama (bukan bawaan IKU/dropdown yang tidak
+            // ditampilkan lagi di blade untuk kasus ini), supaya satu batch RTL tidak
+            // punya PIC berbeda-beda antar poinnya.
+            if ($sudahAda) {
+                $picAktif = $this->rtlBerikutnyaAktif()->first()?->pic;
+
+                if (filled($picAktif)) {
+                    $picTim = $picAktif;
+                }
+            }
 
             foreach ($this->rtlBaru as &$blok) {
                 if (trim($blok['rtl_teks'] ?? '') === '') {

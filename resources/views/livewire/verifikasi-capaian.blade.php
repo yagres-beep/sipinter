@@ -19,7 +19,7 @@
         <div class="badge b-kembali" style="display:block;margin-bottom:14px">{{ $message }}</div>
     @enderror
 
-    <div class="info teal">✏️ Analisis Capaian, Target &amp; Realisasi Triwulanan, dan teks bergaris putus-putus (uraian kegiatan, kendala, solusi, realisasi RTL) selalu bisa disunting Tim SAKIP — klik "Simpan Perubahan" di bawah kapan pun, tidak perlu menunggu status "diajukan".</div>
+    <div class="info teal">✏️ Analisis Capaian, Target &amp; Realisasi Triwulanan, dan teks bergaris putus-putus (uraian kegiatan, kendala, solusi, realisasi RTL, rencana RTL berikutnya) selalu bisa disunting Tim SAKIP — klik "Simpan Perubahan" di bawah kapan pun, tidak perlu menunggu status "diajukan".</div>
     @unless ($bisaDiverifikasi)
         <div class="info">🔒 Isian ini berstatus <x-badge-status :status="$capaian->status" /> — verifikasi/pengembalian bukti hanya bisa dilakukan selagi berstatus "diajukan" atau "sedang ditangani", tapi field di atas tetap bisa disunting &amp; disimpan.</div>
     @endunless
@@ -691,10 +691,16 @@
             @foreach ($rtlBerikutnya as $poin)
                 <div class="poin-single" wire:key="rtl-berikutnya-{{ $poin->id }}">
                     <span class="k-num stat-in">Poin RTL {{ $loop->iteration }}</span>
+                    @if ($this->rtlBerikutnyaBisaDiverifikasi($poin->id))
+                        <button type="button" class="btn btn-red btn-sm" style="position:absolute;top:8px;right:8px" wire:click="hapusRtlBerikutnya({{ $poin->id }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="hapusRtlBerikutnya({{ $poin->id }})">🗑</button>
+                    @endif
 
                     <div class="field" style="margin-bottom:10px">
                         <label>Rencana Kegiatan</label>
-                        <p style="margin:0;font-size:13px">{{ $poin->rtl_teks }}</p>
+                        <textarea class="inp filled" style="height:auto;display:block;font-style:italic" rows="2" wire:model="koreksiRtlBerikutnya.{{ $poin->id }}">{{ $this->koreksiRtlBerikutnya[$poin->id] ?? $poin->rtl_teks }}</textarea>
+                        @error("koreksiRtlBerikutnya.{$poin->id}")
+                            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                        @enderror
                     </div>
 
                     <x-badge-status :status="$poin->status_verifikasi === 'terverifikasi' ? 'disetujui' : ($poin->status_verifikasi === 'ditolak' ? 'dikembalikan' : 'diajukan')" :label="$poin->status_verifikasi === 'terverifikasi' ? 'Sesuai' : ($poin->status_verifikasi === 'ditolak' ? 'Tidak Sesuai' : 'Menunggu')" />
