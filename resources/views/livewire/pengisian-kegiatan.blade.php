@@ -197,39 +197,41 @@
                 </div>
             @else
             {{--
-                wire:key dikunci ke id kegiatan (bukan index "block-{{ $i }}" saja) supaya
-                tetap stabil kalau blok lain di depannya dihapus (indeksnya ikut bergeser).
+                wire:key SENGAJA menyertakan status terisi/tidaknya uraian, jenis, dan
+                tahapan survei (bukan cuma id/index blok saja) — semua nilai inilah yang
+                dipakai x-data di bawah untuk menentukan Jenis Kegiatan/Tahapan
+                Survei/Bukti Capaian terkunci atau tidak. x-data hanya dievaluasi SEKALI
+                saat elemen pertama kali dibuat; begitu Livewire memuat ulang blok ini
+                lewat request AJAX biasa (mis. updatedIkuId() saat memilih IKU yang sudah
+                pernah diisi, BUKAN saat mount/reload halaman penuh) tapi wire:key-nya
+                tidak berubah, Alpine hanya me-morph DOM dan MEMPERTAHANKAN nilai x-data
+                lama — uraianTerisi/jenisTerpilih/tahapanTerisi tetap kosong walau data
+                sebenarnya (lewat wire:model) sudah terisi dari database, sehingga Jenis
+                Kegiatan/Bukti Capaian tampak terkunci padahal sudah ada isinya (baru
+                "kebuka" setelah pengguna mengetik ulang Uraian Kegiatan). Dengan key yang
+                ikut berubah, Livewire memperlakukan blok ini sebagai elemen BARU begitu
+                status kunci sebenarnya berubah — Alpine terpaksa membuat ulang x-data
+                dari nilai server yang sudah benar.
 
-                uraianTeks/jenisTerpilih/tahapanNilai di x-data bawah SENGAJA memakai
-                $wire.entangle(...) — bukan primitif Alpine biasa yang cuma dibaca sekali
-                dari x-data saat elemen pertama kali dibuat. Sebelumnya (primitif biasa)
-                Jenis Kegiatan/Tahapan Survei/Bukti Capaian bisa tampak TERKUNCI padahal
-                datanya sudah ada di database: begitu Livewire memuat ulang blok ini lewat
-                request AJAX biasa (mis. updatedIkuId() saat memilih IKU yang sudah pernah
-                diisi, BUKAN mount/reload halaman penuh), primitif x-data yang sudah
-                terlanjur diinisialisasi TIDAK ikut ter-refresh walau wire:model di baliknya
-                sudah terisi — baru "kebuka" setelah pengguna mengetik ulang Uraian
-                Kegiatan. entangle() menjaga nilainya SELALU sinkron dua arah dengan
-                properti Livewire aslinya (blocks.{{ $i }}.*) kapan pun properti itu
-                berubah — dari input pengguna MAUPUN dari respons server manapun (termasuk
-                saat data lama dimuat ulang) — jadi status terkunci/tidaknya selalu
-                mengikuti data yang sebenarnya, bukan cuma snapshot Alpine yang sudah basi.
+                (Sempat dicoba pakai $wire.entangle() supaya tidak perlu trik wire:key
+                sama sekali, tapi ternyata bikin SELURUH tombol "Tambah ..." di halaman
+                ini berhenti berfungsi di Livewire 4 — dikembalikan ke pendekatan
+                wire:key ini yang sudah terbukti aman.)
             --}}
-            <div class="keg" wire:key="block-{{ $block['id'] ?? 'baru-'.$i }}"
+            <div class="keg" wire:key="block-{{ $i }}-{{ $block['id'] ?? 'baru' }}-{{ trim($block['uraian_kegiatan']) !== '' ? 1 : 0 }}-{{ $block['jenis'] }}-{{ $block['tahapan_survei'] ?? '' }}"
                 x-data="{
-                    uraianTeks: $wire.entangle('blocks.{{ $i }}.uraian_kegiatan'),
-                    jenisTerpilih: $wire.entangle('blocks.{{ $i }}.jenis').live,
-                    tahapanNilai: $wire.entangle('blocks.{{ $i }}.tahapan_survei').live,
+                    uraianTerisi: {{ trim($block['uraian_kegiatan']) !== '' ? 'true' : 'false' }},
+                    uraianTeks: @js($block['uraian_kegiatan']),
+                    jenisTerpilih: '{{ $block['jenis'] }}',
+                    tahapanTerisi: {{ filled($block['tahapan_survei'] ?? null) ? 'true' : 'false' }},
+                    tahapanNilai: '{{ $block['tahapan_survei'] ?? '' }}',
                     pendingBuktiNames: [],
-                    get uraianTerisi() { return (this.uraianTeks || '').trim() !== ''; },
-                    get tahapanTerisi() { return (this.tahapanNilai || '') !== ''; },
                     get folderPreview() {
-                        const teks = this.uraianTeks || '';
-                        if (! teks.trim()) return '';
+                        if (! this.uraianTeks.trim()) return '';
                         const prefix = (this.jenisTerpilih === 'survei_sensus' && this.tahapanNilai)
                             ? '[' + this.tahapanNilai.charAt(0).toUpperCase() + this.tahapanNilai.slice(1) + '] '
                             : '';
-                        const full = prefix + teks;
+                        const full = prefix + this.uraianTeks;
                         return full.length > 100 ? full.slice(0, 100) : full;
                     }
                 }">
@@ -245,7 +247,8 @@
 
                 <div class="field">
                     <label>Uraian Kegiatan <span class="req">*</span></label>
-                    <input type="text" class="inp filled" list="dl-uraian-{{ $i }}" x-model="uraianTeks"
+                    <input type="text" class="inp filled" list="dl-uraian-{{ $i }}" wire:model.live.blur="blocks.{{ $i }}.uraian_kegiatan"
+                        @input="uraianTerisi = ($event.target.value.trim() !== ''); uraianTeks = $event.target.value"
                         placeholder="mis. Pencacahan rumah tangga Sakernas {{ $periodeLabel }}">
                     @if ($rtlBerjalanOptions->isNotEmpty())
                         <datalist id="dl-uraian-{{ $i }}">
@@ -276,9 +279,11 @@
 
                     <div x-show="uraianTerisi" x-cloak class="pills">
                         <span class="pill" :class="{ on: jenisTerpilih === 'bukan_survei_sensus' }"
-                            @click="jenisTerpilih = 'bukan_survei_sensus'">Bukan Survei/Sensus</span>
+                            @click="jenisTerpilih = 'bukan_survei_sensus'"
+                            wire:click="$set('blocks.{{ $i }}.jenis', 'bukan_survei_sensus')">Bukan Survei/Sensus</span>
                         <span class="pill" :class="{ on: jenisTerpilih === 'survei_sensus' }"
-                            @click="jenisTerpilih = 'survei_sensus'">Survei/Sensus</span>
+                            @click="jenisTerpilih = 'survei_sensus'"
+                            wire:click="$set('blocks.{{ $i }}.jenis', 'survei_sensus')">Survei/Sensus</span>
                     </div>
                     @error("blocks.{$i}.jenis")
                         <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
@@ -287,7 +292,8 @@
 
                 <div class="field" x-show="jenisTerpilih === 'survei_sensus'" x-cloak>
                     <label>Tahapan Survei <span class="req">*</span></label>
-                    <select class="inp filled" x-model="tahapanNilai">
+                    <select class="inp filled" wire:model.live="blocks.{{ $i }}.tahapan_survei"
+                        @change="tahapanTerisi = ($event.target.value !== ''); tahapanNilai = $event.target.value">
                         <option value="">— Pilih Tahapan —</option>
                         <option value="persiapan">Persiapan</option>
                         <option value="pelaksanaan">Pelaksanaan</option>

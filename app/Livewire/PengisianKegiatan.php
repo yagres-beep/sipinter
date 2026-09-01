@@ -1443,7 +1443,15 @@ class PengisianKegiatan extends Component
             function () {
                 $target = $this->targetTriwulanBerikutnya();
 
+                // status_dokumen != draft SENGAJA disertakan — RTL Baru yang baru
+                // tersimpan lewat "Simpan Draft" (belum diajukan ke Tim SAKIP sama
+                // sekali) TIDAK dianggap "sudah ditetapkan" di sini, supaya Bagian 5
+                // tetap terbuka & bisa diedit selama isian keseluruhan masih draft —
+                // sama seperti Kegiatan/Kendala & Solusi yang tetap bisa diedit selagi
+                // berstatus draft. Baru dianggap "sudah ditetapkan" (hanya-baca) begitu
+                // benar-benar diajukan (lihat simpanBagianIsian()).
                 $query = RtlEvaluasiModel::where('iku_id', $this->iku_id)
+                    ->where('status_dokumen', RtlEvaluasiModel::STATUS_DIAJUKAN)
                     ->whereHas('periode', fn ($q) => $q->where('tahun', $target['tahun'])->where('triwulan', $target['triwulan']));
 
                 if ($this->verifikasiTerlihat()) {
@@ -1453,6 +1461,31 @@ class PengisianKegiatan extends Component
                 return $query->exists();
             }
         );
+    }
+
+    /**
+     * Poin RTL berikutnya yang tersimpan sebagai DRAFT milik sendiri (belum pernah
+     * diajukan ke Tim SAKIP sama sekali) — dipakai muatRtlBaruBlocks() supaya teks
+     * yang sudah diketik & disimpan lewat "Simpan Draft" tetap tampil & bisa
+     * dilanjutkan mengeditnya, bukan hilang jadi blok kosong lagi begitu form dibuka
+     * ulang. Lihat catatan di rtlTriwulanBerikutnyaSudahAda() soal kenapa draft tidak
+     * dianggap "sudah ditetapkan".
+     *
+     * @return \Illuminate\Support\Collection<int, RtlEvaluasiModel>
+     */
+    protected function rtlBerikutnyaDraftSendiri()
+    {
+        if (! $this->iku_id) {
+            return collect();
+        }
+
+        $target = $this->targetTriwulanBerikutnya();
+
+        return RtlEvaluasiModel::where('iku_id', $this->iku_id)
+            ->where('status_dokumen', RtlEvaluasiModel::STATUS_DRAFT)
+            ->whereHas('periode', fn ($q) => $q->where('tahun', $target['tahun'])->where('triwulan', $target['triwulan']))
+            ->orderBy('id')
+            ->get();
     }
 
     /**
@@ -1509,6 +1542,7 @@ class PengisianKegiatan extends Component
                 $target = $this->targetTriwulanBerikutnya();
 
                 return RtlEvaluasiModel::where('iku_id', $this->iku_id)
+                    ->where('status_dokumen', RtlEvaluasiModel::STATUS_DIAJUKAN)
                     ->where('status_verifikasi', '!=', 'ditolak')
                     ->whereHas('periode', fn ($q) => $q->where('tahun', $target['tahun'])->where('triwulan', $target['triwulan']))
                     ->orderBy('id')
@@ -1519,10 +1553,12 @@ class PengisianKegiatan extends Component
 
     /**
      * Muat ulang $rtlBaru — kosong (satu blok baru) secara bawaan, ATAU diisi dari
-     * poin-poin yang ditolak Tim SAKIP (lengkap dengan id-nya, supaya penyimpanan
-     * berikutnya meng-UPDATE baris lama, bukan membuat duplikat baru — lihat blok
-     * simpan langkah 4 di ajukanIsian()). Dipanggil di titik yang sama dengan
-     * muatBagianKustomBlocks() (mount/updatedIkuId/updatedBulan/updatedTahun).
+     * poin-poin yang ditolak Tim SAKIP, ATAU (bila tidak ada yang ditolak) dari draft
+     * milik sendiri yang sudah tersimpan lewat "Simpan Draft" tapi belum diajukan
+     * (lengkap dengan id-nya, supaya penyimpanan berikutnya meng-UPDATE baris lama,
+     * bukan membuat duplikat baru — lihat langkah 4 di simpanBagianIsian()). Dipanggil
+     * di titik yang sama dengan muatBagianKustomBlocks() (mount/updatedIkuId/
+     * updatedBulan/updatedTahun).
      */
     protected function muatRtlBaruBlocks(): void
     {
@@ -1530,9 +1566,17 @@ class PengisianKegiatan extends Component
 
         $ditolak = $this->rtlBerikutnyaDitolak();
 
-        $this->rtlBaru = $ditolak->isEmpty()
+        if ($ditolak->isNotEmpty()) {
+            $this->rtlBaru = $ditolak->map(fn ($poin) => ['id' => $poin->id, 'rtl_teks' => $poin->rtl_teks])->values()->all();
+
+            return;
+        }
+
+        $draftSendiri = $this->rtlBerikutnyaDraftSendiri();
+
+        $this->rtlBaru = $draftSendiri->isEmpty()
             ? [$this->emptyRtlBlock()]
-            : $ditolak->map(fn ($poin) => ['id' => $poin->id, 'rtl_teks' => $poin->rtl_teks])->values()->all();
+            : $draftSendiri->map(fn ($poin) => ['id' => $poin->id, 'rtl_teks' => $poin->rtl_teks])->values()->all();
     }
 
     protected function labelTriwulanBerikutnya(): string
@@ -2096,20 +2140,32 @@ class PengisianKegiatan extends Component
                     continue;
                 }
 
-                // Blok dengan id terisi berarti poin lama yang DITOLAK Tim SAKIP (dimuat
-                // lewat muatRtlBaruBlocks(), lihat rtlBerikutnyaDitolak()) — di-UPDATE di
-                // tempat & status_verifikasi direset ke "menunggu" supaya kembali masuk
-                // antrean verifikasi, BUKAN dibuat baris duplikat. Pola sama seperti
-                // BagianKustomPoin di langkah 5 di bawah.
+                // Blok dengan id terisi berarti poin lama — baik yang DITOLAK Tim SAKIP
+                // (dimuat lewat rtlBerikutnyaDitolak()) MAUPUN draft milik sendiri yang
+                // belum pernah diajukan (dimuat lewat rtlBerikutnyaDraftSendiri(), lihat
+                // muatRtlBaruBlocks()) — di-UPDATE di tempat, BUKAN dibuat baris duplikat.
+                // Pola sama seperti BagianKustomPoin di langkah 5 di bawah.
                 if (! empty($blok['id'])) {
-                    RtlEvaluasiModel::whereKey($blok['id'])->update([
+                    $dataUpdate = [
                         'rtl_teks' => $blok['rtl_teks'],
                         'berlaku_bulan' => $berlakuBulan,
                         'pic' => $picTim,
                         'batas_waktu' => $this->rtlBaruBatasWaktu,
-                        'status_verifikasi' => 'menunggu',
-                        'catatan' => null,
-                    ]);
+                    ];
+
+                    // status_dokumen/status_verifikasi/catatan HANYA disentuh saat benar-
+                    // benar mengajukan ($ajukan) — draft yang disimpan ulang (baik draft
+                    // sendiri maupun poin yang ditolak sedang diperbaiki) tetap TIDAK
+                    // dianggap "sudah ditetapkan" (lihat rtlTriwulanBerikutnyaSudahAda())
+                    // dan alasan penolakan lama (bila ada) tetap tampil sampai benar-benar
+                    // diajukan ulang.
+                    if ($ajukan) {
+                        $dataUpdate['status_dokumen'] = RtlEvaluasiModel::STATUS_DIAJUKAN;
+                        $dataUpdate['status_verifikasi'] = 'menunggu';
+                        $dataUpdate['catatan'] = null;
+                    }
+
+                    RtlEvaluasiModel::whereKey($blok['id'])->update($dataUpdate);
 
                     continue;
                 }
@@ -2121,6 +2177,7 @@ class PengisianKegiatan extends Component
                     'berlaku_bulan' => $berlakuBulan,
                     'pic' => $picTim,
                     'batas_waktu' => $this->rtlBaruBatasWaktu,
+                    'status_dokumen' => $ajukan ? RtlEvaluasiModel::STATUS_DIAJUKAN : RtlEvaluasiModel::STATUS_DRAFT,
                 ]);
                 $blok['id'] = $rtl->id;
             }

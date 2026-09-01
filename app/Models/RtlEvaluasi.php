@@ -20,6 +20,15 @@ class RtlEvaluasi extends Model
     public const STATUS_TIDAK_COCOK = 'tidak_cocok';
 
     /**
+     * Status dokumen RTL Baru (rencana triwulan berikutnya) — TERPISAH dari
+     * status_verifikasi (hasil review Tim SAKIP, hanya relevan setelah diajukan).
+     * Lihat PengisianKegiatan::simpanBagianIsian() & rtlTriwulanBerikutnyaSudahAda().
+     */
+    public const STATUS_DRAFT = 'draft';
+
+    public const STATUS_DIAJUKAN = 'diajukan';
+
+    /**
      * Ambang batas kemiripan teks (0-100, dari PHP similar_text()) untuk RF-35:
      * >= AMBANG_COCOK        -> "cocok"
      * >= AMBANG_PERLU_DITINJAU (tapi < AMBANG_COCOK) -> "perlu ditinjau"
@@ -37,6 +46,7 @@ class RtlEvaluasi extends Model
         'berlaku_bulan',
         'pic',
         'batas_waktu',
+        'status_dokumen',
         'realisasi',
         'status_cocok',
         'status_verifikasi',

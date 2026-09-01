@@ -325,6 +325,74 @@ class PengisianKegiatanTest extends TestCase
         $this->assertSame('RTL draf berikutnya', $rtlBaru->rtl_teks);
     }
 
+    /**
+     * Regresi produksi: begitu simpanDraft() mulai ikut menyimpan RTL Baru (supaya
+     * tidak hilang saat form dibuka ulang, lihat
+     * test_simpan_draft_menyimpan_bukti_kendala_solusi_dan_rtl_juga()), Bagian 5
+     * langsung terkunci "Sudah ditetapkan" (hanya-baca) & tombol "Tambah Poin RTL"
+     * hilang begitu draft pertama disimpan — padahal isian secara keseluruhan MASIH
+     * berstatus draft (belum diajukan ke Tim SAKIP) dan Kegiatan/Kendala & Solusi
+     * tetap bisa diedit bebas selama draft. RTL Baru draft harus tetap terbuka &
+     * bisa dilanjutkan mengeditnya, persis seperti bagian lain, sampai benar-benar
+     * diajukan.
+     */
+    public function test_rtl_baru_draft_tetap_bisa_diedit_dan_tombol_tambah_tetap_ada(): void
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $ketua = User::create([
+            'nama' => 'Ketua Uji RTL Draf', 'username' => 'ketua-uji-rtl-draf@example.test', 'email' => 'ketua-uji-rtl-draf@example.test',
+            'password' => 'password', 'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create([
+            'kode' => 'UJI-RTLDRAF', 'indikator' => 'Indikator uji RTL draf', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji',
+        ]);
+
+        $this->actingAs($ketua);
+
+        Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 9)
+            ->set('iku_id', $iku->id)
+            ->set('blocks.0.uraian_kegiatan', 'Kegiatan RTL draf')
+            ->set('blocks.0.jenis', 'bukan_survei_sensus')
+            ->set('rtlBaru.0.rtl_teks', 'RTL draf belum diajukan')
+            ->call('simpanDraft')
+            ->assertHasNoErrors();
+
+        $rtl = RtlEvaluasi::first();
+        $this->assertSame('draft', $rtl->status_dokumen);
+
+        // Buka ulang komponen (mis. pengguna membuka lagi formnya) — RTL Baru draft
+        // ini harus tetap tampil sebagai isian yang BISA DIEDIT (bukan "Sudah
+        // ditetapkan" hanya-baca), lengkap dengan tombol "Tambah Poin RTL".
+        $component = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 9)
+            ->set('iku_id', $iku->id);
+
+        $component->assertDontSee('Sudah ditetapkan')
+            ->assertSet('rtlBaru.0.id', $rtl->id)
+            ->assertSet('rtlBaru.0.rtl_teks', 'RTL draf belum diajukan')
+            ->assertSee('Tambah Poin RTL');
+
+        // Melanjutkan & benar-benar mengajukan HARUS mengubah baris yang SAMA (bukan
+        // duplikat) jadi "diajukan" — baru di titik ini terkunci "Sudah ditetapkan".
+        $component->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti-rtl-draf.pdf', 100, 'application/pdf')])
+            ->call('ajukanIsian')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseCount('rtl_evaluasi', 1);
+        $rtl->refresh();
+        $this->assertSame('diajukan', $rtl->status_dokumen);
+
+        Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 9)
+            ->set('iku_id', $iku->id)
+            ->assertSee('Sudah ditetapkan');
+    }
+
     public function test_pratinjau_nama_folder_mengikuti_uraian_dan_tahapan(): void
     {
         $peranKetua = Role::create(['nama' => 'Ketua Tim']);
