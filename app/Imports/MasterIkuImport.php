@@ -26,7 +26,9 @@ class MasterIkuImport implements ToCollection
 {
     public const EXPECTED_HEADER = [
         'No.', 'Nama Sasaran',
-        'Kode Indikator', 'Indikator Kinerja', 'Jenis Periode', 'Jenis Nilai', 'Satuan',
+        'Kode Indikator', 'Penanggung Jawab (Tim)', 'Indikator Kinerja',
+        'Dasar Hitung', 'Basis Data',
+        'Jenis Periode', 'Jenis Nilai', 'Satuan',
         'Target Tahunan', 'Deskripsi X (Pembilang)', 'Target X (Pembilang)', 'Deskripsi Y (Penyebut)', 'Target Y (Penyebut)',
         'Alokasi Target TW I', 'Alokasi Target TW II', 'Alokasi Target TW III', 'Alokasi Target TW IV',
         'Cek Total Alokasi', 'Target Acuan', 'Status',

@@ -6,10 +6,13 @@ use App\Exports\MasterIkuTemplateExport;
 use App\Imports\MasterIkuImport;
 use App\Models\CapaianTahunan;
 use App\Models\MasterIku as MasterIkuModel;
+use App\Models\UserTim;
+use App\Services\FormulaCapaianService;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
-use Maatwebsite\Excel\Facades\Excel as ExcelFacade;
 use Livewire\Component;
 use Livewire\WithFileUploads;
+use Maatwebsite\Excel\Facades\Excel as ExcelFacade;
 
 class MasterIku extends Component
 {
@@ -134,7 +137,7 @@ class MasterIku extends Component
             'formulaCapaian' => [
                 'nullable', 'string', 'max:2000',
                 function ($attribute, $value, $fail) {
-                    if (filled($value) && ! \App\Services\FormulaCapaianService::valid($value)) {
+                    if (filled($value) && ! FormulaCapaianService::valid($value)) {
                         $fail('Rumus tidak valid — periksa kembali penulisannya (variabel yang tersedia: alokasi, realisasi, batas).');
                     }
                 },
@@ -349,7 +352,7 @@ class MasterIku extends Component
 
         try {
             MasterIkuModel::whereKey($this->pendingDeleteId)->delete();
-        } catch (\Illuminate\Database\QueryException $e) {
+        } catch (QueryException $e) {
             // Jaring pengaman kalau ada relasi baru muncul di antara confirmDelete()
             // dicek dan tombol Hapus benar-benar diklik (mis. dua tab dibuka
             // bersamaan) — 23503 = foreign_key_violation (Postgres).
@@ -387,7 +390,10 @@ class MasterIku extends Component
             'ikuList' => $ikuList,
             'totalIndikator' => $ikuList->count(),
             'daftarKode' => $ikuList->pluck('kode')->filter()->unique()->sort()->values()->all(),
-            'daftarTim' => $ikuList->pluck('tim')->filter()->unique()->sort()->values()->all(),
+            // Digabung dengan tim keanggotaan pengguna (user_tim.tim) supaya tim yang
+            // sudah ada di struktur organisasi ikut tersaran walau belum pernah
+            // dipakai di Master IKU manapun — tetap boleh ketik tim baru bebas.
+            'daftarTim' => $ikuList->pluck('tim')->merge(UserTim::pluck('tim'))->filter()->unique()->sort()->values()->all(),
             'daftarSasaran' => $ikuList->pluck('sasaran')->filter()->unique()->sort()->values()->all(),
             'pendingDeleteKode' => $this->pendingDeleteId
                 ? $ikuList->firstWhere('id', $this->pendingDeleteId)?->kode

@@ -28,7 +28,7 @@
             <div class="ico ico-teal" style="width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:19px">📥</div>
             <div>
                 <div style="font-weight:700;color:var(--ink);font-size:13px">Template Sheet Master_IKU (.xlsx)</div>
-                <div class="fhint" style="margin-top:2px">Kolom: Nama Sasaran, Kode Indikator, Indikator Kinerja, Jenis Periode, Jenis Nilai (%/Non %), Satuan, Target Tahunan, Deskripsi &amp; Target X/Y (khusus "%"), Alokasi Target TW I-IV. Tim (yang juga berlaku sebagai Penanggung Jawab) diisi belakangan lewat form manual (lihat sheet "Daftar Nama" untuk saran nama Tim). Jangan hapus baris contoh (baris 2-3) &amp; petunjuk (baris 4).</div>
+                <div class="fhint" style="margin-top:2px">Kolom: Nama Sasaran, Kode Indikator, Penanggung Jawab (Tim), Indikator Kinerja, Dasar Hitung, Basis Data, Jenis Periode, Jenis Nilai (%/Non %), Satuan, Target Tahunan, Deskripsi &amp; Target X/Y (khusus "%"), Alokasi Target TW I-IV. Lihat sheet "Daftar Nama" untuk saran nama Tim yang sudah ada. Jangan hapus baris contoh (baris 2-3) &amp; petunjuk (baris 4).</div>
             </div>
         </div>
         <button type="button" class="btn btn-teal" wire:click="downloadTemplate">⬇ Unduh Template (.xlsx)</button>

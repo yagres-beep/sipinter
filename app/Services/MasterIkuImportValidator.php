@@ -8,7 +8,7 @@ use Illuminate\Support\Collection;
 /**
  * Validator murni untuk import Master IKU dari Excel (spek bagian 6.2) — TANPA
  * ketergantungan library Excel maupun DB write. Menerima baris mentah (array kolom
- * A-S, 0-based — lihat App\Exports\MasterIkuTemplateSheet::headings() untuk urutan
+ * A-V, 0-based — lihat App\Exports\MasterIkuTemplateSheet::headings() untuk urutan
  * pastinya) & mengembalikan hasil terstruktur per baris: valid + data siap simpan
  * (dipecah master_iku/capaian_tahunan, lihat validasiSatuBaris()), ATAU daftar
  * pesan error.
@@ -102,16 +102,19 @@ class MasterIkuImportValidator
 
         $namaSasaran = $ambil(1);
         $kodeIndikatorMentah = $ambil(2);
-        $namaIndikator = $ambil(3);
-        $jenisPeriodeRaw = $ambil(4);
-        $jenisNilaiRaw = $ambil(5);
-        $satuan = $ambil(6);
-        $targetTahunanRaw = $ambil(7);
-        $deskripsiX = $ambil(8);
-        $targetXRaw = $ambil(9);
-        $deskripsiY = $ambil(10);
-        $targetYRaw = $ambil(11);
-        $alokasiRaw = [$ambil(12), $ambil(13), $ambil(14), $ambil(15)];
+        $timMentah = $ambil(3);
+        $namaIndikator = $ambil(4);
+        $dasarHitung = $ambil(5);
+        $basisData = $ambil(6);
+        $jenisPeriodeRaw = $ambil(7);
+        $jenisNilaiRaw = $ambil(8);
+        $satuan = $ambil(9);
+        $targetTahunanRaw = $ambil(10);
+        $deskripsiX = $ambil(11);
+        $targetXRaw = $ambil(12);
+        $deskripsiY = $ambil(13);
+        $targetYRaw = $ambil(14);
+        $alokasiRaw = [$ambil(15), $ambil(16), $ambil(17), $ambil(18)];
 
         if ($kodeIndikatorMentah === '' && $namaIndikator === ''
             && $namaSasaran === '' && implode('', $alokasiRaw) === '') {
@@ -123,7 +126,9 @@ class MasterIkuImportValidator
         // --- 1. Wajib isi -----------------------------------------------------
         foreach ([
             'Nama Sasaran' => $namaSasaran,
-            'Kode Indikator' => $kodeIndikatorMentah, 'Indikator Kinerja' => $namaIndikator,
+            'Kode Indikator' => $kodeIndikatorMentah,
+            'Penanggung Jawab (Tim)' => $timMentah,
+            'Indikator Kinerja' => $namaIndikator,
             'Jenis Periode' => $jenisPeriodeRaw,
             'Jenis Nilai' => $jenisNilaiRaw, 'Satuan' => $satuan, 'Target Tahunan' => $targetTahunanRaw,
         ] as $label => $nilai) {
@@ -254,8 +259,11 @@ class MasterIkuImportValidator
             'kode' => $kodeIndikator,
             'master_iku' => [
                 'kode' => $kodeIndikator,
+                'tim' => $timMentah,
                 'sasaran' => $namaSasaran,
                 'indikator' => $namaIndikator,
+                'dasar_hitung' => $dasarHitung ?: null,
+                'basis_data' => $basisData ?: null,
                 'jenis_periode' => $jenisPeriode,
                 'satuan' => $satuan,
                 'metode_capaian' => $metodeCapaian,

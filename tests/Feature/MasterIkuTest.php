@@ -3,12 +3,14 @@
 namespace Tests\Feature;
 
 use App\Exports\MasterIkuTemplateExport;
+use App\Exports\MasterIkuTemplateSheet;
 use App\Imports\MasterIkuImport;
 use App\Livewire\MasterIku;
 use App\Models\CapaianTahunan;
 use App\Models\MasterIku as MasterIkuModel;
 use App\Models\Role;
 use App\Models\User;
+use App\Models\UserTim;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -72,7 +74,9 @@ class MasterIkuTest extends TestCase
     {
         $row = [
             1, 'Sasaran Satu',
-            '1131', 'Persentase publikasi tepat waktu', 'Tahunan', '%', 'Persen', 8.89,
+            '1131', 'Tim Statistik', 'Persentase publikasi tepat waktu',
+            'y = [[n|N]] x 100%', 'Data internal',
+            'Tahunan', '%', 'Persen', 8.89,
             'Pembilang', 8, 'Penyebut', 90,
             2, 2, 2, 2, '', '', '',
         ];
@@ -91,7 +95,9 @@ class MasterIkuTest extends TestCase
     {
         $row = [
             2, 'Sasaran Dua',
-            '1132', 'Indeks Pelayanan Publik', 'Triwulanan', 'Non %', 'Poin', 4.35,
+            '1132', 'Tim Layanan', 'Indeks Pelayanan Publik',
+            '', '',
+            'Triwulanan', 'Non %', 'Poin', 4.35,
             '', '', '', '',
             1.09, 1.08, 1.09, 1.09, '', '', '',
         ];
@@ -110,7 +116,7 @@ class MasterIkuTest extends TestCase
             MasterIkuImport::EXPECTED_HEADER,
             $this->rowPersen(),
             $this->rowNonPersen(),
-            [\App\Exports\MasterIkuTemplateSheet::BARIS_PETUNJUK],
+            [MasterIkuTemplateSheet::BARIS_PETUNJUK],
             ...$dataRows,
         ]));
 
@@ -133,7 +139,7 @@ class MasterIkuTest extends TestCase
     public function test_import_baris_tidak_valid_dilaporkan_dengan_alasan(): void
     {
         $import = $this->importDanKembalikanHasil([
-            $this->rowPersen([2 => '2003', 9 => '']), // Target X dikosongkan -> error.
+            $this->rowPersen([2 => '2003', 12 => '']), // Target X dikosongkan -> error.
         ]);
 
         $this->assertFalse($import->hasilValidasi[0]['valid']);
@@ -156,6 +162,9 @@ class MasterIkuTest extends TestCase
         $this->assertNotNull($iku);
         $this->assertSame('rasio', $iku->metode_capaian);
         $this->assertSame('Sasaran Satu', $iku->sasaran);
+        $this->assertSame('Tim Statistik', $iku->tim);
+        $this->assertSame('y = [[n|N]] x 100%', $iku->dasar_hitung);
+        $this->assertSame('Data internal', $iku->basis_data);
 
         $ct = CapaianTahunan::where('iku_id', $iku->id)->where('tahun', 2026)->first();
         $this->assertNotNull($ct);
@@ -197,7 +206,7 @@ class MasterIkuTest extends TestCase
         $this->assertFalse($importInsert->hasilValidasi[0]['valid']);
         $this->assertStringContainsString('sudah ada di database', implode(' ', $importInsert->hasilValidasi[0]['errors']));
 
-        $importUpsert = $this->importDanKembalikanHasil([$this->rowNonPersen([2 => '3003', 3 => 'Indikator Baru'])], modeUpsert: true);
+        $importUpsert = $this->importDanKembalikanHasil([$this->rowNonPersen([2 => '3003', 4 => 'Indikator Baru'])], modeUpsert: true);
         $this->assertTrue($importUpsert->hasilValidasi[0]['valid'], implode(' | ', $importUpsert->hasilValidasi[0]['errors']));
 
         Livewire::test(MasterIku::class)
@@ -217,7 +226,7 @@ class MasterIkuTest extends TestCase
 
         $import = $this->importDanKembalikanHasil([
             $this->rowNonPersen([2 => '3004']), // valid
-            $this->rowPersen([2 => '3005', 9 => '']), // invalid (Target X kosong)
+            $this->rowPersen([2 => '3005', 12 => '']), // invalid (Target X kosong)
         ]);
 
         Livewire::test(MasterIku::class)
@@ -235,7 +244,7 @@ class MasterIkuTest extends TestCase
 
         $import = $this->importDanKembalikanHasil([
             $this->rowNonPersen([2 => '3006']), // valid
-            $this->rowPersen([2 => '3007', 9 => '']), // invalid
+            $this->rowPersen([2 => '3007', 12 => '']), // invalid
         ]);
 
         Livewire::test(MasterIku::class)
@@ -258,7 +267,7 @@ class MasterIkuTest extends TestCase
         $sheet->fromArray(MasterIkuImport::EXPECTED_HEADER, null, 'A1');
         $sheet->fromArray($this->rowPersen(), null, 'A2');
         $sheet->fromArray($this->rowNonPersen(), null, 'A3');
-        $sheet->setCellValue('A4', \App\Exports\MasterIkuTemplateSheet::BARIS_PETUNJUK);
+        $sheet->setCellValue('A4', MasterIkuTemplateSheet::BARIS_PETUNJUK);
         $sheet->fromArray($this->rowNonPersen([2 => '4001']), null, 'A5');
 
         $tempPath = tempnam(sys_get_temp_dir(), 'xlsx');
@@ -281,6 +290,24 @@ class MasterIkuTest extends TestCase
         $component->call('konfirmasiImpor')->assertHasNoErrors();
 
         $this->assertSame(1, MasterIkuModel::where('kode', '4001')->count());
+    }
+
+    public function test_saran_tim_menggabungkan_tim_master_iku_dan_tim_keanggotaan_pengguna(): void
+    {
+        $this->loginSebagaiTimSakip();
+
+        MasterIkuModel::create(['kode' => '8001', 'indikator' => 'Uji', 'tim' => 'Tim Dari IKU']);
+
+        $peran = Role::create(['nama' => 'Ketua Tim']);
+        $user = User::create([
+            'nama' => 'Ketua Uji', 'username' => 'ketua-uji@example.test', 'email' => 'ketua-uji@example.test',
+            'password' => 'password', 'role_id' => $peran->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+        UserTim::create(['user_id' => $user->id, 'tim' => 'Tim Dari Pengguna']);
+
+        Livewire::test(MasterIku::class)
+            ->assertSee('Tim Dari IKU')
+            ->assertSee('Tim Dari Pengguna');
     }
 
     public function test_iku_baru_default_metode_langsung(): void
