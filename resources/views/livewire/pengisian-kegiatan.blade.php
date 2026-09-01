@@ -13,7 +13,7 @@
             const y = window.scrollY;
 
             // Lepas fokus dari tombol yang baru diklik SEBELUM DOM diperbarui — tombol
-            // "Tambah ..." ada di BAWAH daftar blok yang baru bertambah, jadi begitu blok
+            // 'Tambah ...' ada di BAWAH daftar blok yang baru bertambah, jadi begitu blok
             // baru disisipkan DI ATASNYA, posisi tombol itu ikut bergeser ke bawah. Selama
             // tombolnya masih fokus, sebagian browser otomatis men-scroll halaman supaya
             // elemen yang fokus itu tetap terlihat — inilah lompatan yang terlihat SEBELUM
@@ -28,11 +28,11 @@
             // baru yang baru dirender belum selesai reflow), jadi satu
             // requestAnimationFrame saja kadang masih kebobolan sekejap sebelum posisi
             // scroll dikoreksi balik.
-            const kunci = () => {
-                if (Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y);
+            const kunci = function () {
+                if (1 < Math.abs(window.scrollY - y)) window.scrollTo(0, y);
             };
-            aksi().then(() => {
-                requestAnimationFrame(() => {
+            aksi().then(function () {
+                requestAnimationFrame(function () {
                     kunci();
                     requestAnimationFrame(kunci);
                     setTimeout(kunci, 50);
