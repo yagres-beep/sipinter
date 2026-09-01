@@ -716,6 +716,49 @@ class VerifikasiCapaianTest extends TestCase
         $this->assertSame('diverifikasi', $data['capaian']->fresh()->status);
     }
 
+    /**
+     * PIC Tindak Lanjut boleh dikosongkan Ketua Tim saat mengajukan (lihat
+     * PengisianKegiatanTest::test_ajukan_isian_berhasil_meski_pic_tindak_lanjut_kosong())
+     * — Tim SAKIP yang wajib mengisi/mengonfirmasinya di sini sebelum "Verifikasi
+     * Selesai" bisa ditekan.
+     */
+    public function test_verifikasi_selesai_gagal_bila_pic_rtl_berikutnya_belum_diisi(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+
+        $periodeBerikutnya = Periode::create([
+            'tahun' => 2026, 'bulan' => 10, 'triwulan' => 4, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false,
+        ]);
+
+        $rtlBerikutnya = RtlEvaluasi::create([
+            'iku_id' => $data['iku']->id, 'periode_id' => $periodeBerikutnya->id,
+            'rtl_teks' => 'Rencana tanpa PIC', 'batas_waktu' => '2026-12-31',
+        ]);
+
+        $component = Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
+            ->call('tandaiSesuai', $data['berkas1']->id)
+            ->call('tandaiSesuai', $data['berkas2']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan1']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan2']->id)
+            ->call('tandaiRtlBerikutnyaSesuai', $rtlBerikutnya->id)
+            ->set('alokasi_tw3', 50)
+            ->set('realisasi_tw3', 45)
+            ->call('verifikasiSelesai')
+            ->assertHasErrors(['picRtlBerikutnya']);
+
+        $this->assertNull($rtlBerikutnya->fresh()->pic);
+
+        // Setelah Tim SAKIP mengisi PIC, verifikasi selesai baru boleh lanjut & PIC
+        // tersimpan ke baris RTL berikutnya.
+        $component->set('picRtlBerikutnya', 'Tim Uji Verifikasi')
+            ->call('verifikasiSelesai')
+            ->assertHasNoErrors();
+
+        $this->assertSame('Tim Uji Verifikasi', $rtlBerikutnya->fresh()->pic);
+        $this->assertSame('diverifikasi', $data['capaian']->fresh()->status);
+    }
+
     public function test_tandai_rtl_berikutnya_tolak_wajib_catatan(): void
     {
         $this->actingAs($this->buatSakip());

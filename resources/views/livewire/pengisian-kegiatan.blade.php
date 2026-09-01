@@ -3,6 +3,16 @@
         bisaDiisiTw: {{ $bulan % 3 === 0 ? 'true' : 'false' }},
         modalBerkas: null,
         pendingHapus: null,
+        // Menambah blok baru (Kegiatan/Kendala & Solusi/RTL/Bagian Kustom) memicu
+        // request Livewire biasa (AJAX, bukan navigasi halaman) — tapi begitu isi
+        // halaman bertambah tinggi, browser BISA menggeser posisi scroll saat DOM
+        // diperbarui, terasa seperti 'reload ke atas' padahal bukan. Bungkus lewat
+        // $wire (mengembalikan Promise) supaya posisi scroll ditangkap SEBELUM
+        // request dikirim & dikembalikan SETELAH DOM selesai diperbarui.
+        jagaScroll(aksi) {
+            const y = window.scrollY;
+            aksi().then(() => requestAnimationFrame(() => window.scrollTo(0, y)));
+        },
     }"
     x-on:livewire-upload-start.window="$dispatch('notify', { type: 'info', message: 'Mengunggah berkas ke server…' })"
     x-on:livewire-upload-finish.window="$dispatch('notify', { type: 'success', message: 'Berkas dipilih & tersimpan sementara di server — akan disalin ke Google Drive saat diajukan.' })"
@@ -331,7 +341,7 @@
             @endif
         @endforeach
 
-        <button type="button" class="btn btn-ghost btn-sm" wire:click="addBlock" wire:loading.attr="disabled" wire:target="addBlock" @disabled($formTerkunciDisetujui || $formTerkunciSedangDitangani)>
+        <button type="button" class="btn btn-ghost btn-sm" x-on:click="jagaScroll(() => $wire.addBlock())" wire:loading.attr="disabled" wire:target="addBlock" @disabled($formTerkunciDisetujui || $formTerkunciSedangDitangani)>
             <span wire:loading.remove wire:target="addBlock">＋ Tambah Kegiatan</span>
             <span wire:loading wire:target="addBlock">Menambahkan…</span>
         </button>
@@ -414,7 +424,7 @@
             </div>
         @endforeach
 
-        <button type="button" class="btn btn-ghost btn-sm" wire:click="addKendalaBlock" wire:loading.attr="disabled" wire:target="addKendalaBlock" @disabled($formTerkunciSedangDitangani)>
+        <button type="button" class="btn btn-ghost btn-sm" x-on:click="jagaScroll(() => $wire.addKendalaBlock())" wire:loading.attr="disabled" wire:target="addKendalaBlock" @disabled($formTerkunciSedangDitangani)>
             <span wire:loading.remove wire:target="addKendalaBlock">＋ Tambah Pasangan Kendala &amp; Solusi</span>
             <span wire:loading wire:target="addKendalaBlock">Menambahkan…</span>
         </button>
@@ -609,16 +619,21 @@
                     </div>
                 @endforeach
 
-                <button type="button" class="btn btn-ghost btn-sm" wire:click="addRtlBlock" wire:loading.attr="disabled" wire:target="addRtlBlock" @disabled($formTerkunciSedangDitangani)>
+                <button type="button" class="btn btn-ghost btn-sm" x-on:click="jagaScroll(() => $wire.addRtlBlock())" wire:loading.attr="disabled" wire:target="addRtlBlock" @disabled($formTerkunciSedangDitangani)>
                     <span wire:loading.remove wire:target="addRtlBlock">＋ Tambah Poin RTL</span>
                     <span wire:loading wire:target="addRtlBlock">Menambahkan…</span>
                 </button>
 
                 <div class="row2" style="margin-top:14px">
-                    <div class="field"><label>PIC Tindak Lanjut <span class="req">*</span></label>
-                        <input type="text" class="inp filled" wire:model="rtlBaruPic" readonly style="cursor:not-allowed;opacity:0.8">
+                    <div class="field"><label>PIC Tindak Lanjut</label>
+                        <select class="inp filled" wire:model="rtlBaruPic">
+                            <option value="">— Belum dipilih (diisi Tim SAKIP saat verifikasi) —</option>
+                            @foreach ($daftarTimPic as $tim)
+                                <option value="{{ $tim }}">{{ $tim }}</option>
+                            @endforeach
+                        </select>
                         <div class="fhint">
-                            Diisi otomatis dari nama tim penanggung jawab IKU ini — selalu nama tim, bukan perorangan, jadi tidak bisa diketik manual. Berlaku untuk seluruh poin RTL {{ $labelBerikutnya }} di atas.
+                            Nama tim (bukan perorangan) yang bertanggung jawab menindaklanjuti — bawaan diambil dari tim penanggung jawab IKU ini, tapi boleh diganti. Opsional di sini; wajib diisi/dikonfirmasi Tim SAKIP saat verifikasi. Berlaku untuk seluruh poin RTL {{ $labelBerikutnya }} di atas.
                         </div>
                         @error('rtlBaruPic')
                             <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
@@ -779,7 +794,7 @@
                     </div>
                 @endforeach
 
-                <button type="button" class="btn btn-ghost btn-sm" wire:click="addBagianKustomBlock({{ $bagian->id }})" wire:loading.attr="disabled" wire:target="addBagianKustomBlock({{ $bagian->id }})" @disabled($formTerkunciSedangDitangani)>
+                <button type="button" class="btn btn-ghost btn-sm" x-on:click="jagaScroll(() => $wire.addBagianKustomBlock({{ $bagian->id }}))" wire:loading.attr="disabled" wire:target="addBagianKustomBlock({{ $bagian->id }})" @disabled($formTerkunciSedangDitangani)>
                     <span wire:loading.remove wire:target="addBagianKustomBlock({{ $bagian->id }})">＋ Tambah Poin {{ $bagian->nama }}</span>
                     <span wire:loading wire:target="addBagianKustomBlock({{ $bagian->id }})">Menambahkan…</span>
                 </button>

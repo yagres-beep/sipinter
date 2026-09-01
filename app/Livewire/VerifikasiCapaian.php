@@ -9,6 +9,7 @@ use App\Models\Capaian;
 use App\Models\CapaianTahunan;
 use App\Models\Kegiatan;
 use App\Models\KendalaSolusi;
+use App\Models\MasterIku;
 use App\Models\RincianN;
 use App\Models\RincianOutput;
 use App\Models\RtlEvaluasi;
@@ -219,6 +220,16 @@ class VerifikasiCapaian extends Component
     public array $catatanRtlBerikutnya = [];
 
     /**
+     * PIC Tindak Lanjut untuk rencana RTL triwulan berikutnya (Bagian 5) — SATU nilai
+     * untuk seluruh poin dalam batch ini, sama seperti PengisianKegiatan::$rtlBaruPic.
+     * Ketua Tim boleh mengosongkannya saat mengajukan (lihat PengisianKegiatan::rules()),
+     * tapi Tim SAKIP WAJIB mengisi/mengonfirmasinya di sini sebelum "Verifikasi Selesai"
+     * bisa ditekan (lihat verifikasiSelesai()) — supaya rencana yang lolos ke notula
+     * final selalu punya PIC yang jelas.
+     */
+    public ?string $picRtlBerikutnya = null;
+
+    /**
      * Cache dalam satu siklus request (di-reset otomatis tiap request baru) — DB
      * remote (Supabase, Seoul) makan ~400ms per query, dan tiap koleksi ini dipakai
      * ulang di banyak tempat (mount, render, verifikasiSelesai, kembalikanKeKetuaTim)
@@ -325,6 +336,8 @@ class VerifikasiCapaian extends Component
             $this->koreksiRtlRealisasi[$poin->id] = $poin->realisasi;
             $this->catatanRtl[$poin->id] = $poin->catatan;
         }
+
+        $this->picRtlBerikutnya = $this->rtlBerikutnyaBaruDitetapkan()->first()?->pic;
 
         $tw = (int) $this->capaian->periode->triwulan;
         foreach ($this->rincianNList() as $n) {
@@ -1180,6 +1193,18 @@ class VerifikasiCapaian extends Component
                 RtlEvaluasi::whereKey($id)->update(['realisasi' => $teks]);
             }
         }
+
+        // PIC Tindak Lanjut boleh belum diisi Ketua Tim (lihat App\Livewire\
+        // PengisianKegiatan::rules()) — Tim SAKIP mengisi/mengonfirmasinya di sini,
+        // berlaku untuk SELURUH poin RTL berikutnya dalam batch ini sekaligus (satu
+        // nilai per batch, sama seperti cara Ketua Tim mengisinya). verifikasiSelesai()
+        // sudah memastikan nilainya terisi sebelum sampai ke sini (lihat gerbang di
+        // sana); kembalikanKeKetuaTim() tetap menyimpannya kalau sudah sempat diisi,
+        // tapi tidak mewajibkannya.
+        if ($this->rtlBerikutnyaBaruDitetapkan()->isNotEmpty() && filled($this->picRtlBerikutnya)) {
+            RtlEvaluasi::whereIn('id', $this->rtlBerikutnyaBaruDitetapkan()->pluck('id'))
+                ->update(['pic' => trim($this->picRtlBerikutnya)]);
+        }
     }
 
     /**
@@ -1371,6 +1396,17 @@ class VerifikasiCapaian extends Component
             return;
         }
 
+        // PIC Tindak Lanjut opsional bagi Ketua Tim saat mengajukan, tapi WAJIB
+        // dikonfirmasi/diisi Tim SAKIP di sini sebelum verifikasi benar-benar selesai
+        // — supaya rencana yang lolos ke notula final selalu punya PIC yang jelas.
+        if ($rtlBerikutnya->isNotEmpty() && blank($this->picRtlBerikutnya)) {
+            $pesan = 'PIC Tindak Lanjut untuk rencana RTL triwulan berikutnya wajib diisi sebelum verifikasi selesai.';
+            $this->addError('picRtlBerikutnya', $pesan);
+            $this->dispatch('notify', type: 'error', message: $pesan);
+
+            return;
+        }
+
         $this->validate();
 
         try {
@@ -1513,6 +1549,7 @@ class VerifikasiCapaian extends Component
             'kendalaSolusiList' => $kendalaSolusiList,
             'rtlSebelumnya' => $this->rtlEvaluasiSebelumnya(),
             'rtlBerikutnya' => $this->rtlBerikutnyaBaruDitetapkan(),
+            'daftarTimPic' => MasterIku::daftarTimGabungan(),
             'berkasPerKegiatan' => $kegiatanList->mapWithKeys(fn ($k) => [$k->id => $this->berkasUntukKegiatan($k->id)]),
             'bagianKustomList' => $bagianKustomList,
             'berkasPerBagianKustom' => $bagianKustomList->mapWithKeys(fn ($p) => [$p->id => $this->berkasUntukBagianKustom($p->id)]),

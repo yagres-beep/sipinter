@@ -117,6 +117,36 @@ class MasterIku extends Model
     public static function lupakanCache(): void
     {
         Cache::forget('master-iku-dropdown');
+        Cache::forget('master-iku-tim-gabungan');
+    }
+
+    /**
+     * Daftar nama tim gabungan — tim penanggung jawab di Master IKU (master_iku.tim)
+     * digabung keanggotaan tim pengguna (user_tim.tim), tanpa duplikat &amp; terurut.
+     * Dipakai untuk dropdown/saran "pilih tim" di beberapa tempat (Master IKU, PIC
+     * Tindak Lanjut di Isian Kegiatan &amp; Verifikasi) supaya sumber tim yang sudah
+     * ada di struktur organisasi selalu konsisten, tidak diketik ulang tiap tempat.
+     *
+     * Di-cache 5 menit (dilupakan lewat lupakanCache() tiap kali Master IKU
+     * disimpan/dihapus/diimpor) — dipakai di render() PengisianKegiatan/
+     * VerifikasiCapaian yang jalan di SETIAP aksi Livewire (termasuk yang sepele
+     * seperti addBlock()), jadi tanpa cache ini tiap klik membayar 2 query DB
+     * remote hanya untuk daftar saran dropdown yang nyaris tidak pernah berubah.
+     * Perubahan keanggotaan tim (user_tim) di luar jalur Master IKU tidak
+     * memicu lupakanCache() secara eksplisit — TTL 5 menit cukup sebagai jaring
+     * pengaman, tidak fatal bila sedikit basi untuk sekadar daftar saran.
+     *
+     * @return list<string>
+     */
+    public static function daftarTimGabungan(): array
+    {
+        return Cache::remember('master-iku-tim-gabungan', 300, fn () => static::whereNotNull('tim')->distinct()->pluck('tim')
+            ->merge(UserTim::pluck('tim'))
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values()
+            ->all());
     }
 
     public function kegiatan(): HasMany

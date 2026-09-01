@@ -6,7 +6,6 @@ use App\Exports\MasterIkuTemplateExport;
 use App\Imports\MasterIkuImport;
 use App\Models\CapaianTahunan;
 use App\Models\MasterIku as MasterIkuModel;
-use App\Models\UserTim;
 use App\Services\FormulaCapaianService;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -393,7 +392,7 @@ class MasterIku extends Component
             // Digabung dengan tim keanggotaan pengguna (user_tim.tim) supaya tim yang
             // sudah ada di struktur organisasi ikut tersaran walau belum pernah
             // dipakai di Master IKU manapun — tetap boleh ketik tim baru bebas.
-            'daftarTim' => $ikuList->pluck('tim')->merge(UserTim::pluck('tim'))->filter()->unique()->sort()->values()->all(),
+            'daftarTim' => MasterIkuModel::daftarTimGabungan(),
             'daftarSasaran' => $ikuList->pluck('sasaran')->filter()->unique()->sort()->values()->all(),
             'pendingDeleteKode' => $this->pendingDeleteId
                 ? $ikuList->firstWhere('id', $this->pendingDeleteId)?->kode

@@ -665,9 +665,28 @@
 
             {{-- PIC & Batas Waktu berlaku untuk SELURUH poin di bawah (satu nilai per
                  batch, bukan per poin — sama seperti cara Ketua Tim mengisinya) — cukup
-                 ditampilkan sekali di sini, tidak diulang di tiap poin. --}}
+                 ditampilkan sekali di sini, tidak diulang di tiap poin. PIC wajib
+                 diisi/dikonfirmasi Tim SAKIP di sini (boleh kosong dari Ketua Tim, lihat
+                 App\Livewire\PengisianKegiatan) sebelum "Verifikasi Selesai" bisa ditekan. --}}
             @if ($rtlBerikutnya->isNotEmpty())
-                <div class="muted" style="font-size:11px;margin-bottom:10px">PIC: {{ $rtlBerikutnya->first()->pic }} · Batas waktu: {{ $rtlBerikutnya->first()->batas_waktu?->translatedFormat('d F Y') }}</div>
+                <div class="row2" style="margin-bottom:10px;align-items:flex-end">
+                    <div class="field" style="margin-bottom:0">
+                        <label>PIC Tindak Lanjut <span class="req">*</span></label>
+                        <select class="inp filled" wire:model="picRtlBerikutnya" @disabled(! $bisaDiverifikasi)>
+                            <option value="">— Pilih tim PIC —</option>
+                            @foreach ($daftarTimPic as $tim)
+                                <option value="{{ $tim }}">{{ $tim }}</option>
+                            @endforeach
+                        </select>
+                        @error('picRtlBerikutnya')
+                            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                        @enderror
+                    </div>
+                    <div class="field" style="margin-bottom:0">
+                        <label>Batas Waktu</label>
+                        <p style="margin:0;font-size:13px">{{ $rtlBerikutnya->first()->batas_waktu?->translatedFormat('d F Y') }}</p>
+                    </div>
+                </div>
             @endif
 
             @foreach ($rtlBerikutnya as $poin)

@@ -786,9 +786,49 @@ class PengisianKegiatanTest extends TestCase
         $component = Livewire::test(PengisianKegiatan::class);
         $component->set('iku_id', $iku->id);
 
-        // PIC Tindak Lanjut selalu nama tim (master_iku.tim), BUKAN nama orang —
-        // konsisten dengan yang dipakai di notula (NotulaBagian1DocxService::isiBagianIku()).
+        // PIC Tindak Lanjut bawaan mengikuti nama tim (master_iku.tim), BUKAN nama
+        // orang — konsisten dengan yang dipakai di notula
+        // (NotulaBagian1DocxService::isiBagianIku()). Boleh diganti Ketua Tim lewat
+        // dropdown, lihat test_ajukan_isian_berhasil_meski_pic_tindak_lanjut_kosong().
         $this->assertSame('Uji Otomatis', $component->get('rtlBaruPic'));
+    }
+
+    /**
+     * Regresi: PIC Tindak Lanjut dulu WAJIB diisi tapi field-nya dikunci hanya-baca
+     * & terisi otomatis dari MasterIku::tim — begitu IKU belum dikonfigurasi tim-nya
+     * (tim kosong), rtlBaruPic tidak akan pernah terisi dan tombol "Ajukan ke Tim
+     * SAKIP" tidak akan pernah aktif sama sekali. PIC sekarang opsional bagi Ketua
+     * Tim (wajib diisi Tim SAKIP saat verifikasi, lihat VerifikasiCapaianTest).
+     */
+    public function test_ajukan_isian_berhasil_meski_pic_tindak_lanjut_kosong(): void
+    {
+        $peranKetua = Role::firstOrCreate(['nama' => 'Ketua Tim']);
+        $ketua = User::create([
+            'nama' => 'Ketua Uji', 'username' => 'ketua-uji-pic-kosong@example.test',
+            'email' => 'ketua-uji-pic-kosong@example.test', 'password' => 'password',
+            'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create(['kode' => 'UJI-PICKOSONG', 'indikator' => 'Indikator uji PIC kosong']);
+
+        $this->actingAs($ketua);
+
+        $component = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 9) // bulan terakhir triwulan — RTL Baru & PIC-nya digerbang aktif di sini.
+            ->set('iku_id', $iku->id)
+            ->set('blocks.0.uraian_kegiatan', 'Kegiatan uji PIC kosong')
+            ->set('blocks.0.jenis', 'bukan_survei_sensus')
+            ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
+            ->set('rtlBaru.0.rtl_teks', 'RTL uji coba tanpa PIC');
+
+        $this->assertSame('', $component->get('rtlBaruPic'));
+        $this->assertTrue($component->instance()->formLengkap());
+
+        $component->call('ajukanIsian')->assertHasNoErrors();
+
+        $this->assertDatabaseCount('kegiatan', 1);
+        $this->assertDatabaseHas('rtl_evaluasi', ['rtl_teks' => 'RTL uji coba tanpa PIC', 'pic' => null]);
     }
 
     public function test_riwayat_kendala_solusi_kumulatif_dari_triwulan_1_sampai_berjalan(): void
