@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\EnsureEmailIsComplete;
 use App\Http\Middleware\EnsureUserHasRole;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -25,5 +26,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->trustProxies(at: '*');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // Jaring pengaman: kunci per-sesi yang basi (lihat PengisianKegiatan::boot()) semestinya
+        // sudah ditangani di sumbernya, tapi kalau ada pemakaian lain yang lolos, jangan sampai
+        // pengguna melihat halaman 500 kosong — kembalikan saja ke halaman sebelumnya.
+        $exceptions->render(function (LockTimeoutException $e, $request) {
+            return back()->with('error', 'Sistem sedang sibuk memproses aksi sebelumnya — silakan coba lagi sebentar.');
+        });
     })->create();

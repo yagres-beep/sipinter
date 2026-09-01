@@ -135,7 +135,18 @@ class PengisianKegiatan extends Component
         // TTL kunci (40 detik) sengaja lebih panjang dari batas tunggu block() (25 detik)
         // supaya kunci tidak pernah kedaluwarsa sendiri sementara masih benar-benar dipegang.
         $this->requestLock = Cache::lock('pengisian-kegiatan-lock:'.session()->getId(), 40);
-        $this->requestLock->block(25);
+
+        try {
+            $this->requestLock->block(25);
+        } catch (\Illuminate\Contracts\Cache\LockTimeoutException $e) {
+            // Kunci basi tertinggal dari request sebelumnya yang mati mendadak (mis. timeout
+            // DB/Google Drive) sehingga dehydrate() tidak sempat memanggil release(). Daripada
+            // membiarkan exception ini menjadi halaman 500 kosong, lewati kunci untuk request
+            // ini saja — risikonya cuma snapshot sedikit basi, jauh lebih baik daripada crash.
+            Log::warning('Kunci pengisian-kegiatan basi, dilewati.', ['session' => session()->getId()]);
+            $this->requestLock = null;
+            $this->dispatch('notify', type: 'warning', message: 'Sistem sedang sibuk memproses aksi sebelumnya — jika perubahan tidak muncul, coba ulangi.');
+        }
     }
 
     public function dehydrate(): void
