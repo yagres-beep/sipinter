@@ -6,9 +6,28 @@
         // Menambah blok baru (Kegiatan/Kendala & Solusi/RTL/Bagian Kustom) memicu
         // request Livewire biasa (AJAX, bukan navigasi halaman) — tapi begitu isi
         // halaman bertambah tinggi, browser BISA menggeser posisi scroll saat DOM
-        // diperbarui, terasa seperti 'reload ke atas' padahal bukan. Bungkus lewat
-        // $wire (mengembalikan Promise) supaya posisi scroll ditangkap SEBELUM
-        // request dikirim & dikembalikan SETELAH DOM selesai diperbarui.
+        // diperbarui, terasa seperti 'reload ke atas' padahal bukan.
+
+        // Dikoreksi di BEBERAPA frame berturut-turut (bukan cuma sekali) — DOM hasil
+        // morph Livewire bisa masih bergeser tinggi setelah frame pertama (mis. blok
+        // baru yang baru dirender belum selesai reflow), jadi satu
+        // requestAnimationFrame saja kadang masih kebobolan sekejap sebelum posisi
+        // scroll dikoreksi balik.
+        koreksiScroll(y) {
+            const kunci = function () {
+                if (1 < Math.abs(window.scrollY - y)) window.scrollTo(0, y);
+            };
+            requestAnimationFrame(function () {
+                kunci();
+                requestAnimationFrame(kunci);
+                setTimeout(kunci, 50);
+                setTimeout(kunci, 150);
+            });
+        },
+
+        // Dipakai tombol 'Tambah ...': bungkus lewat $wire (mengembalikan Promise)
+        // supaya posisi scroll ditangkap SEBELUM request dikirim & dikoreksi SETELAH
+        // DOM selesai diperbarui.
         jagaScroll(aksi) {
             const y = window.scrollY;
 
@@ -23,21 +42,21 @@
                 document.activeElement.blur();
             }
 
-            // Dikoreksi di BEBERAPA frame berturut-turut (bukan cuma sekali) — DOM hasil
-            // morph Livewire bisa masih bergeser tinggi setelah frame pertama (mis. blok
-            // baru yang baru dirender belum selesai reflow), jadi satu
-            // requestAnimationFrame saja kadang masih kebobolan sekejap sebelum posisi
-            // scroll dikoreksi balik.
-            const kunci = function () {
-                if (1 < Math.abs(window.scrollY - y)) window.scrollTo(0, y);
-            };
-            aksi().then(function () {
-                requestAnimationFrame(function () {
-                    kunci();
-                    requestAnimationFrame(kunci);
-                    setTimeout(kunci, 50);
-                    setTimeout(kunci, 150);
-                });
+            aksi().then(() => this.koreksiScroll(y));
+        },
+
+        // Field lain (mis. textarea 'Rencana kegiatan', input 'Batas Waktu') pakai
+        // wire:model.live.blur — otomatis mengirim request begitu fokus pindah ke
+        // elemen lain, misalnya saat dropdown 'PIC Tindak Lanjut' di sebelahnya
+        // dibuka. Request ini TIDAK lewat jagaScroll() (tidak dipicu klik tombol),
+        // jadi lompatan scrollnya dijaga di sini: tangkap posisi scroll sebelum
+        // SETIAP request komponen ini terkirim, lalu koreksi balik setelah DOM
+        // selesai di-morph.
+        init() {
+            Livewire.hook('commit', ({ component, respond }) => {
+                if (component !== this.$wire.__instance) return;
+                const y = window.scrollY;
+                respond(() => this.koreksiScroll(y));
             });
         },
     }"
