@@ -1834,55 +1834,375 @@ class PengisianKegiatan extends Component
             ]
         );
 
-        DB::transaction(function () use ($periode) {
-            Capaian::firstOrCreate(['iku_id' => $this->iku_id, 'periode_id' => $periode->id]);
+        $iku = MasterIku::findOrFail($this->iku_id);
+        $folderService = app(FolderStructureService::class);
 
-            foreach ($this->blocks as $block) {
-                // Blok yang sudah diajukan/diverifikasi/disetujui ditampilkan hanya-baca
-                // di form (lihat muatBlocksKegiatan()) — tidak boleh ikut tertimpa di sini.
-                if (in_array($block['status_dokumen'] ?? null, self::STATUS_KEGIATAN_TERKUNCI, true)) {
-                    continue;
-                }
+        // Diisi setiap kali satu berkas GAGAL disinkron ke Drive — sama seperti
+        // ajukanIsian(), lihat catatan di sana.
+        $driveGagal = [];
 
-                $tahapan = $block['jenis'] === 'survei_sensus' ? $block['tahapan_survei'] : null;
-
-                $namaFolderAuto = Str::limit(
-                    ($tahapan ? '['.ucfirst($tahapan).'] ' : '').$block['uraian_kegiatan'],
-                    100,
-                    ''
-                );
-
-                if ($block['id']) {
-                    // UPDATE, bukan create — supaya kegiatan draft/dikembalikan yang sudah
-                    // ada tidak diduplikasi tiap kali draf disimpan ulang. status_dokumen &
-                    // drive_folder_id SENGAJA tidak disentuh (drive_folder_id dipakai ulang
-                    // oleh FolderStructureService, lihat catatan di model Kegiatan).
-                    Kegiatan::whereKey($block['id'])->update([
-                        'uraian_kegiatan' => $block['uraian_kegiatan'],
-                        'jenis' => $block['jenis'],
-                        'tahapan_survei' => $tahapan,
-                        'nama_folder_auto' => $namaFolderAuto,
-                    ]);
-                } else {
-                    Kegiatan::create([
-                        'iku_id' => $this->iku_id,
-                        'periode_id' => $periode->id,
-                        'uraian_kegiatan' => $block['uraian_kegiatan'],
-                        'jenis' => $block['jenis'],
-                        'tahapan_survei' => $tahapan,
-                        'nama_folder_auto' => $namaFolderAuto,
-                        'status_dokumen' => Kegiatan::STATUS_DRAFT,
-                    ]);
-                }
-            }
+        DB::transaction(function () use ($periode, $iku, $folderService, &$driveGagal) {
+            $this->simpanBagianIsian($periode, $iku, $folderService, $driveGagal, ajukan: false);
         });
 
-        session()->flash('status', 'Draf kegiatan berhasil disimpan. Lengkapi bukti & bagian lain lalu ajukan ke Tim SAKIP saat siap.');
+        session()->flash('status', 'Draf berhasil disimpan — kegiatan, kendala & solusi, evaluasi RTL, dan RTL berikutnya yang sudah diisi ikut tersimpan. Lengkapi bagian yang belum lengkap lalu ajukan ke Tim SAKIP saat siap.');
+
+        if (! empty($driveGagal)) {
+            session()->flash('driveGagal', $driveGagal);
+        }
 
         $this->lupakanCachePeriodeIku();
 
-        // Reload halaman penuh — lihat catatan senada di akhir ajukanIsian().
-        $this->redirect(route('pengisian.index'));
+        // Reload halaman penuh — lihat catatan senada di akhir ajukanIsian(). Query
+        // string iku_id/tahun/bulan SENGAJA disertakan supaya mount() langsung memuat
+        // ulang IKU yang sama (lihat mount()) — tanpa ini, draf yang baru saja
+        // tersimpan (kendala/solusi, evaluasi RTL, RTL berikutnya) akan tampak "hilang"
+        // begitu halaman terbuka lagi, padahal sebenarnya sudah tersimpan di database,
+        // hanya belum dimuat ulang ke form karena IKU belum otomatis terpilih lagi.
+        $this->redirect(route('pengisian.index', [
+            'iku_id' => $this->iku_id,
+            'tahun' => $this->tahun,
+            'bulan' => $this->bulan,
+        ]));
+    }
+
+    /**
+     * Logika penyimpanan bersama antara simpanDraft() dan ajukanIsian() — supaya
+     * mengklik "Simpan Draft" TIDAK diam-diam membuang kendala & solusi, evaluasi
+     * RTL, RTL berikutnya, dan bukti yang sudah diisi/diunggah (bug produksi:
+     * hanya kolom Kegiatan yang tersimpan, sisanya baru benar-benar tersimpan saat
+     * "Ajukan ke Tim SAKIP" diklik, padahal pengguna mengira "Simpan Draft" sudah
+     * menyimpan SEMUA isian di halaman).
+     *
+     * Saat $ajukan === false (dipanggil dari simpanDraft()): kegiatan/kendala &
+     * solusi/evaluasi RTL/RTL berikutnya/bagian kustom yang sudah diisi tetap
+     * disimpan & bukti tetap diunggah, TAPI status kegiatan/capaian TIDAK
+     * dipindahkan ke "diajukan" — supaya isian tetap dianggap draft dan tidak
+     * masuk antrean verifikasi Tim SAKIP sebelum benar-benar diajukan.
+     */
+    protected function simpanBagianIsian(Periode $periode, MasterIku $iku, FolderStructureService $folderService, array &$driveGagal, bool $ajukan): void
+    {
+        $capaian = Capaian::firstOrCreate([
+            'iku_id' => $this->iku_id,
+            'periode_id' => $periode->id,
+        ]);
+
+        $adaKegiatanDiajukan = false;
+        $adaPerbaikanLainDiajukan = false;
+
+        // 1) Kegiatan + bukti capaian (bukti melekat langsung ke kegiatan, RF-23)
+        foreach ($this->blocks as &$block) {
+            // Blok yang sudah diajukan/diverifikasi/disetujui ditampilkan hanya-baca
+            // di form (lihat muatBlocksKegiatan()) — tidak boleh ikut tertimpa di sini.
+            if (in_array($block['status_dokumen'] ?? null, self::STATUS_KEGIATAN_TERKUNCI, true)) {
+                continue;
+            }
+
+            // Blok kosong (baru ditambah lewat "Tambah Kegiatan" tapi belum diisi sama
+            // sekali) dilewati saat draft — beda dari ajukanIsian() yang memvalidasi
+            // SEMUA blok wajib terisi, draft boleh punya blok kosong tertinggal.
+            if (! $ajukan && trim($block['uraian_kegiatan']) === '') {
+                continue;
+            }
+
+            $tahapan = $block['jenis'] === 'survei_sensus' ? $block['tahapan_survei'] : null;
+
+            $namaFolderAuto = Str::limit(
+                ($tahapan ? '['.ucfirst($tahapan).'] ' : '').$block['uraian_kegiatan'],
+                100,
+                ''
+            );
+
+            if ($block['id']) {
+                // UPDATE kegiatan draft/dikembalikan yang sudah ada, bukan create baru —
+                // supaya menyimpan/mengajukan ulang isian yang sudah ada tidak membuat
+                // baris duplikat. drive_folder_id SENGAJA tidak disentuh (dipakai ulang
+                // oleh FolderStructureService, lihat catatan di model Kegiatan).
+                $kegiatan = Kegiatan::findOrFail($block['id']);
+                $kegiatan->update([
+                    'rtl_evaluasi_id' => $this->cariRtlBerjalanCocok($block['uraian_kegiatan']),
+                    'uraian_kegiatan' => $block['uraian_kegiatan'],
+                    'jenis' => $block['jenis'],
+                    'tahapan_survei' => $tahapan,
+                    'nama_folder_auto' => $namaFolderAuto,
+                ]);
+            } else {
+                $kegiatan = Kegiatan::create([
+                    'iku_id' => $this->iku_id,
+                    'rtl_evaluasi_id' => $this->cariRtlBerjalanCocok($block['uraian_kegiatan']),
+                    'periode_id' => $periode->id,
+                    'uraian_kegiatan' => $block['uraian_kegiatan'],
+                    'jenis' => $block['jenis'],
+                    'tahapan_survei' => $tahapan,
+                    'nama_folder_auto' => $namaFolderAuto,
+                    'status_dokumen' => Kegiatan::STATUS_DRAFT,
+                ]);
+                $block['id'] = $kegiatan->id;
+            }
+
+            if ($ajukan) {
+                // draft→diajukan maupun dikembalikan→diajukan, keduanya diizinkan
+                // (lihat Kegiatan::TRANSITIONS) — tidak perlu logic tambahan di sini.
+                $kegiatan->ajukan();
+                $adaKegiatanDiajukan = true;
+            }
+
+            // RF-17: nama berkas & folder mengikuti uraian kegiatan (bukan tahapan
+            // survei — itu cuma prefix folder, lihat namaFolderAuto di atas), supaya
+            // langsung dikenali dari daftar berkas tanpa harus dibuka satu-satu.
+            $namaBerkasDasar = 'Kegiatan '.$block['uraian_kegiatan'];
+
+            foreach ($block['bukti'] as $file) {
+                $path = $file->store('bukti-capaian', 'local');
+
+                $berkas = Berkas::create([
+                    'ref_id' => $kegiatan->id,
+                    'ref_type' => Kegiatan::class,
+                    'kategori' => 'capaian',
+                    'nama_file' => $namaBerkasDasar.'.pdf',
+                    'path' => $path,
+                    'status_verifikasi' => 'menunggu',
+                ]);
+
+                // Dibungkus try/catch supaya penyimpanan TETAP berhasil walau Drive
+                // belum terkonfigurasi — berkas tetap aman di disk lokal sebagai cadangan.
+                try {
+                    $this->streamProgresUnggah($file->getClientOriginalName(), 'bukti kegiatan');
+                    $localFullPath = Storage::disk('local')->path($path);
+                    $hasilDrive = $folderService->unggahBerkasKegiatan($kegiatan, 'capaian', $localFullPath, namaBerkasOverride: $namaBerkasDasar);
+                    $berkas->update($hasilDrive);
+                    $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti kegiatan', true);
+                } catch (\Throwable $e) {
+                    Log::warning('Gagal mengunggah berkas ke Google Drive, disimpan lokal saja: '.$e->getMessage());
+                    $driveGagal[] = "{$file->getClientOriginalName()} (bukti kegiatan: {$block['uraian_kegiatan']})";
+                    $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti kegiatan', false, $e->getMessage());
+                }
+            }
+
+            // Berkas yang baru saja tersimpan di atas dipindah ke existing_bukti supaya
+            // tidak dicoba diunggah ulang bila simpanBagianIsian() dipanggil lagi dalam
+            // request yang sama (tidak terjadi saat ini, tapi jaga-jaga) dan supaya form
+            // yang dimuat ulang tidak menampilkan input unggah kosong lagi tanpa alasan.
+            $block['bukti'] = [];
+        }
+        unset($block);
+
+        // 2) Kendala & Solusi (blok kosong dilewati — bagian ini opsional per periode).
+        // UPDATE, bukan create, bila blok ini punya id (pasangan lama yang ditolak
+        // Tim SAKIP dan sedang diperbaiki — lihat muatKendalaBlocks()), supaya tidak
+        // duplikat. status_verifikasi & catatan SENGAJA TIDAK direset ke "menunggu" —
+        // tanda "Tidak Sesuai" + alasannya tetap tampil ke Tim SAKIP sampai mereka
+        // sendiri menandainya ulang (tandaiKendalaSesuai()/tandaiKendalaTolak()),
+        // supaya mereka masih ingat apa yang salah sebelumnya saat memeriksa
+        // perbaikan ini. Baru kosong begitu ditandai "Sesuai".
+        foreach ($this->kendalaBlocks as &$block) {
+            if (trim($block['kendala']) === '' && trim($block['solusi']) === '') {
+                continue;
+            }
+
+            if ($block['id'] ?? null) {
+                KendalaSolusiModel::whereKey($block['id'])->update([
+                    'kendala' => $block['kendala'],
+                    'solusi' => $block['solusi'] ?: null,
+                ]);
+            } else {
+                $model = KendalaSolusiModel::create([
+                    'iku_id' => $this->iku_id,
+                    'periode_id' => $periode->id,
+                    'kendala' => $block['kendala'],
+                    'solusi' => $block['solusi'] ?: null,
+                ]);
+                $block['id'] = $model->id;
+            }
+
+            $adaPerbaikanLainDiajukan = true;
+        }
+        unset($block);
+
+        // 3) Evaluasi RTL triwulan sebelumnya — cukup bukti realisasi (SEMUA poin wajib
+        // punya bukti bila sedang mengajukan pada bulan terakhir triwulan, dicek di
+        // buatValidator()); baris tanpa bukti baru dilewati begitu saja di sini.
+        foreach ($this->evaluasi as $rtlId => &$data) {
+            if (empty($data['bukti'])) {
+                continue;
+            }
+
+            $poin = RtlEvaluasiModel::with(['periode', 'masterIku'])->findOrFail($rtlId);
+            $namaBerkasDasar = 'Evaluasi RTL '.$poin->rtl_teks;
+            $adaPerbaikanLainDiajukan = true;
+
+            // status_verifikasi & catatan SENGAJA TIDAK direset ke "menunggu" di sini
+            // walau bukti baru baru saja diunggah — tanda "Tidak Sesuai" + alasannya
+            // TETAP tampil ke Tim SAKIP sampai mereka sendiri yang menandainya ulang
+            // (tandaiRtlSesuai()/tandaiRtlTolak()), supaya mereka masih ingat apa yang
+            // salah sebelumnya saat memeriksa bukti baru ini. Baru kosong begitu Tim
+            // SAKIP menandai "Sesuai". Sama seperti bukti Kegiatan (Berkas lama yang
+            // "ditolak" juga tidak pernah direset otomatis di sini).
+
+            foreach ($data['bukti'] as $file) {
+                $path = $file->store('bukti-evaluasi-rtl', 'local');
+
+                $berkas = Berkas::create([
+                    'ref_id' => $poin->id,
+                    'ref_type' => RtlEvaluasiModel::class,
+                    'kategori' => 'evaluasi_rtl',
+                    'nama_file' => $namaBerkasDasar.'.pdf',
+                    'path' => $path,
+                    'status_verifikasi' => 'menunggu',
+                ]);
+
+                try {
+                    $this->streamProgresUnggah($file->getClientOriginalName(), 'bukti evaluasi RTL');
+                    $localFullPath = Storage::disk('local')->path($path);
+                    $hasilDrive = $folderService->unggahBerkas($poin->periode, $poin->masterIku, 'evaluasi_rtl', $localFullPath, namaBerkasOverride: $namaBerkasDasar);
+                    $berkas->update($hasilDrive);
+                    $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti evaluasi RTL', true);
+                } catch (\Throwable $e) {
+                    Log::warning('Gagal mengunggah bukti evaluasi RTL ke Google Drive, disimpan lokal saja: '.$e->getMessage());
+                    $driveGagal[] = "{$file->getClientOriginalName()} (bukti evaluasi RTL)";
+                    $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti evaluasi RTL', false, $e->getMessage());
+                }
+            }
+
+            $data['bukti'] = [];
+        }
+        unset($data);
+
+        // 4) RTL triwulan berikutnya (hanya bila belum pernah ditetapkan, dan hanya
+        // boleh diisi di bulan terakhir triwulan berjalan — dicek jugu di buatValidator()
+        // saat mengajukan). Poin dengan teks masih kosong dilewati saat draft (belum
+        // ada validator yang mewajibkannya di sini).
+        if ($this->rtlBaruBisaDiisi() && ! $this->rtlTriwulanBerikutnyaSudahAda()) {
+            $target = $this->targetTriwulanBerikutnya();
+            $bulanPertamaTarget = ($target['triwulan'] - 1) * 3 + 1;
+
+            $periodeTarget = Periode::firstOrCreate(
+                ['tahun' => $target['tahun'], 'bulan' => $bulanPertamaTarget],
+                ['triwulan' => $target['triwulan'], 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]
+            );
+
+            // RF-33: "RTL untuk Oktober, November, dan Desember" — satu keterangan bulan
+            // yang sama untuk SELURUH poin dalam triwulan ini (bukan per poin).
+            $namaBulanTarget = collect($this->bulanBulanTarget())->map(fn ($b) => $this->namaBulanIndo($b));
+            $berlakuBulan = 'RTL untuk '.$namaBulanTarget->join(', ', ', dan ');
+
+            // PIC dipilih bebas oleh Ketua Tim lewat dropdown (daftarTimPic(), lihat
+            // blade) — boleh dikosongkan; kalau kosong, jatuh ke nama tim IKU ini
+            // (App\Models\MasterIku::tim) sebagai bawaan.
+            $picTim = trim($this->rtlBaruPic) !== '' ? trim($this->rtlBaruPic) : $this->ikuTerpilih()?->tim;
+
+            foreach ($this->rtlBaru as &$blok) {
+                if (trim($blok['rtl_teks'] ?? '') === '') {
+                    continue;
+                }
+
+                // Blok dengan id terisi berarti poin lama yang DITOLAK Tim SAKIP (dimuat
+                // lewat muatRtlBaruBlocks(), lihat rtlBerikutnyaDitolak()) — di-UPDATE di
+                // tempat & status_verifikasi direset ke "menunggu" supaya kembali masuk
+                // antrean verifikasi, BUKAN dibuat baris duplikat. Pola sama seperti
+                // BagianKustomPoin di langkah 5 di bawah.
+                if (! empty($blok['id'])) {
+                    RtlEvaluasiModel::whereKey($blok['id'])->update([
+                        'rtl_teks' => $blok['rtl_teks'],
+                        'berlaku_bulan' => $berlakuBulan,
+                        'pic' => $picTim,
+                        'batas_waktu' => $this->rtlBaruBatasWaktu,
+                        'status_verifikasi' => 'menunggu',
+                        'catatan' => null,
+                    ]);
+
+                    continue;
+                }
+
+                $rtl = RtlEvaluasiModel::create([
+                    'iku_id' => $this->iku_id,
+                    'periode_id' => $periodeTarget->id,
+                    'rtl_teks' => $blok['rtl_teks'],
+                    'berlaku_bulan' => $berlakuBulan,
+                    'pic' => $picTim,
+                    'batas_waktu' => $this->rtlBaruBatasWaktu,
+                ]);
+                $blok['id'] = $rtl->id;
+            }
+            unset($blok);
+        }
+
+        // 5) Bagian kustom (mis. Manajemen Risiko) — poin kosong dilewati, sama
+        // seperti Kendala & Solusi; bukti sudah dipastikan wajib lewat validasi saat
+        // mengajukan. UPDATE, bukan create, bila blok ini punya id (poin lama yang
+        // dimuat lewat muatBagianKustomBlocks() untuk diperbaiki teksnya) — supaya
+        // tidak duplikat, mengikuti pola yang sama dengan Kendala & Solusi di atas.
+        foreach ($this->bagianKustomAktif() as $bagian) {
+            foreach ($this->bagianKustomBlocks[$bagian->id] ?? [] as $i => $blok) {
+                if (trim($blok['teks'] ?? '') === '') {
+                    continue;
+                }
+
+                if ($blok['id'] ?? null) {
+                    $poin = BagianKustomPoin::whereKey($blok['id'])->first();
+
+                    if (! $poin) {
+                        continue;
+                    }
+
+                    // status_verifikasi & catatan SENGAJA TIDAK direset — sama seperti
+                    // Kendala & Solusi/Evaluasi RTL di atas, lihat penjelasan di sana.
+                    $poin->update(['teks' => $blok['teks']]);
+                } else {
+                    $poin = BagianKustomPoin::create([
+                        'bagian_kustom_id' => $bagian->id,
+                        'iku_id' => $this->iku_id,
+                        'periode_id' => $periode->id,
+                        'teks' => $blok['teks'],
+                    ]);
+                    $this->bagianKustomBlocks[$bagian->id][$i]['id'] = $poin->id;
+                }
+
+                $adaPerbaikanLainDiajukan = true;
+                $namaBerkasDasar = $bagian->nama.' '.$poin->teks;
+
+                foreach ($blok['bukti'] as $file) {
+                    $path = $file->store('bukti-bagian-kustom', 'local');
+
+                    $berkas = Berkas::create([
+                        'ref_id' => $poin->id,
+                        'ref_type' => BagianKustomPoin::class,
+                        'kategori' => 'bagian_kustom',
+                        'nama_file' => $namaBerkasDasar.'.pdf',
+                        'path' => $path,
+                        'status_verifikasi' => 'menunggu',
+                    ]);
+
+                    try {
+                        $this->streamProgresUnggah($file->getClientOriginalName(), "bukti {$bagian->nama}");
+                        $localFullPath = Storage::disk('local')->path($path);
+                        $hasilDrive = $folderService->unggahBerkas(
+                            $periode, $iku, 'bagian_kustom', $localFullPath,
+                            namaFolderOverride: $bagian->nama,
+                            namaBerkasOverride: $namaBerkasDasar,
+                        );
+                        $berkas->update($hasilDrive);
+                        $this->notifikasiHasilUnggah($file->getClientOriginalName(), "bukti {$bagian->nama}", true);
+                    } catch (\Throwable $e) {
+                        Log::warning("Gagal mengunggah bukti {$bagian->nama} ke Google Drive, disimpan lokal saja: ".$e->getMessage());
+                        $driveGagal[] = "{$file->getClientOriginalName()} (bukti {$bagian->nama})";
+                        $this->notifikasiHasilUnggah($file->getClientOriginalName(), "bukti {$bagian->nama}", false, $e->getMessage());
+                    }
+                }
+
+                $this->bagianKustomBlocks[$bagian->id][$i]['bukti'] = [];
+            }
+        }
+
+        // Dicek TERAKHIR, setelah SELURUH bagian (Kegiatan, Kendala & Solusi, Evaluasi
+        // RTL, Bagian Kustom) selesai diproses di atas — supaya perbaikan pada bagian
+        // MANA PUN yang tadinya jadi alasan "dikembalikan" ikut memindahkan Capaian ini
+        // balik ke "diajukan", bukan cuma perbaikan pada Kegiatan. Hanya dilakukan saat
+        // benar-benar mengajukan ($ajukan) — draft TIDAK boleh memindahkan status
+        // capaian/kegiatan keluar dari "draft"/"dikembalikan".
+        if ($ajukan && ($adaKegiatanDiajukan || $adaPerbaikanLainDiajukan)) {
+            $capaian->catatStatus(Kegiatan::STATUS_DIAJUKAN, auth()->user());
+        }
     }
 
     /**
@@ -1968,318 +2288,7 @@ class PengisianKegiatan extends Component
         $driveGagal = [];
 
         DB::transaction(function () use ($periode, $iku, $folderService, &$driveGagal) {
-            // Angka capaian (RF-38) milik IKU+periode, dibagikan seluruh kegiatan di
-            // bawahnya — cukup disiapkan kosong di sini, diisi Tim SAKIP saat verifikasi.
-            // Unique iku_id+periode_id berarti kegiatan tambahan yang diajukan belakangan
-            // pada IKU+bulan yang sama menemukan baris Capaian YANG SAMA di sini, jadi
-            // riwayat statusnya (catatStatus() di bawah) otomatis tergabung satu poin.
-            $capaian = Capaian::firstOrCreate([
-                'iku_id' => $this->iku_id,
-                'periode_id' => $periode->id,
-            ]);
-
-            // Dicatat true hanya bila benar-benar ada kegiatan yang berpindah status ke
-            // "diajukan" di request ini — supaya mengklik "Ajukan" saat semua blok sudah
-            // terkunci (tidak ada perubahan sama sekali) tidak menambah riwayat kosong.
-            $adaKegiatanDiajukan = false;
-
-            // Sama seperti $adaKegiatanDiajukan, tapi untuk PERBAIKAN di luar blok Kegiatan
-            // (kendala & solusi, bukti evaluasi RTL, Bagian Kustom) — bila Capaian ini
-            // "dikembalikan" KARENA salah satu bagian ini (bukan karena Kegiatan), isian
-            // tetap harus balik ke "diajukan" begitu diperbaiki+diajukan ulang. Sebelumnya
-            // hanya $adaKegiatanDiajukan yang dicek di bawah, jadi memperbaiki HANYA bukti
-            // evaluasi RTL yang ditolak (semua Kegiatan lain sudah terkunci/tidak berubah)
-            // tidak pernah memindahkan status Capaian keluar dari "dikembalikan".
-            $adaPerbaikanLainDiajukan = false;
-
-            // 1) Kegiatan + bukti capaian (bukti melekat langsung ke kegiatan, RF-23)
-            foreach ($this->blocks as $block) {
-                // Blok yang sudah diajukan/diverifikasi/disetujui ditampilkan hanya-baca
-                // di form (lihat muatBlocksKegiatan()) — tidak boleh ikut tertimpa di sini.
-                if (in_array($block['status_dokumen'] ?? null, self::STATUS_KEGIATAN_TERKUNCI, true)) {
-                    continue;
-                }
-
-                $tahapan = $block['jenis'] === 'survei_sensus' ? $block['tahapan_survei'] : null;
-
-                $namaFolderAuto = Str::limit(
-                    ($tahapan ? '['.ucfirst($tahapan).'] ' : '').$block['uraian_kegiatan'],
-                    100,
-                    ''
-                );
-
-                if ($block['id']) {
-                    // UPDATE kegiatan draft/dikembalikan yang sudah ada, bukan create baru
-                    // — supaya mengajukan ulang isian yang dikembalikan Tim SAKIP tidak
-                    // membuat baris duplikat. drive_folder_id SENGAJA tidak disentuh, lihat
-                    // catatan senada di simpanDraft().
-                    $kegiatan = Kegiatan::findOrFail($block['id']);
-                    $kegiatan->update([
-                        'rtl_evaluasi_id' => $this->cariRtlBerjalanCocok($block['uraian_kegiatan']),
-                        'uraian_kegiatan' => $block['uraian_kegiatan'],
-                        'jenis' => $block['jenis'],
-                        'tahapan_survei' => $tahapan,
-                        'nama_folder_auto' => $namaFolderAuto,
-                    ]);
-                } else {
-                    $kegiatan = Kegiatan::create([
-                        'iku_id' => $this->iku_id,
-                        'rtl_evaluasi_id' => $this->cariRtlBerjalanCocok($block['uraian_kegiatan']),
-                        'periode_id' => $periode->id,
-                        'uraian_kegiatan' => $block['uraian_kegiatan'],
-                        'jenis' => $block['jenis'],
-                        'tahapan_survei' => $tahapan,
-                        'nama_folder_auto' => $namaFolderAuto,
-                        'status_dokumen' => Kegiatan::STATUS_DRAFT,
-                    ]);
-                }
-
-                // draft→diajukan maupun dikembalikan→diajukan, keduanya diizinkan
-                // (lihat Kegiatan::TRANSITIONS) — tidak perlu logic tambahan di sini.
-                $kegiatan->ajukan();
-                $adaKegiatanDiajukan = true;
-
-                // RF-17: nama berkas & folder mengikuti uraian kegiatan (bukan tahapan
-                // survei — itu cuma prefix folder, lihat namaFolderAuto di atas), supaya
-                // langsung dikenali dari daftar berkas tanpa harus dibuka satu-satu. Dipakai
-                // baik untuk nama_file awal (sebelum sempat diunggah ke Drive) maupun sebagai
-                // $namaBerkasOverride Drive — namaUnik() di FolderStructureService yang
-                // menambahkan angka di belakang bila lebih dari satu berkas.
-                $namaBerkasDasar = 'Kegiatan '.$block['uraian_kegiatan'];
-
-                foreach ($block['bukti'] as $file) {
-                    $path = $file->store('bukti-capaian', 'local');
-
-                    $berkas = Berkas::create([
-                        'ref_id' => $kegiatan->id,
-                        'ref_type' => Kegiatan::class,
-                        'kategori' => 'capaian',
-                        'nama_file' => $namaBerkasDasar.'.pdf',
-                        'path' => $path,
-                        'status_verifikasi' => 'menunggu',
-                    ]);
-
-                    // Dibungkus try/catch supaya isian TETAP bisa diajukan walau Drive
-                    // belum terkonfigurasi — berkas tetap aman di disk lokal sebagai cadangan.
-                    // \Throwable (bukan cuma RuntimeException) sengaja dipakai supaya galat
-                    // dari Google API sendiri (mis. Google\Service\Exception saat token/scope
-                    // bermasalah) juga tertangkap di sini, bukan membatalkan SELURUH transaksi
-                    // pengajuan hanya karena Drive sedang bermasalah.
-                    try {
-                        $this->streamProgresUnggah($file->getClientOriginalName(), 'bukti kegiatan');
-                        $localFullPath = Storage::disk('local')->path($path);
-                        $hasilDrive = $folderService->unggahBerkasKegiatan($kegiatan, 'capaian', $localFullPath, namaBerkasOverride: $namaBerkasDasar);
-                        $berkas->update($hasilDrive);
-                        $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti kegiatan', true);
-                    } catch (\Throwable $e) {
-                        Log::warning('Gagal mengunggah berkas ke Google Drive, disimpan lokal saja: '.$e->getMessage());
-                        $driveGagal[] = "{$file->getClientOriginalName()} (bukti kegiatan: {$block['uraian_kegiatan']})";
-                        $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti kegiatan', false, $e->getMessage());
-                    }
-                }
-            }
-
-            // 2) Kendala & Solusi (blok kosong dilewati — bagian ini opsional per periode).
-            // UPDATE, bukan create, bila blok ini punya id (pasangan lama yang ditolak
-            // Tim SAKIP dan sedang diperbaiki — lihat muatKendalaBlocks()), supaya tidak
-            // duplikat. status_verifikasi & catatan SENGAJA TIDAK direset ke "menunggu" —
-            // tanda "Tidak Sesuai" + alasannya tetap tampil ke Tim SAKIP sampai mereka
-            // sendiri menandainya ulang (tandaiKendalaSesuai()/tandaiKendalaTolak()),
-            // supaya mereka masih ingat apa yang salah sebelumnya saat memeriksa
-            // perbaikan ini. Baru kosong begitu ditandai "Sesuai".
-            foreach ($this->kendalaBlocks as $block) {
-                if (trim($block['kendala']) === '' && trim($block['solusi']) === '') {
-                    continue;
-                }
-
-                if ($block['id'] ?? null) {
-                    KendalaSolusiModel::whereKey($block['id'])->update([
-                        'kendala' => $block['kendala'],
-                        'solusi' => $block['solusi'] ?: null,
-                    ]);
-                } else {
-                    KendalaSolusiModel::create([
-                        'iku_id' => $this->iku_id,
-                        'periode_id' => $periode->id,
-                        'kendala' => $block['kendala'],
-                        'solusi' => $block['solusi'] ?: null,
-                    ]);
-                }
-
-                $adaPerbaikanLainDiajukan = true;
-            }
-
-            // 3) Evaluasi RTL triwulan sebelumnya — cukup bukti realisasi (SEMUA poin wajib
-            // punya bukti bila sedang mengajukan pada bulan terakhir triwulan, dicek di
-            // buatValidator()); baris tanpa bukti baru dilewati begitu saja di sini.
-            foreach ($this->evaluasi as $rtlId => $data) {
-                if (empty($data['bukti'])) {
-                    continue;
-                }
-
-                $poin = RtlEvaluasiModel::with(['periode', 'masterIku'])->findOrFail($rtlId);
-                $namaBerkasDasar = 'Evaluasi RTL '.$poin->rtl_teks;
-                $adaPerbaikanLainDiajukan = true;
-
-                // status_verifikasi & catatan SENGAJA TIDAK direset ke "menunggu" di sini
-                // walau bukti baru baru saja diunggah — tanda "Tidak Sesuai" + alasannya
-                // TETAP tampil ke Tim SAKIP sampai mereka sendiri yang menandainya ulang
-                // (tandaiRtlSesuai()/tandaiRtlTolak()), supaya mereka masih ingat apa yang
-                // salah sebelumnya saat memeriksa bukti baru ini. Baru kosong begitu Tim
-                // SAKIP menandai "Sesuai". Sama seperti bukti Kegiatan (Berkas lama yang
-                // "ditolak" juga tidak pernah direset otomatis di sini).
-
-                foreach ($data['bukti'] as $file) {
-                    $path = $file->store('bukti-evaluasi-rtl', 'local');
-
-                    $berkas = Berkas::create([
-                        'ref_id' => $poin->id,
-                        'ref_type' => RtlEvaluasiModel::class,
-                        'kategori' => 'evaluasi_rtl',
-                        'nama_file' => $namaBerkasDasar.'.pdf',
-                        'path' => $path,
-                        'status_verifikasi' => 'menunggu',
-                    ]);
-
-                    try {
-                        $this->streamProgresUnggah($file->getClientOriginalName(), 'bukti evaluasi RTL');
-                        $localFullPath = Storage::disk('local')->path($path);
-                        $hasilDrive = $folderService->unggahBerkas($poin->periode, $poin->masterIku, 'evaluasi_rtl', $localFullPath, namaBerkasOverride: $namaBerkasDasar);
-                        $berkas->update($hasilDrive);
-                        $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti evaluasi RTL', true);
-                    } catch (\Throwable $e) {
-                        Log::warning('Gagal mengunggah bukti evaluasi RTL ke Google Drive, disimpan lokal saja: '.$e->getMessage());
-                        $driveGagal[] = "{$file->getClientOriginalName()} (bukti evaluasi RTL)";
-                        $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti evaluasi RTL', false, $e->getMessage());
-                    }
-                }
-            }
-
-            // 4) RTL triwulan berikutnya (hanya bila belum pernah ditetapkan, dan hanya
-            // boleh diisi di bulan terakhir triwulan berjalan — dicek jugu di buatValidator()).
-            if ($this->rtlBaruBisaDiisi() && ! $this->rtlTriwulanBerikutnyaSudahAda()) {
-                $target = $this->targetTriwulanBerikutnya();
-                $bulanPertamaTarget = ($target['triwulan'] - 1) * 3 + 1;
-
-                $periodeTarget = Periode::firstOrCreate(
-                    ['tahun' => $target['tahun'], 'bulan' => $bulanPertamaTarget],
-                    ['triwulan' => $target['triwulan'], 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]
-                );
-
-                // RF-33: "RTL untuk Oktober, November, dan Desember" — satu keterangan bulan
-                // yang sama untuk SELURUH poin dalam triwulan ini (bukan per poin).
-                $namaBulanTarget = collect($this->bulanBulanTarget())->map(fn ($b) => $this->namaBulanIndo($b));
-                $berlakuBulan = 'RTL untuk '.$namaBulanTarget->join(', ', ', dan ');
-
-                // PIC dipilih bebas oleh Ketua Tim lewat dropdown (daftarTimPic(), lihat
-                // blade) — boleh dikosongkan; kalau kosong, jatuh ke nama tim IKU ini
-                // (App\Models\MasterIku::tim) sebagai bawaan. Tim SAKIP tetap wajib
-                // mengisi/mengonfirmasi PIC ini sebelum verifikasi selesai (lihat
-                // VerifikasiCapaian::verifikasiSelesai()), jadi nilai kosong di sini
-                // bukan masalah — hanya tertunda sampai verifikasi.
-                $picTim = trim($this->rtlBaruPic) !== '' ? trim($this->rtlBaruPic) : $this->ikuTerpilih()?->tim;
-
-                // Blok dengan id terisi berarti poin lama yang DITOLAK Tim SAKIP (dimuat
-                // lewat muatRtlBaruBlocks(), lihat rtlBerikutnyaDitolak()) — di-UPDATE di
-                // tempat & status_verifikasi direset ke "menunggu" supaya kembali masuk
-                // antrean verifikasi, BUKAN dibuat baris duplikat. Pola sama seperti
-                // BagianKustomPoin di langkah 5 di bawah.
-                foreach ($this->rtlBaru as $blok) {
-                    if (! empty($blok['id'])) {
-                        RtlEvaluasiModel::whereKey($blok['id'])->update([
-                            'rtl_teks' => $blok['rtl_teks'],
-                            'berlaku_bulan' => $berlakuBulan,
-                            'pic' => $picTim,
-                            'batas_waktu' => $this->rtlBaruBatasWaktu,
-                            'status_verifikasi' => 'menunggu',
-                            'catatan' => null,
-                        ]);
-
-                        continue;
-                    }
-
-                    RtlEvaluasiModel::create([
-                        'iku_id' => $this->iku_id,
-                        'periode_id' => $periodeTarget->id,
-                        'rtl_teks' => $blok['rtl_teks'],
-                        'berlaku_bulan' => $berlakuBulan,
-                        'pic' => $picTim,
-                        'batas_waktu' => $this->rtlBaruBatasWaktu,
-                    ]);
-                }
-            }
-
-            // 5) Bagian kustom (mis. Manajemen Risiko) — poin kosong dilewati, sama
-            // seperti Kendala & Solusi; bukti sudah dipastikan wajib lewat validasi di atas.
-            // UPDATE, bukan create, bila blok ini punya id (poin lama yang dimuat lewat
-            // muatBagianKustomBlocks() untuk diperbaiki tekusnya) — supaya tidak
-            // duplikat, mengikuti pola yang sama dengan Kendala & Solusi di atas.
-            foreach ($this->bagianKustomAktif() as $bagian) {
-                foreach ($this->bagianKustomBlocks[$bagian->id] ?? [] as $blok) {
-                    if (trim($blok['teks'] ?? '') === '') {
-                        continue;
-                    }
-
-                    if ($blok['id'] ?? null) {
-                        $poin = BagianKustomPoin::whereKey($blok['id'])->first();
-
-                        if (! $poin) {
-                            continue;
-                        }
-
-                        // status_verifikasi & catatan SENGAJA TIDAK direset — sama seperti
-                        // Kendala & Solusi/Evaluasi RTL di atas, lihat penjelasan di sana.
-                        $poin->update(['teks' => $blok['teks']]);
-                    } else {
-                        $poin = BagianKustomPoin::create([
-                            'bagian_kustom_id' => $bagian->id,
-                            'iku_id' => $this->iku_id,
-                            'periode_id' => $periode->id,
-                            'teks' => $blok['teks'],
-                        ]);
-                    }
-
-                    $adaPerbaikanLainDiajukan = true;
-                    $namaBerkasDasar = $bagian->nama.' '.$poin->teks;
-
-                    foreach ($blok['bukti'] as $file) {
-                        $path = $file->store('bukti-bagian-kustom', 'local');
-
-                        $berkas = Berkas::create([
-                            'ref_id' => $poin->id,
-                            'ref_type' => BagianKustomPoin::class,
-                            'kategori' => 'bagian_kustom',
-                            'nama_file' => $namaBerkasDasar.'.pdf',
-                            'path' => $path,
-                            'status_verifikasi' => 'menunggu',
-                        ]);
-
-                        try {
-                            $this->streamProgresUnggah($file->getClientOriginalName(), "bukti {$bagian->nama}");
-                            $localFullPath = Storage::disk('local')->path($path);
-                            $hasilDrive = $folderService->unggahBerkas(
-                                $periode, $iku, 'bagian_kustom', $localFullPath,
-                                namaFolderOverride: $bagian->nama,
-                                namaBerkasOverride: $namaBerkasDasar,
-                            );
-                            $berkas->update($hasilDrive);
-                            $this->notifikasiHasilUnggah($file->getClientOriginalName(), "bukti {$bagian->nama}", true);
-                        } catch (\Throwable $e) {
-                            Log::warning("Gagal mengunggah bukti {$bagian->nama} ke Google Drive, disimpan lokal saja: ".$e->getMessage());
-                            $driveGagal[] = "{$file->getClientOriginalName()} (bukti {$bagian->nama})";
-                            $this->notifikasiHasilUnggah($file->getClientOriginalName(), "bukti {$bagian->nama}", false, $e->getMessage());
-                        }
-                    }
-                }
-            }
-
-            // Dicek TERAKHIR, setelah SELURUH bagian (Kegiatan, Kendala & Solusi, Evaluasi
-            // RTL, Bagian Kustom) selesai diproses di atas — supaya perbaikan pada bagian
-            // MANA PUN yang tadinya jadi alasan "dikembalikan" ikut memindahkan Capaian ini
-            // balik ke "diajukan", bukan cuma perbaikan pada Kegiatan.
-            if ($adaKegiatanDiajukan || $adaPerbaikanLainDiajukan) {
-                $capaian->catatStatus(Kegiatan::STATUS_DIAJUKAN, auth()->user());
-            }
+            $this->simpanBagianIsian($periode, $iku, $folderService, $driveGagal, ajukan: true);
         });
 
         $this->stream(to: 'progres-unggah', content: '', replace: true);

@@ -11,7 +11,22 @@
         // request dikirim & dikembalikan SETELAH DOM selesai diperbarui.
         jagaScroll(aksi) {
             const y = window.scrollY;
-            aksi().then(() => requestAnimationFrame(() => window.scrollTo(0, y)));
+            // Dikoreksi di BEBERAPA frame berturut-turut (bukan cuma sekali) — DOM hasil
+            // morph Livewire bisa masih bergeser tinggi setelah frame pertama (mis. blok
+            // baru yang baru dirender belum selesai reflow, atau browser mencoba
+            // memfokuskan elemen baru), jadi satu requestAnimationFrame saja kadang masih
+            // kebobolan sekejap sebelum posisi scroll dikoreksi balik.
+            const kunci = () => {
+                if (Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y);
+            };
+            aksi().then(() => {
+                requestAnimationFrame(() => {
+                    kunci();
+                    requestAnimationFrame(kunci);
+                    setTimeout(kunci, 50);
+                    setTimeout(kunci, 150);
+                });
+            });
         },
     }"
     x-on:livewire-upload-start.window="$dispatch('notify', { type: 'info', message: 'Mengunggah berkas ke server…' })"
@@ -169,7 +184,25 @@
                     </div>
                 </div>
             @else
-            <div class="keg" wire:key="block-{{ $i }}"
+            {{--
+                wire:key SENGAJA menyertakan status terisi/tidaknya uraian, jenis, dan
+                tahapan survei (bukan cuma index "block-{{ $i }}") — semua nilai
+                inilah yang dipakai x-data di bawah untuk menentukan Jenis
+                Kegiatan/Tahapan Survei/Bukti Capaian terkunci atau tidak. x-data hanya
+                dievaluasi SEKALI saat elemen pertama kali dibuat; begitu Livewire
+                memuat ulang blok ini lewat request AJAX biasa (mis. updatedIkuId()
+                saat memilih IKU yang sudah pernah diisi, BUKAN saat mount/reload
+                halaman penuh) tapi wire:key-nya tidak berubah, Alpine hanya
+                me-morph DOM dan MEMPERTAHANKAN nilai x-data lama — uraianTerisi/
+                jenisTerpilih/tahapanTerisi tetap kosong walau data sebenarnya (lewat
+                wire:model) sudah terisi dari database, sehingga Jenis
+                Kegiatan/Bukti Capaian tampak terkunci padahal sudah ada isinya
+                (baru "kebuka" setelah pengguna mengetik ulang Uraian Kegiatan). Dengan
+                key yang ikut berubah, Livewire memperlakukan blok ini sebagai elemen
+                BARU begitu status kunci sebenarnya berubah — Alpine terpaksa membuat
+                ulang x-data dari nilai server yang sudah benar.
+            --}}
+            <div class="keg" wire:key="block-{{ $i }}-{{ $block['id'] ?? 'baru' }}-{{ trim($block['uraian_kegiatan']) !== '' ? 1 : 0 }}-{{ $block['jenis'] }}-{{ $block['tahapan_survei'] ?? '' }}"
                 x-data="{
                     uraianTerisi: {{ trim($block['uraian_kegiatan']) !== '' ? 'true' : 'false' }},
                     uraianTeks: @js($block['uraian_kegiatan']),

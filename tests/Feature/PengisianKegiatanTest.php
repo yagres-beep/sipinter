@@ -273,6 +273,58 @@ class PengisianKegiatanTest extends TestCase
         $this->assertSame('draft', $kegiatan->status_dokumen);
     }
 
+    /**
+     * Regresi produksi: "Simpan Draft" hanya menyimpan kolom Kegiatan (uraian, jenis,
+     * tahapan) — kendala & solusi, RTL berikutnya, dan bukti capaian yang sudah
+     * diisi/diunggah TIDAK ikut tersimpan sama sekali (baru tersimpan saat "Ajukan ke
+     * Tim SAKIP"), jadi menutup lalu membuka lagi form terasa seperti isian itu hilang.
+     */
+    public function test_simpan_draft_menyimpan_bukti_kendala_solusi_dan_rtl_juga(): void
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $ketua = User::create([
+            'nama' => 'Ketua Uji Draf Lengkap', 'username' => 'ketua-uji-draf-lengkap@example.test', 'email' => 'ketua-uji-draf-lengkap@example.test',
+            'password' => 'password', 'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create([
+            'kode' => 'UJI-DRAF', 'indikator' => 'Indikator uji draf lengkap', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji',
+        ]);
+
+        $this->actingAs($ketua);
+
+        Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 9) // bulan terakhir triwulan — RTL Baru boleh diisi.
+            ->set('iku_id', $iku->id)
+            ->set('blocks.0.uraian_kegiatan', 'Kegiatan draf lengkap')
+            ->set('blocks.0.jenis', 'bukan_survei_sensus')
+            ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti-draf.pdf', 100, 'application/pdf')])
+            ->set('kendalaBlocks.0.kendala', 'Kendala draf')
+            ->set('kendalaBlocks.0.solusi', 'Solusi draf')
+            ->set('rtlBaru.0.rtl_teks', 'RTL draf berikutnya')
+            ->call('simpanDraft')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseCount('kegiatan', 1);
+        $this->assertDatabaseCount('berkas', 1);
+        $this->assertDatabaseCount('kendala_solusi', 1);
+        $this->assertDatabaseCount('rtl_evaluasi', 1);
+
+        $kegiatan = Kegiatan::first();
+        $this->assertSame('draft', $kegiatan->status_dokumen);
+
+        $capaian = Capaian::first();
+        $this->assertNotSame('diajukan', $capaian->status);
+
+        $kendalaSolusi = KendalaSolusi::first();
+        $this->assertSame('Kendala draf', $kendalaSolusi->kendala);
+        $this->assertSame('Solusi draf', $kendalaSolusi->solusi);
+
+        $rtlBaru = RtlEvaluasi::first();
+        $this->assertSame('RTL draf berikutnya', $rtlBaru->rtl_teks);
+    }
+
     public function test_pratinjau_nama_folder_mengikuti_uraian_dan_tahapan(): void
     {
         $peranKetua = Role::create(['nama' => 'Ketua Tim']);
