@@ -7,6 +7,7 @@ use Google\Client as GoogleClient;
 use Google\Service\Drive;
 use Google\Service\Drive\DriveFile;
 use Google\Service\Drive\Permission;
+use Google\Service\Exception as GoogleServiceException;
 use RuntimeException;
 
 /**
@@ -57,13 +58,13 @@ class GoogleDriveService
         ]);
 
         /** @var DriveFile $uploaded */
-        $uploaded = $this->drive()->files->create($metadata, [
+        $uploaded = $this->panggilApi(fn () => $this->drive()->files->create($metadata, [
             'data' => file_get_contents($localPath),
             'mimeType' => $mimeType,
             'uploadType' => 'multipart',
             // 'fields' membatasi respons API hanya ke kolom yang kita perlukan (hemat kuota API).
             'fields' => 'id, name, webViewLink, size',
-        ]);
+        ]), "mengunggah berkas \"{$filename}\"");
 
         return [
             'id' => $uploaded->getId(),
@@ -114,7 +115,10 @@ class GoogleDriveService
         ]);
 
         /** @var DriveFile $folder */
-        $folder = $this->drive()->files->create($metadata, ['fields' => 'id']);
+        $folder = $this->panggilApi(
+            fn () => $this->drive()->files->create($metadata, ['fields' => 'id']),
+            "membuat folder \"{$name}\""
+        );
 
         return $folder->getId();
     }
@@ -139,11 +143,11 @@ class GoogleDriveService
             $parentFolderId
         );
 
-        $hasil = $this->drive()->files->listFiles([
+        $hasil = $this->panggilApi(fn () => $this->drive()->files->listFiles([
             'q' => $query,
             'fields' => 'files(id, name)',
             'pageSize' => 1,
-        ]);
+        ]), "mencari folder \"{$name}\"");
 
         $folderDitemukan = $hasil->getFiles()[0] ?? null;
 
@@ -163,11 +167,11 @@ class GoogleDriveService
      */
     public function namesInFolder(string $parentFolderId): array
     {
-        $hasil = $this->drive()->files->listFiles([
+        $hasil = $this->panggilApi(fn () => $this->drive()->files->listFiles([
             'q' => sprintf("'%s' in parents and trashed = false", $parentFolderId),
             'fields' => 'files(name)',
             'pageSize' => 1000,
-        ]);
+        ]), 'membaca isi folder');
 
         return array_map(fn (DriveFile $file) => $file->getName(), $hasil->getFiles());
     }
@@ -184,7 +188,10 @@ class GoogleDriveService
     public function getFileLink(string $fileId): string
     {
         /** @var DriveFile $file */
-        $file = $this->drive()->files->get($fileId, ['fields' => 'webViewLink']);
+        $file = $this->panggilApi(
+            fn () => $this->drive()->files->get($fileId, ['fields' => 'webViewLink']),
+            'mengambil tautan berkas'
+        );
 
         return $file->getWebViewLink();
     }
@@ -198,7 +205,10 @@ class GoogleDriveService
      */
     public function downloadFileContent(string $fileId): string
     {
-        return $this->drive()->files->get($fileId, ['alt' => 'media'])->getBody()->getContents();
+        return $this->panggilApi(
+            fn () => $this->drive()->files->get($fileId, ['alt' => 'media'])->getBody()->getContents(),
+            'mengunduh berkas'
+        );
     }
 
     /**
@@ -234,7 +244,10 @@ class GoogleDriveService
         $client = $this->clientOAuthUntukAkun($akun);
         $drive = new Drive($client);
 
-        $about = $drive->about->get(['fields' => 'storageQuota']);
+        $about = $this->panggilApi(
+            fn () => $drive->about->get(['fields' => 'storageQuota']),
+            "mengambil info kuota akun {$akun->email_gmail_institusi}"
+        );
         $kuota = $about->getStorageQuota();
 
         return [
@@ -291,18 +304,21 @@ class GoogleDriveService
 
         try {
             $sudahDibagikan = collect(
-                $this->drive()->permissions->listPermissions($folderId, ['fields' => 'permissions(emailAddress)'])->getPermissions()
+                $this->panggilApi(
+                    fn () => $this->drive()->permissions->listPermissions($folderId, ['fields' => 'permissions(emailAddress)'])->getPermissions(),
+                    'membaca daftar akses folder'
+                )
             )->contains(fn (Permission $p) => strcasecmp((string) $p->getEmailAddress(), $email) === 0);
 
             if ($sudahDibagikan) {
                 return;
             }
 
-            $this->drive()->permissions->create($folderId, new Permission([
+            $this->panggilApi(fn () => $this->drive()->permissions->create($folderId, new Permission([
                 'type' => 'user',
                 'role' => $role,
                 'emailAddress' => $email,
-            ]), ['sendNotificationEmail' => false]);
+            ]), ['sendNotificationEmail' => false]), "membagikan folder ke {$email}");
         } finally {
             $this->client = $clientLama;
             $this->drive = $driveLama;
@@ -412,5 +428,50 @@ class GoogleDriveService
     protected function drive(): Drive
     {
         return $this->drive ??= new Drive($this->client());
+    }
+
+    /**
+     * Bungkus SATU panggilan ke Drive API supaya error mentah dari Google (biasanya
+     * JSON teknis, mis. `{"error":{"code":404,"message":"File not found: ..."}}`)
+     * diterjemahkan jadi RuntimeException berbahasa Indonesia yang aman ditampilkan
+     * apa adanya ke Tim SAKIP.
+     *
+     * Ini yang membuat kode pemanggil (Livewire component, dsb.) yang SUDAH terbiasa
+     * menangkap RuntimeException (lihat FolderConfigManager, FolderStructureService)
+     * tidak lagi kebobolan Google\Service\Exception mentah — tanpa perubahan ini,
+     * exception itu lolos sampai ke Laravel dan berakhir sebagai halaman 500 kosong
+     * tanpa keterangan, alih-alih notifikasi gagal yang menjelaskan sebabnya.
+     *
+     * @template T
+     * @param  callable(): T  $panggilan
+     * @return T
+     */
+    protected function panggilApi(callable $panggilan, string $konteks)
+    {
+        try {
+            return $panggilan();
+        } catch (GoogleServiceException $e) {
+            throw new RuntimeException($this->pesanGoogleRamah($e, $konteks), previous: $e);
+        }
+    }
+
+    /**
+     * Ambil pesan INTI dari body JSON error Google (bukan seluruh JSON mentah), lalu
+     * tambahkan saran tindak lanjut untuk kode HTTP yang paling sering terjadi di
+     * SIPINTER: 404 (folder sudah dihapus/ID salah) & 403 (folder belum/tidak lagi
+     * dibagikan ke akun ini).
+     */
+    protected function pesanGoogleRamah(GoogleServiceException $e, string $konteks): string
+    {
+        $data = json_decode($e->getMessage(), true);
+        $pesanAsli = $data['error']['message'] ?? $e->getMessage();
+
+        $saran = match ($e->getCode()) {
+            404 => ' Folder/berkas yang dituju kemungkinan sudah dihapus atau ID-nya sudah tidak valid — periksa & perbarui folder Drive-nya di menu Akun & Storage.',
+            403 => ' Akun Drive ini kemungkinan belum/tidak lagi punya akses ke folder tersebut — pastikan folder sudah dibagikan (peran Editor) ke akun ini.',
+            default => '',
+        };
+
+        return "Gagal {$konteks}: {$pesanAsli}.{$saran}";
     }
 }

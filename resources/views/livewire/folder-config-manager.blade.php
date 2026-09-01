@@ -118,10 +118,13 @@
             </div>
 
             <div class="btn-row">
-                <button type="button" class="btn btn-primary" wire:click="simpan" wire:loading.attr="disabled" wire:target="simpan">
+                <button type="button" class="btn btn-primary" wire:click="simpan" wire:loading.attr="disabled" wire:target="simpan" @disabled(! $adaPerubahan) title="{{ $adaPerubahan ? '' : 'Belum ada perubahan yang perlu disimpan' }}">
                     <span wire:loading.remove wire:target="simpan">💾 Simpan Pola Folder</span>
                     <span wire:loading wire:target="simpan"><i class="spin"></i> Menyimpan…</span>
                 </button>
+                @if (! $adaPerubahan)
+                    <span class="muted" style="font-size:11.5px;align-self:center">Tidak ada perubahan untuk disimpan.</span>
+                @endif
             </div>
         </div>
 

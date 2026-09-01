@@ -8,7 +8,6 @@ use App\Models\MasterIku;
 use App\Services\FolderStructureService;
 use Illuminate\Support\Str;
 use Livewire\Component;
-use RuntimeException;
 
 /**
  * Modul Tim SAKIP untuk mengatur pola struktur folder Drive (RF-15), pola KHUSUS
@@ -25,6 +24,20 @@ class FolderConfigManager extends Component
 
     /** @var list<array{nama: string, wajib: bool, subfolder_per_kegiatan: bool}> */
     public array $kategori = [];
+
+    /**
+     * Salinan $hierarki/$kategori PERSIS SEPERTI SAAT TERAKHIR TERSIMPAN — dipakai
+     * semata untuk membandingkan apakah ada perubahan yang belum disimpan (menentukan
+     * tombol "Simpan Pola Folder" aktif/nonaktif). Diperbarui di mount() (pola yang
+     * dimuat dari DB dianggap "tersimpan") dan simpan() (setelah berhasil disimpan
+     * ulang), TIDAK pernah disentuh method lain.
+     *
+     * @var list<array{level: string, aktif: bool}>
+     */
+    public array $hierarkiTersimpan = [];
+
+    /** @var list<array{nama: string, wajib: bool, subfolder_per_kegiatan: bool}> */
+    public array $kategoriTersimpan = [];
 
     public string $kategoriBaru = '';
 
@@ -69,6 +82,8 @@ class FolderConfigManager extends Component
 
         $this->hierarki = $config->pola_json['hierarki'] ?? FolderConfig::polaDefault()['hierarki'];
         $this->kategori = $config->pola_json['kategori'] ?? FolderConfig::polaDefault()['kategori'];
+        $this->hierarkiTersimpan = $this->hierarki;
+        $this->kategoriTersimpan = $this->kategori;
         $this->tahunBaru = (int) now()->year + 1;
         $this->manualTahun = (int) now()->year;
     }
@@ -232,7 +247,20 @@ class FolderConfigManager extends Component
             ],
         ]);
 
+        $this->hierarkiTersimpan = $this->hierarki;
+        $this->kategoriTersimpan = $this->kategori;
+
         session()->flash('status', 'Pola struktur folder berhasil disimpan.');
+    }
+
+    /**
+     * Ada perubahan pola global yang belum disimpan? Dipakai render() untuk
+     * mengaktifkan/menonaktifkan tombol "Simpan Pola Folder" — nonaktif bila
+     * $hierarki/$kategori saat ini persis sama dengan salinan terakhir tersimpan.
+     */
+    protected function adaPerubahan(): bool
+    {
+        return $this->hierarki !== $this->hierarkiTersimpan || $this->kategori !== $this->kategoriTersimpan;
     }
 
     // ================= Pola khusus per IKU (override opsional) =================
@@ -436,7 +464,10 @@ class FolderConfigManager extends Component
             app(FolderStructureService::class)->buatFolderTahunLebihAwal($this->tahunBaru);
 
             session()->flash('status', "Folder tahun {$this->tahunBaru} berhasil disiapkan di Drive storage aktif.");
-        } catch (RuntimeException $e) {
+        } catch (\Throwable $e) {
+            // \Throwable (bukan cuma RuntimeException) supaya error Google Drive yang
+            // tak terduga tetap tampil sebagai notifikasi gagal yang jelas, bukan
+            // halaman 500 kosong tanpa keterangan.
             $this->addError('tahunBaru', $e->getMessage());
         }
     }
@@ -477,7 +508,7 @@ class FolderConfigManager extends Component
             session()->flash('status', "Folder \"{$this->manualNamaFolder}\" berhasil dibuat/ditemukan di Drive.");
 
             $this->reset(['manualTriwulan', 'manualBulan', 'manualIkuId', 'manualKategoriNama', 'manualNamaFolder']);
-        } catch (RuntimeException $e) {
+        } catch (\Throwable $e) {
             $this->addError('manualNamaFolder', $e->getMessage());
         }
     }
@@ -583,6 +614,7 @@ class FolderConfigManager extends Component
             'previewIku' => $this->ikuTerpilih ? $this->jalurPreview($this->hierarkiIku, $this->kategoriIku) : [],
             'ikuList' => MasterIku::daftarUrutKode(),
             'ikuDenganOverride' => IkuFolderConfig::pluck('iku_id')->all(),
+            'adaPerubahan' => $this->adaPerubahan(),
         ]);
     }
 }
