@@ -182,8 +182,8 @@ class PengisianKegiatan extends Component
             $this->muatBlocksKegiatan();
             $this->muatKendalaBlocks();
             $this->muatBagianKustomBlocks();
-            $this->muatRtlBaruBlocks();
             $this->pilihPicOtomatis();
+            $this->muatRtlBaruBlocks();
         }
     }
 
@@ -582,8 +582,8 @@ class PengisianKegiatan extends Component
         $this->muatBlocksKegiatan();
         $this->muatKendalaBlocks();
         $this->muatBagianKustomBlocks();
-        $this->muatRtlBaruBlocks();
         $this->pilihPicOtomatis();
+        $this->muatRtlBaruBlocks();
     }
 
     public function updatedBulan(): void
@@ -1568,6 +1568,7 @@ class PengisianKegiatan extends Component
 
         if ($ditolak->isNotEmpty()) {
             $this->rtlBaru = $ditolak->map(fn ($poin) => ['id' => $poin->id, 'rtl_teks' => $poin->rtl_teks])->values()->all();
+            $this->muatPicTersimpan($ditolak->first()->pic);
 
             return;
         }
@@ -1577,6 +1578,25 @@ class PengisianKegiatan extends Component
         $this->rtlBaru = $draftSendiri->isEmpty()
             ? [$this->emptyRtlBlock()]
             : $draftSendiri->map(fn ($poin) => ['id' => $poin->id, 'rtl_teks' => $poin->rtl_teks])->values()->all();
+
+        if ($draftSendiri->isNotEmpty()) {
+            $this->muatPicTersimpan($draftSendiri->first()->pic);
+        }
+    }
+
+    /**
+     * Pulihkan PIC Tindak Lanjut yang sudah pernah dipilih & disimpan (draft
+     * sendiri/ditolak Tim SAKIP) — HARUS dipanggil SETELAH pilihPicOtomatis()
+     * (lihat mount()/updatedIkuId()), supaya pilihan Ketua Tim sebelumnya tidak
+     * hilang tertimpa bawaan nama tim IKU begitu form dibuka/dimuat ulang. Kalau
+     * PIC tersimpan memang sengaja dikosongkan dulu, biarkan bawaan otomatis dari
+     * pilihPicOtomatis() yang tetap tampil.
+     */
+    protected function muatPicTersimpan(?string $pic): void
+    {
+        if ($pic !== null && trim($pic) !== '') {
+            $this->rtlBaruPic = $pic;
+        }
     }
 
     protected function labelTriwulanBerikutnya(): string

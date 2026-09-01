@@ -393,6 +393,49 @@ class PengisianKegiatanTest extends TestCase
             ->assertSee('Sudah ditetapkan');
     }
 
+    /**
+     * Regresi: PIC Tindak Lanjut yang sudah dipilih & disimpan (draft/ditolak) hilang
+     * tertimpa bawaan nama tim IKU begitu form dibuka ulang — pilihPicOtomatis()
+     * dipanggil SETELAH muatRtlBaruBlocks() memuat draft, jadi PIC kustom yang baru
+     * saja disimpan tidak pernah ikut termuat. Lihat muatPicTersimpan().
+     */
+    public function test_pic_tindak_lanjut_draf_tetap_tersimpan_saat_form_dibuka_ulang(): void
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $ketua = User::create([
+            'nama' => 'Ketua Uji PIC Draf', 'username' => 'ketua-uji-pic-draf@example.test', 'email' => 'ketua-uji-pic-draf@example.test',
+            'password' => 'password', 'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create([
+            'kode' => 'UJI-PICDRAF', 'indikator' => 'Indikator uji PIC draf', 'tim' => 'Tim Bawaan', 'penanggung_jawab' => 'Ketua Uji',
+        ]);
+
+        $this->actingAs($ketua);
+
+        Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 9)
+            ->set('iku_id', $iku->id)
+            ->set('blocks.0.uraian_kegiatan', 'Kegiatan PIC draf')
+            ->set('blocks.0.jenis', 'bukan_survei_sensus')
+            ->set('rtlBaru.0.rtl_teks', 'RTL PIC draf')
+            ->set('rtlBaruPic', 'Tim Kustom')
+            ->call('simpanDraft')
+            ->assertHasNoErrors();
+
+        $rtl = RtlEvaluasi::first();
+        $this->assertSame('Tim Kustom', $rtl->pic);
+
+        // Buka ulang komponen — PIC kustom yang sudah disimpan harus tetap tampil,
+        // BUKAN tertimpa balik ke bawaan nama tim IKU ("Tim Bawaan").
+        Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 9)
+            ->set('iku_id', $iku->id)
+            ->assertSet('rtlBaruPic', 'Tim Kustom');
+    }
+
     public function test_pratinjau_nama_folder_mengikuti_uraian_dan_tahapan(): void
     {
         $peranKetua = Role::create(['nama' => 'Ketua Tim']);
