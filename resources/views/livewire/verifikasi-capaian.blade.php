@@ -379,17 +379,16 @@
         <div class="card">
             <div class="sec"><span>Kendala &amp; Solusi</span></div>
             @foreach ($kendalaSolusiList as $ks)
-                <div class="keg" wire:key="ks-{{ $ks->id }}">
-                    <div class="keg-head">
-                        <span class="t">Pasangan {{ $loop->iteration }}</span>
-                        <x-badge-status :status="$ks->status_verifikasi === 'terverifikasi' ? 'diverifikasi' : ($ks->status_verifikasi === 'ditolak' ? 'dikembalikan' : 'diajukan')" :label="$ks->status_verifikasi === 'terverifikasi' ? 'Sesuai' : ($ks->status_verifikasi === 'ditolak' ? 'Tidak Sesuai' : 'Menunggu')" />
-                    </div>
-                    <div class="field" style="margin-bottom:10px">
+                <div class="poin-row" wire:key="ks-{{ $ks->id }}">
+                    <span class="k-num">Pasangan {{ $loop->iteration }}</span>
+                    <x-badge-status style="position:absolute;top:-9px;right:12px" :status="$ks->status_verifikasi === 'terverifikasi' ? 'diverifikasi' : ($ks->status_verifikasi === 'ditolak' ? 'dikembalikan' : 'diajukan')" :label="$ks->status_verifikasi === 'terverifikasi' ? 'Sesuai' : ($ks->status_verifikasi === 'ditolak' ? 'Tidak Sesuai' : 'Menunggu')" />
+
+                    <div class="field" style="margin-bottom:0">
                         <label style="font-size:11.5px">Kendala</label>
                         <textarea class="inp filled" style="height:auto;display:block;font-style:italic" rows="2" wire:model="koreksiKendala.{{ $ks->id }}.kendala"></textarea>
                     </div>
                     @if ($ks->solusi)
-                        <div class="field" style="margin-bottom:10px">
+                        <div class="field" style="margin-bottom:0">
                             <label style="font-size:11.5px">Solusi</label>
                             <textarea class="inp filled" style="height:auto;display:block;font-style:italic" rows="2" wire:model="koreksiKendala.{{ $ks->id }}.solusi"></textarea>
                         </div>
@@ -401,7 +400,7 @@
                             tidak terasa perlu diklik berkali-kali sebelum berubah warna. Begitu respons
                             server datang, render ulang dari status_verifikasi tetap jadi sumber
                             kebenaran akhir (fallback saat pendingMark masih null, mis. buka modal baru). --}}
-                        <div x-data="{ pendingMark: null }">
+                        <div style="grid-column:1/-1" x-data="{ pendingMark: null }">
                             <div style="display:flex;gap:8px;margin-top:6px">
                                 <button type="button" class="mark"
                                     :class="{ ok: pendingMark === 'ok' || (pendingMark === null && {{ $ks->status_verifikasi === 'terverifikasi' ? 'true' : 'false' }}) }"
@@ -447,7 +446,7 @@
                             </div>
                         </div>
                     @elseif ($ks->catatan)
-                        <div class="field" style="margin-top:6px;margin-bottom:0">
+                        <div class="field" style="grid-column:1/-1;margin-top:6px;margin-bottom:0">
                             <label style="font-size:11.5px">Catatan</label>
                             <p style="font-size:12.5px;color:var(--muted);margin:0">{{ $ks->catatan }}</p>
                         </div>
