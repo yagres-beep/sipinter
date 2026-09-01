@@ -1599,6 +1599,64 @@ class PengisianKegiatanTest extends TestCase
         $this->assertTrue($ditemukan);
     }
 
+    public function test_kendala_sudah_diajukan_terkunci_dari_form_edit_tapi_boleh_tambah_pasangan_baru(): void
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $ketua = User::create([
+            'nama' => 'Ketua Uji Kendala Diajukan', 'username' => 'ketua-uji-kendala-diajukan@example.test', 'email' => 'ketua-uji-kendala-diajukan@example.test',
+            'password' => 'password', 'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create(['kode' => 'UJI-KENDALA-3', 'indikator' => 'Indikator uji kendala 3', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji']);
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 8, 'triwulan' => 3, 'bulan_ke' => 2, 'flag_bulan_terlewat' => false]);
+
+        // Capaian masih "diajukan" — Tim SAKIP belum menyelesaikan satu siklus
+        // pemeriksaan apa pun (beda dari dua test sebelumnya yang sudah "dikembalikan"/
+        // "diverifikasi"), jadi verifikasiTerlihat() masih false di sini.
+        Capaian::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'status' => Capaian::STATUS_DIAJUKAN]);
+
+        $ks = KendalaSolusi::create([
+            'iku_id' => $iku->id, 'periode_id' => $periode->id,
+            'kendala' => 'Kendala sudah diajukan', 'solusi' => 'Solusi sudah diajukan',
+            'status_dokumen' => KendalaSolusi::STATUS_DIAJUKAN, 'status_verifikasi' => 'menunggu',
+        ]);
+
+        $this->actingAs($ketua);
+
+        $component = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $iku->id);
+
+        // Pasangan yang sudah diajukan TIDAK dimuat sebagai blok editable (tidak bisa
+        // diam-diam disunting Ketua Tim selagi menunggu Tim SAKIP) — tampil di
+        // $kendalaAktif (terkunci hanya-baca), dan $kendalaBlocks dibiarkan kosong
+        // (bukan satu blok kosong bawaan) supaya blade cukup menampilkan tombol
+        // "+ Tambah Pasangan" saja.
+        $component->assertSet('kendalaBlocks', []);
+        $this->assertSame([$ks->id], $component->viewData('kendalaAktif')->pluck('id')->all());
+
+        // Ketua Tim tetap bisa menambah pasangan BARU tanpa menunggu Tim SAKIP
+        // memutuskan pasangan lama — sama seperti Kegiatan/Bagian Kustom/RTL berikutnya.
+        // blocks.0 diisi seadanya karena simpanDraft() tetap mewajibkan uraian_kegiatan
+        // & jenis (lihat validate() di sana), walau tidak relevan dengan kendala.
+        $component->set('blocks.0.uraian_kegiatan', 'Kegiatan uji kendala diajukan')
+            ->set('blocks.0.jenis', 'bukan_survei_sensus')
+            ->call('addKendalaBlock')
+            ->set('kendalaBlocks.0.kendala', 'Kendala baru')
+            ->set('kendalaBlocks.0.solusi', 'Solusi baru')
+            ->call('simpanDraft');
+
+        $this->assertDatabaseCount('kendala_solusi', 2);
+        $baru = KendalaSolusi::where('kendala', 'Kendala baru')->firstOrFail();
+        $this->assertSame(KendalaSolusi::STATUS_DRAFT, $baru->status_dokumen);
+
+        // Pasangan lama tidak ikut tersunting oleh penambahan pasangan baru ini.
+        $ks->refresh();
+        $this->assertSame('Kendala sudah diajukan', $ks->kendala);
+        $this->assertSame(KendalaSolusi::STATUS_DIAJUKAN, $ks->status_dokumen);
+    }
+
     /**
      * Siapkan satu poin bagian kustom milik periode BERJALAN (belum terkunci —
      * Capaian-nya "dikembalikan") — dipakai test edit-ulang & hapus-bukti-lama bagian

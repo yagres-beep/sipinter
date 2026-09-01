@@ -460,13 +460,40 @@
             </div>
         @endif
 
+        @if ($kendalaAktif->isNotEmpty())
+            <div style="margin-bottom:16px">
+                <div style="font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📤 Sudah Diajukan — Menunggu Tim SAKIP</div>
+                @foreach ($kendalaAktif as $ks)
+                    <div class="poin-row" wire:key="kendala-aktif-{{ $ks->id }}">
+                        <span class="k-num">Pasangan {{ $loop->iteration }}</span>
+                        <div style="position:absolute;top:-9px;right:12px">
+                            @if ($ks->status_verifikasi === 'terverifikasi')
+                                <x-badge-status status="disetujui" label="Terverifikasi Tim SAKIP" />
+                            @else
+                                <x-badge-status status="diajukan" label="Menunggu Verifikasi Tim SAKIP" />
+                            @endif
+                        </div>
+
+                        <div class="field" style="margin-bottom:0">
+                            <label>Kendala</label>
+                            <p style="margin:0;font-size:13px">{{ $ks->kendala }}</p>
+                        </div>
+                        <div class="field" style="margin-bottom:0">
+                            <label>Solusi</label>
+                            <p style="margin:0;font-size:13px">{{ $ks->solusi ?: '—' }}</p>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        @endif
+
         @foreach ($kendalaBlocks as $i => $block)
             <div class="poin-row" wire:key="kendala-{{ $i }}">
-                <span class="k-num">Pasangan {{ $i + 1 }}</span>
+                <span class="k-num">Pasangan {{ $i + 1 }}{{ $kendalaAktif->isNotEmpty() && ! ($block['id'] ?? null) ? ' (Baru)' : '' }}</span>
                 @if ($block['status_verifikasi'] === 'ditolak')
                     <span class="badge b-kembali" style="position:absolute;top:-9px;right:12px">✕ Tidak Sesuai (Tim SAKIP)</span>
                 @endif
-                @if (count($kendalaBlocks) > 1)
+                @if (count($kendalaBlocks) > 1 && ! ($block['id'] ?? null))
                     <button type="button" class="btn btn-red btn-sm" style="position:absolute;top:8px;right:8px" wire:click="removeKendalaBlock({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="removeKendalaBlock({{ $i }})">🗑</button>
                 @endif
 

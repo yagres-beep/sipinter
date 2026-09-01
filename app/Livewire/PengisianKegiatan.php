@@ -101,6 +101,8 @@ class PengisianKegiatan extends Component
 
     protected ?\Illuminate\Support\Collection $cacheRtlBerikutnyaAktif = null;
 
+    protected ?\Illuminate\Support\Collection $cacheKendalaAktif = null;
+
     protected ?MasterIku $cacheIkuTerpilih = null;
 
     protected bool $cacheIkuTerpilihDihitung = false;
@@ -526,8 +528,20 @@ class PengisianKegiatan extends Component
         $this->kendalaBlocks[] = $this->emptyKendalaBlock();
     }
 
+    /**
+     * Hanya blok yang belum tersimpan (id === null) yang boleh dihapus dari sini —
+     * sama seperti removeBlock()/removeRtlBlock(): pasangan yang sudah punya baris
+     * KendalaSolusi di DB (draft sendiri ATAU ditolak yang sedang diperbaiki) tidak
+     * bisa dihapus lewat tombol ini, supaya tidak diam-diam tertinggal yatim di DB
+     * (tidak ter-update maupun terhapus saat form disimpan, lihat
+     * simpanBagianIsian()) — cukup dikosongkan teksnya bila memang ingin dibatalkan.
+     */
     public function removeKendalaBlock(int $index): void
     {
+        if (($this->kendalaBlocks[$index]['id'] ?? null) !== null) {
+            return;
+        }
+
         unset($this->kendalaBlocks[$index]);
         $this->kendalaBlocks = array_values($this->kendalaBlocks);
     }
@@ -646,7 +660,7 @@ class PengisianKegiatan extends Component
      */
     protected function lupakanCachePeriodeIku(): void
     {
-        foreach (['riwayat', 'rtl-berjalan', 'rtl-berikutnya-ada', 'rtl-berikutnya-aktif', 'rtl-berjalan-terpakai', 'capaian-status', 'catatan-penolakan', 'periode'] as $bagian) {
+        foreach (['riwayat', 'kendala-aktif', 'rtl-berjalan', 'rtl-berikutnya-ada', 'rtl-berikutnya-aktif', 'rtl-berjalan-terpakai', 'capaian-status', 'catatan-penolakan', 'periode'] as $bagian) {
             Cache::forget($this->cacheKeyPeriodeIku($bagian));
         }
 
@@ -1083,20 +1097,26 @@ class PengisianKegiatan extends Component
     }
 
     /**
-     * Pasangan kendala &amp; solusi milik periode ini SENDIRI yang BELUM diterima
-     * Tim SAKIP ("menunggu" baru diajukan, atau "ditolak" perlu diperbaiki) — beda
-     * dari Kegiatan, pasangan yang sudah "terverifikasi" (diterima) TIDAK ikut
-     * dimuat ke sini (terkunci, tidak boleh diedit lagi), cukup tampil di
-     * riwayatKendalaSolusi() sebagai riwayat hanya-baca. Dipanggil sejajar dengan
+     * Pasangan kendala &amp; solusi milik periode ini SENDIRI yang BOLEH DIEDIT
+     * Ketua Tim — draft yang belum pernah diajukan (status_dokumen=draft), atau
+     * yang DITOLAK Tim SAKIP dan perlu diperbaiki. Pasangan yang SUDAH diajukan
+     * (status_dokumen=diajukan) dan belum ditolak final TIDAK ikut dimuat ke sini
+     * — begitu diajukan, teksnya terkunci hanya-baca sampai Tim SAKIP memutuskan
+     * (lihat kendalaAktif(), sama persis pola RTL berikutnya di
+     * rtlBerikutnyaAktif()/muatRtlBaruBlocks()), supaya Ketua Tim tidak diam-diam
+     * menyunting pasangan yang sedang/sudah diperiksa. Dipanggil sejajar dengan
      * muatBlocksKegiatan() supaya isian lama (draft/ditolak) tetap ada saat form
      * dibuka ulang, bukan selalu kosong.
      *
-     * Pengecualian: selagi verifikasiTerlihat() masih false (Tim SAKIP belum
-     * menyelesaikan SATU siklus pemeriksaan penuh untuk periode ini), pasangan yang
-     * SUDAH ditandai "terverifikasi" di tengah jalan TETAP ikut dimuat ke sini
-     * (bukan pindah ke riwayat dulu) dengan status_verifikasi/catatan disamarkan
-     * jadi "menunggu"/null — supaya Ketua Tim tidak melihat hasil tandaan Tim SAKIP
-     * yang masih bisa berubah sebelum benar-benar final (lihat verifikasiTerlihat()).
+     * Pasangan yang sudah "terverifikasi" (diterima) TIDAK ikut dimuat ke sini
+     * sama sekali (beda dari Kegiatan), cukup tampil di riwayatKendalaSolusi()
+     * sebagai riwayat hanya-baca — KECUALI selagi verifikasiTerlihat() masih false
+     * (Tim SAKIP belum menyelesaikan SATU siklus pemeriksaan penuh), pasangan yang
+     * SUDAH ditandai "terverifikasi" di tengah jalan tetap dianggap "aktif"
+     * (terkunci lewat kendalaAktif(), BUKAN dimuat sebagai blok editable di sini)
+     * supaya tidak ada pasangan yang tiba-tiba "menghilang" (lalu muncul di
+     * riwayatKendalaSolusi() sebagai sudah diterima) sebelum pemeriksaannya
+     * benar-benar final.
      */
     protected function muatKendalaBlocks(): void
     {
@@ -1108,13 +1128,6 @@ class PengisianKegiatan extends Component
             return;
         }
 
-        // Selagi verifikasiTerlihat() masih false (Tim SAKIP belum menyelesaikan siklus
-        // pemeriksaan ini), SELURUH pasangan periode ini dimuat sebagai blok — termasuk
-        // yang sudah diam-diam ditandai "terverifikasi" Tim SAKIP di tengah jalan —
-        // supaya tidak ada pasangan yang tiba-tiba "menghilang" dari sini (lalu muncul
-        // di riwayatKendalaSolusi() sebagai sudah diterima) sebelum pemeriksaannya
-        // benar-benar final. Begitu verifikasiTerlihat() true, kembali ke perilaku
-        // semula: yang sudah "terverifikasi" pindah ke riwayat (hanya-baca).
         $query = KendalaSolusiModel::where('iku_id', $this->iku_id)->where('periode_id', $periode->id);
 
         if ($this->verifikasiTerlihat()) {
@@ -1123,19 +1136,65 @@ class PengisianKegiatan extends Component
 
         $daftar = $query->orderBy('id')->get();
 
-        if ($daftar->isEmpty()) {
-            $this->kendalaBlocks = [$this->emptyKendalaBlock()];
+        // Pasangan yang sudah diajukan (status_dokumen=diajukan) dan belum final
+        // ditolak Tim SAKIP dikeluarkan dari sini — tampil terkunci lewat
+        // kendalaAktif() di blade, bukan sebagai blok editable.
+        $editable = $daftar->reject(fn (KendalaSolusiModel $ks) => $ks->status_dokumen === KendalaSolusiModel::STATUS_DIAJUKAN && ! $this->verifikasiTerlihat());
+
+        if ($editable->isEmpty()) {
+            // Satu blok kosong bawaan HANYA untuk pengisian pertama kali ($daftar
+            // benar-benar kosong) — begitu ada pasangan lain yang sudah diajukan
+            // (tampil terkunci lewat kendalaAktif()), biarkan $kendalaBlocks kosong
+            // supaya blade cukup menampilkan tombol "+ Tambah Pasangan" saja, tanpa
+            // kotak input kosong yang nongol begitu saja di bawahnya.
+            $this->kendalaBlocks = $daftar->isEmpty() ? [$this->emptyKendalaBlock()] : [];
 
             return;
         }
 
-        $this->kendalaBlocks = $daftar->map(fn (KendalaSolusiModel $ks) => [
+        $this->kendalaBlocks = $editable->map(fn (KendalaSolusiModel $ks) => [
             'id' => $ks->id,
             'kendala' => $ks->kendala,
             'solusi' => $ks->solusi ?? '',
             'status_verifikasi' => $this->verifikasiTerlihat() ? $ks->status_verifikasi : 'menunggu',
             'catatan' => $this->verifikasiTerlihat() ? $ks->catatan : null,
         ])->values()->all();
+    }
+
+    /**
+     * Pasangan kendala &amp; solusi periode ini yang SUDAH diajukan ke Tim SAKIP dan
+     * belum diputuskan final — ditampilkan terkunci hanya-baca di blade (badge
+     * "Menunggu Verifikasi Tim SAKIP"/"Terverifikasi Tim SAKIP" sesuai status_
+     * verifikasi apa adanya), pola identik dengan RtlEvaluasi berikutnya di
+     * rtlBerikutnyaAktif(). Selalu kosong begitu verifikasiTerlihat() true — pada
+     * titik itu tiap pasangan sudah final: pindah ke riwayatKendalaSolusi()
+     * (terverifikasi) atau kembali jadi blok editable di muatKendalaBlocks()
+     * (ditolak, perlu diperbaiki) — jadi tidak ada lagi yang perlu tampil "aktif"
+     * di sini.
+     *
+     * @return \Illuminate\Support\Collection<int, KendalaSolusiModel>
+     */
+    protected function kendalaAktif()
+    {
+        if ($this->cacheKendalaAktif !== null) {
+            return $this->cacheKendalaAktif;
+        }
+
+        $periode = $this->iku_id ? $this->periodeSaatIni() : null;
+
+        if (! $periode || $this->verifikasiTerlihat()) {
+            return $this->cacheKendalaAktif = collect();
+        }
+
+        return $this->cacheKendalaAktif = Cache::remember(
+            $this->cacheKeyPeriodeIku('kendala-aktif'),
+            self::CACHE_TTL_DETIK,
+            fn () => KendalaSolusiModel::where('iku_id', $this->iku_id)
+                ->where('periode_id', $periode->id)
+                ->where('status_dokumen', KendalaSolusiModel::STATUS_DIAJUKAN)
+                ->orderBy('id')
+                ->get()
+        );
     }
 
     /**
@@ -1564,6 +1623,14 @@ class PengisianKegiatan extends Component
      * bukan membuat duplikat baru — lihat langkah 4 di simpanBagianIsian()). Dipanggil
      * di titik yang sama dengan muatBagianKustomBlocks() (mount/updatedIkuId/
      * updatedBulan/updatedTahun).
+     *
+     * Satu blok kosong bawaan HANYA disiapkan otomatis untuk pengisian PERTAMA KALI
+     * (belum ada batch RTL berikutnya yang diajukan sama sekali) — begitu batch sudah
+     * ditetapkan (rtlTriwulanBerikutnyaSudahAda()), $rtlBaru dibiarkan KOSONG (blade
+     * cukup menampilkan tombol "+ Tambah Poin RTL" saja, sama seperti Kendala & Solusi
+     * di muatKendalaBlocks()) — supaya tidak ada kotak input kosong yang nongol
+     * begitu saja di bawah daftar poin yang sudah terkunci, padahal belum tentu
+     * Ketua Tim mau menambah poin baru saat itu juga.
      */
     protected function muatRtlBaruBlocks(): void
     {
@@ -1580,13 +1647,14 @@ class PengisianKegiatan extends Component
 
         $draftSendiri = $this->rtlBerikutnyaDraftSendiri();
 
-        $this->rtlBaru = $draftSendiri->isEmpty()
-            ? [$this->emptyRtlBlock()]
-            : $draftSendiri->map(fn ($poin) => ['id' => $poin->id, 'rtl_teks' => $poin->rtl_teks])->values()->all();
-
         if ($draftSendiri->isNotEmpty()) {
+            $this->rtlBaru = $draftSendiri->map(fn ($poin) => ['id' => $poin->id, 'rtl_teks' => $poin->rtl_teks])->values()->all();
             $this->muatPicTersimpan($draftSendiri->first()->pic);
+
+            return;
         }
+
+        $this->rtlBaru = $this->rtlTriwulanBerikutnyaSudahAda() ? [] : [$this->emptyRtlBlock()];
     }
 
     /**
@@ -1810,7 +1878,8 @@ class PengisianKegiatan extends Component
             // (riwayatKendalaSolusi(), sudah di-scope per triwulan lewat groupBy di sana).
             if ($this->bulanKeDari($this->bulan) === 3) {
                 $adaDiFormIni = collect($this->kendalaBlocks)
-                    ->contains(fn ($blok) => filled($blok['kendala'] ?? null));
+                    ->contains(fn ($blok) => filled($blok['kendala'] ?? null))
+                    || $this->kendalaAktif()->isNotEmpty();
 
                 $adaDiBulanSebelumnya = $this->riwayatKendalaSolusi()
                     ->get($this->triwulanDari($this->bulan), collect())
@@ -2084,29 +2153,40 @@ class PengisianKegiatan extends Component
         unset($block);
 
         // 2) Kendala & Solusi (blok kosong dilewati — bagian ini opsional per periode).
-        // UPDATE, bukan create, bila blok ini punya id (pasangan lama yang ditolak
-        // Tim SAKIP dan sedang diperbaiki — lihat muatKendalaBlocks()), supaya tidak
-        // duplikat. status_verifikasi & catatan SENGAJA TIDAK direset ke "menunggu" —
-        // tanda "Tidak Sesuai" + alasannya tetap tampil ke Tim SAKIP sampai mereka
-        // sendiri menandainya ulang (tandaiKendalaSesuai()/tandaiKendalaTolak()),
-        // supaya mereka masih ingat apa yang salah sebelumnya saat memeriksa
-        // perbaikan ini. Baru kosong begitu ditandai "Sesuai".
+        // UPDATE, bukan create, bila blok ini punya id (pasangan lama yang DRAFT
+        // milik sendiri ATAU ditolak Tim SAKIP dan sedang diperbaiki — lihat
+        // muatKendalaBlocks()), supaya tidak duplikat. status_verifikasi & catatan
+        // SENGAJA TIDAK direset ke "menunggu" — tanda "Tidak Sesuai" + alasannya
+        // tetap tampil ke Tim SAKIP sampai mereka sendiri menandainya ulang
+        // (tandaiKendalaSesuai()/tandaiKendalaTolak()), supaya mereka masih ingat
+        // apa yang salah sebelumnya saat memeriksa perbaikan ini. Baru kosong
+        // begitu ditandai "Sesuai". status_dokumen HANYA disentuh saat benar-benar
+        // mengajukan ($ajukan) — pola sama persis dengan RTL berikutnya di langkah
+        // 4 di bawah — supaya pasangan ini langsung terkunci hanya-baca (lihat
+        // kendalaAktif()) begitu diajukan, bukan tetap bisa diedit bebas.
         foreach ($this->kendalaBlocks as &$block) {
             if (trim($block['kendala']) === '' && trim($block['solusi']) === '') {
                 continue;
             }
 
             if ($block['id'] ?? null) {
-                KendalaSolusiModel::whereKey($block['id'])->update([
+                $dataUpdate = [
                     'kendala' => $block['kendala'],
                     'solusi' => $block['solusi'] ?: null,
-                ]);
+                ];
+
+                if ($ajukan) {
+                    $dataUpdate['status_dokumen'] = KendalaSolusiModel::STATUS_DIAJUKAN;
+                }
+
+                KendalaSolusiModel::whereKey($block['id'])->update($dataUpdate);
             } else {
                 $model = KendalaSolusiModel::create([
                     'iku_id' => $this->iku_id,
                     'periode_id' => $periode->id,
                     'kendala' => $block['kendala'],
                     'solusi' => $block['solusi'] ?: null,
+                    'status_dokumen' => $ajukan ? KendalaSolusiModel::STATUS_DIAJUKAN : KendalaSolusiModel::STATUS_DRAFT,
                 ]);
                 $block['id'] = $model->id;
             }
@@ -2466,6 +2546,7 @@ class PengisianKegiatan extends Component
             'flagTerlewat' => $this->isBulanTerlewat(),
             'periodeLabel' => Carbon::create($this->tahun, $this->bulan, 1)->locale('id')->translatedFormat('F Y'),
             'riwayatKendala' => $this->riwayatKendalaSolusi(),
+            'kendalaAktif' => $this->kendalaAktif(),
             'rtlSebelumnya' => $this->rtlTriwulanBerjalan(),
             'sudahAdaRtlBerikutnya' => $this->rtlTriwulanBerikutnyaSudahAda(),
             'rtlBerikutnyaDitolak' => $this->rtlBerikutnyaDitolak(),

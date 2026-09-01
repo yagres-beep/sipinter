@@ -12,11 +12,16 @@ class KendalaSolusi extends Model
 
     protected $table = 'kendala_solusi';
 
+    public const STATUS_DRAFT = 'draft';
+
+    public const STATUS_DIAJUKAN = 'diajukan';
+
     protected $fillable = [
         'iku_id',
         'periode_id',
         'kendala',
         'solusi',
+        'status_dokumen',
         'status_verifikasi',
         'catatan',
     ];
