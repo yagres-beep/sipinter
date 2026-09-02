@@ -47,4 +47,40 @@ class RumusMarkupTest extends TestCase
         $this->assertNull(RumusMarkup::keTeksPolos(null));
         $this->assertSame('teks biasa', RumusMarkup::keTeksPolos('teks biasa'));
     }
+
+    public function test_keOmml_merakit_pecahan_bersusun_ooxml_math(): void
+    {
+        $omml = RumusMarkup::keOmml('y = [[n|N]] x 100%');
+
+        $this->assertStringStartsWith('<m:oMath>', $omml);
+        $this->assertStringEndsWith('</m:oMath>', $omml);
+        $this->assertStringContainsString('<m:r><m:t xml:space="preserve">y = </m:t></m:r>', $omml);
+        $this->assertStringContainsString('<m:f><m:fPr><m:type m:val="bar"/></m:fPr>', $omml);
+        $this->assertStringContainsString('<m:num><m:r><m:t xml:space="preserve">n</m:t></m:r></m:num>', $omml);
+        $this->assertStringContainsString('<m:den><m:r><m:t xml:space="preserve">N</m:t></m:r></m:den>', $omml);
+        $this->assertStringContainsString('<m:r><m:t xml:space="preserve"> x 100%</m:t></m:r>', $omml);
+    }
+
+    public function test_keOmml_beberapa_pecahan_sekaligus(): void
+    {
+        $omml = RumusMarkup::keOmml('[[n|N]] dan [[5|90]]');
+
+        $this->assertSame(2, substr_count($omml, '<m:f>'));
+        $this->assertStringContainsString('<m:num><m:r><m:t xml:space="preserve">5</m:t></m:r></m:num>', $omml);
+        $this->assertStringContainsString('<m:den><m:r><m:t xml:space="preserve">90</m:t></m:r></m:den>', $omml);
+    }
+
+    public function test_keOmml_mengescape_xml_di_luar_pecahan(): void
+    {
+        $omml = RumusMarkup::keOmml('<b>y</b> & [[a|b]]');
+
+        $this->assertStringNotContainsString('<b>y</b>', $omml);
+        $this->assertStringContainsString('&lt;b&gt;y&lt;/b&gt; &amp; ', $omml);
+    }
+
+    public function test_keOmml_null_dan_kosong(): void
+    {
+        $this->assertNull(RumusMarkup::keOmml(null));
+        $this->assertSame('', RumusMarkup::keOmml(''));
+    }
 }

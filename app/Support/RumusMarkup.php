@@ -48,4 +48,48 @@ class RumusMarkup
 
         return preg_replace(self::POLA, '$1/$2', $teks) ?? $teks;
     }
+
+    /**
+     * Untuk .docx: [[a|b]] dirakit jadi pecahan bersusun SUNGGUHAN lewat OOXML Math
+     * (<m:oMath>/<m:f>, garis pembagi horizontal asli -- dirender Word persis seperti
+     * rumus di Equation Editor), bukan notasi miring "a/b" seperti keTeksPolos().
+     * Namespace "m" (http://schemas.openxmlformats.org/officeDocument/2006/math) sudah
+     * otomatis dideklarasikan di root <w:document> berkas .docx manapun sejak Word 2007,
+     * jadi tidak perlu suntikan namespace tambahan di sini.
+     *
+     * Hasilnya berupa fragmen XML MENTAH (bukan teks polos) -- pemanggil WAJIB
+     * menyisipkannya lewat penggantian raw XML (lihat
+     * NotulaBagian1DocxService::setFormula()), BUKAN lewat TemplateProcessor::setValue()
+     * ke dalam <w:t> biasa (elemen <m:oMath> tidak sah sebagai isi <w:t>).
+     */
+    public static function keOmml(?string $teks): ?string
+    {
+        if (! $teks) {
+            return $teks;
+        }
+
+        $potongan = preg_split(self::POLA, $teks, -1, PREG_SPLIT_DELIM_CAPTURE);
+        $total = count($potongan);
+        $xml = '';
+
+        for ($i = 0; $i < $total; $i += 3) {
+            if ($potongan[$i] !== '') {
+                $xml .= '<m:r><m:t xml:space="preserve">'.self::amanXml($potongan[$i]).'</m:t></m:r>';
+            }
+
+            if ($i + 2 < $total) {
+                $xml .= '<m:f><m:fPr><m:type m:val="bar"/></m:fPr>'
+                    .'<m:num><m:r><m:t xml:space="preserve">'.self::amanXml($potongan[$i + 1]).'</m:t></m:r></m:num>'
+                    .'<m:den><m:r><m:t xml:space="preserve">'.self::amanXml($potongan[$i + 2]).'</m:t></m:r></m:den>'
+                    .'</m:f>';
+            }
+        }
+
+        return '<m:oMath>'.$xml.'</m:oMath>';
+    }
+
+    private static function amanXml(string $teks): string
+    {
+        return htmlspecialchars($teks, ENT_QUOTES | ENT_XML1);
+    }
 }

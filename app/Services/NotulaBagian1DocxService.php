@@ -67,6 +67,7 @@ class NotulaBagian1DocxService
         $this->isiPerIkuDinamis($processor, $templatePath, $data);
         $this->isiHeader($processor, $notula, $data);
         $this->isiPenutup($processor, $notula);
+        $this->cegahBarisTerpotongAntarHalaman($processor);
 
         $dir = dirname($outputPath);
         if (! is_dir($dir)) {
@@ -114,6 +115,22 @@ class NotulaBagian1DocxService
     {
         $bersih = $nilai !== null ? rtrim($nilai) : '';
         $p->setValue($nama, $bersih !== '' ? $bersih : '…', -1);
+    }
+
+    /**
+     * Isi {{formula_capaian}} dengan pecahan bersusun SUNGGUHAN (OOXML Math, lihat
+     * App\Support\RumusMarkup::keOmml()) -- BEDA dari set() biasa karena <m:oMath>
+     * TIDAK sah sebagai isi <w:t> (macro-nya ada di dalam satu <w:t> milik satu
+     * <w:r>). Nilainya "memutus" run tsb: menutup <w:t>/<w:r> yang sedang berjalan,
+     * menyisipkan <m:oMath> sebagai run SEJAJAR (sibling) di dalam <w:p> yang sama,
+     * lalu membuka <w:r>/<w:t> kosong baru supaya XML tetap sah -- aman disisipkan
+     * mentah lewat setValue() karena Settings::isOutputEscapingEnabled() default
+     * false (replace TIDAK di-escape, lihat vendor TemplateProcessor::setValue()).
+     */
+    private function setFormula(TemplateProcessor $p, string $formulaBaris): void
+    {
+        $omml = RumusMarkup::keOmml($formulaBaris);
+        $p->setValue('formula_capaian', '</w:t></w:r>'.$omml.'<w:r><w:t xml:space="preserve">', -1);
     }
 
     /**
@@ -236,10 +253,16 @@ class NotulaBagian1DocxService
         $indikatorLower = mb_strtolower($iku->indikator);
         $isSakip = str_contains($indikatorLower, 'sakip');
         $isBerakhlak = str_contains($indikatorLower, 'berakhlak');
-        // Tabel RO hanya tampil bila BENAR-BENAR ada RO terisi -- sebelumnya tetap
-        // tercetak (satu baris placeholder "...") walau IKU ini belum punya RO sama
-        // sekali, padahal seharusnya seluruh blok baru muncul begitu ada isiannya.
-        $tampilkanRo = ! $isSakip && ! $isBerakhlak && empty($rekap['realisasi'] ?? null) && $roIku->isNotEmpty();
+        // Tabel RO hanya tampil bila BENAR-BENAR ada RO yang SUDAH direalisasikan
+        // (volume_ro atau progres_persen terisi) -- sebelumnya cukup RO-nya ADA
+        // (baris Kegiatan/RincianOutput sudah dibuat) walau belum satu pun diisi
+        // realisasinya, sehingga tabel tetap tercetak tapi isinya "…" semua (tampak
+        // kosong). Baris yang belum diisi realisasinya ikut disaring keluar (lihat
+        // pemakaian $roIkuTerisi di gandakanBarisRo() di bawah), bukan cuma dicek
+        // ada/tidaknya -- supaya tabel betul-betul dilewati bila TIDAK ADA satu pun
+        // RO yang punya realisasi, langsung lanjut ke bagian berikutnya.
+        $roIkuTerisi = $roIku->filter(fn ($ro) => filled($ro->volume_ro) || $ro->progres_persen !== null);
+        $tampilkanRo = ! $isSakip && ! $isBerakhlak && empty($rekap['realisasi'] ?? null) && $roIkuTerisi->isNotEmpty();
         // Baris rumus "y = n/N x 100%" (paragraf TERSENDIRI rata tengah, lihat
         // formulaBaris()) hanya tampil untuk IKU % yang datanya lengkap -- sama seperti
         // blok_sakip/blok_ro, dibuang total (bukan dikosongkan jadi "…") bila tidak berlaku
@@ -253,7 +276,7 @@ class NotulaBagian1DocxService
         $xml = $this->resolveBlokKondisional($xml, 'blok_ro', $tampilkanRo);
         $xml = $this->resolveBlokKondisional($xml, 'blok_formula', $tampilkanFormula, 'p');
         if ($tampilkanRo) {
-            $xml = $this->gandakanBarisRo($xml, $roIku);
+            $xml = $this->gandakanBarisRo($xml, $roIkuTerisi);
         }
 
         $sub->setMacroChars('{{', '}}');
@@ -316,12 +339,11 @@ class NotulaBagian1DocxService
         // ulang rumus & memperbarui angkanya tiap triwulan, dicetak sebagai paragraf
         // TERSENDIRI rata tengah (blok_formula, lihat $tampilkanFormula di atas) --
         // beda dari "dimana:.../rincian n-N" & kolom dasar_hitung manual di bawahnya
-        // yang tetap rata kiri. [[a|b]] (pecahan bersusun di PDF, lihat
-        // App\Support\RumusMarkup) diratakan jadi notasi biasa "a/b" -- .docx tidak
-        // mendukung pecahan bersusun lewat penggantian teks biasa
-        // (TemplateProcessor::setValue).
+        // yang tetap rata kiri. [[a|b]] dirakit jadi pecahan bersusun SUNGGUHAN lewat
+        // OOXML Math (lihat setFormula() & App\Support\RumusMarkup::keOmml()) -- BUKAN
+        // notasi "a/b" biasa, supaya .docx tercetak persis seperti dokumen resmi.
         if ($tampilkanFormula) {
-            $this->set($sub, 'formula_capaian', RumusMarkup::keTeksPolos($formulaBaris));
+            $this->setFormula($sub, $formulaBaris);
         }
 
         // Kolom dasar_hitung sendiri (kalau diisi) TETAP ditampilkan sebagai keterangan
@@ -423,6 +445,10 @@ class NotulaBagian1DocxService
      * "n = 1 mencakup:\n• uraian\n\nN = 4 mencakup:\n• uraian...", persis contoh
      * manual yang sebelumnya diketik Tim SAKIP sendiri ke kolom dasar_hitung.
      * Null bila IKU ini belum punya satu pun baris RincianN untuk tahun tsb.
+     *
+     * Baris "n = ..." DIHILANGKAN SAMA SEKALI (bukan dicetak "n = 0") bila belum ada
+     * satu pun item yang direalisasikan triwulan ini -- langsung lompat ke rincian N,
+     * sesuai contoh dokumen resmi.
      */
     private function rincianNMencakupTeks(MasterIku $iku, Periode $periode): ?string
     {
@@ -437,10 +463,31 @@ class NotulaBagian1DocxService
         $daftar = fn (Collection $baris) => $baris->map(fn (RincianN $r) => '• '.$r->uraian)->implode("\n");
 
         $blokN = $terealisasi->isNotEmpty()
-            ? "n = {$terealisasi->count()} mencakup:\n".$daftar($terealisasi)
-            : 'n = 0 (belum ada item yang direalisasikan triwulan ini)';
+            ? "n = {$terealisasi->count()} mencakup:\n".$daftar($terealisasi)."\n\n"
+            : '';
 
-        return "{$blokN}\n\nN = {$semua->count()} mencakup:\n".$daftar($semua);
+        return "{$blokN}N = {$semua->count()} mencakup:\n".$daftar($semua);
+    }
+
+    /**
+     * Tandai SELURUH baris tabel (<w:tr>) di dokumen supaya TIDAK BOLEH terpotong Word di
+     * tengah saat menyeberangi batas halaman (<w:cantSplit/>) -- bawaan Word MENGIZINKAN baris
+     * terpotong, dan tabel Bagian I ini satu baris bisa memuat cukup banyak teks (mis. baris RO
+     * dengan uraian panjang, atau baris Analisis Capaian Kinerja + daftar kegiatan) sehingga kerap
+     * jatuh tepat di batas halaman: isinya lalu tampak "terpotong" ke baris tabel BERIKUTNYA
+     * (kolom lain di baris yang sama seolah kosong di potongan pertama, lalu muncul sendirian di
+     * potongan kedua) -- persis kerancuan Realisasi Volume RO vs Kegiatan/Kendala-Solusi yang
+     * dilaporkan Tim SAKIP. Dipasang GLOBAL (bukan cuma baris RO) karena baris Kegiatan dan
+     * Kendala/Solusi pada tabel per-IKU yang sama berisiko sama.
+     *
+     * Dijalankan di generate() SETELAH seluruh manipulasi XML lain (blok IKU digandakan, baris RO
+     * digandakan, dst) supaya menyisir HASIL AKHIR dokumen, bukan cuma template mentahnya.
+     */
+    private function cegahBarisTerpotongAntarHalaman(TemplateProcessor $processor): void
+    {
+        $xml = $this->getMainPart($processor);
+        $xml = preg_replace('/<w:tr\b([^>]*)>/', '<w:tr$1><w:trPr><w:cantSplit/></w:trPr>', $xml);
+        $this->setMainPart($processor, $xml);
     }
 
     /**
@@ -459,30 +506,27 @@ class NotulaBagian1DocxService
 
     /**
      * Gandakan baris template RO ({{ro_row}}...{{/ro_row}}, 3 kolom: Rincian Output/Realisasi
-     * Volume RO/Progres) sekali per RincianOutput pada IKU ini (RF baru: satu Kegiatan boleh
-     * punya banyak RO), bukan katalog kode RO tetap seperti versi lama. Kosong (belum ada RO)
-     * -> baris ini tidak ditampilkan sama sekali (lihat $tampilkanRo di isiSatuIku()).
+     * Volume RO/Progres) sekali per RincianOutput yang SUDAH direalisasikan pada IKU ini (RF
+     * baru: satu Kegiatan boleh punya banyak RO), bukan katalog kode RO tetap seperti versi
+     * lama. $roIku di sini SELALU sudah tersaring notEmpty() -- pemanggilnya (isiSatuIku())
+     * hanya memanggil method ini bila $tampilkanRo true, lihat $roIkuTerisi di sana.
      */
     private function gandakanBarisRo(string $xml, Collection $roIku): string
     {
         [$before, $rowTemplate, $after] = $this->splitOnMarkers($xml, '{{ro_row}}', '{{/ro_row}}', 'tr');
 
-        if ($roIku->isEmpty()) {
-            $baris = $this->isiBarisRo($rowTemplate, '…', '…', '…');
-        } else {
-            $baris = $roIku->map(function ($ro) use ($rowTemplate) {
-                $progres = $ro->progres_persen !== null
-                    ? number_format((float) $ro->progres_persen, 2, ',', '.').'%'
-                    : '…';
+        $baris = $roIku->map(function ($ro) use ($rowTemplate) {
+            $progres = $ro->progres_persen !== null
+                ? number_format((float) $ro->progres_persen, 2, ',', '.').'%'
+                : '…';
 
-                return $this->isiBarisRo(
-                    $rowTemplate,
-                    $ro->uraian ?: $ro->kegiatan->uraian_kegiatan ?: '…',
-                    $ro->volume_ro ?: '…',
-                    $progres
-                );
-            })->implode('');
-        }
+            return $this->isiBarisRo(
+                $rowTemplate,
+                $ro->uraian ?: $ro->kegiatan->uraian_kegiatan ?: '…',
+                $ro->volume_ro ?: '…',
+                $progres
+            );
+        })->implode('');
 
         return $before.$baris.$after;
     }

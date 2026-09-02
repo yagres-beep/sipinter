@@ -520,20 +520,31 @@ class NotulaDownloadTest extends TestCase
 
         $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
 
-        $this->assertStringContainsString('2.00/8.00', $xml);
-        $this->assertStringNotContainsString('7.00/8.00', $xml);
+        // setFormula() "memutus" <w:r>/<w:t> yang tadinya membungkus macro untuk
+        // menyisipkan <m:oMath> sebagai sibling -- document.xml HASIL AKHIRNYA tetap
+        // harus well-formed XML, bukan cuma potongan substring yang kebetulan cocok.
+        libxml_use_internal_errors(true);
+        $valid = (new \DOMDocument)->loadXML($xml);
+        $this->assertTrue($valid, 'document.xml Bagian I harus tetap well-formed XML setelah rumus disisipkan sebagai OOXML Math.');
+
+        // Rumus dirakit jadi pecahan bersusun SUNGGUHAN (OOXML Math <m:f>, lihat
+        // App\Support\RumusMarkup::keOmml()) -- pembilang/penyebutnya elemen XML
+        // terpisah, BUKAN notasi teks "2.00/8.00" lagi.
+        $this->assertStringContainsString('<m:t xml:space="preserve">2.00</m:t>', $xml);
+        $this->assertStringContainsString('<m:t xml:space="preserve">8.00</m:t>', $xml);
+        $this->assertStringNotContainsString('<m:t xml:space="preserve">7.00</m:t>', $xml);
         $this->assertStringContainsString('Jumlah Publikasi Berkualitas', $xml);
         $this->assertStringContainsString('Jumlah Seluruh Publikasi', $xml);
         $this->assertStringContainsString('Target 2026: N = 8 mencakup: Laporan A, Laporan B.', $xml);
         // Baris rumus ("y = n/N x 100% = 2.00/8.00 x 100%") dicetak sebagai paragraf
         // TERSENDIRI rata tengah (blok_formula/{{formula_capaian}}), terpisah dari
         // "dimana:.../rincian" yang tetap rata kiri -- posisi paragraf rata-tengah
-        // ("<w:jc w:val="center"/>") harus MUNCUL SEBELUM teks rumusnya di XML.
+        // ("<w:jc w:val="center"/>") harus MUNCUL SEBELUM elemen <m:oMath> rumusnya.
         $posisiRataTengah = strpos($xml, '<w:jc w:val="center"/>', strpos($xml, 'Dasar Hitung dan Basis Data Realisasi IKU'));
-        $posisiRumus = strpos($xml, '2.00/8.00');
+        $posisiRumus = strpos($xml, '<m:oMath>');
         $this->assertNotFalse($posisiRataTengah);
         $this->assertNotFalse($posisiRumus);
-        $this->assertTrue($posisiRataTengah < $posisiRumus, 'Paragraf rumus harus rata tengah (marker jc=center sebelum teks rumus).');
+        $this->assertTrue($posisiRataTengah < $posisiRumus, 'Paragraf rumus harus rata tengah (marker jc=center sebelum elemen <m:oMath>).');
     }
 
     /**
@@ -579,6 +590,113 @@ class NotulaDownloadTest extends TestCase
         $this->assertStringContainsString('Publikasi Statistik Kesejahteraan Rakyat 2026', $xml);
         $this->assertStringContainsString('Laporan Kegiatan Susenas September 2026', $xml);
         $this->assertStringContainsString('Laporan Kegiatan Seruti 2026', $xml);
+    }
+
+    /**
+     * Baris "n = 0 (belum ada item yang direalisasikan triwulan ini)" DIHILANGKAN
+     * SAMA SEKALI (bukan dicetak "n = 0 ...") bila belum ada satu pun item RincianN
+     * yang triwulan_realisasi-nya = triwulan notula ini -- langsung lompat ke "N = ...
+     * mencakup:", sesuai contoh dokumen resmi.
+     */
+    public function test_docx_bagian1_dasar_hitung_rincian_n_tidak_menampilkan_baris_n_bila_belum_ada_realisasi(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $iku = MasterIku::create([
+            'kode' => '3010', 'indikator' => 'Persentase Uji Rincian N Kosong', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
+            'sasaran' => 'Sasaran Uji Rincian N Kosong', 'satuan' => 'Persen', 'metode_capaian' => MasterIku::METODE_RASIO,
+            'deskripsi_x' => 'Jumlah Publikasi Berkualitas', 'deskripsi_y' => 'Jumlah Seluruh Publikasi',
+        ]);
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 4, 'triwulan' => 2, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $this->verifikasiCapaian($iku, $periode);
+
+        CapaianTahunan::create([
+            'iku_id' => $iku->id, 'tahun' => 2026, 'y_alokasi_tw4' => 4,
+            'x_realisasi_tw2' => 0,
+        ]);
+
+        // Belum satu pun item RincianN yang triwulan_realisasi-nya = triwulan berjalan (TW II).
+        RincianN::create(['iku_id' => $iku->id, 'tahun' => 2026, 'uraian' => 'Publikasi Statistik Kesejahteraan Rakyat 2026']);
+        RincianN::create(['iku_id' => $iku->id, 'tahun' => 2026, 'uraian' => 'Laporan Kegiatan Susenas Maret 2026']);
+
+        $notula = Notula::create(['periode_id' => $periode->id]);
+
+        $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
+
+        $this->assertStringNotContainsString('n = 0', $xml);
+        $this->assertStringContainsString('N = 2 mencakup:', $xml);
+        $this->assertStringContainsString('Publikasi Statistik Kesejahteraan Rakyat 2026', $xml);
+    }
+
+    /**
+     * Realisasi Volume RO hanya boleh tercetak bila BENAR-BENAR ada RO yang SUDAH
+     * direalisasikan (volume_ro atau progres_persen terisi) -- RincianOutput yang
+     * baru dibuat (uraian saja, belum diisi realisasinya) TIDAK cukup untuk
+     * menampilkan tabelnya; harus langsung lompat ke bagian berikutnya.
+     */
+    public function test_docx_bagian1_tidak_menampilkan_tabel_ro_bila_ro_ada_tapi_belum_direalisasikan(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $iku = MasterIku::create([
+            'kode' => '2009', 'indikator' => 'Indikator Uji RO Belum Direalisasikan', 'tim' => 'Tim Uji', 'penanggung_jawab' => 'Uji', 'sasaran' => 'Sasaran Uji RO',
+        ]);
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $this->verifikasiCapaian($iku, $periode);
+
+        $kegiatan = Kegiatan::create([
+            'iku_id' => $iku->id,
+            'periode_id' => $periode->id,
+            'uraian_kegiatan' => 'Kegiatan uji RO belum direalisasikan',
+            'jenis' => 'bukan_survei_sensus',
+            'status_dokumen' => Kegiatan::STATUS_DIVERIFIKASI,
+        ]);
+
+        $kegiatan->rincianOutput()->create(['uraian' => 'RO belum direalisasikan']);
+
+        $notula = Notula::create(['periode_id' => $periode->id]);
+
+        $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
+
+        $this->assertStringNotContainsString('Realisasi Volume RO', $xml);
+    }
+
+    /**
+     * Setiap baris tabel (<w:tr>) di Bagian I .docx harus ditandai <w:cantSplit/> supaya
+     * Word tidak memotong satu baris di tengah saat menyeberangi batas halaman -- baris
+     * yang terpotong sebelumnya bikin nilai Realisasi/Progres tampak "lepas" dari
+     * uraiannya sendiri (nyambung ke baris Kegiatan/Kendala-Solusi berikutnya).
+     */
+    public function test_docx_bagian1_setiap_baris_tabel_ditandai_cantSplit(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $iku = MasterIku::create([
+            'kode' => '2010', 'indikator' => 'Indikator Uji CantSplit', 'tim' => 'Tim Uji', 'penanggung_jawab' => 'Uji', 'sasaran' => 'Sasaran Uji CantSplit',
+        ]);
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $this->verifikasiCapaian($iku, $periode);
+
+        Kegiatan::create([
+            'iku_id' => $iku->id,
+            'periode_id' => $periode->id,
+            'uraian_kegiatan' => 'Kegiatan uji cantSplit',
+            'jenis' => 'bukan_survei_sensus',
+            'status_dokumen' => Kegiatan::STATUS_DIVERIFIKASI,
+        ]);
+
+        $notula = Notula::create(['periode_id' => $periode->id]);
+
+        $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
+
+        $totalBaris = substr_count($xml, '<w:tr>');
+        $totalCantSplit = substr_count($xml, '<w:tr><w:trPr><w:cantSplit/></w:trPr>');
+
+        $this->assertGreaterThan(0, $totalBaris);
+        $this->assertSame($totalBaris, $totalCantSplit, 'Setiap <w:tr> harus langsung diikuti <w:trPr><w:cantSplit/></w:trPr>.');
     }
 
     /**
