@@ -201,13 +201,51 @@ class KompilasiNotula extends Component
             ->pluck('nama');
     }
 
+    /**
+     * "Susun Ulang Otomatis" SENGAJA menimpa suntingan manual Tim SAKIP di pratinjau
+     * (lihat NotulaService::susunBagianSatu()) -- itu memang tujuannya: bangun ulang
+     * dari data terverifikasi terkini. Isi LAMANYA disalin dulu ke bagian1_html_cadangan
+     * SEBELUM ditimpa (bukan mencegah penimpaan itu sendiri) supaya kalau tombolnya
+     * kepencet tidak sengaja / hasil susun ulangnya ternyata tidak diinginkan, Tim
+     * SAKIP masih bisa memulihkannya lewat pulihkanSuntinganBagian1() -- lihat tombol
+     * "Pulihkan Suntingan Sebelumnya" di Blade (cuma tampil bila cadangan ini terisi).
+     * Konfirmasi sebelum menimpa (wire:confirm) sudah dipasang di tombolnya sendiri.
+     */
     public function susunUlangOtomatis(): void
     {
-        $html = app(NotulaService::class)->susunBagianSatu($this->notula());
+        $notula = $this->notula();
+
+        if (filled($notula->bagian1_html)) {
+            $notula->update(['bagian1_html_cadangan' => $notula->bagian1_html]);
+        }
+
+        $html = app(NotulaService::class)->susunBagianSatu($notula);
         $this->bagian1EditText = $html;
         $this->dispatchKontenBagian1();
 
-        session()->flash('status', 'Bagian I berhasil disusun ulang otomatis dari data terverifikasi.');
+        session()->flash('status', 'Bagian I berhasil disusun ulang otomatis dari data terverifikasi. Suntingan sebelumnya dicadangkan -- tombol "Pulihkan Suntingan Sebelumnya" tersedia bila diperlukan.');
+    }
+
+    /**
+     * Pulihkan bagian1_html_cadangan (lihat susunUlangOtomatis()) jadi isi pratinjau
+     * aktif lagi -- cadangannya SENGAJA tidak langsung dikosongkan setelah dipulihkan,
+     * supaya kalau Tim SAKIP tidak sengaja klik Susun Ulang Otomatis LAGI setelah ini,
+     * isi yang baru saja dipulihkan tetap tercadangkan (bukan langsung hilang tanpa
+     * jejak di percobaan kedua).
+     */
+    public function pulihkanSuntinganBagian1(): void
+    {
+        $notula = $this->notula();
+
+        if (blank($notula->bagian1_html_cadangan)) {
+            return;
+        }
+
+        $notula->update(['bagian1_html' => $notula->bagian1_html_cadangan]);
+        $this->bagian1EditText = $notula->bagian1_html_cadangan;
+        $this->dispatchKontenBagian1();
+
+        session()->flash('status', 'Suntingan sebelumnya berhasil dipulihkan.');
     }
 
     /**

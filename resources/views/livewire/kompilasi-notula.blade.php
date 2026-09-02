@@ -476,14 +476,26 @@
         </div>
 
         <div class="btn-row" style="margin-top:10px">
-            <button type="button" class="btn btn-ghost btn-sm" wire:click="susunUlangOtomatis" wire:loading.attr="disabled" wire:target="susunUlangOtomatis,simpanSuntinganBagian1">
+            <button type="button" class="btn btn-ghost btn-sm"
+                wire:click="susunUlangOtomatis"
+                wire:confirm="Ini akan menimpa suntingan manual Anda di pratinjau dengan hasil susun ulang dari data terverifikasi. Suntingan lama tetap dicadangkan dan bisa dipulihkan. Lanjutkan?"
+                wire:loading.attr="disabled" wire:target="susunUlangOtomatis,simpanSuntinganBagian1,pulihkanSuntinganBagian1">
                 <span wire:loading.remove wire:target="susunUlangOtomatis">↻ Susun Ulang Otomatis</span>
                 <span wire:loading wire:target="susunUlangOtomatis"><i class="spin"></i> Menyusun…</span>
             </button>
-            <button type="button" class="btn btn-primary btn-sm" wire:click="simpanSuntinganBagian1" wire:loading.attr="disabled" wire:target="susunUlangOtomatis,simpanSuntinganBagian1">
+            <button type="button" class="btn btn-primary btn-sm" wire:click="simpanSuntinganBagian1" wire:loading.attr="disabled" wire:target="susunUlangOtomatis,simpanSuntinganBagian1,pulihkanSuntinganBagian1">
                 <span wire:loading.remove wire:target="simpanSuntinganBagian1">💾 Simpan</span>
                 <span wire:loading wire:target="simpanSuntinganBagian1"><i class="spin"></i> Menyimpan…</span>
             </button>
+            @if (filled($notula->bagian1_html_cadangan))
+                <button type="button" class="btn btn-ghost btn-sm"
+                    wire:click="pulihkanSuntinganBagian1"
+                    wire:confirm="Ini akan mengganti isi pratinjau saat ini dengan suntingan sebelum susun ulang terakhir. Lanjutkan?"
+                    wire:loading.attr="disabled" wire:target="susunUlangOtomatis,simpanSuntinganBagian1,pulihkanSuntinganBagian1">
+                    <span wire:loading.remove wire:target="pulihkanSuntinganBagian1">⤺ Pulihkan Suntingan Sebelumnya</span>
+                    <span wire:loading wire:target="pulihkanSuntinganBagian1"><i class="spin"></i> Memulihkan…</span>
+                </button>
+            @endif
         </div>
 
         <div class="merge-bar" style="margin-top:26px">

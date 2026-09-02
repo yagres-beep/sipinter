@@ -63,6 +63,78 @@ class KompilasiNotulaTest extends TestCase
         );
     }
 
+    /**
+     * susunUlangOtomatis() SENGAJA tetap menimpa bagian1_html (itu tujuannya) --
+     * tapi isi LAMANYA harus tersalin dulu ke bagian1_html_cadangan supaya suntingan
+     * manual Tim SAKIP tidak hilang tanpa jejak, lihat KompilasiNotula::susunUlangOtomatis().
+     */
+    public function test_susun_ulang_otomatis_mencadangkan_suntingan_lama_sebelum_menimpa(): void
+    {
+        $this->fakeKonversiBagian1KeXmlMentah();
+        $this->loginSebagaiTimSakip();
+
+        Livewire::test(KompilasiNotula::class)
+            ->set('tahun', 2026)
+            ->set('triwulan', 3)
+            ->set('bagian1EditText', '<p>Suntingan manual sebelum disusun ulang.</p>')
+            ->call('simpanSuntinganBagian1')
+            ->call('susunUlangOtomatis');
+
+        $this->assertStringContainsString(
+            'Suntingan manual sebelum disusun ulang.',
+            Notula::first()->bagian1_html_cadangan
+        );
+    }
+
+    /**
+     * Notula BARU (belum pernah disusun sama sekali, bagian1_html masih kosong)
+     * tidak boleh mencadangkan string kosong -- tidak ada apa pun untuk dipulihkan.
+     * mount() (lihat KompilasiNotula::muatBagian1EditText()) SELALU mengisi
+     * bagian1_html otomatis sekali di awal bila masih kosong, jadi kekosongannya
+     * disimulasikan LANGSUNG di DB SETELAH mount (bukan lewat komponen) supaya
+     * susunUlangOtomatis() benar-benar menerima notula dengan bagian1_html kosong --
+     * cacheNotula di komponen tidak bertahan antar ->call() terpisah (setiap ->call()
+     * meng-hidrasi ulang dari properti publik, notula() query DB lagi), jadi
+     * pembaruan langsung di DB ini akan terbaca oleh ->call() berikutnya.
+     */
+    public function test_susun_ulang_otomatis_tidak_mencadangkan_bila_belum_ada_isi_sebelumnya(): void
+    {
+        $this->fakeKonversiBagian1KeXmlMentah();
+        $this->loginSebagaiTimSakip();
+
+        $component = Livewire::test(KompilasiNotula::class)
+            ->set('tahun', 2026)
+            ->set('triwulan', 3);
+
+        Notula::first()->update(['bagian1_html' => null]);
+
+        $component->call('susunUlangOtomatis');
+
+        $this->assertNull(Notula::first()->bagian1_html_cadangan);
+    }
+
+    public function test_pulihkan_suntingan_bagian1_mengembalikan_isi_cadangan(): void
+    {
+        $this->fakeKonversiBagian1KeXmlMentah();
+        $this->loginSebagaiTimSakip();
+
+        $component = Livewire::test(KompilasiNotula::class)
+            ->set('tahun', 2026)
+            ->set('triwulan', 3)
+            ->set('bagian1EditText', '<p>Suntingan manual sebelum disusun ulang.</p>')
+            ->call('simpanSuntinganBagian1')
+            ->call('susunUlangOtomatis');
+
+        $component->call('pulihkanSuntinganBagian1')
+            ->assertDispatched('bagian1-diperbarui')
+            ->assertSet('bagian1EditText', '<p>Suntingan manual sebelum disusun ulang.</p>');
+
+        $this->assertSame(
+            '<p>Suntingan manual sebelum disusun ulang.</p>',
+            Notula::first()->bagian1_html
+        );
+    }
+
     public function test_bagian_2_menolak_format_tidak_didukung(): void
     {
         $this->fakeKonversiBagian1KeXmlMentah();

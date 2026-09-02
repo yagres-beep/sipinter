@@ -54,6 +54,7 @@ class Notula extends Model
         'kota_ttd',
         'link_lampiran_basis_data',
         'bagian1_html',
+        'bagian1_html_cadangan',
         'bagian2_pdf',
         'bagian3_pdf',
         'bagian2_html',
