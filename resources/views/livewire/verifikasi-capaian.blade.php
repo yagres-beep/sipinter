@@ -118,11 +118,13 @@
                                 <td style="text-align:center{{ $prefix === 'x_realisasi' && $tw <= $twAktif ? ';min-width:190px;text-align:left' : '' }}">
                                     @if ($prefix === 'x_realisasi' && $tw <= $twAktif)
                                         {{-- Checklist TERBUKA di SETIAP kolom TW s.d. TW aktif (bukan cuma TW
-                                            aktif) -- satu item hanya muncul sebagai checkbox aktif di SATU kolom
-                                            (kolom yang jadi "klaim"-nya, default TW aktif): mengklik checkbox di
-                                            kolom lain memindahkan klaim ke situ. Semua kolom berbagi state
-                                            $rincianNPilih/$rincianNTw yang sama, lihat App\Livewire\
-                                            VerifikasiCapaian::toggleRincianN(). --}}
+                                            aktif). Satu item TETAP dihitung SEKALI SAJA (di kolom TW asal
+                                            klaim-nya, default TW aktif) -- tapi begitu diklaim, item itu juga ikut
+                                            TAMPIL tercentang (read-only, abu-abu) di kolom-kolom TW SESUDAHNYA,
+                                            supaya sifat kumulatifnya kelihatan (bukan "hilang" begitu lewat dari
+                                            kolom asalnya) -- lihat App\Livewire\VerifikasiCapaian::
+                                            toggleRincianN()/twTujuanRincianN(). Mengklik checkbox di kolom lain
+                                            (bukan carry-forward) memindahkan klaim ke situ. --}}
                                         <div style="max-height:170px;overflow-y:auto;display:flex;flex-direction:column;gap:3px">
                                             @foreach ($this->rincianNBisaDipilih() as $n)
                                                 @php
@@ -131,26 +133,33 @@
                                                         ? $twAktif
                                                         : min(max((int) ($rincianNTw[$n->id] ?? $twAktif), 1), $twAktif);
                                                 @endphp
-                                                @if ($n->triwulan_realisasi === $twAktif && $tw !== $twAktif)
-                                                    @continue
+                                                @if (! $dicentang || $tw === $twItem)
+                                                    {{-- belum diklaim (tampil di semua kolom, checkbox aktif) ATAU
+                                                        ini kolom asal klaimnya sendiri (interaktif, bisa dilepas) --}}
+                                                    <label class="fl-row" style="cursor:pointer;gap:6px;font-size:11.5px" title="{{ $n->triwulan_realisasi === null ? 'Belum tercatat -- klik untuk klaim ke TW '.['I', 'II', 'III', 'IV'][$tw - 1].', akan terkunci ke TW ini begitu disimpan' : '' }}">
+                                                        <input type="checkbox" {{ $dicentang ? 'checked' : '' }} wire:click="toggleRincianN({{ $n->id }}, {{ $tw }})">
+                                                        <span>{{ $n->uraian }}</span>
+                                                    </label>
+                                                @elseif ($tw > $twItem)
+                                                    {{-- kolom SESUDAH TW asal klaim -- ikut tercentang (kumulatif),
+                                                        read-only, TIDAK dihitung ulang di sini (tetap dihitung SEKALI
+                                                        di kolom $twItem, lihat recomputeXRealisasiLive()) --}}
+                                                    <div class="fl-row muted" style="gap:6px;font-size:11.5px" title="Sudah direalisasikan sejak TW {{ ['I', 'II', 'III', 'IV'][$twItem - 1] }} -- tetap terhitung kumulatif, ikut tampil di sini">
+                                                        <input type="checkbox" checked disabled>
+                                                        <span>{{ $n->uraian }} <span style="font-weight:400">(sejak TW {{ ['I', 'II', 'III', 'IV'][$twItem - 1] }})</span></span>
+                                                    </div>
                                                 @endif
-                                                @if ($dicentang && $twItem !== $tw)
-                                                    @continue
-                                                @endif
-                                                <label class="fl-row" style="cursor:pointer;gap:6px;font-size:11.5px" title="{{ $n->triwulan_realisasi === null ? 'Belum tercatat -- klik untuk klaim ke TW '.['I', 'II', 'III', 'IV'][$tw - 1].', akan terkunci ke TW ini begitu disimpan' : '' }}">
-                                                    <input type="checkbox" {{ $dicentang ? 'checked' : '' }} wire:click="toggleRincianN({{ $n->id }}, {{ $tw }})">
-                                                    <span>{{ $n->uraian }}</span>
-                                                </label>
                                             @endforeach
                                             @foreach ($this->rincianNTerkunci() as $n)
-                                                @continue($n->triwulan_realisasi !== $tw)
-                                                <div class="muted" style="font-size:11.5px" title="Direalisasikan TW {{ ['I', 'II', 'III', 'IV'][$n->triwulan_realisasi - 1] }}, sudah tersimpan — tidak bisa diubah lagi dari sesi mana pun">✓ {{ $n->uraian }}</div>
+                                                @continue($n->triwulan_realisasi > $tw)
+                                                <div class="muted" style="font-size:11.5px" title="Direalisasikan TW {{ ['I', 'II', 'III', 'IV'][$n->triwulan_realisasi - 1] }}, sudah tersimpan — tidak bisa diubah lagi dari sesi mana pun{{ $n->triwulan_realisasi !== $tw ? ' -- tetap terhitung kumulatif, ikut tampil di sini' : '' }}">✓ {{ $n->uraian }}{{ $n->triwulan_realisasi !== $tw ? ' (sejak TW '.['I', 'II', 'III', 'IV'][$n->triwulan_realisasi - 1].')' : '' }}</div>
                                             @endforeach
                                             @if ($this->rincianNList()->isEmpty() && $tw === $twAktif)
                                                 <span class="muted" style="font-size:11.5px">Belum ada Rincian N — tambahkan di <a wire:navigate href="{{ route('master-iku.index') }}#target">🎯 Target Tahunan</a>.</span>
                                             @endif
                                         </div>
-                                        <div class="muted" style="font-size:10.5px;margin-top:2px">{{ $this->{"x_realisasi_tw{$tw}"} ?? 0 }} item{{ $tw === $twAktif ? ' (live, tersimpan setelah "Simpan")' : '' }}</div>
+                                        @php $kumulatifTw = collect(range(1, $tw))->sum(fn ($i) => $this->{"x_realisasi_tw{$i}"} ?? 0); @endphp
+                                        <div class="muted" style="font-size:10.5px;margin-top:2px">{{ $kumulatifTw }} item kumulatif s.d. TW ini{{ $tw === $twAktif ? ' (live, tersimpan setelah "Simpan")' : '' }}</div>
                                     @elseif ($bisaDiedit)
                                         <span class="muted" title="TW ini belum berjalan, belum bisa diisi">🔒 {{ $capaianTahunan->{"{$prefix}_tw{$tw}"} ?? '-' }}</span>
                                     @else

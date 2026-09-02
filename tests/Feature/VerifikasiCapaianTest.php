@@ -1294,6 +1294,27 @@ class VerifikasiCapaianTest extends TestCase
         $this->assertNull($item->fresh()->triwulan_realisasi);
     }
 
+    public function test_item_yang_diklaim_ikut_tampil_kumulatif_di_kolom_tw_sesudahnya(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+        $data['iku']->update(['metode_capaian' => 'rasio']);
+
+        // Periode Capaian ini triwulan III -- satu item diklaim TW I lewat sesi lain
+        // (langsung ke DB, sudah terkunci -- masuk rincianNTerkunci()), satu lagi
+        // diklaim TW II dari SESI INI (belum disimpan, masih rincianNBisaDipilih()).
+        // Keduanya harus tetap tampil (read-only, ditandai "sejak TW ...") di kolom
+        // TW III -- bukan menghilang begitu lewat dari kolom asalnya.
+        $terkunciTw1 = RincianN::create(['iku_id' => $data['iku']->id, 'tahun' => 2026, 'uraian' => 'Terkunci TW I', 'triwulan_realisasi' => 1]);
+        $diklaimTw2 = RincianN::create(['iku_id' => $data['iku']->id, 'tahun' => 2026, 'uraian' => 'Diklaim TW II']);
+
+        $component = Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']->fresh()]);
+        $component->call('toggleRincianN', $diklaimTw2->id, 2);
+
+        $component->assertSeeInOrder(['Terkunci TW I', '(sejak TW I)']);
+        $component->assertSeeInOrder(['Diklaim TW II', '(sejak TW II)']);
+    }
+
     public function test_rincian_n_tidak_bisa_disusulkan_ke_tw_yang_belum_berjalan(): void
     {
         $this->actingAs($this->buatSakip());
