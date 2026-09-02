@@ -1413,14 +1413,15 @@ class PengisianKegiatanTest extends TestCase
 
     /**
      * Selagi Kegiatan-nya masih editable (draft/dikembalikan), Ketua Tim boleh
-     * membuang bukti APAPUN status_verifikasi-nya (bukan cuma yang "ditolak") —
-     * supaya bukti yang salah unggah sendiri bisa diperbaiki sebelum diajukan ulang.
+     * membuang bukti yang belum "terverifikasi" (mis. masih "menunggu" — belum
+     * sempat diperiksa Tim SAKIP) — supaya bukti yang salah unggah sendiri bisa
+     * diperbaiki sebelum diajukan ulang.
      */
     public function test_hapus_bukti_lama_menghapus_berkas_yang_belum_ditolak_selagi_masih_bisa_diedit(): void
     {
         \Illuminate\Support\Facades\Storage::fake('local');
         $data = $this->siapkanKegiatanDikembalikanDenganBerkasDitolak();
-        $data['berkas']->update(['status_verifikasi' => 'terverifikasi']);
+        $data['berkas']->update(['status_verifikasi' => 'menunggu']);
         \Illuminate\Support\Facades\Storage::disk('local')->put($data['berkas']->path, 'isi pdf palsu');
 
         $this->actingAs($data['ketua']);
@@ -1435,6 +1436,32 @@ class PengisianKegiatanTest extends TestCase
         $component->call('hapusBuktiLama', $blockIndex, $data['berkas']->id);
 
         $this->assertDatabaseMissing('berkas', ['id' => $data['berkas']->id]);
+    }
+
+    /**
+     * Begitu Tim SAKIP menandai satu berkas "Sesuai" (terverifikasi), berkas itu
+     * terkunci permanen bagi Ketua Tim — TIDAK boleh dihapus/diganti lagi lewat
+     * sini, walau Kegiatan induknya sendiri masih terbuka untuk berkas lain yang
+     * ditolak (skenario "Rincian N": status per-berkas, bukan per-kegiatan).
+     * Defense in depth — tombol hapusnya sendiri sudah disembunyikan di blade.
+     */
+    public function test_hapus_bukti_lama_menolak_berkas_yang_sudah_terverifikasi(): void
+    {
+        $data = $this->siapkanKegiatanDikembalikanDenganBerkasDitolak();
+        $data['berkas']->update(['status_verifikasi' => 'terverifikasi', 'catatan' => null]);
+
+        $this->actingAs($data['ketua']);
+
+        $component = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $data['iku']->id);
+
+        $blockIndex = collect($component->get('blocks'))->search(fn ($b) => $b['id'] === $data['kegiatan']->id);
+
+        $component->call('hapusBuktiLama', $blockIndex, $data['berkas']->id);
+
+        $this->assertDatabaseHas('berkas', ['id' => $data['berkas']->id]);
     }
 
     /**
@@ -1824,6 +1851,31 @@ class PengisianKegiatanTest extends TestCase
     }
 
     /**
+     * Sama seperti hapusBuktiLama() untuk Kegiatan — begitu berkas bagian kustom
+     * ditandai "Sesuai" (terverifikasi) oleh Tim SAKIP, hapusBuktiLamaBagianKustom()
+     * menolak menghapusnya, walau poin/Capaian induknya sendiri masih editable.
+     */
+    public function test_hapus_bukti_lama_bagian_kustom_menolak_berkas_yang_sudah_terverifikasi(): void
+    {
+        $data = $this->siapkanBagianKustomDikembalikan();
+
+        $berkas = Berkas::create([
+            'ref_id' => $data['poin']->id, 'ref_type' => \App\Models\BagianKustomPoin::class, 'kategori' => 'bagian_kustom',
+            'nama_file' => 'bukti-sesuai.pdf', 'path' => 'bukti-bagian-kustom/bukti-sesuai.pdf', 'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $this->actingAs($data['ketua']);
+
+        Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $data['iku']->id)
+            ->call('hapusBuktiLamaBagianKustom', $data['poin']->id, $berkas->id);
+
+        $this->assertDatabaseHas('berkas', ['id' => $berkas->id]);
+    }
+
+    /**
      * Begitu Capaian-nya sedang ditangani Tim SAKIP, hapusBuktiLamaBagianKustom()
      * menolak permintaan — defense in depth, sama seperti hapusBuktiLama() untuk Kegiatan.
      */
@@ -1955,5 +2007,45 @@ class PengisianKegiatanTest extends TestCase
         // Catatan penolakan tersalin ke poin RTL itu sendiri sebelum berkasnya lenyap —
         // sama seperti hapusBuktiLama() untuk Kegiatan (lihat test di atas).
         $this->assertSame('Belum sesuai rencana', $poin->fresh()->catatan_bukti_dihapus);
+    }
+
+    /**
+     * Sama seperti hapusBuktiLama() untuk Kegiatan — begitu berkas realisasi RTL
+     * ditandai "Sesuai" (terverifikasi) oleh Tim SAKIP, hapusBuktiLamaEvaluasi()
+     * menolak menghapusnya.
+     */
+    public function test_hapus_bukti_lama_evaluasi_menolak_berkas_yang_sudah_terverifikasi(): void
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $ketua = User::create([
+            'nama' => 'Ketua Uji Evaluasi Sesuai', 'username' => 'ketua-uji-evaluasi-sesuai@example.test', 'email' => 'ketua-uji-evaluasi-sesuai@example.test',
+            'password' => 'password', 'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create(['kode' => 'UJI-EVALUASI-SESUAI', 'indikator' => 'Indikator uji evaluasi sesuai', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji']);
+
+        $periodeRtl = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+
+        $poin = RtlEvaluasi::create([
+            'iku_id' => $iku->id, 'periode_id' => $periodeRtl->id,
+            'rtl_teks' => 'Rencana uji evaluasi sesuai', 'berlaku_bulan' => 'RTL untuk Juli, Agustus, dan September',
+            'pic' => 'PIC Uji', 'batas_waktu' => '2026-09-30',
+        ]);
+
+        $berkas = Berkas::create([
+            'ref_id' => $poin->id, 'ref_type' => RtlEvaluasi::class, 'kategori' => 'evaluasi_rtl',
+            'nama_file' => 'realisasi-sesuai.pdf', 'path' => 'bukti-evaluasi-rtl/realisasi-sesuai.pdf',
+            'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $this->actingAs($ketua);
+
+        Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $iku->id)
+            ->call('hapusBuktiLamaEvaluasi', $poin->id, $berkas->id);
+
+        $this->assertDatabaseHas('berkas', ['id' => $berkas->id]);
     }
 }

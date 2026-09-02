@@ -356,9 +356,12 @@ class PengisianKegiatan extends Component
      * dipakai saat Tim SAKIP menandainya "Tidak Sesuai", supaya Ketua Tim bisa membuang
      * bukti yang salah lalu mengunggah gantinya (tidak ada jalan lain untuk mengganti
      * bukti lama sebelum ini — sebelumnya hanya bisa MENAMBAH berkas baru di samping
-     * yang lama). Berkas yang masih "menunggu"/"terverifikasi" TIDAK boleh dihapus
-     * dari sini (dicek di sini, bukan cuma disembunyikan tombolnya di blade —
-     * defense in depth, pola yang sama dipakai VerifikasiCapaian::tandaiTolak() dkk).
+     * yang lama). Berkas yang sudah "terverifikasi" (Sesuai) TIDAK boleh dihapus/diedit
+     * dari sini — sekali Tim SAKIP menandainya Sesuai, berkas itu terkunci permanen
+     * bagi Ketua Tim, walau kegiatan induknya sendiri masih terbuka untuk berkas lain
+     * yang ditolak (lihat "Rincian N" — status per-berkas, bukan per-kegiatan). Dicek
+     * di sini, bukan cuma disembunyikan tombolnya di blade — defense in depth, pola
+     * yang sama dipakai VerifikasiCapaian::tandaiTolak() dkk.
      * File fisik lokal ikut dihapus; salinan di Google Drive (bila sempat tersalin)
      * TIDAK ikut dihapus (belum ada mekanisme hapus-dari-Drive di GoogleDriveService).
      */
@@ -379,7 +382,7 @@ class PengisianKegiatan extends Component
             ->where('ref_id', $block['id'])
             ->first();
 
-        if (! $berkas) {
+        if (! $berkas || $berkas->status_verifikasi === 'terverifikasi') {
             return;
         }
 
@@ -435,7 +438,7 @@ class PengisianKegiatan extends Component
             ->where('ref_id', $poin->id)
             ->first();
 
-        if (! $berkas) {
+        if (! $berkas || $berkas->status_verifikasi === 'terverifikasi') {
             return;
         }
 
@@ -498,7 +501,7 @@ class PengisianKegiatan extends Component
             ->where('ref_id', $poin->id)
             ->first();
 
-        if (! $berkas) {
+        if (! $berkas || $berkas->status_verifikasi === 'terverifikasi') {
             return;
         }
 

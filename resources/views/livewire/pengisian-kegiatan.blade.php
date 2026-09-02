@@ -346,7 +346,9 @@
                                         @endif
                                     </span>
                                     <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file['id'] }}">🔍 Lihat</button>
-                                    <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLama', args: [{{ $i }}, {{ $file['id'] }}] }" wire:loading.class="btn-busy" wire:target="hapusBuktiLama({{ $i }}, {{ $file['id'] }})">🗑️</span>
+                                    @if ($file['status_verifikasi'] !== 'terverifikasi')
+                                        <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLama', args: [{{ $i }}, {{ $file['id'] }}] }" wire:loading.class="btn-busy" wire:target="hapusBuktiLama({{ $i }}, {{ $file['id'] }})">🗑️</span>
+                                    @endif
                                 </div>
                             @endforeach
                         </div>
@@ -589,7 +591,7 @@
                                             <span class="sub" style="color:var(--red)">{{ $file->catatan }}</span>
                                         @endif
                                     </span>
-                                    @if (! $evaluasiTerkunci)
+                                    @if (! $evaluasiTerkunci && $file->status_verifikasi !== 'terverifikasi')
                                         <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLamaEvaluasi', args: [{{ $poin->id }}, {{ $file->id }}] }" wire:loading.class="btn-busy" wire:target="hapusBuktiLamaEvaluasi({{ $poin->id }}, {{ $file->id }})">🗑️</span>
                                     @endif
                                 </div>
@@ -853,7 +855,9 @@
                                                     <span class="sub" style="color:var(--red)">{{ $file['catatan'] }}</span>
                                                 @endif
                                             </span>
-                                            <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLamaBagianKustom', args: [{{ $blok['id'] }}, {{ $file['id'] }}] }" wire:loading.class="btn-busy" wire:target="hapusBuktiLamaBagianKustom({{ $blok['id'] }}, {{ $file['id'] }})">🗑️</span>
+                                            @if ($file['status_verifikasi'] !== 'terverifikasi')
+                                                <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLamaBagianKustom', args: [{{ $blok['id'] }}, {{ $file['id'] }}] }" wire:loading.class="btn-busy" wire:target="hapusBuktiLamaBagianKustom({{ $blok['id'] }}, {{ $file['id'] }})">🗑️</span>
+                                            @endif
                                         </div>
                                     @endforeach
                                 </div>
