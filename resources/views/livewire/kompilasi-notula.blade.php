@@ -455,6 +455,14 @@
 
             <div class="word-canvas">
             <div class="notula" style="max-height:800px;overflow-y:auto">
+                {{-- Judul sampul notula -- BUKAN bagian dari $bagian1PreviewHtml/area
+                     contenteditable (statis, tidak disunting), tapi HARUS tetap tampil
+                     di sini supaya pratinjau ini sama persis dengan PDF yang diunduh
+                     -- lihat resources/views/pdf/notula-utuh.blade.php (h1 + .sub),
+                     yang jadi acuan resmi tampilan notula. --}}
+                <h1>NOTULA MONITORING KINERJA</h1>
+                <div class="sub">Triwulan {{ ['I', 'II', 'III', 'IV'][$triwulan - 1] }} {{ $tahun }} — BPS Kabupaten Buton Utara</div>
+
                 {{-- Bagian II/III (bila sudah diunggah) tersisip di posisi penanda
                      {{bagian_2}}/{{bagian_3}} di dalam $bagian1PreviewHtml -- sebelum
                      tabel "Mengetahui/Kepala Satker/Notulis", persis seperti template
