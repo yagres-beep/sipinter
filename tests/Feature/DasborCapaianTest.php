@@ -116,13 +116,14 @@ class DasborCapaianTest extends TestCase
     {
         $this->loginSebagaiTimSakip();
 
-        // target_tahunan=200 untuk keduanya. iku1: realisasi_tw2 kumulatif=100 -> 50%.
+        // Target Tahunan=200 untuk keduanya (kini SELALU = alokasi_tw4, lihat
+        // CapaianTahunan::targetTahunan()). iku1: realisasi_tw2 kumulatif=100 -> 50%.
         // iku2: belum ada realisasi sama sekali -> "-".
         $iku1 = MasterIku::create(['kode' => '2001', 'indikator' => 'Uji Setahun A', 'tim' => 'Uji']);
         $iku2 = MasterIku::create(['kode' => '2002', 'indikator' => 'Uji Setahun B', 'tim' => 'Uji']);
 
-        CapaianTahunan::create(['iku_id' => $iku1->id, 'tahun' => 2026, 'target_tahunan' => 200, 'realisasi_tw2' => 100]);
-        CapaianTahunan::create(['iku_id' => $iku2->id, 'tahun' => 2026, 'target_tahunan' => 200]);
+        CapaianTahunan::create(['iku_id' => $iku1->id, 'tahun' => 2026, 'alokasi_tw4' => 200, 'realisasi_tw2' => 100]);
+        CapaianTahunan::create(['iku_id' => $iku2->id, 'tahun' => 2026, 'alokasi_tw4' => 200]);
 
         $component = Livewire::test(DasborCapaian::class)->set('tahun', 2026);
         $perTriwulan = $component->viewData('capaianSetahunPerTriwulan');
@@ -162,7 +163,7 @@ class DasborCapaianTest extends TestCase
 
         $iku = MasterIku::create(['kode' => '3001', 'indikator' => 'Uji Rekap IKU', 'tim' => 'Uji']);
 
-        CapaianTahunan::create(['iku_id' => $iku->id, 'tahun' => 2026, 'target_tahunan' => 100, 'alokasi_tw2' => 100, 'realisasi_tw2' => 100]);
+        CapaianTahunan::create(['iku_id' => $iku->id, 'tahun' => 2026, 'alokasi_tw4' => 100, 'alokasi_tw2' => 100, 'realisasi_tw2' => 100]);
 
         Kegiatan::create([
             'iku_id' => $iku->id, 'periode_id' => $periode->id, 'jenis' => 'bukan_survei_sensus',

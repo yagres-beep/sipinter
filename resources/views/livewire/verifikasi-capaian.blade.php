@@ -72,9 +72,9 @@
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
                 <span class="inp filled" style="background:var(--ro-bg);display:inline-block;width:auto;padding:8px 14px">
                     @if ($capaian->masterIku->pakaiRasio())
-                        {{ $capaian->masterIku->deskripsi_x ?: 'X' }} {{ \App\Models\PengaturanCapaian::formatAngka($capaianTahunan->x_target) }} ÷ {{ $capaian->masterIku->deskripsi_y ?: 'Y' }} {{ \App\Models\PengaturanCapaian::formatAngka($capaianTahunan->y_target) }} = {{ $capaianTahunan->targetTahunan() }}%
+                        {{ $capaian->masterIku->deskripsi_x ?: 'X' }} {{ \App\Models\PengaturanCapaian::formatAngka($capaianTahunan->x_alokasi_tw4) }} ÷ {{ $capaian->masterIku->deskripsi_y ?: 'Y' }} {{ \App\Models\PengaturanCapaian::formatAngka($capaianTahunan->y_alokasi_tw4) }} = {{ $capaianTahunan->targetTahunan() }}%
                     @else
-                        {{ \App\Models\PengaturanCapaian::formatAngka($capaianTahunan->target_tahunan) }} {{ $capaian->masterIku->satuan }}
+                        {{ \App\Models\PengaturanCapaian::formatAngka($capaianTahunan->targetTahunan()) }} {{ $capaian->masterIku->satuan }}
                     @endif
                 </span>
                 <a wire:navigate href="{{ route('master-iku.index') }}#target" class="btn btn-ghost btn-sm">✏️ Ubah di Target Tahunan</a>
@@ -83,11 +83,11 @@
         @if ($capaian->masterIku->pakaiRasio())
             <div class="fhint" style="margin:10px 0 6px">Alokasi Pembilang (X) &amp; Penyebut (Y) TW I-IV sudah ditetapkan sekali di awal tahun lewat <a wire:navigate href="{{ route('master-iku.index') }}#target">🎯 Target Tahunan</a> — di sini centang item Rincian N yang sudah direalisasikan, LANGSUNG di kolom TW yang sebenarnya (checklist terbuka di kolom TW I s.d. TW aktif sekaligus, tidak cuma TW aktif — kalau ada item yang terlewat dicentang saat TW itu berjalan, klik saja checkbox-nya di kolom TW itu dari sini). Begitu tersimpan, item itu terkunci permanen ke kolom tempat dicentang, tidak bisa diedit lagi dari sesi mana pun. Realisasi Penyebut (Y) otomatis mengikuti Alokasi Y. Kumulatif TW I s.d. TW berjalan &amp; persentasenya (X÷Y×100) dihitung otomatis di bawah.</div>
         @else
-            <div class="fhint" style="margin:10px 0 6px">Isi Alokasi Target &amp; Realisasi TRIWULAN INI SAJA (bukan kumulatif, tidak perlu melihat isian triwulan sebelumnya) — kumulatif TW I s.d. TW berjalan dihitung otomatis di bawah.</div>
+            <div class="fhint" style="margin:10px 0 6px">Alokasi Target TW I-IV sudah ditetapkan sekali di awal tahun lewat <a wire:navigate href="{{ route('master-iku.index') }}#target">🎯 Target Tahunan</a> — di sini cukup isi <strong>Realisasi sebagai angka KUMULATIF s.d. TW ini</strong> (mis. TW I=25, TW II=85, TW III=95 — BUKAN kontribusi 25, 60, 10 yang perlu dijumlah). Capaian %-nya dihitung otomatis di bawah.</div>
         @endif
 
         @php $twAktif = (int) $capaian->periode->triwulan; @endphp
-        <div class="fhint" style="margin-bottom:8px">🔒 Hanya kolom TW {{ ['I', 'II', 'III', 'IV'][$twAktif - 1] }} yang bisa diubah dari sesi verifikasi ini (sesuai periode isian ini) — kolom triwulan lain ditampilkan sebagai referensi, disunting lewat sesi verifikasi bulan pada triwulan itu sendiri{{ $capaian->masterIku->pakaiRasio() ? ' (KECUALI checklist Rincian N — kolom TW I s.d. TW aktif SEMUANYA terbuka &amp; bisa dicentang dari sesi ini, lihat baris Realisasi di bawah)' : '' }}.</div>
+        <div class="fhint" style="margin-bottom:8px">🔒 Hanya kolom TW {{ ['I', 'II', 'III', 'IV'][$twAktif - 1] }} yang bisa diubah dari sesi verifikasi ini (sesuai periode isian ini) — kolom triwulan lain ditampilkan sebagai referensi, disunting lewat sesi verifikasi bulan pada triwulan itu sendiri{{ $capaian->masterIku->pakaiRasio() ? ' (KECUALI checklist Rincian N — kolom TW I s.d. TW aktif SEMUANYA terbuka &amp; bisa dicentang dari sesi ini, lihat baris Realisasi di bawah)' : '' }}. Baris Alokasi Target selalu terkunci di sini (kedua Jenis Nilai) — diisi lewat Target Tahunan.</div>
         @if ($capaian->masterIku->pakaiRasio())
             <div class="fhint" style="margin-bottom:8px">⚠️ Dua arti "kumulatif" berbeda di tabel ini — jangan tertukar: <strong>Alokasi X</strong> (baris paling atas) SUDAH kumulatif sejak diisi di Target Tahunan (diketik langsung, tidak dijumlah lagi). <strong>Realisasi X</strong> — checklist-nya terbuka di SETIAP kolom TW s.d. TW aktif; centang item di kolom TW yang sebenarnya (boleh TW berjalan atau TW sebelumnya yang terlewat) — begitu disimpan, TERKUNCI permanen di kolom itu. Baris "↳ ... Kumulatif (%)" paling bawah MURNI hasil hitung otomatis (X÷Y×100), tidak pernah diketik manual.</div>
         @endif
@@ -183,26 +183,19 @@
                     </tr>
                 @else
                     <tr>
-                        <td>Alokasi Target <span class="muted" style="font-weight:400">(TW ini)</span></td>
+                        <td title="Diisi lewat halaman Target Tahunan, bukan di sini">Alokasi Target <span class="muted" style="font-weight:400">(kumulatif, dari Target Tahunan)</span></td>
                         @for ($tw = 1; $tw <= 4; $tw++)
                             <td style="text-align:center">
-                                @if ($tw === $twAktif)
-                                    <input type="number" step="0.01" class="inp filled" style="width:100px;text-align:center" wire:model.live="alokasi_tw{{ $tw }}">
-                                    @error("alokasi_tw{$tw}")
-                                        <div style="color:var(--red);font-size:10.5px">{{ $message }}</div>
-                                    @enderror
-                                @else
-                                    <span class="muted" title="Hanya bisa diubah dari sesi verifikasi TW {{ ['I', 'II', 'III', 'IV'][$tw - 1] }}">🔒 {{ \App\Models\PengaturanCapaian::formatAngka($capaianTahunan->{"alokasi_tw{$tw}"}) }}</span>
-                                @endif
+                                <span class="muted" title="Diisi lewat halaman Target Tahunan, bukan di sini">🔒 {{ \App\Models\PengaturanCapaian::formatAngka($capaianTahunan->{"alokasi_tw{$tw}"}) }}</span>
                             </td>
                         @endfor
                     </tr>
                     <tr>
-                        <td>Realisasi <span class="muted" style="font-weight:400">(TW ini)</span></td>
+                        <td>Realisasi <span class="muted" style="font-weight:400">(kumulatif s.d. TW ini)</span></td>
                         @for ($tw = 1; $tw <= 4; $tw++)
                             <td style="text-align:center">
                                 @if ($tw === $twAktif)
-                                    <input type="number" step="0.01" class="inp filled" style="width:100px;text-align:center" wire:model.live="realisasi_tw{{ $tw }}">
+                                    <input type="number" step="0.01" class="inp filled" style="width:100px;text-align:center" wire:model.live="realisasi_tw{{ $tw }}" title="Ketik angka KUMULATIF s.d. TW ini, bukan kontribusi TW ini saja">
                                     @error("realisasi_tw{$tw}")
                                         <div style="color:var(--red);font-size:10.5px">{{ $message }}</div>
                                     @enderror
@@ -210,18 +203,6 @@
                                     <span class="muted" title="Hanya bisa diubah dari sesi verifikasi TW {{ ['I', 'II', 'III', 'IV'][$tw - 1] }}">🔒 {{ \App\Models\PengaturanCapaian::formatAngka($capaianTahunan->{"realisasi_tw{$tw}"}) }}</span>
                                 @endif
                             </td>
-                        @endfor
-                    </tr>
-                    <tr class="muted">
-                        <td>Alokasi Target Kumulatif</td>
-                        @for ($tw = 1; $tw <= 4; $tw++)
-                            <td style="text-align:center">{{ \App\Models\PengaturanCapaian::formatAngka($capaianTahunan->alokasiKumulatif($tw)) }}</td>
-                        @endfor
-                    </tr>
-                    <tr class="muted">
-                        <td>Realisasi Kumulatif</td>
-                        @for ($tw = 1; $tw <= 4; $tw++)
-                            <td style="text-align:center">{{ \App\Models\PengaturanCapaian::formatAngka($capaianTahunan->realisasiKumulatif($tw)) }}</td>
                         @endfor
                     </tr>
                 @endif

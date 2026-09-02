@@ -193,7 +193,10 @@ class MasterIkuTest extends TestCase
         $iku = MasterIkuModel::where('kode', '3002')->first();
         $ct = CapaianTahunan::where('iku_id', $iku->id)->where('tahun', 2026)->first();
 
-        $this->assertEqualsWithDelta(4.35, $ct->target_tahunan, 0.01);
+        // Target Tahunan tampil (4,35, dari Alokasi Kumulatif TW IV) ->
+        // CapaianTahunan::targetTahunan() -- target_tahunan lama TIDAK dipakai lagi.
+        $this->assertEqualsWithDelta(4.35, $ct->targetTahunan(), 0.01);
+        $this->assertNull($ct->target_tahunan);
         $this->assertEqualsWithDelta(1.09, $ct->alokasi_tw1, 0.01);
         $this->assertEqualsWithDelta(4.35, $ct->alokasiKumulatif(4), 0.01);
     }

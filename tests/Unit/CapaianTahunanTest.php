@@ -8,16 +8,18 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Rumus alokasiKumulatif()/realisasiKumulatif()/targetTahunan(). TIGA pola berbeda
+ * Rumus alokasiKumulatif()/realisasiKumulatif()/targetTahunan(). DUA pola berbeda
  * (lihat docblock App\Models\CapaianTahunan):
- * - Alokasi X/Y & Realisasi Y (IKU 'rasio'): Tim SAKIP mengetik langsung angka
+ * - Alokasi (KEDUA metode) & Realisasi Y (rasio): Tim SAKIP mengetik langsung angka
  *   KUMULATIF/konstan TW I s.d. TW tsb (PERSIS sheet resmi "LK_Kabkot", kolom M-P
- *   untuk Alokasi, Q-T untuk Realisasi -- keduanya konstan pada baris Penyebut) —
- *   dibaca apa adanya per TW, TIDAK dijumlahkan lagi. Target Tahunan (rasio)
- *   SELALU = Alokasi Kumulatif TW IV.
- * - Realisasi X (rasio) & Alokasi/Realisasi (IKU 'langsung'): Tim SAKIP mengisi
- *   kontribusi TRIWULAN ITU SENDIRI (bukan kumulatif) — TETAP dijumlahkan otomatis
- *   dari TW I s.d. TW yang diminta (KEPUTUSAN PRODUK, beda dari sheet resmi).
+ *   untuk Alokasi, Q-T untuk Realisasi -- verifikasi terhadap sheet menunjukkan
+ *   baris Non % pun demikian) — dibaca apa adanya per TW, TIDAK dijumlahkan lagi.
+ *   Target Tahunan (KEDUA metode) SELALU = Alokasi Kumulatif TW IV.
+ * - Realisasi X (rasio) & Realisasi (IKU 'langsung'): PENGECUALIAN -- Realisasi X
+ *   (checklist Rincian N) mengisi kontribusi TRIWULAN ITU SENDIRI (bukan
+ *   kumulatif) — TETAP dijumlahkan otomatis dari TW I s.d. TW yang diminta. Untuk
+ *   'langsung', Realisasi JUGA sudah kumulatif langsung diketik (SAMA pola dengan
+ *   Alokasi), dibaca apa adanya juga.
  * Model diinstansiasi langsung (tanpa DB) — masterIku diikat lewat setRelation()
  * supaya pakaiRasio() tidak perlu query. RefreshDatabase tetap dipakai karena
  * capaianTriwulanan()/capaianSetahun() lewat Capaian::hitungPersentase() membaca
@@ -112,15 +114,16 @@ class CapaianTahunanTest extends TestCase
         $this->assertEqualsWithDelta(33.33, $capaian->capaianSetahun(1), 0.01);
     }
 
-    public function test_metode_langsung_menjumlahkan_alokasi_dan_realisasi_per_tw(): void
+    public function test_metode_langsung_membaca_alokasi_dan_realisasi_kumulatif_apa_adanya(): void
     {
-        // Tim SAKIP isi kontribusi TW-nya sendiri (bukan kumulatif): TW I=25, TW II=60
-        // -> kumulatif TW II otomatis 25+60=85.
+        // Angka PERSIS baris "Non %" sheet "LK_Kabkot" resmi (D76, satuan Persen):
+        // Alokasi M-P=[25,85,95,101.67] & Realisasi Q-R=[55.6,86.46] -- Tim SAKIP
+        // mengetik langsung angka KUMULATIF ini (BUKAN kontribusi 25,60,10,6.67
+        // yang perlu dijumlah -- itu KEPUTUSAN LAMA yang sudah tidak berlaku).
         $capaian = $this->buatCapaianRasio(
             [
-                'target_tahunan' => 101.67,
-                'alokasi_tw1' => 25, 'alokasi_tw2' => 60, 'alokasi_tw3' => 10, 'alokasi_tw4' => 6.67,
-                'realisasi_tw1' => 55.6, 'realisasi_tw2' => 30.86,
+                'alokasi_tw1' => 25, 'alokasi_tw2' => 85, 'alokasi_tw3' => 95, 'alokasi_tw4' => 101.67,
+                'realisasi_tw1' => 55.6, 'realisasi_tw2' => 86.46,
                 'x_alokasi_tw1' => 999, 'y_alokasi_tw1' => 1, // kolom rasio harus diabaikan total
             ],
             MasterIku::METODE_LANGSUNG
@@ -131,6 +134,7 @@ class CapaianTahunanTest extends TestCase
         $this->assertEqualsWithDelta(101.67, $capaian->alokasiKumulatif(4), 0.01);
         $this->assertEqualsWithDelta(55.6, $capaian->realisasiKumulatif(1), 0.01);
         $this->assertEqualsWithDelta(86.46, $capaian->realisasiKumulatif(2), 0.01);
+        // Target Tahunan SELALU = Alokasi Kumulatif TW IV, sama seperti 'rasio'.
         $this->assertEqualsWithDelta(101.67, $capaian->targetTahunan(), 0.01);
 
         // Capaian % (Triwulanan) TW II: realisasi kumulatif 86.46 / alokasi kumulatif 85 -> 101.72.
@@ -193,10 +197,12 @@ class CapaianTahunanTest extends TestCase
      */
     public function test_tipe_b_indeks_pelayanan_publik_variasi_presisi_dua_desimal(): void
     {
+        // Angka PERSIS baris D79 sheet "LK_Kabkot" resmi -- Alokasi M-P=[0,1.04,4.05,4.35]
+        // (P=TW IV=Target=4.35); Realisasi Q-R dimulai 0, TW II kumulatif 0.79
+        // (dibulatkan 2 desimal, lihat docblock kelas ini soal cast decimal:2).
         $capaian = $this->buatCapaianRasio([
-            'target_tahunan' => 4.35,
-            'alokasi_tw1' => 0.52, 'alokasi_tw2' => 0.52,
-            'realisasi_tw1' => 0.40, 'realisasi_tw2' => 0.39,
+            'alokasi_tw1' => 0, 'alokasi_tw2' => 1.04, 'alokasi_tw3' => 4.05, 'alokasi_tw4' => 4.35,
+            'realisasi_tw1' => 0, 'realisasi_tw2' => 0.79,
         ], MasterIku::METODE_LANGSUNG);
 
         $this->assertEqualsWithDelta(1.04, $capaian->alokasiKumulatif(2), 0.001);
@@ -208,21 +214,22 @@ class CapaianTahunanTest extends TestCase
     }
 
     /**
-     * Bagian 4 edge case 4 — Realisasi triwulan belum diisi (null) -> capaian TW
-     * itu "-" (bukan angka), dan TIDAK mencemari kumulatif triwulan berikutnya
-     * seolah-olah bernilai 0 sungguhan (beda dari alokasi 0 yang memang sengaja 0).
+     * Bagian 4 edge case 4 (versi kumulatif-apa-adanya) — TW yang belum diisi
+     * (null) dibaca sebagai 0.0 apa adanya, TIDAK mewarisi angka TW sebelumnya --
+     * beda dari model lama (dicabut) yang menjumlahkan kontribusi lintas TW
+     * sehingga TW belum-terisi otomatis "mewarisi" total TW sebelumnya.
      */
-    public function test_realisasi_null_menghasilkan_tidak_dinilai_bukan_dianggap_nol_sungguhan(): void
+    public function test_metode_langsung_tw_belum_terisi_dibaca_nol_bukan_mewarisi_tw_sebelumnya(): void
     {
         $capaian = $this->buatCapaianRasio([
-            'alokasi_tw1' => 50, 'alokasi_tw2' => 50,
-            'realisasi_tw1' => 50, // TW II realisasi belum diisi (null).
+            'alokasi_tw2' => 50, 'realisasi_tw2' => 50,
+            // alokasi_tw1/realisasi_tw1 belum diisi (null).
         ], MasterIku::METODE_LANGSUNG);
 
-        // TW II: alokasi kumulatif 100 > 0, realisasi kumulatif tetap 50 (TW II belum
-        // menambah apa-apa, BUKAN realisasi_tw2 dianggap 0 lalu capaian TW II jadi "-").
+        $this->assertSame(0.0, $capaian->alokasiKumulatif(1));
+        $this->assertSame(0.0, $capaian->realisasiKumulatif(1));
+        $this->assertEqualsWithDelta(50.0, $capaian->alokasiKumulatif(2), 0.01);
         $this->assertEqualsWithDelta(50.0, $capaian->realisasiKumulatif(2), 0.01);
-        $this->assertEqualsWithDelta(50.0, $capaian->capaianTriwulanan(2), 0.01);
     }
 
     /**

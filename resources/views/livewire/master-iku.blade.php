@@ -139,7 +139,7 @@
                                         @if ($baris['data']['master_iku']['metode_capaian'] === 'rasio')
                                             {{ $baris['data']['capaian_tahunan']['x_target'] }} / {{ $baris['data']['capaian_tahunan']['y_target'] }}
                                         @else
-                                            {{ $baris['data']['capaian_tahunan']['target_tahunan'] }}
+                                            {{ $baris['data']['capaian_tahunan']['alokasi_tw4'] }}
                                         @endif
                                     </td>
                                 </tr>

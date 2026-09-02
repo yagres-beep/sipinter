@@ -104,11 +104,20 @@ class VerifikasiCapaian extends Component
      * directly"), disinkronkan ke CapaianTahunan lewat capaianTahunanTerkini()
      * sebelum ditampilkan/disimpan.
      *
-     * Target Tahunan (target_tahunan/x_target/y_target) TIDAK LAGI diedit dari sini
-     * — sekali per tahun per IKU, diisi terpusat di App\Livewire\TargetTahunan
-     * (tab "Target Tahunan", Data Master & Konfigurasi) supaya tidak perlu diketik
-     * ulang tiap sesi verifikasi bulanan. Di sini nilainya dibaca APA ADANYA dari
+     * Target Tahunan & Alokasi Target (target_tahunan/x_target/y_target lama,
+     * alokasi_tw1..4/x_alokasi_tw1..4/y_alokasi_tw1..4) TIDAK LAGI diedit dari sini
+     * — sekali per tahun per IKU, diisi terpusat di App\Livewire\TargetTahunan (tab
+     * "Target Tahunan", Data Master & Konfigurasi) supaya tidak perlu diketik ulang
+     * tiap sesi verifikasi bulanan, BERLAKU untuk KEDUA metode ('rasio' MAUPUN
+     * 'langsung' -- alokasi_tw1..4 dulu diedit di sini per-TW sebagai kontribusi,
+     * sekarang SUDAH kumulatif & dipindah seluruhnya ke Target Tahunan, PERSIS pola
+     * x_alokasi_tw1..4). Di sini nilainya dibaca APA ADANYA dari
      * capaianTahunanTersimpan() (lihat blade, ditampilkan readonly + tautan).
+     * realisasi_tw1..4 TETAP diedit di sini (satu-satunya yang benar-benar berubah
+     * tiap triwulan) -- TAPI sekarang diketik sebagai angka KUMULATIF s.d. TW
+     * berjalan (SAMA pola dengan Alokasi Target di atas), BUKAN lagi kontribusi
+     * triwulan itu sendiri yang dijumlahkan aplikasi -- lihat App\Models\
+     * CapaianTahunan::realisasiKumulatif().
      */
     public $alokasi_tw1 = null;
 

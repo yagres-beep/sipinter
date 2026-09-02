@@ -137,7 +137,7 @@ class KompilasiNotulaTest extends TestCase
         CapaianTahunan::create([
             'iku_id' => $ikuBernilai->id,
             'tahun' => 2026,
-            'target_tahunan' => 100,
+            'alokasi_tw4' => 100,
             'alokasi_tw1' => 25,
             'realisasi_tw1' => 25,
         ]);
@@ -177,14 +177,14 @@ class KompilasiNotulaTest extends TestCase
         CapaianTahunan::create([
             'iku_id' => $ikuA->id,
             'tahun' => 2026,
-            'target_tahunan' => 100,
+            'alokasi_tw4' => 100,
             'alokasi_tw1' => 25,
             'realisasi_tw1' => 25,
         ]);
         CapaianTahunan::create([
             'iku_id' => $ikuB->id,
             'tahun' => 2026,
-            'target_tahunan' => 100,
+            'alokasi_tw4' => 100,
             'alokasi_tw1' => 25,
             'realisasi_tw1' => 0,
         ]);

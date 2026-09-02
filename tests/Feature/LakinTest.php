@@ -42,9 +42,12 @@ class LakinTest extends TestCase
      */
     protected function buatCapaian(MasterIku $iku, int $tahun, int $triwulan, float $targetTahunan, float $realisasiTriwulanIni): CapaianTahunan
     {
+        // Target Tahunan SELALU = Alokasi Kumulatif TW IV (alokasi_tw4) sekarang --
+        // target_tahunan lama tidak dipakai lagi, lihat App\Models\CapaianTahunan::
+        // targetTahunan().
         return CapaianTahunan::updateOrCreate(
             ['iku_id' => $iku->id, 'tahun' => $tahun],
-            ['target_tahunan' => $targetTahunan, "realisasi_tw{$triwulan}" => $realisasiTriwulanIni]
+            ['alokasi_tw4' => $targetTahunan, "realisasi_tw{$triwulan}" => $realisasiTriwulanIni]
         );
     }
 

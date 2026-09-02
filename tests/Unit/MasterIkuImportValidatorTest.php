@@ -80,7 +80,13 @@ class MasterIkuImportValidatorTest extends TestCase
 
         $this->assertTrue($hasil['valid'], implode(' | ', $hasil['errors']));
         $this->assertSame('langsung', $hasil['data']['master_iku']['metode_capaian']);
-        $this->assertSame(4.35, $hasil['data']['capaian_tahunan']['target_tahunan']);
+        // target_tahunan TIDAK LAGI ditulis (kolom lama, tidak dipakai lagi) --
+        // alokasi_tw1..4 kini ditulis KUMULATIF dari kontribusi mentah kolom Alokasi
+        // Target TW I-IV (1.09, 1.08, 1.09, 1.09 -> kumulatif 1.09, 2.17, 3.26, 4.35),
+        // TW IV selalu = Target Tahunan (lihat CapaianTahunan::targetTahunan()).
+        $this->assertNull($hasil['data']['capaian_tahunan']['target_tahunan']);
+        $this->assertEqualsWithDelta(1.09, $hasil['data']['capaian_tahunan']['alokasi_tw1'], 0.01);
+        $this->assertEqualsWithDelta(4.35, $hasil['data']['capaian_tahunan']['alokasi_tw4'], 0.01);
     }
 
     // --- Aturan 1: wajib isi -------------------------------------------------
@@ -235,7 +241,16 @@ class MasterIkuImportValidatorTest extends TestCase
         $hasil = $this->validasi($this->baseRowNonPersen([10 => '2.17', 15 => '2.17', 16 => '', 17 => '', 18 => '']));
 
         $this->assertTrue($hasil['valid'], implode(' | ', $hasil['errors']));
-        $this->assertSame(0.0, $hasil['data']['capaian_tahunan']['alokasi_tw2']);
+
+        // Sel TW II-IV kosong -> kontribusi mentah dianggap 0 (bukan error), TAPI
+        // angka KUMULATIF-nya tetap 2.17 di keempat TW (carry forward dari TW I,
+        // bukan reset ke 0 -- sesuai App\Models\CapaianTahunan::alokasiKumulatif()
+        // yang membaca kumulatif apa adanya).
+        $ct = $hasil['data']['capaian_tahunan'];
+        $this->assertSame(2.17, $ct['alokasi_tw1']);
+        $this->assertSame(2.17, $ct['alokasi_tw2']);
+        $this->assertSame(2.17, $ct['alokasi_tw3']);
+        $this->assertSame(2.17, $ct['alokasi_tw4']);
     }
 
     // --- Baris kosong dilewati, bukan error ------------------------------------

@@ -282,15 +282,19 @@ class MasterIkuImportValidator
                 // $alokasi di atas, lihat docblock kelas) -- alokasiKumulatif() membacanya
                 // apa adanya, tidak menjumlah lagi. y_alokasi_tw{n} ditulis SAMA di
                 // keempat TW (Y konstan) -- lihat docblock kelas.
-                ...self::alokasiKumulatifDariKontribusi($alokasi),
+                ...self::alokasiKumulatifDariKontribusi($alokasi, 'x_alokasi_tw'),
                 'y_alokasi_tw1' => $penyebutY, 'y_alokasi_tw2' => $penyebutY,
                 'y_alokasi_tw3' => $penyebutY, 'y_alokasi_tw4' => $penyebutY,
             ] : [
-                'target_tahunan' => $targetTahunan,
+                'target_tahunan' => null,
                 'x_target' => null,
                 'y_target' => null,
-                'alokasi_tw1' => $alokasi[1], 'alokasi_tw2' => $alokasi[2],
-                'alokasi_tw3' => $alokasi[3], 'alokasi_tw4' => $alokasi[4],
+                // alokasi_tw{n} JUGA ditulis KUMULATIF, pola SAMA dengan x_alokasi_tw{n}
+                // di atas (kolom "Alokasi Target TW I-IV" spek import tetap kontribusi
+                // mentah per TW -- lebih ramah diisi manusia -- dikonversi jadi kumulatif
+                // di sini sebelum disimpan, lihat App\Models\CapaianTahunan::
+                // alokasiKumulatif()/targetTahunan()).
+                ...self::alokasiKumulatifDariKontribusi($alokasi, 'alokasi_tw'),
             ],
         ];
 
@@ -301,21 +305,23 @@ class MasterIkuImportValidator
      * Ubah kontribusi mentah TW I-IV (dari kolom "Alokasi Target TW I-IV" spek
      * import, $alokasi[1..4]) jadi angka KUMULATIF running-sum -- sesuai format yang
      * sekarang dibaca APA ADANYA oleh App\Models\CapaianTahunan::alokasiKumulatif()
-     * (lihat docblock kelas ini). Jumlah akhirnya (TW IV) SELALU sama dengan Target
-     * X (sudah divalidasi di atas), jadi transformasi ini tidak mengubah makna data,
-     * cuma bentuk penyimpanannya.
+     * (lihat docblock kelas ini) untuk KEDUA metode (MasterIku::metode_capaian),
+     * dibedakan lewat $prefix ('x_alokasi_tw' untuk 'rasio', 'alokasi_tw' untuk
+     * 'langsung'). Jumlah akhirnya (TW IV) SELALU sama dengan Target X/Target
+     * Tahunan (sudah divalidasi di atas), jadi transformasi ini tidak mengubah
+     * makna data, cuma bentuk penyimpanannya.
      *
      * @param  array<int, float>  $alokasi  1-based, TW I-IV
-     * @return array{x_alokasi_tw1: float, x_alokasi_tw2: float, x_alokasi_tw3: float, x_alokasi_tw4: float}
+     * @return array<string, float>
      */
-    private static function alokasiKumulatifDariKontribusi(array $alokasi): array
+    private static function alokasiKumulatifDariKontribusi(array $alokasi, string $prefix): array
     {
         $berjalan = 0.0;
         $kumulatif = [];
 
         foreach ([1, 2, 3, 4] as $tw) {
             $berjalan += $alokasi[$tw];
-            $kumulatif["x_alokasi_tw{$tw}"] = round($berjalan, 2);
+            $kumulatif["{$prefix}{$tw}"] = round($berjalan, 2);
         }
 
         return $kumulatif;

@@ -1,5 +1,5 @@
 <div>
-    <div class="info teal">🎯 Target Tahunan tiap IKU diisi <strong>sekali per tahun di sini</strong> — dipakai otomatis di halaman Verifikasi setiap bulan untuk IKU tsb (tidak perlu diketik ulang tiap sesi verifikasi bulanan). Untuk Jenis Nilai %, Alokasi X diisi PER TRIWULAN sebagai angka <strong>KUMULATIF TW I s.d. TW tsb</strong> (persis seperti Kertas Kerja Excel — mis. 1, 1, 2, 3, BUKAN kontribusi tiap TW), sedangkan Alokasi Y diisi lewat daftar Rincian Item (N) — jumlah item = Alokasi Y, dipilih lagi per item saat Verifikasi Capaian tiap triwulan untuk menentukan Realisasi X (Realisasi Y otomatis mengikuti Alokasi Y). Target Tahunan Jenis Nilai % otomatis = Alokasi TW IV, tidak diketik terpisah. Jenis Nilai Non % tetap mengisi Alokasi &amp; Realisasi dari halaman Verifikasi masing-masing bulan seperti biasa.</div>
+    <div class="info teal">🎯 Target Tahunan tiap IKU diisi <strong>sekali per tahun di sini</strong> — dipakai otomatis di halaman Verifikasi setiap bulan untuk IKU tsb (tidak perlu diketik ulang tiap sesi verifikasi bulanan). Alokasi Target diisi PER TRIWULAN sebagai angka <strong>KUMULATIF TW I s.d. TW tsb</strong> (persis seperti Kertas Kerja Excel — mis. 1, 1, 2, 3, BUKAN kontribusi tiap TW), untuk KEDUA Jenis Nilai. Khusus Jenis Nilai %: Alokasi X diisi begitu (kumulatif), sedangkan Alokasi Y diisi lewat daftar Rincian Item (N) — jumlah item = Alokasi Y, dipilih lagi per item saat Verifikasi Capaian tiap triwulan untuk menentukan Realisasi X (Realisasi Y otomatis mengikuti Alokasi Y). Target Tahunan (KEDUA Jenis Nilai) otomatis = Alokasi TW IV, tidak diketik terpisah. Realisasi (kedua Jenis Nilai) tetap diisi dari halaman Verifikasi masing-masing bulan — untuk Non % juga diketik langsung sebagai angka kumulatif, sama polanya dengan Alokasi di sini.</div>
     <div class="fhint" style="margin-bottom:14px">ℹ️ Batas/plafon yang dipakai membandingkan Target Tahunan ini terhadap Realisasi (saat ini 120%) diatur terpisah di tab <a wire:navigate href="{{ route('master-iku.index') }}#rumus">🧮 Rumus Capaian</a>.</div>
 
     @if (session('status'))
@@ -26,8 +26,8 @@
                         <th>Indikator</th>
                         <th>Jenis Nilai</th>
                         <th>Target Tahunan</th>
-                        <th colspan="4" style="text-align:center">Alokasi X Kumulatif per Triwulan <span class="muted" style="font-weight:400">— khusus Jenis Nilai %, isi angka kumulatif TW I s.d. TW tsb</span></th>
-                        <th style="text-align:center">Alokasi Y <span class="muted" style="font-weight:400">(total, sama semua TW)</span></th>
+                        <th colspan="4" style="text-align:center">Alokasi Target Kumulatif per Triwulan <span class="muted" style="font-weight:400">— isi angka kumulatif TW I s.d. TW tsb (X untuk Jenis Nilai %, nilai langsung untuk Non %)</span></th>
+                        <th style="text-align:center">Alokasi Y <span class="muted" style="font-weight:400">(khusus Jenis Nilai %, total sama semua TW)</span></th>
                     </tr>
                     <tr>
                         <th></th>
@@ -60,13 +60,10 @@
                                         = <strong>{{ filled($yTw4) && $yTw4 > 0 ? round(($xTw4 ?? 0) / $yTw4 * 100, 2) : '—' }}%</strong>
                                     </div>
                                 @else
-                                    <div style="display:flex;gap:8px;align-items:center">
-                                        <input type="number" step="0.01" class="inp filled" style="width:140px" wire:model="nilai.{{ $iku->id }}.target_tahunan">
-                                        <span class="muted">{{ $iku->satuan }}</span>
+                                    @php $twEmpat = $nilai[$iku->id]['alokasi_tw4'] ?? null; @endphp
+                                    <div class="muted" style="font-size:11.5px" title="Otomatis = Alokasi Target TW IV, tidak diketik terpisah">
+                                        <strong>{{ $twEmpat ?? '—' }}</strong> {{ $iku->satuan }}
                                     </div>
-                                    @error("nilai.{$iku->id}.target_tahunan")
-                                        <div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>
-                                    @enderror
                                 @endif
                             </td>
                             @if ($pakaiRasio)
@@ -94,7 +91,15 @@
                                     @enderror
                                 </td>
                             @else
-                                <td colspan="5" class="muted" style="text-align:center;font-size:11.5px">diisi dari Verifikasi Capaian</td>
+                                @for ($tw = 1; $tw <= 4; $tw++)
+                                    <td style="text-align:center">
+                                        <input type="number" step="0.01" class="inp filled" style="width:72px;text-align:center" title="Kumulatif TW I s.d. TW {{ $tw }}" wire:model="nilai.{{ $iku->id }}.alokasi_tw{{ $tw }}">
+                                        @error("nilai.{$iku->id}.alokasi_tw{$tw}")
+                                            <div style="color:var(--red);font-size:10.5px">{{ $message }}</div>
+                                        @enderror
+                                    </td>
+                                @endfor
+                                <td class="muted" style="text-align:center;font-size:11.5px">— (tidak berlaku, Non %)</td>
                             @endif
                         </tr>
                     @endforeach

@@ -33,6 +33,12 @@ class TargetTahunanTest extends TestCase
         return $user;
     }
 
+    /**
+     * IKU Non % (metode langsung) kini JUGA diisi sebagai angka Alokasi KUMULATIF
+     * per TW (SAMA pola dengan IKU %) -- Target Tahunan tidak lagi diketik terpisah,
+     * SELALU diturunkan dari Alokasi Kumulatif TW IV (lihat CapaianTahunan::
+     * targetTahunan()), persis seperti IKU rasio.
+     */
     public function test_simpan_target_tahunan_langsung_untuk_iku_non_persen(): void
     {
         $this->loginSebagaiTimSakip();
@@ -40,12 +46,18 @@ class TargetTahunanTest extends TestCase
 
         Livewire::test(TargetTahunan::class)
             ->set('tahun', 2026)
-            ->set("nilai.{$iku->id}.target_tahunan", 75)
+            ->set("nilai.{$iku->id}.alokasi_tw1", 25)
+            ->set("nilai.{$iku->id}.alokasi_tw2", 60)
+            ->set("nilai.{$iku->id}.alokasi_tw3", 70)
+            ->set("nilai.{$iku->id}.alokasi_tw4", 75)
             ->call('simpan')
             ->assertHasNoErrors();
 
         $ct = CapaianTahunan::where('iku_id', $iku->id)->where('tahun', 2026)->first();
-        $this->assertEquals(75, $ct->target_tahunan);
+        $this->assertEquals(25, $ct->alokasi_tw1);
+        $this->assertEquals(75, $ct->alokasi_tw4);
+        $this->assertEqualsWithDelta(75.0, $ct->targetTahunan(), 0.01);
+        $this->assertNull($ct->target_tahunan);
     }
 
     /**
@@ -226,14 +238,14 @@ class TargetTahunanTest extends TestCase
         $this->loginSebagaiTimSakip();
         $iku = MasterIku::create(['kode' => 'UJI-103', 'indikator' => 'IKU Uji', 'tim' => 'Uji', 'penanggung_jawab' => 'A']);
 
-        CapaianTahunan::create(['iku_id' => $iku->id, 'tahun' => 2025, 'target_tahunan' => 60]);
-        CapaianTahunan::create(['iku_id' => $iku->id, 'tahun' => 2026, 'target_tahunan' => 90]);
+        CapaianTahunan::create(['iku_id' => $iku->id, 'tahun' => 2025, 'alokasi_tw4' => 60]);
+        CapaianTahunan::create(['iku_id' => $iku->id, 'tahun' => 2026, 'alokasi_tw4' => 90]);
 
         $component = Livewire::test(TargetTahunan::class)->set('tahun', 2026);
-        $this->assertEquals(90, $component->get('nilai')[$iku->id]['target_tahunan']);
+        $this->assertEquals(90, $component->get('nilai')[$iku->id]['alokasi_tw4']);
 
         $component->set('tahun', 2025);
-        $this->assertEquals(60, $component->get('nilai')[$iku->id]['target_tahunan']);
+        $this->assertEquals(60, $component->get('nilai')[$iku->id]['alokasi_tw4']);
     }
 
     public function test_route_master_iku_ditolak_untuk_peran_selain_tim_sakip(): void
