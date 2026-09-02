@@ -46,9 +46,10 @@
 </style>
 </head>
 <body>
-  <h1>NOTULA MONITORING KINERJA</h1>
-  <div class="sub">Triwulan {{ $labelTriwulan }} {{ $tahun }} — BPS Kabupaten Buton Utara</div>
-
+  {{-- TANPA judul sampul tambahan di sini -- $bagian1Html SUDAH memuat judul
+       resminya sendiri ("NOTULA RAPAT" dst.) persis seperti berkas .docx template
+       yang diunggah Tim SAKIP, jadi menambahkan judul lain di sini cuma bikin PDF
+       berbeda dari template aslinya. --}}
   {{-- Bagian II/III SUDAH tersisip di posisi penanda {{bagian_2}}/{{bagian_3}} di
        dalam $bagian1Html, judulnya pun sudah ikut terbawa dari berkas .docx yang
        diunggah Tim SAKIP -- lihat NotulaService::sisipkanBagianDuaTiga(). --}}
