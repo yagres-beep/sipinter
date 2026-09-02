@@ -8,12 +8,15 @@ use App\Models\Notula;
 use App\Models\PengaturanCapaian;
 use App\Models\Periode;
 use App\Models\RincianN;
+use App\Services\GoogleDriveService;
 use App\Support\RumusMarkup;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpWord\TemplateProcessor;
 use ReflectionProperty;
 use RuntimeException;
+use Throwable;
 
 /**
  * Isi template Bagian I bervariabel {{...}} (template_notula/SIPINTER_Template_Bagian_I_Mesin.docx)
@@ -83,8 +86,16 @@ class NotulaBagian1DocxService
     /**
      * Berkas Template Notula yang sedang diunggah (Pengaturan > Template Notula) diutamakan
      * bila ada dan masih tersimpan di disk -- jatuh ke berkas bawaan proyek kalau belum
-     * pernah diunggah sama sekali (instalasi baru) atau berkasnya hilang dari disk (mis. di
-     * hosting tanpa storage persisten, lihat catatan fidelitas serupa di BerkasDownloadController).
+     * pernah diunggah sama sekali (instalasi baru).
+     *
+     * Salinan lokal (storage/app/private) TIDAK persisten di Render free plan -- terhapus
+     * tiap kali container di-deploy ulang, walau unggahan ke Drive sudah sukses sebelumnya
+     * (lihat TemplateNotula::unggah()). Sebelum diam-diam jatuh ke template BAWAAN (yang
+     * BEDA dari template resmi yang diunggah Tim SAKIP -- notula hasilnya akan meleset dari
+     * template tanpa peringatan apa pun), coba dulu ambil ulang dari Drive lewat
+     * drive_file_id, sama seperti pola BerkasDownloadController::show(). Hasilnya disimpan
+     * balik ke disk lokal supaya panggilan generate() berikutnya dalam deploy yang sama
+     * tidak perlu memanggil Drive API lagi setiap kali.
      */
     private function resolveTemplatePath(): string
     {
@@ -92,6 +103,17 @@ class NotulaBagian1DocxService
 
         if ($config->template_notula_path && Storage::disk('local')->exists($config->template_notula_path)) {
             return Storage::disk('local')->path($config->template_notula_path);
+        }
+
+        if ($config->template_notula_path && $config->template_notula_drive_file_id) {
+            try {
+                $konten = app(GoogleDriveService::class)->downloadFileContent($config->template_notula_drive_file_id);
+                Storage::disk('local')->put($config->template_notula_path, $konten);
+
+                return Storage::disk('local')->path($config->template_notula_path);
+            } catch (Throwable $e) {
+                Log::warning("Gagal mengambil template notula dari Drive, jatuh ke template bawaan: {$e->getMessage()}");
+            }
         }
 
         $bawaan = base_path(self::DEFAULT_TEMPLATE_PATH);
