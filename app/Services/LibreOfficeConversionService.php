@@ -173,6 +173,7 @@ class LibreOfficeConversionService
         if ($dom->documentElement) {
             $this->buangAtributBerbahaya($dom->documentElement);
             $this->pindahkanAlignKeStyle($dom->documentElement);
+            $this->gabungkanTbodyBersebelahan($dom);
         }
 
         // LibreOffice menaruh definisi kelas paragraf/tabel (P1, T1, dst.) di
@@ -242,6 +243,43 @@ class LibreOfficeConversionService
 
         foreach (iterator_to_array($node->childNodes) as $anak) {
             $this->pindahkanAlignKeStyle($anak);
+        }
+    }
+
+    /**
+     * LibreOffice kadang mengekspor SATU tabel visual (baris-barisnya menyambung
+     * tanpa jeda, border rapat) sebagai BANYAK <tbody> terpisah -- satu per baris
+     * atau per kelompok baris, artefak dari struktur <w:tbl>/<w:trPr> asli di
+     * .docx sumber. Spesifikasi HTML5 sebenarnya membolehkan rowspan menembus
+     * batas <tbody>, tapi mesin tata-letak tabel Chrome/Blink (dipakai pratinjau
+     * WYSIWYG Kompilasi Notula) TIDAK konsisten menanganinya -- sel rowspan/colspan
+     * di baris header (mis. "Triwulan III" menaungi Target/Realisasi/Capaian) jadi
+     * salah tempat begitu barisnya ada di <tbody> lain, walau dompdf (jalur PDF)
+     * tetap merender benar. Gabungkan semua <tbody> yang bersebelahan langsung di
+     * bawah <table> yang sama jadi SATU supaya kedua jalur (pratinjau layar & PDF)
+     * selalu tampil identik, persis tata letak template aslinya.
+     */
+    private function gabungkanTbodyBersebelahan(DOMDocument $dom): void
+    {
+        foreach ($dom->getElementsByTagName('table') as $table) {
+            $tbodies = [];
+            foreach (iterator_to_array($table->childNodes) as $anak) {
+                if ($anak instanceof DOMElement && strtolower($anak->tagName) === 'tbody') {
+                    $tbodies[] = $anak;
+                }
+            }
+
+            if (count($tbodies) < 2) {
+                continue;
+            }
+
+            $pertama = $tbodies[0];
+            for ($i = 1; $i < count($tbodies); $i++) {
+                foreach (iterator_to_array($tbodies[$i]->childNodes) as $baris) {
+                    $pertama->appendChild($baris);
+                }
+                $tbodies[$i]->parentNode?->removeChild($tbodies[$i]);
+            }
         }
     }
 
