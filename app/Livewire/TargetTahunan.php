@@ -21,13 +21,22 @@ use Livewire\Component;
  * Alokasi Target Pembilang(X)/Penyebut(Y) per triwulan (IKU 'rasio') JUGA diisi
  * SEKALI di sini bareng Target Tahunan -- sesuai Kertas Kerja resmi, alokasi X/Y
  * per triwulan sudah ditetapkan di awal tahun, bukan diketik ulang tiap sesi
- * verifikasi bulanan. Realisasi X TETAP diisi dari VerifikasiCapaian (per bulan,
- * per IKU, itu satu-satunya angka yang benar-benar berubah tiap triwulan) --
- * Realisasi Y otomatis DISALIN dari Alokasi Y di sini setiap kali disimpan (lihat
- * simpan()), karena Y ("jumlah keseluruhan") bukan sesuatu yang dicapai bertahap,
- * nilainya sudah pasti sejak awal tahun sama seperti alokasinya. IKU 'langsung'
- * (Non %) TIDAK terpengaruh -- Alokasi/Realisasi-nya tetap diisi dari
- * VerifikasiCapaian seperti sebelumnya.
+ * verifikasi bulanan. Alokasi X diisi Tim SAKIP langsung sebagai angka KUMULATIF TW
+ * I s.d. TW tsb (PERSIS seperti kolom M-P sheet "LK_Kabkot" resmi, mis. 1, 1, 2, 3
+ * -- BUKAN kontribusi tiap TW yang dijumlahkan aplikasi, lihat
+ * App\Models\CapaianTahunan::alokasiKumulatif()). Realisasi X TETAP diisi dari
+ * VerifikasiCapaian (per bulan, per IKU, itu satu-satunya angka yang benar-benar
+ * berubah tiap triwulan, TETAP nilai TRIWULAN ITU SENDIRI yang dijumlahkan otomatis
+ * -- lihat App\Models\CapaianTahunan::realisasiKumulatif(), TIDAK berubah oleh RF
+ * ini) -- Realisasi Y otomatis DISALIN dari Alokasi Y di sini setiap kali disimpan
+ * (lihat simpan()), karena Y ("jumlah keseluruhan") bukan sesuatu yang dicapai
+ * bertahap, nilainya sudah pasti sejak awal tahun sama seperti alokasinya. Target
+ * Tahunan IKU 'rasio' TIDAK LAGI diketik terpisah (x_target/y_target lama, kolom
+ * dibiarkan di DB tapi tidak dipakai lagi) -- SELALU sama dengan Alokasi Kumulatif
+ * TW IV, ditampilkan otomatis (lihat blade) supaya tidak ada 2 tempat isian yang
+ * bisa tidak sinkron. IKU 'langsung' (Non %) TIDAK terpengaruh -- Alokasi/Realisasi
+ * & Target Tahunan-nya tetap diisi dari VerifikasiCapaian/kolom target_tahunan
+ * seperti sebelumnya.
  */
 class TargetTahunan extends Component
 {
@@ -38,8 +47,12 @@ class TargetTahunan extends Component
      * dkk. di App\Livewire\VerifikasiCapaian (Livewire tidak mendukung wire:model
      * langsung ke atribut model).
      *
+     * x_target/y_target (Target Tahunan IKU 'rasio' lama, diketik terpisah) SENGAJA
+     * TIDAK ADA di sini lagi -- lihat App\Models\CapaianTahunan::targetTahunan(),
+     * sekarang selalu diturunkan dari x_alokasi_tw4/y_alokasi_tw4 di bawah.
+     *
      * @var array<int, array{
-     *     target_tahunan: ?float, x_target: ?float, y_target: ?float,
+     *     target_tahunan: ?float,
      *     x_alokasi_tw1: ?float, x_alokasi_tw2: ?float, x_alokasi_tw3: ?float, x_alokasi_tw4: ?float,
      *     y_alokasi_tw1: ?float, y_alokasi_tw2: ?float, y_alokasi_tw3: ?float, y_alokasi_tw4: ?float,
      * }>
@@ -87,8 +100,6 @@ class TargetTahunan extends Component
 
             $dasar = [
                 'target_tahunan' => $ct?->target_tahunan,
-                'x_target' => $ct?->x_target,
-                'y_target' => $ct?->y_target,
             ];
 
             foreach (self::KOLOM_ALOKASI_TW as $kolom) {
@@ -127,8 +138,6 @@ class TargetTahunan extends Component
 
         foreach (array_keys($this->nilai) as $ikuId) {
             $rules["nilai.{$ikuId}.target_tahunan"] = ['nullable', 'numeric', 'min:0'];
-            $rules["nilai.{$ikuId}.x_target"] = ['nullable', 'numeric', 'min:0'];
-            $rules["nilai.{$ikuId}.y_target"] = ['nullable', 'numeric', 'min:0'];
 
             foreach (self::KOLOM_ALOKASI_TW as $kolom) {
                 $rules["nilai.{$ikuId}.{$kolom}"] = ['nullable', 'numeric', 'min:0'];
@@ -210,15 +219,20 @@ class TargetTahunan extends Component
                 $iku = $daftarIkuPerId->get($ikuId);
                 $ct = CapaianTahunan::firstOrNew(['iku_id' => $ikuId, 'tahun' => $this->tahun]);
 
+                // X diisi Tim SAKIP langsung sebagai angka KUMULATIF TW I s.d. TW tsb
+                // (lihat CapaianTahunan::alokasiKumulatif(), dibaca APA ADANYA, TIDAK
+                // dijumlahkan lagi di sini) -- beda dari Y di bawah yang tetap sengaja
+                // memakai DUA pola berbeda (Alokasi Y vs Realisasi Y) supaya
+                // realisasiKumulatif() (yang TETAP menjumlahkan X/Y realisasi lintas TW,
+                // tidak berubah oleh RF ini) tetap benar.
                 $xAlokasi = collect(['x_alokasi_tw1', 'x_alokasi_tw2', 'x_alokasi_tw3', 'x_alokasi_tw4'])
                     ->mapWithKeys(fn ($kolom) => [$kolom => $data[$kolom] ?? null]);
 
                 // Alokasi Y HANYA diminta SEKALI di blade (satu input "Total", bukan
                 // 4 kotak identik per TW -- Y tidak bertambah tiap triwulan) --
-                // diratakan jadi TW I di sini & TW II-IV otomatis 0, supaya struktur
-                // 4-kolom-per-TW yang dipakai alokasiKumulatif()/realisasiKumulatif()
-                // (raw per-TW DIJUMLAHKAN, lihat CapaianTahunan) tetap menghasilkan
-                // kumulatif Y yang konstan sepanjang tahun.
+                // diulang SAMA di keempat TW di sini, supaya alokasiKumulatif() (yang
+                // membaca y_alokasi_tw{$tw} APA ADANYA per TW, tanpa menjumlah) tetap
+                // menghasilkan kumulatif Y yang konstan sepanjang tahun.
                 //
                 // Untuk IKU bermetode Rasio (MasterIku::pakaiRasio()), Alokasi Y BUKAN
                 // input manual -- diganti COUNT baris Rincian N milik IKU+tahun ini
@@ -233,15 +247,14 @@ class TargetTahunan extends Component
 
                 $yAlokasi = collect([
                     'y_alokasi_tw1' => $yTotal,
-                    'y_alokasi_tw2' => $yTotal !== null ? 0.0 : null,
-                    'y_alokasi_tw3' => $yTotal !== null ? 0.0 : null,
-                    'y_alokasi_tw4' => $yTotal !== null ? 0.0 : null,
+                    'y_alokasi_tw2' => $yTotal,
+                    'y_alokasi_tw3' => $yTotal,
+                    'y_alokasi_tw4' => $yTotal,
                 ]);
 
                 $alokasiTw = $xAlokasi->merge($yAlokasi);
 
-                $adaIsi = $data['target_tahunan'] !== null || $data['x_target'] !== null || $data['y_target'] !== null
-                    || $alokasiTw->contains(fn ($v) => $v !== null);
+                $adaIsi = $data['target_tahunan'] !== null || $alokasiTw->contains(fn ($v) => $v !== null);
 
                 if (! $ct->exists && ! $adaIsi) {
                     continue;
@@ -249,18 +262,20 @@ class TargetTahunan extends Component
 
                 $ct->fill([
                     'target_tahunan' => $data['target_tahunan'],
-                    'x_target' => $data['x_target'],
-                    'y_target' => $data['y_target'],
                     ...$alokasiTw->all(),
-                    // Realisasi Y SELALU disalin dari Alokasi Y (bukan isian terpisah) --
-                    // lihat docblock kelas: Y ("jumlah keseluruhan") sudah pasti sejak
-                    // awal tahun, sama seperti alokasinya, jadi CapaianTahunan::
-                    // realisasiKumulatif() tetap menghitung Y yang benar tanpa Tim SAKIP
-                    // perlu mengisi Realisasi Y berulang tiap triwulan di Verifikasi Capaian.
-                    'y_realisasi_tw1' => $yAlokasi['y_alokasi_tw1'],
-                    'y_realisasi_tw2' => $yAlokasi['y_alokasi_tw2'],
-                    'y_realisasi_tw3' => $yAlokasi['y_alokasi_tw3'],
-                    'y_realisasi_tw4' => $yAlokasi['y_alokasi_tw4'],
+                    // Realisasi Y SELALU disalin dari (total) Alokasi Y (bukan isian
+                    // terpisah) -- lihat docblock kelas: Y ("jumlah keseluruhan") sudah
+                    // pasti sejak awal tahun, sama seperti alokasinya -- diulang SAMA di
+                    // keempat TW, PERSIS pola Alokasi Y di atas (BUKAN nol di TW II-IV
+                    // lagi): realisasiKumulatif() membaca y_realisasi_tw{$tw} LANGSUNG per
+                    // TW untuk 'rasio' (TIDAK menjumlahkannya, beda dari x_realisasi_tw
+                    // yang tetap dijumlah -- lihat docblock CapaianTahunan::
+                    // realisasiKumulatif()), jadi nol di TW II-IV akan salah dibaca
+                    // sebagai Y=0 pada TW itu alih-alih Y konstan.
+                    'y_realisasi_tw1' => $yTotal,
+                    'y_realisasi_tw2' => $yTotal,
+                    'y_realisasi_tw3' => $yTotal,
+                    'y_realisasi_tw4' => $yTotal,
                 ])->save();
             }
         });

@@ -17,14 +17,18 @@ use Illuminate\Support\Collection;
  * apa pun sendiri); App\Livewire\MasterIku memanggil alur itu untuk PRATINJAU
  * sebelum benar-benar commit ke DB (lihat pratinjauExcel()/konfirmasiImpor()).
  *
- * Catatan desain penting (Tipe A "%"): spek section 0 mendefinisikan Y (penyebut)
- * sebagai KONSTAN untuk satu tahun (diisi sekali), sedangkan skema CapaianTahunan
- * yang SUDAH ADA & sudah dites (lihat CapaianTahunanTest) menyimpan y_alokasi_tw1..4
- * PER TRIWULAN lalu MENJUMLAHKANNYA (rasioKumulatif()). Supaya kumulatif tetap benar
- * (X kumulatif ÷ Y konstan) TANPA mengubah rumus CapaianTahunan yang sudah dites,
- * validator ini menaruh SELURUH nilai Y konstan di y_alokasi_tw1 (TW I) dan 0 di
- * TW II-IV — sehingga sum(y_alokasi_tw1..N) = Y konstan untuk N triwulan mana pun,
- * persis meniru "Y konstan" spek lewat mekanisme kumulatif yang sudah ada.
+ * Catatan desain penting (Tipe A "%"): kolom "Alokasi Target TW I-IV" pada spek
+ * import ini adalah KONTRIBUSI MENTAH tiap triwulan (dijumlahkan wajib = Target X,
+ * lihat aturan bersyarat di bawah) — beda dari App\Models\CapaianTahunan::
+ * alokasiKumulatif() yang SEKARANG membaca x_alokasi_tw{n}/y_alokasi_tw{n} sebagai
+ * angka KUMULATIF langsung (TIDAK dijumlahkan lagi, lihat docblock kelas itu).
+ * Validator ini yang menjumlahkan running-sum-nya SEKALI SAAT IMPOR (lihat
+ * hitungKumulatifBerjalan() di bawah) sebelum ditulis ke x_alokasi_tw1..4, supaya
+ * hasilnya tetap sama seperti sebelumnya tanpa mengubah rumus CapaianTahunan.
+ * Y (penyebut) spek section 0 KONSTAN untuk satu tahun (diisi sekali) — ditaruh
+ * SAMA di y_alokasi_tw1..4 (bukan lagi Y konstan di TW I & 0 di TW II-IV), PERSIS
+ * meniru "Y konstan" spek lewat pembacaan langsung (tanpa jumlah) yang sekarang
+ * dipakai alokasiKumulatif().
  */
 class MasterIkuImportValidator
 {
@@ -274,13 +278,13 @@ class MasterIkuImportValidator
                 'target_tahunan' => null,
                 'x_target' => $targetX,
                 'y_target' => $penyebutY,
-                // Lihat docblock kelas: Y konstan (spek) ditaruh seluruhnya di TW I
-                // supaya kumulatif Y (mekanisme CapaianTahunan yang sudah ada) sama
-                // dengan Y konstan pada triwulan mana pun.
-                'x_alokasi_tw1' => $alokasi[1], 'x_alokasi_tw2' => $alokasi[2],
-                'x_alokasi_tw3' => $alokasi[3], 'x_alokasi_tw4' => $alokasi[4],
-                'y_alokasi_tw1' => $penyebutY, 'y_alokasi_tw2' => 0.0,
-                'y_alokasi_tw3' => 0.0, 'y_alokasi_tw4' => 0.0,
+                // x_alokasi_tw{n} ditulis KUMULATIF (running sum dari kontribusi mentah
+                // $alokasi di atas, lihat docblock kelas) -- alokasiKumulatif() membacanya
+                // apa adanya, tidak menjumlah lagi. y_alokasi_tw{n} ditulis SAMA di
+                // keempat TW (Y konstan) -- lihat docblock kelas.
+                ...self::alokasiKumulatifDariKontribusi($alokasi),
+                'y_alokasi_tw1' => $penyebutY, 'y_alokasi_tw2' => $penyebutY,
+                'y_alokasi_tw3' => $penyebutY, 'y_alokasi_tw4' => $penyebutY,
             ] : [
                 'target_tahunan' => $targetTahunan,
                 'x_target' => null,
@@ -291,5 +295,29 @@ class MasterIkuImportValidator
         ];
 
         return [$data, []];
+    }
+
+    /**
+     * Ubah kontribusi mentah TW I-IV (dari kolom "Alokasi Target TW I-IV" spek
+     * import, $alokasi[1..4]) jadi angka KUMULATIF running-sum -- sesuai format yang
+     * sekarang dibaca APA ADANYA oleh App\Models\CapaianTahunan::alokasiKumulatif()
+     * (lihat docblock kelas ini). Jumlah akhirnya (TW IV) SELALU sama dengan Target
+     * X (sudah divalidasi di atas), jadi transformasi ini tidak mengubah makna data,
+     * cuma bentuk penyimpanannya.
+     *
+     * @param  array<int, float>  $alokasi  1-based, TW I-IV
+     * @return array{x_alokasi_tw1: float, x_alokasi_tw2: float, x_alokasi_tw3: float, x_alokasi_tw4: float}
+     */
+    private static function alokasiKumulatifDariKontribusi(array $alokasi): array
+    {
+        $berjalan = 0.0;
+        $kumulatif = [];
+
+        foreach ([1, 2, 3, 4] as $tw) {
+            $berjalan += $alokasi[$tw];
+            $kumulatif["x_alokasi_tw{$tw}"] = round($berjalan, 2);
+        }
+
+        return $kumulatif;
     }
 }

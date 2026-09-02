@@ -171,8 +171,10 @@ class MasterIkuTest extends TestCase
         $this->assertEqualsWithDelta(8.0, $ct->x_target, 0.01);
         $this->assertEqualsWithDelta(90.0, $ct->y_target, 0.01);
         $this->assertEqualsWithDelta(90.0, $ct->y_alokasi_tw1, 0.01);
-        $this->assertEqualsWithDelta(0.0, $ct->y_alokasi_tw2, 0.01);
-        // Target Tahunan tampil (8/90*100=8,89%) -> capaianTahunan::targetTahunan().
+        $this->assertEqualsWithDelta(90.0, $ct->y_alokasi_tw2, 0.01);
+        $this->assertEqualsWithDelta(8.0, $ct->x_alokasi_tw4, 0.01);
+        // Target Tahunan tampil (8/90*100=8,89%, dari Alokasi Kumulatif TW IV) ->
+        // capaianTahunan::targetTahunan() -- x_target/y_target lama TIDAK dipakai lagi.
         $this->assertEqualsWithDelta(8.89, $ct->targetTahunan(), 0.01);
     }
 

@@ -249,16 +249,34 @@ class MasterIkuImportValidatorTest extends TestCase
         $this->assertSame([], $hasil);
     }
 
-    // --- Mapping Y konstan ke y_alokasi_tw1 (lihat docblock validator) --------
+    // --- Mapping Y konstan & X kumulatif (lihat docblock validator) -----------
 
-    public function test_y_konstan_ditaruh_di_tw_satu_untuk_tipe_persen(): void
+    public function test_y_konstan_ditaruh_sama_di_keempat_tw_untuk_tipe_persen(): void
     {
         $hasil = $this->validasi($this->baseRowPersen());
 
         $ct = $hasil['data']['capaian_tahunan'];
         $this->assertSame(90.0, $ct['y_alokasi_tw1']);
-        $this->assertSame(0.0, $ct['y_alokasi_tw2']);
-        $this->assertSame(0.0, $ct['y_alokasi_tw3']);
-        $this->assertSame(0.0, $ct['y_alokasi_tw4']);
+        $this->assertSame(90.0, $ct['y_alokasi_tw2']);
+        $this->assertSame(90.0, $ct['y_alokasi_tw3']);
+        $this->assertSame(90.0, $ct['y_alokasi_tw4']);
+    }
+
+    /**
+     * Kolom "Alokasi Target TW I-IV" pada file Excel tetap KONTRIBUSI mentah tiap
+     * TW (baseRowPersen: [2,2,2,2], jumlah = Target X = 8, sesuai aturan bersyarat
+     * di atas) -- tapi ditulis ke x_alokasi_tw1..4 sebagai KUMULATIF running-sum
+     * (2, 4, 6, 8), sesuai App\Models\CapaianTahunan::alokasiKumulatif() yang
+     * sekarang membacanya langsung tanpa menjumlah lagi.
+     */
+    public function test_alokasi_x_ditulis_kumulatif_running_sum_untuk_tipe_persen(): void
+    {
+        $hasil = $this->validasi($this->baseRowPersen());
+
+        $ct = $hasil['data']['capaian_tahunan'];
+        $this->assertSame(2.0, $ct['x_alokasi_tw1']);
+        $this->assertSame(4.0, $ct['x_alokasi_tw2']);
+        $this->assertSame(6.0, $ct['x_alokasi_tw3']);
+        $this->assertSame(8.0, $ct['x_alokasi_tw4']);
     }
 }

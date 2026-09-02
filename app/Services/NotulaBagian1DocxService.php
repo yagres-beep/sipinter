@@ -358,8 +358,9 @@ class NotulaBagian1DocxService
      * TW berjalan, lihat CapaianTahunan::realisasiKumulatif() -- TIDAK disentuh):
      * - n = nilai MENTAH triwulan berjalan SAJA (rekap['x_realisasi_tw'], apa adanya
      *   yang diketik Tim SAKIP di Verifikasi Capaian, BUKAN kumulatif).
-     * - N = Target Tahunan Y (rekap['y_target'], konstan sepanjang tahun -- BUKAN
-     *   dijumlahkan per triwulan seperti alokasi/realisasi).
+     * - N = Alokasi Y TW IV (rekap['y_target'], sumber App\Models\CapaianTahunan::
+     *   y_alokasi_tw4 -- konstan sepanjang tahun, dibaca langsung TANPA dijumlah,
+     *   sama seperti App\Models\CapaianTahunan::targetTahunan()).
      *
      * Null (bukan dirakit) bila datanya belum lengkap (satuan bukan Persen, atau
      * Deskripsi X/Y / target Y / realisasi triwulan berjalan belum diisi) -- supaya

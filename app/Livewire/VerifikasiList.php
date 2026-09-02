@@ -250,20 +250,57 @@ class VerifikasiList extends Component
         );
     }
 
+    /**
+     * Poin RTL BARU yang ditetapkan Ketua Tim untuk triwulan BERIKUTNYA — sama
+     * polanya dengan DasborUtama::rtlBerikutnyaPerCapaian(), lihat komentar di sana
+     * untuk alasan dicocokkan lewat (iku_id, tahun, triwulan) SASARAN (bukan
+     * periode_id Capaian ini).
+     *
+     * @param  \Illuminate\Support\Collection<int, Capaian>  $daftarCapaian
+     * @return \Illuminate\Support\Collection<int, \Illuminate\Support\Collection<int, RtlEvaluasi>>
+     */
+    protected function rtlBerikutnyaPerCapaian($daftarCapaian)
+    {
+        if ($daftarCapaian->isEmpty()) {
+            return collect();
+        }
+
+        $kunciPasangan = fn ($ikuId, $tahun, $triwulan) => "{$ikuId}-{$tahun}-{$triwulan}";
+
+        $sasaran = $daftarCapaian->mapWithKeys(function ($c) use ($kunciPasangan) {
+            $triwulanBerikutnya = $c->periode->triwulan === 4 ? 1 : $c->periode->triwulan + 1;
+            $tahunBerikutnya = $c->periode->triwulan === 4 ? $c->periode->tahun + 1 : $c->periode->tahun;
+
+            return [$c->id => $kunciPasangan($c->iku_id, $tahunBerikutnya, $triwulanBerikutnya)];
+        });
+
+        $perPasangan = RtlEvaluasi::whereIn('iku_id', $daftarCapaian->pluck('iku_id'))
+            ->with('periode:id,tahun,triwulan')
+            ->get(['id', 'iku_id', 'periode_id', 'status_verifikasi'])
+            ->filter(fn ($r) => $sasaran->contains($kunciPasangan($r->iku_id, $r->periode->tahun, $r->periode->triwulan)))
+            ->groupBy(fn ($r) => $kunciPasangan($r->iku_id, $r->periode->tahun, $r->periode->triwulan));
+
+        return $daftarCapaian->mapWithKeys(
+            fn ($c) => [$c->id => $perPasangan->get($sasaran->get($c->id), collect())]
+        );
+    }
+
     public function render()
     {
         $daftarCapaian = $this->daftarCapaian();
         $kegiatanPerCapaian = $this->kegiatanPerCapaian($daftarCapaian);
         $kendalaSolusiPerCapaian = $this->kendalaSolusiPerCapaian($daftarCapaian);
         $rtlPerCapaian = $this->rtlPerCapaian($daftarCapaian);
+        $rtlBerikutnyaPerCapaian = $this->rtlBerikutnyaPerCapaian($daftarCapaian);
 
         // "Item" = seluruh jenis isian pendukung satu Capaian (Kegiatan + Kendala &
-        // Solusi + RTL yang sudah dilaporkan) — lihat DasborUtama::render() untuk
-        // alasan yang sama.
+        // Solusi + evaluasi RTL triwulan sebelumnya + RTL BARU triwulan berikutnya) —
+        // lihat DasborUtama::render() untuk alasan yang sama.
         $jumlahItem = $daftarCapaian->mapWithKeys(fn ($c) => [$c->id => (
             $kegiatanPerCapaian->get($c->id, collect())->count()
             + $kendalaSolusiPerCapaian->get($c->id, collect())->count()
             + $rtlPerCapaian->get($c->id, collect())->count()
+            + $rtlBerikutnyaPerCapaian->get($c->id, collect())->count()
         )]);
 
         return view('livewire.verifikasi-list', [
@@ -273,6 +310,7 @@ class VerifikasiList extends Component
             'rincianStatusKegiatan' => $kegiatanPerCapaian->map(fn ($g) => Kegiatan::rincianStatus($g)),
             'rincianStatusKendala' => $kendalaSolusiPerCapaian->map(fn ($g) => KendalaSolusi::rincianStatusVerifikasi($g)),
             'rincianStatusRtl' => $rtlPerCapaian->map(fn ($g) => RtlEvaluasi::rincianStatusVerifikasi($g)),
+            'rincianStatusRtlBerikutnya' => $rtlBerikutnyaPerCapaian->map(fn ($g) => RtlEvaluasi::rincianStatusVerifikasi($g)),
             'statusTersedia' => self::statusTersedia(),
         ]);
     }

@@ -275,6 +275,51 @@ class DasborUtama extends Component
     }
 
     /**
+     * Poin RTL BARU yang ditetapkan Ketua Tim PADA triwulan Capaian ini untuk
+     * dilaksanakan pada triwulan BERIKUTNYA (Bagian 5 "Rencana Tindak Lanjut", lihat
+     * PengisianKegiatan::ajukanIsian() langkah 4 &amp; VerifikasiCapaian::
+     * rtlBerikutnyaBaruDitetapkan()) — BEDA dari rtlPerCapaian() di atas yang
+     * mengambil evaluasi/realisasi RTL yang ditetapkan triwulan SEBELUMNYA. Poin
+     * BARU ini tersimpan di baris Periode triwulan berikutnya (bukan periode_id
+     * Capaian ini), jadi harus dicocokkan lewat (iku_id, tahun, triwulan) sasaran —
+     * sebelumnya sama sekali tidak ikut terhitung di kolom "Item"/rincian dasbor,
+     * padahal sudah bisa diverifikasi Tim SAKIP (status_verifikasi) sejak diajukan.
+     *
+     * Tidak difilter status_dokumen — sama seperti kegiatanPerCapaian() &amp;
+     * kendalaSolusiPerCapaian(), baris draft Ketua Tim sendiri tetap ikut terhitung
+     * (Tim SAKIP tidak akan melihatnya karena Capaian berstatus draft sudah disaring
+     * lebih dulu di daftarCapaian()).
+     *
+     * @param  \Illuminate\Support\Collection<int, Capaian>  $daftarCapaian
+     * @return \Illuminate\Support\Collection<int, \Illuminate\Support\Collection<int, RtlEvaluasi>>
+     */
+    protected function rtlBerikutnyaPerCapaian($daftarCapaian)
+    {
+        if ($daftarCapaian->isEmpty()) {
+            return collect();
+        }
+
+        $kunciPasangan = fn ($ikuId, $tahun, $triwulan) => "{$ikuId}-{$tahun}-{$triwulan}";
+
+        $sasaran = $daftarCapaian->mapWithKeys(function ($c) use ($kunciPasangan) {
+            $triwulanBerikutnya = $c->periode->triwulan === 4 ? 1 : $c->periode->triwulan + 1;
+            $tahunBerikutnya = $c->periode->triwulan === 4 ? $c->periode->tahun + 1 : $c->periode->tahun;
+
+            return [$c->id => $kunciPasangan($c->iku_id, $tahunBerikutnya, $triwulanBerikutnya)];
+        });
+
+        $perPasangan = RtlEvaluasi::whereIn('iku_id', $daftarCapaian->pluck('iku_id'))
+            ->with('periode:id,tahun,triwulan')
+            ->get(['id', 'iku_id', 'periode_id', 'status_verifikasi'])
+            ->filter(fn ($r) => $sasaran->contains($kunciPasangan($r->iku_id, $r->periode->tahun, $r->periode->triwulan)))
+            ->groupBy(fn ($r) => $kunciPasangan($r->iku_id, $r->periode->tahun, $r->periode->triwulan));
+
+        return $daftarCapaian->mapWithKeys(
+            fn ($c) => [$c->id => $perPasangan->get($sasaran->get($c->id), collect())]
+        );
+    }
+
+    /**
      * Tautan baris sesuai peran yang login — Tim SAKIP menuju detail verifikasi
      * langsung (baris SUDAH berupa Capaian, tidak perlu lagi dicocokkan lewat query
      * terpisah seperti sebelumnya), Ketua Tim &amp; Kepala menuju halaman kerja utama
@@ -336,15 +381,18 @@ class DasborUtama extends Component
         $kegiatanPerCapaian = $this->kegiatanPerCapaian($daftarCapaian);
         $kendalaSolusiPerCapaian = $this->kendalaSolusiPerCapaian($daftarCapaian);
         $rtlPerCapaian = $this->rtlPerCapaian($daftarCapaian);
+        $rtlBerikutnyaPerCapaian = $this->rtlBerikutnyaPerCapaian($daftarCapaian);
 
         // "Item" = seluruh jenis isian pendukung satu Capaian (Kegiatan + Kendala &
-        // Solusi + RTL yang sudah dilaporkan), BUKAN cuma Kegiatan seperti sebelumnya —
-        // supaya "8 item diajukan" (mis. 2 kegiatan + 3 kendala&solusi + 3 RTL) tetap
-        // tertotal utuh di kolom ini walau salah satu jenisnya nanti ditolak Tim SAKIP.
+        // Solusi + evaluasi RTL triwulan sebelumnya + RTL BARU triwulan berikutnya),
+        // BUKAN cuma Kegiatan seperti sebelumnya — supaya "8 item diajukan" (mis.
+        // 2 kegiatan + 3 kendala&solusi + 3 RTL) tetap tertotal utuh di kolom ini
+        // walau salah satu jenisnya nanti ditolak Tim SAKIP.
         $jumlahItem = $daftarCapaian->mapWithKeys(fn ($c) => [$c->id => (
             $kegiatanPerCapaian->get($c->id, collect())->count()
             + $kendalaSolusiPerCapaian->get($c->id, collect())->count()
             + $rtlPerCapaian->get($c->id, collect())->count()
+            + $rtlBerikutnyaPerCapaian->get($c->id, collect())->count()
         )]);
 
         return view('livewire.dasbor-utama', [
@@ -356,6 +404,7 @@ class DasborUtama extends Component
             'rincianStatusKegiatan' => $kegiatanPerCapaian->map(fn ($g) => Kegiatan::rincianStatus($g)),
             'rincianStatusKendala' => $kendalaSolusiPerCapaian->map(fn ($g) => KendalaSolusi::rincianStatusVerifikasi($g)),
             'rincianStatusRtl' => $rtlPerCapaian->map(fn ($g) => RtlEvaluasi::rincianStatusVerifikasi($g)),
+            'rincianStatusRtlBerikutnya' => $rtlBerikutnyaPerCapaian->map(fn ($g) => RtlEvaluasi::rincianStatusVerifikasi($g)),
             'tautanBaris' => $this->tautanSemuaBaris($daftarCapaian, $role),
             'ikuBelumTerisiTriwulanIni' => $this->ikuBelumTerisiTriwulanIni(),
             'triwulanBerjalan' => (int) ceil(now()->month / 3),

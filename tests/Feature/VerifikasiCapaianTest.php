@@ -371,7 +371,10 @@ class VerifikasiCapaianTest extends TestCase
             ->call('verifikasiSelesai')
             ->assertHasErrors(['berkas']);
 
-        $this->assertSame('diajukan', $data['capaian']->fresh()->status);
+        // Sudah "sedang ditangani" (bukan lagi "diajukan") sejak berkas ditandai
+        // Sesuai di atas — verifikasiSelesai yang gagal validasi tidak
+        // mengembalikannya ke "diajukan".
+        $this->assertSame('sedang_ditangani', $data['capaian']->fresh()->status);
     }
 
     public function test_tandai_uraian_sesuai_menandai_terverifikasi(): void
@@ -479,7 +482,7 @@ class VerifikasiCapaianTest extends TestCase
             ->call('verifikasiSelesai')
             ->assertHasErrors(['berkas']);
 
-        $this->assertSame('diajukan', $data['capaian']->fresh()->status);
+        $this->assertSame('sedang_ditangani', $data['capaian']->fresh()->status);
     }
 
     /**
@@ -917,12 +920,15 @@ class VerifikasiCapaianTest extends TestCase
             ->assertHasNoErrors();
 
         // Dua kegiatan diverifikasi BERSAMAAN, tapi harus tercatat sebagai SATU poin
-        // riwayat saja (bukan satu per kegiatan) karena keduanya berbagi satu Capaian.
-        $this->assertDatabaseCount('riwayat_status_capaian', 1);
+        // riwayat "diverifikasi" saja (bukan satu per kegiatan) karena keduanya
+        // berbagi satu Capaian -- ditambah SATU baris "sedang ditangani" yang otomatis
+        // tercatat begitu berkas pertama ditandai Sesuai (lihat tandaiSedangDitangani()).
+        $this->assertDatabaseCount('riwayat_status_capaian', 2);
 
-        $riwayat = $data['capaian']->fresh()->riwayatStatus->first();
-        $this->assertSame('diverifikasi', $riwayat->status);
-        $this->assertSame($sakip->id, $riwayat->user_id);
+        $riwayat = $data['capaian']->fresh()->riwayatStatus;
+        $this->assertSame('diverifikasi', $riwayat->first()->status);
+        $this->assertSame($sakip->id, $riwayat->first()->user_id);
+        $this->assertSame('sedang_ditangani', $riwayat->last()->status);
     }
 
     public function test_kembalikan_ke_ketua_tim_mencatat_riwayat_dikembalikan_dengan_catatan(): void
@@ -940,12 +946,15 @@ class VerifikasiCapaianTest extends TestCase
             ->call('kembalikanKeKetuaTim')
             ->assertHasNoErrors();
 
-        $this->assertDatabaseCount('riwayat_status_capaian', 1);
+        // Ditambah SATU baris "sedang ditangani" yang otomatis tercatat begitu berkas1
+        // ditandai Tidak Sesuai (panggilan tandai* pertama) -- lihat tandaiSedangDitangani().
+        $this->assertDatabaseCount('riwayat_status_capaian', 2);
 
-        $riwayat = $data['capaian']->fresh()->riwayatStatus->first();
-        $this->assertSame('dikembalikan', $riwayat->status);
-        $this->assertSame($sakip->id, $riwayat->user_id);
-        $this->assertSame('Bukti tidak jelas', $riwayat->catatan);
+        $riwayat = $data['capaian']->fresh()->riwayatStatus;
+        $this->assertSame('dikembalikan', $riwayat->first()->status);
+        $this->assertSame($sakip->id, $riwayat->first()->user_id);
+        $this->assertSame('Bukti tidak jelas', $riwayat->first()->catatan);
+        $this->assertSame('sedang_ditangani', $riwayat->last()->status);
     }
 
     public function test_kegiatan_tambahan_pada_iku_dan_bulan_yang_sama_tergabung_satu_riwayat(): void
@@ -998,12 +1007,16 @@ class VerifikasiCapaianTest extends TestCase
             ->call('kembalikanKeKetuaTim')
             ->assertHasNoErrors();
 
-        // Satu Capaian (IKU+bulan yang sama) menyimpan KEDUA riwayat itu tergabung
-        // dalam satu timeline, bukan tersebar/terputus per batch pengajuan.
+        // Satu Capaian (IKU+bulan yang sama) menyimpan KEEMPAT riwayat itu tergabung
+        // dalam satu timeline, bukan tersebar/terputus per batch pengajuan -- dua
+        // "sedang ditangani" tambahan (satu per batch, lihat tandaiSedangDitangani())
+        // diselingi di antara "diverifikasi" (batch 1) dan "dikembalikan" (batch 2).
         $riwayat = $data['capaian']->fresh()->riwayatStatus;
-        $this->assertCount(2, $riwayat);
-        $this->assertSame('dikembalikan', $riwayat->first()->status);
-        $this->assertSame('diverifikasi', $riwayat->last()->status);
+        $this->assertCount(4, $riwayat);
+        $this->assertSame(
+            ['dikembalikan', 'sedang_ditangani', 'diverifikasi', 'sedang_ditangani'],
+            $riwayat->pluck('status')->all()
+        );
     }
 
     /**

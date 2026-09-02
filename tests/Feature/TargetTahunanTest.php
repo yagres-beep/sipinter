@@ -48,7 +48,12 @@ class TargetTahunanTest extends TestCase
         $this->assertEquals(75, $ct->target_tahunan);
     }
 
-    public function test_simpan_target_tahunan_rasio_menyimpan_kolom_x_y(): void
+    /**
+     * Target Tahunan (rasio) TIDAK LAGI diketik terpisah (x_target/y_target lama,
+     * tidak ada input-nya lagi) — SELALU diturunkan dari Alokasi Kumulatif TW IV
+     * (lihat CapaianTahunan::targetTahunan()).
+     */
+    public function test_simpan_target_tahunan_rasio_diturunkan_dari_alokasi_tw_empat(): void
     {
         $this->loginSebagaiTimSakip();
         $iku = MasterIku::create([
@@ -56,29 +61,40 @@ class TargetTahunanTest extends TestCase
             'metode_capaian' => MasterIku::METODE_RASIO,
         ]);
 
-        Livewire::test(TargetTahunan::class)
+        $component = Livewire::test(TargetTahunan::class)
             ->set('tahun', 2026)
-            ->set("nilai.{$iku->id}.x_target", 3)
-            ->set("nilai.{$iku->id}.y_target", 4)
-            ->call('simpan')
-            ->assertHasNoErrors();
+            ->set("nilai.{$iku->id}.x_alokasi_tw4", 3)
+            ->call('tambahN', $iku->id)
+            ->call('tambahN', $iku->id)
+            ->call('tambahN', $iku->id)
+            ->call('tambahN', $iku->id);
+
+        $kunciList = array_keys($component->get('rincianN')[$iku->id]);
+        foreach ($kunciList as $i => $kunci) {
+            $component->set("rincianN.{$iku->id}.{$kunci}.uraian", 'Item '.($i + 1));
+        }
+
+        $component->call('simpan')->assertHasNoErrors();
 
         $ct = CapaianTahunan::where('iku_id', $iku->id)->where('tahun', 2026)->first();
-        $this->assertEquals(3, $ct->x_target);
-        $this->assertEquals(4, $ct->y_target);
+        $this->assertEquals(3, $ct->x_alokasi_tw4);
+        $this->assertEquals(4, $ct->y_alokasi_tw4);
+        $this->assertEqualsWithDelta(75.0, $ct->targetTahunan(), 0.01);
         $this->assertNull($ct->target_tahunan);
     }
 
     /**
      * Alokasi X TW I-IV untuk IKU rasio diisi SEKALI di sini (bukan diketik ulang
-     * tiap sesi Verifikasi Capaian). Alokasi Y kini SELALU berasal dari JUMLAH
+     * tiap sesi Verifikasi Capaian) sebagai angka KUMULATIF langsung (persis sheet
+     * "LK_Kabkot" resmi — lihat CapaianTahunan::alokasiKumulatif(), dibaca apa
+     * adanya, TIDAK dijumlahkan lagi). Alokasi Y kini SELALU berasal dari JUMLAH
      * baris Rincian N (App\Models\RincianN, otomatis aktif untuk semua IKU rasio —
-     * lihat MasterIku::pakaiRasio()), bukan angka manual — diratakan jadi TW I &
-     * TW II-IV otomatis 0 di kolom tersimpan, supaya kumulatifnya
-     * (alokasiKumulatif()) tetap konstan sepanjang tahun. Realisasi Y HARUS
-     * otomatis mengikuti pola yang sama (bukan isian terpisah), supaya
-     * CapaianTahunan::realisasiKumulatif() tetap menghitung Y yang benar walau
-     * Tim SAKIP di Verifikasi Capaian cuma mengisi Realisasi X.
+     * lihat MasterIku::pakaiRasio()), bukan angka manual — diulang SAMA di keempat
+     * TW di kolom tersimpan (Y konstan, dibaca langsung tanpa jumlah). Realisasi Y
+     * mengikuti pola SAMA seperti Alokasi Y (diulang sama di keempat TW, BUKAN nol
+     * di TW II-IV) — CapaianTahunan::realisasiKumulatif() membaca y_realisasi_tw{n}
+     * LANGSUNG per TW untuk 'rasio' (TIDAK dijumlahkan, beda dari x_realisasi yang
+     * tetap dijumlah).
      */
     public function test_simpan_alokasi_tw_rasio_menyalin_realisasi_y_dari_alokasi_y(): void
     {
@@ -112,17 +128,16 @@ class TargetTahunanTest extends TestCase
         $this->assertEquals(1, $ct->x_alokasi_tw1);
         $this->assertEquals(2, $ct->x_alokasi_tw3);
         $this->assertEquals(3, $ct->y_alokasi_tw1);
-        $this->assertEquals(0, $ct->y_alokasi_tw2);
-        $this->assertEquals(0, $ct->y_alokasi_tw3);
-        $this->assertEquals(0, $ct->y_alokasi_tw4);
+        $this->assertEquals(3, $ct->y_alokasi_tw2);
+        $this->assertEquals(3, $ct->y_alokasi_tw3);
+        $this->assertEquals(3, $ct->y_alokasi_tw4);
 
-        // Realisasi Y HARUS mengikuti pola Alokasi Y yang sama (3 di TW I, 0 di
-        // sisanya) -- kumulatifnya tetap 3 sepanjang tahun -- tanpa pernah diisi
-        // langsung di sini maupun di Verifikasi Capaian.
+        // Realisasi Y HARUS diulang sama di keempat TW (3), PERSIS pola Alokasi Y
+        // di atas -- tanpa pernah diisi langsung di sini maupun di Verifikasi Capaian.
         $this->assertEquals(3, $ct->y_realisasi_tw1);
-        $this->assertEquals(0, $ct->y_realisasi_tw2);
-        $this->assertEquals(0, $ct->y_realisasi_tw3);
-        $this->assertEquals(0, $ct->y_realisasi_tw4);
+        $this->assertEquals(3, $ct->y_realisasi_tw2);
+        $this->assertEquals(3, $ct->y_realisasi_tw3);
+        $this->assertEquals(3, $ct->y_realisasi_tw4);
     }
 
     /**
@@ -141,8 +156,7 @@ class TargetTahunanTest extends TestCase
         Livewire::test(TargetTahunan::class)
             ->set('tahun', 2026)
             ->assertSee('% (X ÷ Y)')
-            ->set("nilai.{$iku->id}.x_target", 5)
-            ->set("nilai.{$iku->id}.y_target", 10)
+            ->set("nilai.{$iku->id}.x_alokasi_tw4", 5)
             ->call('simpan')
             ->assertHasNoErrors();
 
@@ -185,8 +199,9 @@ class TargetTahunanTest extends TestCase
         $this->assertDatabaseCount('rincian_n', 2);
         $ct = CapaianTahunan::where('iku_id', $iku->id)->where('tahun', 2026)->first();
         $this->assertEquals(2, $ct->y_alokasi_tw1);
-        $this->assertEquals(0, $ct->y_alokasi_tw2);
+        $this->assertEquals(2, $ct->y_alokasi_tw2);
         $this->assertEquals(2, $ct->y_realisasi_tw1);
+        $this->assertEquals(2, $ct->y_realisasi_tw2);
     }
 
     public function test_hapus_rincian_n_yang_tersimpan_menghapus_dari_db(): void

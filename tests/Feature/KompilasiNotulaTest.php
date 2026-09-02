@@ -158,6 +158,48 @@ class KompilasiNotulaTest extends TestCase
     }
 
     /**
+     * "Terhadap Target Setahun" (capaian_pk) HARUS membagi dengan jumlah TOTAL
+     * indikator, bukan cuma yang sudah ternilai -- beda dari "Terhadap Target
+     * Triwulanan" (capaian_tw) yang membagi dengan jumlah nilai valid saja -- sesuai
+     * baris 87 kolom Y-AB (SUMIF/COUNTIF) vs U-X (AVERAGEIFS) sheet "LK_Kabkot", Kertas
+     * Kerja Pengukuran Kinerja Triwulanan resmi (lihat docblock
+     * CapaianCalculatorService::rataRataCapaianSetahun()). IKU B realisasinya 0 (belum
+     * ada capaian TW ini) sehingga capaian_tw/capaian_pk-nya "-" (TIDAK_DINILAI):
+     * capaian_tw mengecualikannya dari pembagi (tetap 100.0, dari IKU A saja), TAPI
+     * capaian_pk TETAP menghitungnya di pembagi sebagai 0 -- (25.0 + 0) / 2 = 12.5,
+     * BUKAN 25.0/1 seperti bila IKU B ikut dibuang dari pembagi juga.
+     */
+    public function test_rekap_capaian_pk_membagi_dengan_jumlah_total_indikator_bukan_hanya_yang_ternilai(): void
+    {
+        $ikuA = MasterIku::create(['kode' => '9005', 'indikator' => 'Uji IKU Lima', 'sasaran' => 'Sasaran Uji', 'tim' => 'Uji', 'penanggung_jawab' => 'A']);
+        $ikuB = MasterIku::create(['kode' => '9006', 'indikator' => 'Uji IKU Enam Belum Ternilai', 'sasaran' => 'Sasaran Uji', 'tim' => 'Uji', 'penanggung_jawab' => 'A']);
+
+        CapaianTahunan::create([
+            'iku_id' => $ikuA->id,
+            'tahun' => 2026,
+            'target_tahunan' => 100,
+            'alokasi_tw1' => 25,
+            'realisasi_tw1' => 25,
+        ]);
+        CapaianTahunan::create([
+            'iku_id' => $ikuB->id,
+            'tahun' => 2026,
+            'target_tahunan' => 100,
+            'alokasi_tw1' => 25,
+            'realisasi_tw1' => 0,
+        ]);
+
+        $notula = app(NotulaService::class)->untukTriwulan(2026, 1);
+        Capaian::create(['iku_id' => $ikuA->id, 'periode_id' => $notula->periode_id, 'status' => Capaian::STATUS_DIVERIFIKASI]);
+        Capaian::create(['iku_id' => $ikuB->id, 'periode_id' => $notula->periode_id, 'status' => Capaian::STATUS_DIVERIFIKASI]);
+
+        $data = app(NotulaService::class)->kumpulkanDataBagianSatu($notula);
+
+        $this->assertSame(100.0, $data['rataCapaianTw']);
+        $this->assertSame(12.5, $data['rataCapaianPk']);
+    }
+
+    /**
      * Smoke test triwulan I (tidak punya triwulan sebelumnya di tahun yang sama) --
      * pastikan susunBagianSatu() tidak melempar galat sepanjang seluruh alur generate
      * template -> konversi -> simpan.

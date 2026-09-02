@@ -258,6 +258,40 @@ class DasborUtamaTest extends TestCase
     }
 
     /**
+     * Skenario: RTL BARU yang ditetapkan Ketua Tim triwulan ini untuk triwulan
+     * BERIKUTNYA (Bagian 5) tersimpan di baris Periode triwulan berikutnya, bukan
+     * periode_id Capaian triwulan berjalan ini — sebelum diperbaiki, poin ini sama
+     * sekali tidak ikut terhitung di kolom "Item"/rincian, padahal Tim SAKIP sudah
+     * bisa memverifikasinya (status_verifikasi) sejak diajukan.
+     */
+    public function test_item_menghitung_rtl_triwulan_berikutnya(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 9, 'triwulan' => 3, 'bulan_ke' => 3, 'flag_bulan_terlewat' => false]);
+        $periodeBerikutnya = Periode::create(['tahun' => 2026, 'bulan' => 10, 'triwulan' => 4, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $iku = MasterIku::create(['kode' => 'IOTA-9', 'indikator' => 'Indikator Iota', 'tim' => 'Tim I', 'penanggung_jawab' => 'PJ I']);
+
+        Capaian::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'status' => Capaian::STATUS_DIAJUKAN]);
+
+        Kegiatan::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'uraian_kegiatan' => 'K1', 'jenis' => 'bukan_survei_sensus', 'status_dokumen' => 'diajukan']);
+
+        RtlEvaluasi::create([
+            'iku_id' => $iku->id, 'periode_id' => $periodeBerikutnya->id, 'rtl_teks' => 'Rencana TW IV',
+            'status_dokumen' => 'diajukan', 'status_verifikasi' => 'menunggu',
+        ]);
+
+        $capaian = Capaian::where('iku_id', $iku->id)->firstOrFail();
+
+        Livewire::test(DasborUtama::class)
+            ->assertSee('IOTA-9')
+            ->assertSee('RTL Berikutnya 1 Menunggu');
+
+        $component = Livewire::test(DasborUtama::class);
+        $this->assertSame(2, $component->viewData('jumlahItem')->get($capaian->id));
+    }
+
+    /**
      * Skenario dari laporan pengguna: MasterIku::tim kosong (sejumlah IKU lama belum
      * pernah diisi kolom ini) tapi Ketua Tim yang mengajukan isian ini SUDAH terdaftar
      * di satu tim (App\Models\UserTim, diisi saat registrasi) — kolom "Tim" di dasbor

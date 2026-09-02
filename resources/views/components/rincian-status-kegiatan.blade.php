@@ -4,19 +4,21 @@
     supaya status besar (badge Capaian::status) tetap bisa ditelusuri sampai rincian
     per kegiatannya tanpa perlu membuka detail.
 
-    :rincianKendala &amp; :rincianRtl (keduanya opsional) menambahkan rincian Kendala &amp;
-    Solusi serta bukti evaluasi RTL (status_verifikasi) di baris terpisah, diberi
-    prefiks "K&S"/"RTL" — supaya Capaian yang "Dikembalikan" KARENA salah satu dari
-    keduanya ditolak (bukan karena bukti Kegiatan) tetap kelihatan penyebabnya di
-    sini, bukan cuma di badge status besar (lihat KendalaSolusi::rincianStatusVerifikasi()
-    &amp; RtlEvaluasi::rincianStatusVerifikasi()).
+    :rincianKendala, :rincianRtl &amp; :rincianRtlBerikutnya (ketiganya opsional) menambahkan
+    rincian Kendala &amp; Solusi, evaluasi RTL triwulan SEBELUMNYA, dan RTL BARU yang
+    ditetapkan untuk triwulan BERIKUTNYA (status_verifikasi masing-masing) di baris
+    terpisah, diberi prefiks "K&S"/"RTL"/"RTL Berikutnya" — supaya Capaian yang
+    "Dikembalikan" KARENA salah satu dari ketiganya ditolak (bukan karena bukti
+    Kegiatan) tetap kelihatan penyebabnya di sini, bukan cuma di badge status besar
+    (lihat KendalaSolusi::rincianStatusVerifikasi() &amp; RtlEvaluasi::rincianStatusVerifikasi()).
 
     Pemakaian: <x-rincian-status-kegiatan
         :rincian="App\Models\Kegiatan::rincianStatus($kegiatanIkuIni)"
         :rincianKendala="App\Models\KendalaSolusi::rincianStatusVerifikasi($kendalaIkuIni)"
-        :rincianRtl="App\Models\RtlEvaluasi::rincianStatusVerifikasi($rtlIkuIni)" />
+        :rincianRtl="App\Models\RtlEvaluasi::rincianStatusVerifikasi($rtlIkuIni)"
+        :rincianRtlBerikutnya="App\Models\RtlEvaluasi::rincianStatusVerifikasi($rtlBerikutnyaIkuIni)" />
 --}}
-@props(['rincian', 'rincianKendala' => null, 'rincianRtl' => null])
+@props(['rincian', 'rincianKendala' => null, 'rincianRtl' => null, 'rincianRtlBerikutnya' => null])
 
 <div style="display:flex;flex-direction:column;gap:4px">
     <div style="display:flex;flex-wrap:wrap;gap:4px">
@@ -51,6 +53,19 @@
         <div style="display:flex;flex-wrap:wrap;gap:4px">
             @foreach ($rincianRtl as $status => $jumlah)
                 <x-badge-status :status="$status" :label="'RTL '.$jumlah.' '.match($status) {
+                    'menunggu' => 'Menunggu',
+                    'terverifikasi' => 'Sesuai',
+                    'ditolak' => 'Tidak Sesuai',
+                    default => ucfirst($status),
+                }" style="font-size:10px;padding:2px 7px" />
+            @endforeach
+        </div>
+    @endif
+
+    @if ($rincianRtlBerikutnya && $rincianRtlBerikutnya->isNotEmpty())
+        <div style="display:flex;flex-wrap:wrap;gap:4px">
+            @foreach ($rincianRtlBerikutnya as $status => $jumlah)
+                <x-badge-status :status="$status" :label="'RTL Berikutnya '.$jumlah.' '.match($status) {
                     'menunggu' => 'Menunggu',
                     'terverifikasi' => 'Sesuai',
                     'ditolak' => 'Tidak Sesuai',

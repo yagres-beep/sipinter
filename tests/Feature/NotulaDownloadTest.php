@@ -512,7 +512,7 @@ class NotulaDownloadTest extends TestCase
         // TW I mentah = 5, TW II mentah = 2 (kumulatifnya 7) -- rumus HARUS pakai 2
         // (mentah TW II saja), bukan 7 (kumulatif TW I+II).
         CapaianTahunan::create([
-            'iku_id' => $iku->id, 'tahun' => 2026, 'y_target' => 8,
+            'iku_id' => $iku->id, 'tahun' => 2026, 'y_alokasi_tw4' => 8,
             'x_realisasi_tw1' => 5, 'x_realisasi_tw2' => 2,
         ]);
 
@@ -557,7 +557,7 @@ class NotulaDownloadTest extends TestCase
         $this->verifikasiCapaian($iku, $periode);
 
         CapaianTahunan::create([
-            'iku_id' => $iku->id, 'tahun' => 2026, 'y_target' => 4,
+            'iku_id' => $iku->id, 'tahun' => 2026, 'y_alokasi_tw4' => 4,
             'x_realisasi_tw2' => 1,
         ]);
 

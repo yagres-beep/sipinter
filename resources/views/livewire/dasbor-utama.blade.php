@@ -96,7 +96,7 @@
                                 <td class="muted">{{ $angkaRomawi[$capaian->periode->triwulan ?? 0] ?? '—' }}</td>
                                 <td class="muted">{{ $timPerCapaian->get($capaian->id) ?: '—' }}</td>
                                 <td class="muted">{{ $jumlahItem->get($capaian->id, 0) }}</td>
-                                <td><x-rincian-status-kegiatan :rincian="$rincianStatusKegiatan->get($capaian->id, collect())" :rincianKendala="$rincianStatusKendala->get($capaian->id, collect())" :rincianRtl="$rincianStatusRtl->get($capaian->id, collect())" /></td>
+                                <td><x-rincian-status-kegiatan :rincian="$rincianStatusKegiatan->get($capaian->id, collect())" :rincianKendala="$rincianStatusKendala->get($capaian->id, collect())" :rincianRtl="$rincianStatusRtl->get($capaian->id, collect())" :rincianRtlBerikutnya="$rincianStatusRtlBerikutnya->get($capaian->id, collect())" /></td>
                                 <td><x-badge-status :status="$capaian->status" /></td>
                             </tr>
                         @endforeach

@@ -499,6 +499,24 @@ class VerifikasiCapaian extends Component
     }
 
     /**
+     * Pindahkan Capaian::status ke "sedang ditangani" SEKETIKA saat Tim SAKIP
+     * menandai item pertama (berkas/kendala/uraian/dst) Sesuai atau Tidak Sesuai —
+     * tanpa menunggu "Simpan Verifikasi" (simpanSementara()) ditekan, supaya status
+     * di Dasbor/Verifikasi List langsung mencerminkan bahwa pemeriksaan sedang
+     * berjalan. Dipanggil dari tiap method tandai*Sesuai()/tandai*Tolak() di bawah,
+     * tepat sebelum tanda itu ditulis ke DB. Sama seperti transisi status di
+     * simpanSementara(): hanya dicatat SEKALI ke Riwayat Status saat pertama kali
+     * beralih dari "diajukan" — panggilan berikutnya tidak menambah baris riwayat
+     * baru selama isian belum berpindah status lagi.
+     */
+    protected function tandaiSedangDitangani(): void
+    {
+        if ($this->capaian->status === Capaian::STATUS_DIAJUKAN) {
+            $this->capaian->catatStatus(Capaian::STATUS_SEDANG_DITANGANI, auth()->user());
+        }
+    }
+
+    /**
      * Setelah disetujui (masuk notula final), isian ini dikunci total — Ketua Tim
      * tidak bisa menambah kegiatan apa pun sampai Tim SAKIP membuka kembali secara
      * eksplisit lewat bukaKembali() di bawah, menariknya ke status "dikembalikan"
@@ -692,6 +710,8 @@ class VerifikasiCapaian extends Component
         $this->resetErrorBag('catatanBerkas.'.$berkasId);
         $this->catatanBerkas[$berkasId] = null;
 
+        $this->tandaiSedangDitangani();
+
         Berkas::whereKey($berkasId)->update([
             'status_verifikasi' => 'terverifikasi',
             'catatan' => null,
@@ -717,6 +737,8 @@ class VerifikasiCapaian extends Component
 
             return;
         }
+
+        $this->tandaiSedangDitangani();
 
         Berkas::whereKey($berkasId)->update([
             'status_verifikasi' => 'ditolak',
@@ -751,6 +773,8 @@ class VerifikasiCapaian extends Component
         $this->resetErrorBag('catatanKendala.'.$kendalaId);
         $this->catatanKendala[$kendalaId] = null;
 
+        $this->tandaiSedangDitangani();
+
         KendalaSolusi::whereKey($kendalaId)->update([
             'status_verifikasi' => 'terverifikasi',
             'catatan' => null,
@@ -775,6 +799,8 @@ class VerifikasiCapaian extends Component
 
             return;
         }
+
+        $this->tandaiSedangDitangani();
 
         KendalaSolusi::whereKey($kendalaId)->update([
             'status_verifikasi' => 'ditolak',
@@ -806,6 +832,8 @@ class VerifikasiCapaian extends Component
         $this->resetErrorBag('catatanUraian.'.$kegiatanId);
         $this->catatanUraian[$kegiatanId] = null;
 
+        $this->tandaiSedangDitangani();
+
         Kegiatan::whereKey($kegiatanId)->update([
             'status_verifikasi_uraian' => 'terverifikasi',
             'catatan_uraian' => null,
@@ -830,6 +858,8 @@ class VerifikasiCapaian extends Component
 
             return;
         }
+
+        $this->tandaiSedangDitangani();
 
         Kegiatan::whereKey($kegiatanId)->update([
             'status_verifikasi_uraian' => 'ditolak',
@@ -857,6 +887,8 @@ class VerifikasiCapaian extends Component
 
         $this->resetErrorBag('catatanBagianKustom.'.$poinId);
         $this->catatanBagianKustom[$poinId] = null;
+
+        $this->tandaiSedangDitangani();
 
         // catatan_bukti_dihapus (pengingat bukti tertolak yang sudah dihapus Ketua Tim,
         // lihat App\Livewire\PengisianKegiatan::hapusBuktiLamaBagianKustom()) ikut
@@ -886,6 +918,8 @@ class VerifikasiCapaian extends Component
 
             return;
         }
+
+        $this->tandaiSedangDitangani();
 
         BagianKustomPoin::whereKey($poinId)->update([
             'status_verifikasi' => 'ditolak',
@@ -923,6 +957,8 @@ class VerifikasiCapaian extends Component
         $this->resetErrorBag('catatanRtl.'.$rtlId);
         $this->catatanRtl[$rtlId] = null;
 
+        $this->tandaiSedangDitangani();
+
         // catatan_bukti_dihapus ikut dikosongkan — sama seperti tandaiBagianKustomSesuai().
         RtlEvaluasi::whereKey($rtlId)->update([
             'status_verifikasi' => 'terverifikasi',
@@ -949,6 +985,8 @@ class VerifikasiCapaian extends Component
 
             return;
         }
+
+        $this->tandaiSedangDitangani();
 
         RtlEvaluasi::whereKey($rtlId)->update([
             'status_verifikasi' => 'ditolak',
@@ -977,6 +1015,8 @@ class VerifikasiCapaian extends Component
         $this->resetErrorBag('catatanRtlBerikutnya.'.$rtlId);
         $this->catatanRtlBerikutnya[$rtlId] = null;
 
+        $this->tandaiSedangDitangani();
+
         RtlEvaluasi::whereKey($rtlId)->update([
             'status_verifikasi' => 'terverifikasi',
             'catatan' => null,
@@ -1001,6 +1041,8 @@ class VerifikasiCapaian extends Component
 
             return;
         }
+
+        $this->tandaiSedangDitangani();
 
         RtlEvaluasi::whereKey($rtlId)->update([
             'status_verifikasi' => 'ditolak',

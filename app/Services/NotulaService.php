@@ -16,7 +16,6 @@ use App\Models\RtlEvaluasi;
 use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf as PdfFacade;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -182,10 +181,11 @@ class NotulaService
                 // Untuk rumus "Dasar Hitung" IKU bersatuan Persen (lihat
                 // NotulaBagian1DocxService::formulaPersenOtomatis()) -- n = nilai
                 // MENTAH triwulan berjalan saja (x_realisasi_twN, BUKAN kumulatif,
-                // lihat docblock CapaianTahunan), N = target tahunan Y (konstan,
-                // TIDAK dijumlahkan tiap triwulan seperti alokasi/realisasi).
+                // lihat docblock CapaianTahunan), N = Alokasi Y TW IV (y_alokasi_tw4,
+                // konstan sepanjang tahun, SUMBER TUNGGAL sama seperti targetTahunan()
+                // -- x_target/y_target lama TIDAK dipakai lagi di sini).
                 'x_realisasi_tw' => $ct?->{"x_realisasi_tw{$tw}"},
-                'y_target' => $ct?->y_target,
+                'y_target' => $ct?->y_alokasi_tw4,
             ]];
         });
 
@@ -252,12 +252,30 @@ class NotulaService
             })
             : collect();
 
-        // Ringkasan capaian pada paragraf pembuka (RF-42): rata-rata capaian_tw/capaian_pk
-        // HANYA atas IKU yang punya nilai — IKU strip "-" (belum dinilai, lihat
-        // Capaian::hitungPersentase()) dikecualikan supaya tidak menurunkan rata-rata,
-        // sama seperti pola CapaianCalculatorService::rataRataCapaianTriwulanan().
-        $rataCapaianTw = $this->rataRataCapaian($rekapPerIku, 'capaian_tw');
-        $rataCapaianPk = $this->rataRataCapaian($rekapPerIku, 'capaian_pk');
+        // Ringkasan capaian pada paragraf pembuka (RF-42): rata-rata Capaian Kinerja
+        // (Rumus 2.3/2.4) SELURUH CapaianTahunan tahun ini -- BUKAN $rekapPerIku (yang
+        // dibatasi ke IKU terverifikasi TRIWULAN INI saja, lihat $ikuTerverifikasiIds di
+        // atas) -- lewat rumus RESMI CapaianCalculatorService::rataRataCapaianTriwulanan()/
+        // rataRataCapaianSetahun(), PERSIS pola App\Livewire\DasborCapaian::
+        // capaianKinerjaPerTriwulan()/capaianSetahunPerTriwulan(), supaya angka di kalimat
+        // pembuka SELALU sama dengan kartu "Capaian Kinerja IKU per Triwulan" di Dasbor
+        // Capaian -- sama seperti baris 87 AVERAGEIFS (kolom Terhadap Target Triwulanan)
+        // dan SUMIF/COUNTIF (kolom Terhadap Target Setahun) pada sheet "LK_Kabkot", Kertas
+        // Kerja Pengukuran Kinerja Triwulanan resmi. TIDAK boleh dituker jadi
+        // rataRataCapaianTriwulanan() untuk keduanya -- pembagi keduanya SENGAJA beda
+        // (rataRataCapaianSetahun() membagi dengan jumlah TOTAL indikator, bukan cuma yang
+        // sudah ternilai, lihat docblock-nya).
+        $capaianTahunanTahunIni = CapaianTahunan::where('tahun', $periode->tahun)->get();
+
+        $capaianTwList = $capaianTahunanTahunIni
+            ->map(fn (CapaianTahunan $ct) => $ct->capaianTriwulanan($tw) ?? CapaianCalculatorService::TIDAK_DINILAI)
+            ->all();
+        $capaianPkList = $capaianTahunanTahunIni
+            ->map(fn (CapaianTahunan $ct) => $ct->capaianSetahun($tw) ?? CapaianCalculatorService::TIDAK_DINILAI)
+            ->all();
+
+        $rataCapaianTw = $this->bulatkanAtauNull(CapaianCalculatorService::rataRataCapaianTriwulanan($capaianTwList));
+        $rataCapaianPk = $this->bulatkanAtauNull(CapaianCalculatorService::rataRataCapaianSetahun($capaianPkList));
 
         return [
             'notula' => $notula,
@@ -584,15 +602,14 @@ class NotulaService
     }
 
     /**
-     * Rata-rata satu kolom rekapPerIku (capaian_tw/capaian_pk), mengecualikan IKU yang
-     * belum dinilai (null, lihat Capaian::hitungPersentase()) — null berarti strip "-",
-     * bukan 0, jadi tidak boleh ikut menurunkan rata-rata.
+     * Ratakan hasil CapaianCalculatorService::rataRataCapaianTriwulanan()/
+     * rataRataCapaianSetahun() (float|string) ke float|null untuk paragraf pembuka --
+     * TIDAK_DINILAI ("-", seluruh IKU belum ternilai triwulan ini) jadi null, konsisten
+     * dengan makna null di tempat lain (lihat Capaian::hitungPersentase()).
      */
-    private function rataRataCapaian(Collection $rekapPerIku, string $kolom): ?float
+    private function bulatkanAtauNull(float|string $hasil): ?float
     {
-        $nilai = $rekapPerIku->pluck($kolom)->filter(fn ($v) => $v !== null);
-
-        return $nilai->isEmpty() ? null : round($nilai->avg(), 2);
+        return $hasil === CapaianCalculatorService::TIDAK_DINILAI ? null : round((float) $hasil, 2);
     }
 
     protected function pastikanFolder(string $dir): void
