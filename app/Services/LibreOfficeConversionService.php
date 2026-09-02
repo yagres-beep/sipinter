@@ -174,6 +174,7 @@ class LibreOfficeConversionService
             $this->buangAtributBerbahaya($dom->documentElement);
             $this->pindahkanAlignKeStyle($dom->documentElement);
             $this->gabungkanTbodyBersebelahan($dom);
+            $this->sisipkanTitikPotongKataMajemuk($dom->documentElement);
         }
 
         // LibreOffice menaruh definisi kelas paragraf/tabel (P1, T1, dst.) di
@@ -280,6 +281,33 @@ class LibreOfficeConversionService
                 }
                 $tbodies[$i]->parentNode?->removeChild($tbodies[$i]);
             }
+        }
+    }
+
+    /**
+     * dompdf TIDAK menganggap "/" sebagai titik potong baris yang sah (beda dari
+     * mesin render browser) -- istilah majemuk tanpa spasi seperti
+     * "Publikasi/Laporan" jadi dianggap SATU kata utuh. Dengan table-layout:fixed
+     * (lihat sipinter.css/.notula table & pdf/notula-utuh.blade.php -- lebar
+     * TABEL sendiri sudah dijamin tidak pernah melebihi halaman lewat itu), kata
+     * "utuh" yang lebih panjang dari lebar kolomnya masih bisa membuat TEKS di
+     * dalam sel itu meluber visual ke luar batas selnya. Menyisipkan spasi
+     * lebar-nol (U+200B, tidak terlihat sama sekali) tepat setelah tiap "/"
+     * memberi dompdf titik potong yang sah TANPA mengubah tampilan teksnya,
+     * supaya isi sel ikut terbungkus rapi di dalam lebar kolom yang terkunci.
+     */
+    private function sisipkanTitikPotongKataMajemuk(DOMNode $node): void
+    {
+        if ($node instanceof DOMElement && in_array(strtolower($node->tagName), ['style', 'script'], true)) {
+            return;
+        }
+
+        if ($node->nodeType === XML_TEXT_NODE && str_contains($node->textContent, '/')) {
+            $node->textContent = str_replace('/', "/\u{200B}", $node->textContent);
+        }
+
+        foreach (iterator_to_array($node->childNodes) as $anak) {
+            $this->sisipkanTitikPotongKataMajemuk($anak);
         }
     }
 

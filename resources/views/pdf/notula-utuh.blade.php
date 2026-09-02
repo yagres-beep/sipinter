@@ -35,14 +35,17 @@
   ul { margin: 0 0 8px 18px; padding: 0; }
   .nrow { margin-bottom: 8px; }
   .nlabel { font-weight: bold; }
-  {{-- table-layout:fixed WAJIB -- lebar tabel di dompdf TIDAK bisa diandalkan
-       terkunci ke 100% dengan "auto" (dompdf melebarkan tabel keluar tepi halaman
-       kalau ada kata yang tidak muat di kolomnya, mis. "Publikasi/Laporan" sebagai
-       satu kata utuh) -- "fixed" MENJAMIN lebar tabel tidak pernah melampaui yang
-       dideklarasikan, sesuai <w:tblLayout w:type="fixed"/> di template .docx-nya
-       sendiri. Proporsi kolom karenanya mengikuti w:tblGrid template persis -- ini
-       yang membuat sebagian kolom tampak sempit, TAPI itu tata letak resmi template,
-       bukan bug. --}}
+  {{-- table-layout:fixed WAJIB, sudah dicoba SEGALA cara lain (width absolut
+       pt bukan %, table-layout:auto, menghapus atribut width/cellpadding/col
+       LibreOffice, menyisipkan titik potong kata) dan DIUKUR LANGSUNG dari
+       koordinat PDF-nya -- semuanya TETAP melebar sampai keluar tepi kanan
+       kertas pada tabel yang punya elemen <col> (tabel Bagian I hasil ekspor
+       LibreOffice SELALU begini). Penyebab pastinya di jalur internal dompdf
+       untuk tabel ber-<col> belum berhasil diisolasi, tapi table-layout:fixed
+       TERBUKTI KONSISTEN 0% melebihi lebar yang dideklarasikan (523pt vs batas
+       523,28pt) -- juga sesuai <w:tblLayout w:type="fixed"/> template .docx-nya
+       sendiri. Trade-off: kolom mengikuti w:tblGrid template persis (bukan
+       menyesuaikan isi bebas), TAPI itu memang tata letak resmi template. --}}
   table { width: 100%; table-layout: fixed; border-collapse: collapse; margin: 8px 0; }
   td, th { border: 1px solid #999; padding: 5px 6px; text-align: left; }
   th { background: #f2f2f2; }
