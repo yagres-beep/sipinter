@@ -301,6 +301,36 @@ class VerifikasiCapaianTest extends TestCase
         $this->assertSame('menunggu', $ks->fresh()->status_verifikasi);
     }
 
+    /**
+     * Regresi: kendalaSolusiList() di-cache satu siklus request (lihat
+     * $cacheKendalaSolusiList), tapi tandaiKendalaTolak() memicu cache itu (lewat
+     * kendalaBisaDiverifikasi()) SEBELUM melakukan raw update() ke DB — akibatnya
+     * render() pada request YANG SAMA membaca cache basi (status masih "menunggu")
+     * walau DB sudah tersimpan "ditolak". Di layar ini tampak seolah tombol "Simpan
+     * Verifikasi" tidak merespon karena label "✓ Tersimpan" tidak pernah muncul.
+     * Percobaan pertama TANPA catatan (gagal validasi, menyisakan error di
+     * error bag) sekaligus menguji error itu ikut dibersihkan begitu percobaan
+     * kedua (dengan catatan) berhasil — sebelumnya error lama itu bertahan
+     * selamanya karena addError() tidak pernah di-reset.
+     */
+    public function test_tandai_kendala_tolak_dengan_catatan_langsung_tercermin_di_render(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+        $ks = KendalaSolusi::create(['iku_id' => $data['iku']->id, 'periode_id' => $data['periode']->id, 'kendala' => 'Kendala uji']);
+
+        $component = Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
+            ->call('tandaiKendalaTolak', $ks->id)
+            ->assertHasErrors(['catatanKendala.'.$ks->id]);
+
+        $component->set('catatanKendala.'.$ks->id, 'Solusi tidak relevan')
+            ->call('tandaiKendalaTolak', $ks->id)
+            ->assertHasNoErrors()
+            ->assertSee('Tersimpan');
+
+        $this->assertSame('ditolak', $component->instance()->kendalaSolusiList()->firstWhere('id', $ks->id)->status_verifikasi);
+    }
+
     public function test_kembalikan_ke_ketua_tim_bisa_dipicu_kendala_ditolak_tanpa_berkas_ditolak(): void
     {
         $this->actingAs($this->buatSakip());
@@ -714,6 +744,32 @@ class VerifikasiCapaianTest extends TestCase
 
         $this->assertSame('terverifikasi', $rtlBerikutnya->fresh()->status_verifikasi);
         $this->assertSame('diverifikasi', $data['capaian']->fresh()->status);
+    }
+
+    /**
+     * Regresi: sama seperti test_tandai_kendala_tolak_dengan_catatan_langsung_tercermin_di_render()
+     * di atas, tapi untuk rtlBerikutnyaBaruDitetapkan() ($cacheRtlBerikutnya) —
+     * sebelumnya satu klik "Sesuai" sudah tersimpan ke DB tapi render() pada
+     * request yang sama masih menampilkan status "menunggu" (cache basi), jadi
+     * tombol "Simpan Verifikasi" + label "✓ Tersimpan" tidak muncul sampai
+     * pengguna mengklik ulang (memicu request baru dengan cache yang benar-benar
+     * segar).
+     */
+    public function test_tandai_rtl_berikutnya_sesuai_langsung_tercermin_di_render(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+        $rtlBerikutnya = $this->siapkanRtlBerikutnyaBaruDitetapkan($data);
+
+        $component = Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
+            ->call('tandaiRtlBerikutnyaSesuai', $rtlBerikutnya->id)
+            ->assertHasNoErrors()
+            ->assertSee('Tersimpan');
+
+        $this->assertSame(
+            'terverifikasi',
+            $component->instance()->rtlBerikutnyaBaruDitetapkan()->firstWhere('id', $rtlBerikutnya->id)->status_verifikasi
+        );
     }
 
     /**
@@ -1155,7 +1211,7 @@ class VerifikasiCapaianTest extends TestCase
         $this->assertEquals(1, $capaianTahunan->x_realisasi_tw3);
     }
 
-    public function test_simpan_perubahan_kumulatif_menjumlahkan_tw_dari_sesi_lain_dan_tw_periode_ini(): void
+    public function test_simpan_perubahan_alokasi_tw_periode_ini_tidak_mengubah_tw_sesi_lain(): void
     {
         $this->actingAs($this->buatSakip());
         $data = $this->siapkanIkuDenganDuaKegiatan();
@@ -1171,8 +1227,10 @@ class VerifikasiCapaianTest extends TestCase
             'y_alokasi_tw1' => 3,
         ]);
 
-        // kumulatif TW III harus otomatis terjumlah dari TW I (sesi lain) + TW III
-        // (sesi ini): X=1+2=3, Y=3+3=6 -> 50%, BUKAN dari X/Y TW III saja (2/3=66.67).
+        // Alokasi X/Y TW III diisi Tim SAKIP sebagai angka KUMULATIF langsung TW I
+        // s.d. TW III (lihat App\Models\CapaianTahunan::alokasiKumulatif(), dibaca
+        // apa adanya, TIDAK dijumlahkan lagi dengan TW I) -> 2/3=66.67%, TW I (sesi
+        // lain) TETAP 1/3=33.33%, tidak ikut tersentuh/berubah oleh simpanan ini.
         Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']->fresh()])
             ->set('x_alokasi_tw3', 2)
             ->set('y_alokasi_tw3', 3)
@@ -1182,7 +1240,7 @@ class VerifikasiCapaianTest extends TestCase
         $capaianTahunan = \App\Models\CapaianTahunan::where('iku_id', $data['iku']->id)->where('tahun', 2026)->first();
 
         $this->assertEqualsWithDelta(33.33, $capaianTahunan->alokasiKumulatif(1), 0.01);
-        $this->assertEqualsWithDelta(50.0, $capaianTahunan->alokasiKumulatif(3), 0.01);
+        $this->assertEqualsWithDelta(66.67, $capaianTahunan->alokasiKumulatif(3), 0.01);
     }
 
     public function test_simpan_perubahan_tidak_bisa_menimpa_tw_di_luar_periode_capaian_ini(): void

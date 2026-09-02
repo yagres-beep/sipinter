@@ -689,12 +689,16 @@ class VerifikasiCapaian extends Component
             return;
         }
 
+        $this->resetErrorBag('catatanBerkas.'.$berkasId);
         $this->catatanBerkas[$berkasId] = null;
 
         Berkas::whereKey($berkasId)->update([
             'status_verifikasi' => 'terverifikasi',
             'catatan' => null,
         ]);
+
+        $this->cacheBerkasKegiatan = null;
+        $this->cacheBerkasBagianKustom = null;
     }
 
     public function tandaiTolak(int $berkasId): void
@@ -702,6 +706,8 @@ class VerifikasiCapaian extends Component
         if (! $this->berkasBisaDiverifikasi($berkasId)) {
             return;
         }
+
+        $this->resetErrorBag('catatanBerkas.'.$berkasId);
 
         $catatan = trim((string) ($this->catatanBerkas[$berkasId] ?? ''));
 
@@ -716,6 +722,9 @@ class VerifikasiCapaian extends Component
             'status_verifikasi' => 'ditolak',
             'catatan' => $catatan,
         ]);
+
+        $this->cacheBerkasKegiatan = null;
+        $this->cacheBerkasBagianKustom = null;
     }
 
     /**
@@ -739,12 +748,15 @@ class VerifikasiCapaian extends Component
             return;
         }
 
+        $this->resetErrorBag('catatanKendala.'.$kendalaId);
         $this->catatanKendala[$kendalaId] = null;
 
         KendalaSolusi::whereKey($kendalaId)->update([
             'status_verifikasi' => 'terverifikasi',
             'catatan' => null,
         ]);
+
+        $this->cacheKendalaSolusiList = null;
     }
 
     public function tandaiKendalaTolak(int $kendalaId): void
@@ -752,6 +764,8 @@ class VerifikasiCapaian extends Component
         if (! $this->kendalaBisaDiverifikasi($kendalaId)) {
             return;
         }
+
+        $this->resetErrorBag('catatanKendala.'.$kendalaId);
 
         $catatan = trim((string) ($this->catatanKendala[$kendalaId] ?? ''));
 
@@ -766,6 +780,8 @@ class VerifikasiCapaian extends Component
             'status_verifikasi' => 'ditolak',
             'catatan' => $catatan,
         ]);
+
+        $this->cacheKendalaSolusiList = null;
     }
 
     /**
@@ -787,12 +803,15 @@ class VerifikasiCapaian extends Component
             return;
         }
 
+        $this->resetErrorBag('catatanUraian.'.$kegiatanId);
         $this->catatanUraian[$kegiatanId] = null;
 
         Kegiatan::whereKey($kegiatanId)->update([
             'status_verifikasi_uraian' => 'terverifikasi',
             'catatan_uraian' => null,
         ]);
+
+        $this->cacheKegiatanList = null;
     }
 
     public function tandaiUraianTolak(int $kegiatanId): void
@@ -800,6 +819,8 @@ class VerifikasiCapaian extends Component
         if (! $this->uraianBisaDiverifikasi($kegiatanId)) {
             return;
         }
+
+        $this->resetErrorBag('catatanUraian.'.$kegiatanId);
 
         $catatan = trim((string) ($this->catatanUraian[$kegiatanId] ?? ''));
 
@@ -814,6 +835,8 @@ class VerifikasiCapaian extends Component
             'status_verifikasi_uraian' => 'ditolak',
             'catatan_uraian' => $catatan,
         ]);
+
+        $this->cacheKegiatanList = null;
     }
 
     /**
@@ -832,6 +855,7 @@ class VerifikasiCapaian extends Component
             return;
         }
 
+        $this->resetErrorBag('catatanBagianKustom.'.$poinId);
         $this->catatanBagianKustom[$poinId] = null;
 
         // catatan_bukti_dihapus (pengingat bukti tertolak yang sudah dihapus Ketua Tim,
@@ -842,6 +866,8 @@ class VerifikasiCapaian extends Component
             'catatan' => null,
             'catatan_bukti_dihapus' => null,
         ]);
+
+        $this->cacheBagianKustomList = null;
     }
 
     public function tandaiBagianKustomTolak(int $poinId): void
@@ -849,6 +875,8 @@ class VerifikasiCapaian extends Component
         if (! $this->bagianKustomBisaDiverifikasi($poinId)) {
             return;
         }
+
+        $this->resetErrorBag('catatanBagianKustom.'.$poinId);
 
         $catatan = trim((string) ($this->catatanBagianKustom[$poinId] ?? ''));
 
@@ -863,6 +891,8 @@ class VerifikasiCapaian extends Component
             'status_verifikasi' => 'ditolak',
             'catatan' => $catatan,
         ]);
+
+        $this->cacheBagianKustomList = null;
     }
 
     /**
@@ -890,6 +920,7 @@ class VerifikasiCapaian extends Component
             return;
         }
 
+        $this->resetErrorBag('catatanRtl.'.$rtlId);
         $this->catatanRtl[$rtlId] = null;
 
         // catatan_bukti_dihapus ikut dikosongkan — sama seperti tandaiBagianKustomSesuai().
@@ -898,6 +929,8 @@ class VerifikasiCapaian extends Component
             'catatan' => null,
             'catatan_bukti_dihapus' => null,
         ]);
+
+        $this->cacheRtlSebelumnya = null;
     }
 
     public function tandaiRtlTolak(int $rtlId): void
@@ -905,6 +938,8 @@ class VerifikasiCapaian extends Component
         if (! $this->rtlBisaDiverifikasi($rtlId)) {
             return;
         }
+
+        $this->resetErrorBag('catatanRtl.'.$rtlId);
 
         $catatan = trim((string) ($this->catatanRtl[$rtlId] ?? ''));
 
@@ -919,6 +954,8 @@ class VerifikasiCapaian extends Component
             'status_verifikasi' => 'ditolak',
             'catatan' => $catatan,
         ]);
+
+        $this->cacheRtlSebelumnya = null;
     }
 
     /**
@@ -937,12 +974,15 @@ class VerifikasiCapaian extends Component
             return;
         }
 
+        $this->resetErrorBag('catatanRtlBerikutnya.'.$rtlId);
         $this->catatanRtlBerikutnya[$rtlId] = null;
 
         RtlEvaluasi::whereKey($rtlId)->update([
             'status_verifikasi' => 'terverifikasi',
             'catatan' => null,
         ]);
+
+        $this->cacheRtlBerikutnya = null;
     }
 
     public function tandaiRtlBerikutnyaTolak(int $rtlId): void
@@ -950,6 +990,8 @@ class VerifikasiCapaian extends Component
         if (! $this->rtlBerikutnyaBisaDiverifikasi($rtlId)) {
             return;
         }
+
+        $this->resetErrorBag('catatanRtlBerikutnya.'.$rtlId);
 
         $catatan = trim((string) ($this->catatanRtlBerikutnya[$rtlId] ?? ''));
 
@@ -964,6 +1006,8 @@ class VerifikasiCapaian extends Component
             'status_verifikasi' => 'ditolak',
             'catatan' => $catatan,
         ]);
+
+        $this->cacheRtlBerikutnya = null;
     }
 
     /**
