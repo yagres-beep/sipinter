@@ -1264,6 +1264,36 @@ class VerifikasiCapaianTest extends TestCase
         $this->assertCount(2, $component->instance()->rincianNTerkunci());
     }
 
+    public function test_toggle_rincian_n_mengklaim_dan_memindah_klaim_antar_kolom_tw(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+        $data['iku']->update(['metode_capaian' => 'rasio']);
+
+        // Periode Capaian ini triwulan III -- item diklaim langsung dari kolom TW I
+        // (klik checkbox di kolom TW I, bukan lewat dropdown lagi), lalu klaimnya
+        // dipindah ke kolom TW II, lalu dilepas sepenuhnya dari kolom TW II.
+        $item = RincianN::create(['iku_id' => $data['iku']->id, 'tahun' => 2026, 'uraian' => 'Item']);
+
+        $component = Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']->fresh()]);
+
+        $component->call('toggleRincianN', $item->id, 1);
+        $this->assertTrue($component->get('rincianNPilih')[$item->id]);
+        $this->assertEquals(1, $component->get('rincianNTw')[$item->id]);
+
+        // Klik lagi di kolom TW II -- klaim PINDAH ke TW II, bukan menambah entri baru.
+        $component->call('toggleRincianN', $item->id, 2);
+        $this->assertTrue($component->get('rincianNPilih')[$item->id]);
+        $this->assertEquals(2, $component->get('rincianNTw')[$item->id]);
+
+        // Klik lagi di kolom TW II yang SAMA (kolom klaim saat ini) -- terlepas.
+        $component->call('toggleRincianN', $item->id, 2);
+        $this->assertFalse($component->get('rincianNPilih')[$item->id]);
+
+        // Belum pernah disimpan -- DB tetap kosong.
+        $this->assertNull($item->fresh()->triwulan_realisasi);
+    }
+
     public function test_rincian_n_tidak_bisa_disusulkan_ke_tw_yang_belum_berjalan(): void
     {
         $this->actingAs($this->buatSakip());

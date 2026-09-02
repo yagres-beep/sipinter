@@ -496,6 +496,50 @@ class VerifikasiCapaian extends Component
     }
 
     /**
+     * Centang/lepas satu item Rincian N dari KOLOM TW $tw manapun (1..TW aktif) --
+     * dipanggil blade lewat wire:click (bukan wire:model biasa) karena checklist
+     * kini TERBUKA/interaktif di SETIAP kolom TW s.d. TW aktif sekaligus (bukan
+     * cuma kolom TW aktif), lihat blade -- satu item hanya boleh "diklaim" oleh
+     * SATU kolom pada satu waktu: mengklik di kolom lain memindahkan klaimnya ke
+     * kolom itu, mengklik ulang di kolom yang sama melepasnya. Item yang triwulan_
+     * realisasi-nya sudah TW aktif (tersimpan sesi ini sebelumnya) tetap hanya
+     * bisa disentuh dari kolom TW aktif -- $tw dari kolom lain diabaikan untuk
+     * item semacam itu (dijaga twTujuanRincianN()). Item yang SUDAH terkunci
+     * permanen di TW lain (bukan TW aktif) tidak pernah sampai sini -- blade hanya
+     * memanggil ini untuk item $rincianNBisaDipilih().
+     */
+    public function toggleRincianN(int $id, int $tw): void
+    {
+        if (! $this->bisaDiverifikasi()) {
+            return;
+        }
+
+        $twAktif = (int) $this->capaian->periode->triwulan;
+        $tw = min(max($tw, 1), $twAktif);
+
+        $n = $this->rincianNBisaDipilih()->firstWhere('id', $id);
+
+        if (! $n) {
+            return;
+        }
+
+        $dicentangDiKolomIni = (bool) ($this->rincianNPilih[$id] ?? false)
+            && $this->twTujuanRincianN($n, $twAktif) === $tw;
+
+        if ($dicentangDiKolomIni) {
+            $this->rincianNPilih[$id] = false;
+        } else {
+            $this->rincianNPilih[$id] = true;
+
+            if ($n->triwulan_realisasi === null) {
+                $this->rincianNTw[$id] = $tw;
+            }
+        }
+
+        $this->recomputeXRealisasiLive();
+    }
+
+    /**
      * Tulis pilihan $rincianNPilih/$rincianNTw ke DB (set/lepas triwulan_realisasi
      * item terkait, ke triwulan TUJUAN masing-masing -- lihat twTujuanRincianN(),
      * BUKAN selalu TW aktif seperti sebelumnya) lalu samakan x_realisasi_tw1..4
