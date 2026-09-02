@@ -477,8 +477,7 @@
 
         <div class="btn-row" style="margin-top:10px">
             <button type="button" class="btn btn-ghost btn-sm"
-                wire:click="susunUlangOtomatis"
-                wire:confirm="Ini akan menimpa suntingan manual Anda di pratinjau dengan hasil susun ulang dari data terverifikasi. Suntingan lama tetap dicadangkan dan bisa dipulihkan. Lanjutkan?"
+                wire:click="mintaSusunUlangOtomatis"
                 wire:loading.attr="disabled" wire:target="susunUlangOtomatis,simpanSuntinganBagian1,pulihkanSuntinganBagian1">
                 <span wire:loading.remove wire:target="susunUlangOtomatis">↻ Susun Ulang Otomatis</span>
                 <span wire:loading wire:target="susunUlangOtomatis"><i class="spin"></i> Menyusun…</span>
@@ -489,14 +488,31 @@
             </button>
             @if (filled($notula->bagian1_html_cadangan))
                 <button type="button" class="btn btn-ghost btn-sm"
-                    wire:click="pulihkanSuntinganBagian1"
-                    wire:confirm="Ini akan mengganti isi pratinjau saat ini dengan suntingan sebelum susun ulang terakhir. Lanjutkan?"
+                    wire:click="mintaPulihkanSuntinganBagian1"
                     wire:loading.attr="disabled" wire:target="susunUlangOtomatis,simpanSuntinganBagian1,pulihkanSuntinganBagian1">
                     <span wire:loading.remove wire:target="pulihkanSuntinganBagian1">⤺ Pulihkan Suntingan Sebelumnya</span>
                     <span wire:loading wire:target="pulihkanSuntinganBagian1"><i class="spin"></i> Memulihkan…</span>
                 </button>
             @endif
         </div>
+
+        <x-confirm-modal :show="$konfirmasiSusunUlang" title="Susun Ulang Otomatis?" :danger="false"
+            message="Ini akan menimpa suntingan manual Anda di pratinjau dengan hasil susun ulang dari data terverifikasi. Suntingan lama tetap dicadangkan dan bisa dipulihkan. Lanjutkan?">
+            <button type="button" class="btn btn-ghost" wire:click="batalSusunUlangOtomatis" wire:loading.attr="disabled" wire:target="susunUlangOtomatis">Batal</button>
+            <button type="button" class="btn btn-primary" wire:click="susunUlangOtomatis" wire:loading.attr="disabled" wire:target="susunUlangOtomatis">
+                <span wire:loading.remove wire:target="susunUlangOtomatis">Lanjutkan</span>
+                <span wire:loading wire:target="susunUlangOtomatis"><i class="spin"></i> Menyusun…</span>
+            </button>
+        </x-confirm-modal>
+
+        <x-confirm-modal :show="$konfirmasiPulihkan" title="Pulihkan Suntingan Sebelumnya?" :danger="false"
+            message="Ini akan mengganti isi pratinjau saat ini dengan suntingan sebelum susun ulang terakhir. Lanjutkan?">
+            <button type="button" class="btn btn-ghost" wire:click="batalPulihkanSuntinganBagian1" wire:loading.attr="disabled" wire:target="pulihkanSuntinganBagian1">Batal</button>
+            <button type="button" class="btn btn-primary" wire:click="pulihkanSuntinganBagian1" wire:loading.attr="disabled" wire:target="pulihkanSuntinganBagian1">
+                <span wire:loading.remove wire:target="pulihkanSuntinganBagian1">Lanjutkan</span>
+                <span wire:loading wire:target="pulihkanSuntinganBagian1"><i class="spin"></i> Memulihkan…</span>
+            </button>
+        </x-confirm-modal>
 
         <div class="merge-bar" style="margin-top:26px">
             <span class="merge-stat">

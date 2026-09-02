@@ -527,11 +527,40 @@ class NotulaBagian1DocxService
      *
      * Dijalankan di generate() SETELAH seluruh manipulasi XML lain (blok IKU digandakan, baris RO
      * digandakan, dst) supaya menyisir HASIL AKHIR dokumen, bukan cuma template mentahnya.
+     *
+     * Baris HARUS diperiksa dulu apakah sudah punya <w:trPr> sendiri (mis. baris header tabel
+     * Sasaran/Triwulan yang butuh <w:trPr><w:jc w:val="center"/></w:trPr> supaya sel vMerge/
+     * gridSpan-nya rata tengah) -- kalau ADA, <w:cantSplit/> harus disisipkan sebagai ANAK di
+     * dalam <w:trPr> yang sudah ada itu, BUKAN menambah <w:trPr> KEDUA yang terpisah. Skema OOXML
+     * hanya mengizinkan SATU <w:trPr> per <w:tr>; dua elemen trPr bersebelahan membuat baris itu
+     * tidak valid, dan Word/LibreOffice lalu merusak susunan sel gabungan (vMerge/gridSpan) baris
+     * tsb saat memulihkannya -- persis tabel header Sasaran/Triwulan yang tampak berantakan di
+     * pratinjau Kompilasi Notula walau template aslinya benar.
      */
     private function cegahBarisTerpotongAntarHalaman(TemplateProcessor $processor): void
     {
         $xml = $this->getMainPart($processor);
-        $xml = preg_replace('/<w:tr\b([^>]*)>/', '<w:tr$1><w:trPr><w:cantSplit/></w:trPr>', $xml);
+        $xml = preg_replace_callback(
+            '/<w:tr\b([^>]*)>(\s*<w:trPr\s*\/>|\s*<w:trPr>)?/',
+            function (array $m): string {
+                $trOpen = '<w:tr'.$m[1].'>';
+                $trPr = $m[2] ?? '';
+
+                if ($trPr === '') {
+                    return $trOpen.'<w:trPr><w:cantSplit/></w:trPr>';
+                }
+
+                if (str_contains($trPr, '/>')) {
+                    // <w:trPr/> kosong (self-closed) -- ganti jadi <w:trPr><w:cantSplit/></w:trPr>.
+                    return $trOpen.'<w:trPr><w:cantSplit/></w:trPr>';
+                }
+
+                // <w:trPr> sudah terbuka dengan anak-anaknya sendiri menyusul di XML setelah ini
+                // (mis. <w:jc/>) -- cukup selipkan <w:cantSplit/> sebagai anak PERTAMA di dalamnya.
+                return $trOpen.$trPr.'<w:cantSplit/>';
+            },
+            $xml
+        );
         $this->setMainPart($processor, $xml);
     }
 

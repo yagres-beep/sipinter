@@ -53,6 +53,16 @@ class KompilasiNotula extends Component
     public string $linkLampiranBasisData = '';
 
     /**
+     * Menahan aksi "Susun Ulang Otomatis"/"Pulihkan Suntingan Sebelumnya" di balik
+     * modal konfirmasi bertema SIPINTER (x-confirm-modal) alih-alih wire:confirm
+     * bawaan Livewire, yang me-render confirm() native browser dan tidak ikut
+     * tema/dark-mode situs -- lihat resources/views/components/confirm-modal.blade.php.
+     */
+    public bool $konfirmasiSusunUlang = false;
+
+    public bool $konfirmasiPulihkan = false;
+
+    /**
      * Cache dalam satu siklus request — notula() dipanggil di banyak method
      * (mount, render, tiap aksi) untuk tahun/triwulan yang sama; tanpa memoisasi
      * ini query yang sama (DB remote, ~400ms) terulang tiap kali dipanggil.
@@ -209,10 +219,23 @@ class KompilasiNotula extends Component
      * kepencet tidak sengaja / hasil susun ulangnya ternyata tidak diinginkan, Tim
      * SAKIP masih bisa memulihkannya lewat pulihkanSuntinganBagian1() -- lihat tombol
      * "Pulihkan Suntingan Sebelumnya" di Blade (cuma tampil bila cadangan ini terisi).
-     * Konfirmasi sebelum menimpa (wire:confirm) sudah dipasang di tombolnya sendiri.
+     * Konfirmasi sebelum menimpa (modal $konfirmasiSusunUlang) sudah dipasang di
+     * tombolnya sendiri -- lihat mintaSusunUlangOtomatis()/batalSusunUlangOtomatis().
      */
+    public function mintaSusunUlangOtomatis(): void
+    {
+        $this->konfirmasiSusunUlang = true;
+    }
+
+    public function batalSusunUlangOtomatis(): void
+    {
+        $this->konfirmasiSusunUlang = false;
+    }
+
     public function susunUlangOtomatis(): void
     {
+        $this->konfirmasiSusunUlang = false;
+
         $notula = $this->notula();
 
         if (filled($notula->bagian1_html)) {
@@ -233,8 +256,20 @@ class KompilasiNotula extends Component
      * isi yang baru saja dipulihkan tetap tercadangkan (bukan langsung hilang tanpa
      * jejak di percobaan kedua).
      */
+    public function mintaPulihkanSuntinganBagian1(): void
+    {
+        $this->konfirmasiPulihkan = true;
+    }
+
+    public function batalPulihkanSuntinganBagian1(): void
+    {
+        $this->konfirmasiPulihkan = false;
+    }
+
     public function pulihkanSuntinganBagian1(): void
     {
+        $this->konfirmasiPulihkan = false;
+
         $notula = $this->notula();
 
         if (blank($notula->bagian1_html_cadangan)) {
