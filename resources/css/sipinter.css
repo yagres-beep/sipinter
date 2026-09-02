@@ -417,7 +417,7 @@ th.th-sort.active .th-arrow{opacity:1;color:var(--blue-600);font-weight:700}
 .notula .sub,.notula .nsub{text-align:center;color:var(--muted);font-size:11px;margin-bottom:14px;font-family:inherit}
 .notula .nrow{margin-bottom:8px}
 .notula .nlabel{font-weight:700;color:#111;margin-bottom:3px}
-.notula table{width:100%;margin:8px 0;border-collapse:collapse}
+.notula table{width:100%;table-layout:fixed;margin:8px 0;border-collapse:collapse}
 .notula td,.notula th{border:1px solid #999;padding:5px 6px;font-size:11pt;text-align:left}
 .notula th{text-transform:none;letter-spacing:0;color:#111;font-weight:700;background:#f2f2f2}
 .notula p{margin:0 0 12px}

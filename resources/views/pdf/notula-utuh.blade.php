@@ -35,7 +35,11 @@
   ul { margin: 0 0 8px 18px; padding: 0; }
   .nrow { margin-bottom: 8px; }
   .nlabel { font-weight: bold; }
-  table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+  {{-- table-layout:fixed sesuai <w:tblLayout w:type="fixed"/> di template .docx --
+       TANPA ini, kolom ditata dari perkiraan lebar konten (algoritma "auto"), yang
+       bisa melebarkan/mempersempit kolom secara tidak proporsional dibanding lebar
+       w:tcW per kolom di template asli, apalagi pada sel berisi teks panjang. --}}
+  table { width: 100%; table-layout: fixed; border-collapse: collapse; margin: 8px 0; }
   td, th { border: 1px solid #999; padding: 5px 6px; text-align: left; }
   th { background: #f2f2f2; }
 
