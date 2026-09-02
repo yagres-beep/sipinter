@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Models\FolderConfig;
 use App\Services\FolderStructureService;
 use App\Services\GoogleDriveService;
+use App\Services\NotulaBagian1DocxService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Component;
@@ -35,9 +36,25 @@ class TemplateNotula extends Component
         ];
     }
 
+    /**
+     * Struktur berkas divalidasi (NotulaBagian1DocxService::validasiStrukturTemplate())
+     * SEBELUM diaktifkan sebagai template Bagian I -- berkas ini dipakai LANGSUNG oleh
+     * generate() (lihat catatan kelas di NotulaBagian1DocxService), jadi berkas yang
+     * penanda bloknya belum lengkap (mis. lupa {{/iku_blok}}) harus ketahuan & ditolak
+     * DI SINI, bukan baru meruntuhkan halaman Kompilasi Notula bagi semua pemakai
+     * begitu template rusak ini terlanjur jadi template aktif.
+     */
     public function unggah(): void
     {
         $this->validate();
+
+        try {
+            app(NotulaBagian1DocxService::class)->validasiStrukturTemplate($this->templateFile->getRealPath());
+        } catch (\RuntimeException $e) {
+            $this->addError('templateFile', $e->getMessage());
+
+            return;
+        }
 
         $config = FolderConfig::current();
 

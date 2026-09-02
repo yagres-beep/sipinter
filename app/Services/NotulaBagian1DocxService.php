@@ -56,7 +56,7 @@ class NotulaBagian1DocxService
     {
         $templatePath = $this->resolveTemplatePath();
 
-        $processor = new TemplateProcessor($templatePath);
+        $processor = $this->newTemplateProcessor($templatePath);
         // Template ini pakai delimiter {{...}} (bukan ${...} bawaan PhpWord) supaya
         // sesuai konvensi yang diminta -- lihat TemplateProcessor::setMacroChars().
         // Dikembalikan ke default di akhir generate() karena properti ini STATIC
@@ -190,7 +190,7 @@ class NotulaBagian1DocxService
 
         $daftarIku = $data['sasaranPerIku']->flatten();
 
-        $sub = new TemplateProcessor($templatePath);
+        $sub = $this->newTemplateProcessor($templatePath);
         $sub->setMacroChars('{{', '}}');
 
         $potongan = $daftarIku->map(function ($iku) use ($data, $ikuBlokTemplate, $sub) {
@@ -266,9 +266,15 @@ class NotulaBagian1DocxService
         // Baris rumus "y = n/N x 100%" (paragraf TERSENDIRI rata tengah, lihat
         // formulaBaris()) hanya tampil untuk IKU % yang datanya lengkap -- sama seperti
         // blok_sakip/blok_ro, dibuang total (bukan dikosongkan jadi "…") bila tidak berlaku
-        // supaya tidak menyisakan paragraf rata-tengah kosong.
-        $formulaBaris = $this->formulaBaris($iku, $rekap);
-        $tampilkanFormula = $formulaBaris !== null;
+        // supaya tidak menyisakan paragraf rata-tengah kosong. IKU bersatuan Poin (rumus
+        // unik per indikator, mis. IPP/TPSS) TIDAK punya rumus otomatis -- kalau Tim SAKIP
+        // menuliskan sintaks RumusMarkup di baris pertama "Dasar Hitung"-nya sendiri, itu
+        // yang dipakai sebagai gantinya (lihat formulaKustomDariDasarHitung()). Rumus
+        // otomatis SELALU diutamakan bila keduanya kebetulan ada, supaya tidak dobel.
+        $formulaOtomatis = $this->formulaBaris($iku, $rekap);
+        $formulaKustom = $formulaOtomatis === null ? $this->formulaKustomDariDasarHitung($iku->dasar_hitung) : null;
+        $formulaDicetak = $formulaOtomatis ?? $formulaKustom['formula'] ?? null;
+        $tampilkanFormula = $formulaDicetak !== null;
 
         $xml = $blokTemplate;
         $xml = $this->resolveBlokKondisional($xml, 'blok_sakip', $isSakip);
@@ -343,13 +349,18 @@ class NotulaBagian1DocxService
         // OOXML Math (lihat setFormula() & App\Support\RumusMarkup::keOmml()) -- BUKAN
         // notasi "a/b" biasa, supaya .docx tercetak persis seperti dokumen resmi.
         if ($tampilkanFormula) {
-            $this->setFormula($sub, $formulaBaris);
+            $this->setFormula($sub, $formulaDicetak);
         }
 
         // Kolom dasar_hitung sendiri (kalau diisi) TETAP ditampilkan sebagai keterangan
         // tambahan setelah "dimana:.../rincian" (mis. rincian "Target 2026: N = 2
-        // mencakup: ..."), bukan lagi wajib memuat rumus lengkap.
-        $dasarHitungGabungan = collect([$this->formulaKeterangan($iku, $rekap, $data['periode']), $iku->dasar_hitung])
+        // mencakup: ..."), bukan lagi wajib memuat rumus lengkap. Bila baris pertamanya
+        // sudah "diambil" jadi rumus kustom di atas ($formulaKustom), sisanya (baris
+        // KEDUA dst.) yang jadi keterangan di sini -- bukan dasar_hitung utuh lagi,
+        // supaya rumusnya tidak tercetak dobel (sekali bersusun di blok_formula, sekali
+        // lagi mendatar di sini).
+        $dasarHitungSumber = $formulaKustom !== null ? $formulaKustom['sisa'] : $iku->dasar_hitung;
+        $dasarHitungGabungan = collect([$this->formulaKeterangan($iku, $rekap, $data['periode']), $dasarHitungSumber])
             ->filter(fn ($t) => filled($t))
             ->implode("\n\n");
         $dasarHitungTeks = RumusMarkup::keTeksPolos($dasarHitungGabungan);
@@ -407,6 +418,40 @@ class NotulaBagian1DocxService
         $besarNTeks = PengaturanCapaian::formatAngka($besarN);
 
         return "y = [[n|N]] × 100% = [[{$nTeks}|{$besarNTeks}]] × 100%";
+    }
+
+    /**
+     * Ambil rumus KUSTOM IKU bersatuan Poin (mis. IPP: "IPP = w1 x [[SUM:i=1,n|xi]] +
+     * w2 x [[SUM:i=1,m|yi]]") dari BARIS PERTAMA kolom "Dasar Hitung" Master IKU --
+     * konvensinya: baris pertama berisi rumusnya (dicetak bersusun rata tengah lewat
+     * blok_formula, PERSIS seperti rumus otomatis formulaBaris()), baris-baris
+     * SETELAHNYA (kalau ada) tetap keterangan biasa rata kiri seperti dasar_hitung
+     * lain -- dikembalikan terpisah lewat kunci 'sisa' supaya pemanggil (isiSatuIku())
+     * tidak mencetak rumusnya dua kali (sekali bersusun, sekali lagi mendatar).
+     *
+     * Null bila baris pertama TIDAK memuat sintaks RumusMarkup "[[" sama sekali --
+     * berarti seluruh isian memang teks keterangan biasa (perilaku lama, tidak
+     * berubah). Dipanggil HANYA bila formulaBaris() sendiri null (lihat isiSatuIku())
+     * -- rumus otomatis IKU % SELALU diutamakan, supaya tidak dobel dengan isian
+     * manual yang kebetulan juga diawali "[[".
+     *
+     * @return array{formula: string, sisa: ?string}|null
+     */
+    private function formulaKustomDariDasarHitung(?string $dasarHitung): ?array
+    {
+        $dasarHitung = trim((string) $dasarHitung);
+        if ($dasarHitung === '') {
+            return null;
+        }
+
+        [$barisPertama, $sisa] = array_pad(explode("\n", $dasarHitung, 2), 2, null);
+        $barisPertama = trim($barisPertama);
+
+        if (! str_contains($barisPertama, '[[')) {
+            return null;
+        }
+
+        return ['formula' => $barisPertama, 'sisa' => $sisa !== null && trim($sisa) !== '' ? trim($sisa) : null];
     }
 
     /**
@@ -561,6 +606,31 @@ class NotulaBagian1DocxService
     // perilaku TemplateProcessor itu sendiri.
     // ------------------------------------------------------------------
 
+    /**
+     * Bangun TemplateProcessor dengan delimiter {{...}} SUDAH aktif SEBELUM konstruktornya
+     * jalan -- konstruktor PhpWord (lewat readPartWithRels()) memanggil fixBrokenMacros()
+     * SAAT ITU JUGA untuk menyatukan run XML yang terpecah (Word kerap memecah satu macro
+     * jadi beberapa <w:r> begitu dokumennya disunting ulang & disimpan, mis. commit "Rumus
+     * pecahan bersusun asli di docx, rapikan tabel Realisasi RO"), memakai delimiter yang
+     * SEDANG AKTIF saat konstruksi. Kode lama memanggil setMacroChars('{{','}}') SETELAH
+     * `new TemplateProcessor(...)`, jadi fixBrokenMacros() konstruktor itu masih memakai
+     * default ${...} bawaan PhpWord -- macro {{...}} yang kebetulan terpecah runnya TIDAK
+     * ikut diperbaiki, dan pencarian string literal di splitOnMarkers() (mis. {{iku_blok}})
+     * gagal walau macro itu masih ADA di dokumen, cuma terpecah. Delimiter diset lewat
+     * Reflection ke properti STATIC TemplateProcessor (bukan lewat instance) karena kita
+     * belum punya instance-nya di titik ini -- justru itu masalahnya.
+     */
+    private function newTemplateProcessor(string $templatePath): TemplateProcessor
+    {
+        foreach (['macroOpeningChars' => '{{', 'macroClosingChars' => '}}'] as $properti => $nilai) {
+            $ref = new ReflectionProperty(TemplateProcessor::class, $properti);
+            $ref->setAccessible(true);
+            $ref->setValue(null, $nilai);
+        }
+
+        return new TemplateProcessor($templatePath);
+    }
+
     private function getMainPart(TemplateProcessor $p): string
     {
         $ref = new ReflectionProperty(TemplateProcessor::class, 'tempDocumentMainPart');
@@ -574,6 +644,69 @@ class NotulaBagian1DocxService
         $ref = new ReflectionProperty(TemplateProcessor::class, 'tempDocumentMainPart');
         $ref->setAccessible(true);
         $ref->setValue($p, $xml);
+    }
+
+    /**
+     * Validasi STRUKTUR template (bukan isi datanya) -- dipanggil App\Livewire\TemplateNotula::unggah()
+     * SEBELUM berkas yang diunggah Tim SAKIP diaktifkan sebagai template Bagian I. Mencegah berkas yang
+     * belum lengkap penanda bloknya (mis. lupa menyisipkan {{/iku_blok}} saat menyunting ulang di Word)
+     * baru ketahuan rusak saat generate() dipanggil (splitOnMarkers() melempar RuntimeException, lihat
+     * catatan kelas di atas) -- yang berarti SELURUH halaman Kompilasi Notula ambruk 500 bagi SEMUA
+     * pemakai berikutnya. Dengan validasi ini, kesalahannya ketahuan & bisa diperbaiki SAAT unggah.
+     *
+     * Mengecek SEMUA pasangan penanda blok sekaligus lewat cariBlokAman() (bukan berhenti di kesalahan
+     * pertama seperti splitOnMarkers()) supaya Tim SAKIP bisa memperbaiki semuanya dalam satu kali coba.
+     *
+     * @throws RuntimeException berisi daftar SEMUA masalah yang ditemukan, satu per baris
+     */
+    public function validasiStrukturTemplate(string $templatePath): void
+    {
+        try {
+            $processor = $this->newTemplateProcessor($templatePath);
+            $processor->setMacroChars('{{', '}}');
+            $xml = $this->getMainPart($processor);
+        } catch (\Throwable $e) {
+            throw new RuntimeException("Berkas bukan .docx yang valid atau rusak: {$e->getMessage()}");
+        }
+
+        $masalah = [];
+
+        $ikuBlok = $this->cariBlokAman($xml, '{{iku_blok}}', '{{/iku_blok}}', 'p', $masalah);
+
+        // Blok kondisional & ro_row ada DI DALAM iku_blok -- hanya diperiksa kalau iku_blok sendiri
+        // berhasil ditemukan (kalau tidak, isinya tidak diketahui, laporan di atas sudah cukup).
+        if ($ikuBlok !== null) {
+            $this->cariBlokAman($ikuBlok, '{{blok_sakip}}', '{{/blok_sakip}}', 'tr', $masalah);
+            $this->cariBlokAman($ikuBlok, '{{blok_berakhlak}}', '{{/blok_berakhlak}}', 'tr', $masalah);
+            $blokRo = $this->cariBlokAman($ikuBlok, '{{blok_ro}}', '{{/blok_ro}}', 'tr', $masalah);
+            $this->cariBlokAman($ikuBlok, '{{blok_formula}}', '{{/blok_formula}}', 'p', $masalah);
+
+            if ($blokRo !== null) {
+                $this->cariBlokAman($blokRo, '{{ro_row}}', '{{/ro_row}}', 'tr', $masalah);
+            }
+        }
+
+        if ($masalah !== []) {
+            throw new RuntimeException("Template tidak sesuai struktur yang dibutuhkan:\n- ".implode("\n- ", $masalah));
+        }
+    }
+
+    /**
+     * Versi splitOnMarkers() yang TIDAK melempar exception -- mengembalikan null & menambahkan
+     * pesannya ke $masalah bila penanda tidak ditemukan/rusak, dipakai KHUSUS oleh
+     * validasiStrukturTemplate() supaya semua masalah bisa dikumpulkan sekaligus.
+     */
+    private function cariBlokAman(string $xml, string $openNeedle, string $closeNeedle, string $unit, array &$masalah): ?string
+    {
+        try {
+            [, $inner] = $this->splitOnMarkers($xml, $openNeedle, $closeNeedle, $unit);
+
+            return $inner;
+        } catch (RuntimeException $e) {
+            $masalah[] = $e->getMessage();
+
+            return null;
+        }
     }
 
     /**

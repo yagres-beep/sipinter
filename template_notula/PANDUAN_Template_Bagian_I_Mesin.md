@@ -2,9 +2,18 @@
 
 Berkas ini adalah **template mesin** yang dipakai `App\Services\NotulaBagian1DocxService`
 untuk menghasilkan unduhan Bagian I (.docx) di halaman Kompilasi Notula (tombol
-"⬇ Unduh Bagian I (.docx, terisi otomatis)"). **Ini BUKAN** berkas yang sama dengan
-fitur "Template Notula" di menu Pengaturan (`App\Livewire\TemplateNotula`) — itu cuma
-arsip referensi format resmi yang diunggah Tim SAKIP dan tidak pernah dibaca kode.
+"⬇ Unduh Bagian I (.docx, terisi otomatis)"), maupun pratinjau webnya (lewat konversi
+LibreOffice, lihat `NotulaService::susunBagianSatu()`).
+
+Berkas ini di repo cuma jadi **cadangan bawaan** (`DEFAULT_TEMPLATE_PATH`) — begitu Tim
+SAKIP mengunggah berkas lewat fitur "Template Notula" di menu Pengaturan
+(`App\Livewire\TemplateNotula`), berkas UNGGAHAN itu yang dipakai LANGSUNG sebagai
+template aktif (lihat `NotulaBagian1DocxService::resolveTemplatePath()`), bukan cadangan
+bawaan ini. Jadi struktur macro di bawah berlaku SAMA untuk kedua berkas — berkas yang
+diunggah lewat Pengaturan juga wajib mengikutinya persis, dan sejak
+`TemplateNotula::unggah()` sudah memanggil `validasiStrukturTemplate()`, berkas yang
+penanda bloknya tidak lengkap akan ditolak saat diunggah (bukan baru ketahuan rusak saat
+dipakai menyusun notula).
 
 ## Yang PENTING diketahui sebelum menyunting berkas ini
 
