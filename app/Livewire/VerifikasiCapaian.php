@@ -65,17 +65,37 @@ class VerifikasiCapaian extends Component
     public array $rincianOutput = [];
 
     /**
-     * Centang item Rincian N (App\Models\RincianN) yang direalisasikan PADA
-     * TRIWULAN INI -- dikunci pada id RincianN, HANYA memuat item yang
-     * triwulan_realisasi-nya masih kosong ATAU sudah triwulan ini sendiri (item
-     * yang direalisasikan triwulan LAIN tidak pernah masuk sini, ditampilkan
-     * read-only di blade). Menggantikan input manual x_realisasi_tw{n} untuk
-     * SEMUA IKU bermetode Rasio (MasterIku::pakaiRasio()) -- lihat
-     * updatedRincianNPilih()/syncRincianN().
+     * Centang item Rincian N (App\Models\RincianN) yang direalisasikan --
+     * dikunci pada id RincianN, HANYA memuat item yang triwulan_realisasi-nya
+     * masih kosong ATAU sudah triwulan ini sendiri (item yang direalisasikan
+     * triwulan LAIN tidak pernah masuk sini, ditampilkan read-only di blade).
+     * Menggantikan input manual x_realisasi_tw{n} untuk SEMUA IKU bermetode
+     * Rasio (MasterIku::pakaiRasio()) -- lihat updatedRincianNPilih()/syncRincianN().
+     *
+     * Item yang MASIH KOSONG (belum pernah direalisasikan) boleh dicentang untuk
+     * TW MANA PUN s.d. triwulan berjalan (bukan cuma triwulan berjalan itu
+     * sendiri) -- lihat $rincianNTw di bawah untuk triwulan tujuannya -- supaya
+     * Tim SAKIP bisa menyusulkan item yang terlewat dicentang pada sesi
+     * verifikasi TW sebelumnya, sesuai Kertas Kerja Excel resmi yang mengisi
+     * Realisasi (Kumulatif) sebagai angka apa adanya, bukan terikat sesi.
      *
      * @var array<int, bool>
      */
     public array $rincianNPilih = [];
+
+    /**
+     * Triwulan TUJUAN untuk tiap item Rincian N yang MASIH KOSONG (triwulan_
+     * realisasi === null) dan sedang dicentang $rincianNPilih -- dikunci pada id
+     * RincianN, nilai 1-4, DIBATASI maksimal triwulan berjalan (tidak bisa
+     * menyusulkan ke triwulan yang belum terjadi) di syncRincianN(). Default =
+     * triwulan berjalan (perilaku lama tetap berlaku bila tidak diubah). Item
+     * yang SUDAH direalisasikan triwulan berjalan (triwulan_realisasi === TW
+     * aktif, dicentang dari sesi sebelumnya) TIDAK memakai properti ini --
+     * triwulannya sudah tetap TW aktif, tidak bisa dipindah.
+     *
+     * @var array<int, int>
+     */
+    public array $rincianNTw = [];
 
     /**
      * Nilai form Alokasi/Realisasi Triwulanan — diikat lewat wire:model (properti
@@ -360,6 +380,8 @@ class VerifikasiCapaian extends Component
         foreach ($this->rincianNList() as $n) {
             if ($n->triwulan_realisasi === $tw) {
                 $this->rincianNPilih[$n->id] = true;
+            } elseif ($n->triwulan_realisasi === null) {
+                $this->rincianNTw[$n->id] = $tw;
             }
         }
     }
@@ -411,23 +433,79 @@ class VerifikasiCapaian extends Component
     }
 
     /**
-     * Live-recompute x_realisasi_tw{TW aktif} dari jumlah item yang SEDANG
-     * dicentang -- dipanggil otomatis Livewire tiap $rincianNPilih berubah (mirip
-     * efek wire:model.live pada input manual), supaya kumulatif &amp; Capaian %
-     * di blade langsung bereaksi tanpa perlu menyimpan dulu.
+     * Triwulan TUJUAN efektif satu item $rincianNBisaDipilih() -- TW aktif bila
+     * item ini sudah direalisasikan TW aktif (triwulan_realisasi === TW aktif,
+     * tidak bisa dipindah lagi), atau pilihan $rincianNTw (dibatasi 1..TW aktif,
+     * default TW aktif) bila item ini masih kosong. Dipakai bersama oleh
+     * updatedRincianNPilih() (live preview) &amp; syncRincianN() (simpan
+     * sesungguhnya) supaya keduanya selalu konsisten.
      */
-    public function updatedRincianNPilih(): void
+    protected function twTujuanRincianN(RincianN $n, int $twAktif): int
     {
-        $tw = (int) $this->capaian->periode->triwulan;
-        $this->{"x_realisasi_tw{$tw}"} = collect($this->rincianNPilih)->filter()->count();
+        if ($n->triwulan_realisasi === $twAktif) {
+            return $twAktif;
+        }
+
+        $pilihan = (int) ($this->rincianNTw[$n->id] ?? $twAktif);
+
+        return min(max($pilihan, 1), $twAktif);
     }
 
     /**
-     * Tulis pilihan $rincianNPilih ke DB (set/lepas triwulan_realisasi item
-     * terkait) lalu samakan x_realisasi_tw{TW aktif} dengan jumlah SESUNGGUHNYA
-     * di DB setelahnya -- dipanggil dari tiap jalur simpan (bukan hanya
-     * updatedRincianNPilih() yang cuma live-preview di memori), TIDAK melakukan
-     * apa pun bila IKU ini tidak MasterIku::pakaiRasio().
+     * Live-recompute x_realisasi_tw1..4 dari jumlah item yang SUDAH terkunci di
+     * TW lain (apa adanya) DITAMBAH item $rincianNBisaDipilih() yang SEDANG
+     * dicentang (dihitung ke triwulan tujuannya masing-masing, lihat
+     * twTujuanRincianN()) -- dipanggil otomatis Livewire tiap $rincianNPilih/
+     * $rincianNTw berubah (mirip efek wire:model.live pada input manual), supaya
+     * kumulatif &amp; Capaian % di blade langsung bereaksi tanpa perlu menyimpan
+     * dulu. SELURUH 4 kolom di-recompute (bukan cuma TW aktif) karena kini item
+     * bisa disusulkan ke TW SEBELUM TW aktif dari sesi ini -- lihat docblock
+     * $rincianNPilih.
+     */
+    protected function recomputeXRealisasiLive(): void
+    {
+        $twAktif = (int) $this->capaian->periode->triwulan;
+
+        $hitung = array_fill(1, 4, 0);
+
+        foreach ($this->rincianNList() as $n) {
+            if ($n->triwulan_realisasi !== null && $n->triwulan_realisasi !== $twAktif) {
+                $hitung[$n->triwulan_realisasi]++;
+
+                continue;
+            }
+
+            if ((bool) ($this->rincianNPilih[$n->id] ?? false)) {
+                $hitung[$this->twTujuanRincianN($n, $twAktif)]++;
+            }
+        }
+
+        foreach ($hitung as $tw => $jumlah) {
+            $this->{"x_realisasi_tw{$tw}"} = $jumlah;
+        }
+    }
+
+    public function updatedRincianNPilih(): void
+    {
+        $this->recomputeXRealisasiLive();
+    }
+
+    public function updatedRincianNTw(): void
+    {
+        $this->recomputeXRealisasiLive();
+    }
+
+    /**
+     * Tulis pilihan $rincianNPilih/$rincianNTw ke DB (set/lepas triwulan_realisasi
+     * item terkait, ke triwulan TUJUAN masing-masing -- lihat twTujuanRincianN(),
+     * BUKAN selalu TW aktif seperti sebelumnya) lalu samakan x_realisasi_tw1..4
+     * dengan jumlah SESUNGGUHNYA di DB setelahnya -- dipanggil dari tiap jalur
+     * simpan (bukan hanya recomputeXRealisasiLive() yang cuma live-preview di
+     * memori), TIDAK melakukan apa pun bila IKU ini tidak MasterIku::pakaiRasio().
+     * Item yang sudah tersimpan pada TW manapun (termasuk yang baru disusulkan ke
+     * TW sebelumnya oleh sesi INI) langsung TERKUNCI permanen setelahnya -- tidak
+     * pernah muncul lagi di rincianNBisaDipilih() begitu triwulan_realisasi
+     * terisi, dari sesi manapun.
      */
     protected function syncRincianN(): void
     {
@@ -435,23 +513,26 @@ class VerifikasiCapaian extends Component
             return;
         }
 
-        $tw = (int) $this->capaian->periode->triwulan;
+        $twAktif = (int) $this->capaian->periode->triwulan;
 
         foreach ($this->rincianNBisaDipilih() as $n) {
             $dicentang = (bool) ($this->rincianNPilih[$n->id] ?? false);
 
             if ($dicentang && $n->triwulan_realisasi === null) {
-                $n->update(['triwulan_realisasi' => $tw]);
-            } elseif (! $dicentang && $n->triwulan_realisasi === $tw) {
+                $n->update(['triwulan_realisasi' => $this->twTujuanRincianN($n, $twAktif)]);
+            } elseif (! $dicentang && $n->triwulan_realisasi === $twAktif) {
                 $n->update(['triwulan_realisasi' => null]);
             }
         }
 
         $this->cacheRincianNList = null;
-        $this->{"x_realisasi_tw{$tw}"} = RincianN::where('iku_id', $this->capaian->iku_id)
-            ->where('tahun', $this->capaian->periode->tahun)
-            ->where('triwulan_realisasi', $tw)
-            ->count();
+
+        for ($tw = 1; $tw <= 4; $tw++) {
+            $this->{"x_realisasi_tw{$tw}"} = RincianN::where('iku_id', $this->capaian->iku_id)
+                ->where('tahun', $this->capaian->periode->tahun)
+                ->where('triwulan_realisasi', $tw)
+                ->count();
+        }
     }
 
     /**
@@ -1088,6 +1169,7 @@ class VerifikasiCapaian extends Component
             'koreksiRtlRealisasi.*' => ['nullable', 'string'],
             'koreksiRtlBerikutnya.*' => ['required', 'string'],
             'rincianNPilih.*' => ['boolean'],
+            'rincianNTw.*' => ['nullable', 'integer', 'min:1', 'max:'.(int) $this->capaian->periode->triwulan],
             'alokasi_tw1' => ['nullable', 'numeric', 'min:0'],
             'alokasi_tw2' => ['nullable', 'numeric', 'min:0'],
             'alokasi_tw3' => ['nullable', 'numeric', 'min:0'],
@@ -1199,6 +1281,17 @@ class VerifikasiCapaian extends Component
      * keduanya sudah tidak diedit dari halaman ini (lihat App\Livewire\
      * TargetTahunan), jadi nilainya dibiarkan apa adanya dari
      * capaianTahunanTersimpan().
+     *
+     * PENGECUALIAN untuk x_realisasi_tw (IKU rasio): SELURUH 4 kolom (1..4) ikut
+     * disinkronkan di sini, BUKAN cuma TW aktif seperti prefix lain — sejak Tim
+     * SAKIP boleh menyusulkan item Rincian N ke TW SEBELUM TW aktif dari sesi ini
+     * (lihat $rincianNTw/syncRincianN()), ground truth x_realisasi_tw1..4 sudah
+     * direcompute PENUH dari tabel rincian_n (bukan cuma ditulis-tindih nilai TW
+     * aktif) baik oleh recomputeXRealisasiLive() (live preview) maupun
+     * syncRincianN() (sebelum disimpan) — jadi aman disinkronkan seluruhnya di
+     * sini tanpa risiko menimpa TW lain dengan nilai basi, beda dari
+     * alokasi_tw/realisasi_tw/x_alokasi_tw/y_alokasi_tw yang TETAP murni milik
+     * sesi TW aktif saja.
      */
     protected function capaianTahunanTerkini(): CapaianTahunan
     {
@@ -1207,8 +1300,16 @@ class VerifikasiCapaian extends Component
 
         $fill = [];
 
-        foreach (['alokasi_tw', 'realisasi_tw', 'x_alokasi_tw', 'y_alokasi_tw', 'x_realisasi_tw', 'y_realisasi_tw'] as $prefix) {
+        foreach (['alokasi_tw', 'realisasi_tw', 'x_alokasi_tw', 'y_alokasi_tw', 'y_realisasi_tw'] as $prefix) {
             $fill["{$prefix}{$tw}"] = $this->{"{$prefix}{$tw}"};
+        }
+
+        if ($this->capaian->masterIku->pakaiRasio()) {
+            for ($n = 1; $n <= 4; $n++) {
+                $fill["x_realisasi_tw{$n}"] = $this->{"x_realisasi_tw{$n}"};
+            }
+        } else {
+            $fill["x_realisasi_tw{$tw}"] = $this->{"x_realisasi_tw{$tw}"};
         }
 
         $model->fill($fill);

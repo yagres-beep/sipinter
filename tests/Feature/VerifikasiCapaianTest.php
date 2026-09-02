@@ -1224,6 +1224,63 @@ class VerifikasiCapaianTest extends TestCase
         $this->assertEquals(1, $capaianTahunan->x_realisasi_tw3);
     }
 
+    public function test_rincian_n_bisa_disusulkan_ke_tw_sebelumnya_dari_sesi_tw_berjalan(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+        $data['iku']->update(['metode_capaian' => 'rasio']);
+
+        // Periode Capaian ini sendiri triwulan III (lihat siapkanIkuDenganDuaKegiatan()) --
+        // item TERLEWAT dicentang saat sesi TW I/TW II, disusulkan dari sini.
+        $itemTerlewatTw1 = RincianN::create(['iku_id' => $data['iku']->id, 'tahun' => 2026, 'uraian' => 'Terlewat TW I']);
+        $itemTerlewatTw2 = RincianN::create(['iku_id' => $data['iku']->id, 'tahun' => 2026, 'uraian' => 'Terlewat TW II']);
+        $itemTw3 = RincianN::create(['iku_id' => $data['iku']->id, 'tahun' => 2026, 'uraian' => 'Item TW III']);
+
+        Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']->fresh()])
+            ->set("rincianNPilih.{$itemTerlewatTw1->id}", true)
+            ->set("rincianNTw.{$itemTerlewatTw1->id}", 1)
+            ->set("rincianNPilih.{$itemTerlewatTw2->id}", true)
+            ->set("rincianNTw.{$itemTerlewatTw2->id}", 2)
+            ->set("rincianNPilih.{$itemTw3->id}", true)
+            ->call('simpanPerubahan')
+            ->assertHasNoErrors();
+
+        $this->assertEquals(1, $itemTerlewatTw1->fresh()->triwulan_realisasi);
+        $this->assertEquals(2, $itemTerlewatTw2->fresh()->triwulan_realisasi);
+        $this->assertEquals(3, $itemTw3->fresh()->triwulan_realisasi);
+
+        $capaianTahunan = \App\Models\CapaianTahunan::where('iku_id', $data['iku']->id)->where('tahun', 2026)->first();
+        $this->assertEquals(1, $capaianTahunan->x_realisasi_tw1);
+        $this->assertEquals(1, $capaianTahunan->x_realisasi_tw2);
+        $this->assertEquals(1, $capaianTahunan->x_realisasi_tw3);
+
+        // Setelah tersimpan, item yang disusulkan ke TW I/II langsung terkunci --
+        // tidak lagi muncul di daftar yang bisa dipilih pada render berikutnya, dari
+        // sesi TW III manapun (matching Excel: sekali diketik, tidak diketik ulang).
+        // itemTw3 TETAP bisa dipilih (boleh diamend selama masih dalam sesi TW III
+        // ini sendiri, sama seperti perilaku lama).
+        $component = Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']->fresh()]);
+        $this->assertCount(1, $component->instance()->rincianNBisaDipilih());
+        $this->assertCount(2, $component->instance()->rincianNTerkunci());
+    }
+
+    public function test_rincian_n_tidak_bisa_disusulkan_ke_tw_yang_belum_berjalan(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+        $data['iku']->update(['metode_capaian' => 'rasio']);
+
+        // Periode Capaian ini triwulan III -- TW IV belum berjalan, tidak boleh
+        // disusulkan ke sana walau payload dimanipulasi (mis. dari console browser).
+        $item = RincianN::create(['iku_id' => $data['iku']->id, 'tahun' => 2026, 'uraian' => 'Item']);
+
+        Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']->fresh()])
+            ->set("rincianNPilih.{$item->id}", true)
+            ->set("rincianNTw.{$item->id}", 4)
+            ->call('simpanPerubahan')
+            ->assertHasErrors(['rincianNTw.'.$item->id]);
+    }
+
     public function test_simpan_perubahan_alokasi_tw_periode_ini_tidak_mengubah_tw_sesi_lain(): void
     {
         $this->actingAs($this->buatSakip());

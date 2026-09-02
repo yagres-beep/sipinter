@@ -81,13 +81,16 @@
             </div>
         </div>
         @if ($capaian->masterIku->pakaiRasio())
-            <div class="fhint" style="margin:10px 0 6px">Alokasi Pembilang (X) &amp; Penyebut (Y) TW I-IV sudah ditetapkan sekali di awal tahun lewat <a wire:navigate href="{{ route('master-iku.index') }}#target">🎯 Target Tahunan</a> — di sini cukup isi <strong>Realisasi Pembilang (X) TRIWULAN INI SAJA</strong> (bukan kumulatif). Realisasi Penyebut (Y) otomatis mengikuti Alokasi Y. Kumulatif TW I s.d. TW berjalan &amp; persentasenya (X÷Y×100) dihitung otomatis di bawah.</div>
+            <div class="fhint" style="margin:10px 0 6px">Alokasi Pembilang (X) &amp; Penyebut (Y) TW I-IV sudah ditetapkan sekali di awal tahun lewat <a wire:navigate href="{{ route('master-iku.index') }}#target">🎯 Target Tahunan</a> — di sini centang item Rincian N yang sudah direalisasikan. Boleh menyusulkan item untuk TW SEBELUMNYA yang terlewat dicentang (pilih TW-nya lewat dropdown di sebelah item) — begitu tersimpan, item itu terkunci permanen ke TW pilihannya, tidak bisa diedit lagi dari sesi mana pun. Realisasi Penyebut (Y) otomatis mengikuti Alokasi Y. Kumulatif TW I s.d. TW berjalan &amp; persentasenya (X÷Y×100) dihitung otomatis di bawah.</div>
         @else
             <div class="fhint" style="margin:10px 0 6px">Isi Alokasi Target &amp; Realisasi TRIWULAN INI SAJA (bukan kumulatif, tidak perlu melihat isian triwulan sebelumnya) — kumulatif TW I s.d. TW berjalan dihitung otomatis di bawah.</div>
         @endif
 
         @php $twAktif = (int) $capaian->periode->triwulan; @endphp
-        <div class="fhint" style="margin-bottom:8px">🔒 Hanya kolom TW {{ ['I', 'II', 'III', 'IV'][$twAktif - 1] }} yang bisa diubah dari sesi verifikasi ini (sesuai periode isian ini) — kolom triwulan lain ditampilkan sebagai referensi, disunting lewat sesi verifikasi bulan pada triwulan itu sendiri.</div>
+        <div class="fhint" style="margin-bottom:8px">🔒 Hanya kolom TW {{ ['I', 'II', 'III', 'IV'][$twAktif - 1] }} yang bisa diubah dari sesi verifikasi ini (sesuai periode isian ini) — kolom triwulan lain ditampilkan sebagai referensi, disunting lewat sesi verifikasi bulan pada triwulan itu sendiri{{ $capaian->masterIku->pakaiRasio() ? ' (KECUALI checklist Rincian N — item yang belum tercatat boleh disusulkan ke TW sebelumnya juga dari sesi ini, lihat dropdown TW di tiap item)' : '' }}.</div>
+        @if ($capaian->masterIku->pakaiRasio())
+            <div class="fhint" style="margin-bottom:8px">⚠️ Dua arti "kumulatif" berbeda di tabel ini — jangan tertukar: <strong>Alokasi X</strong> (baris paling atas) SUDAH kumulatif sejak diisi di Target Tahunan (diketik langsung, tidak dijumlah lagi). <strong>Realisasi X</strong> yang kamu centang di sini boleh menyasar TW berjalan ATAU TW sebelumnya yang terlewat (pilih lewat dropdown) — begitu disimpan, TERKUNCI permanen ke TW itu. Baris "↳ ... Kumulatif (%)" paling bawah MURNI hasil hitung otomatis (X÷Y×100), tidak pernah diketik manual.</div>
+        @endif
         <div class="table-scroll">
             <table>
                 <thead>
@@ -101,42 +104,50 @@
                 <tbody>
                 @if ($capaian->masterIku->pakaiRasio())
                     @foreach ([
-                        ['x_alokasi', $capaian->masterIku->deskripsi_x ?: 'Pembilang (X)', 'Alokasi', false],
-                        ['y_alokasi', $capaian->masterIku->deskripsi_y ?: 'Penyebut (Y)', 'Alokasi', false],
-                        ['x_realisasi', $capaian->masterIku->deskripsi_x ?: 'Pembilang (X)', 'Realisasi', true],
-                        ['y_realisasi', $capaian->masterIku->deskripsi_y ?: 'Penyebut (Y)', 'Realisasi', false],
-                    ] as [$prefix, $label, $bagian, $bisaDiedit])
+                        ['x_alokasi', $capaian->masterIku->deskripsi_x ?: 'Pembilang (X)', 'Alokasi', false, 'ANGKA KUMULATIF s.d. TW ini — dari Target Tahunan'],
+                        ['y_alokasi', $capaian->masterIku->deskripsi_y ?: 'Penyebut (Y)', 'Alokasi', false, 'konstan sepanjang tahun — dari Target Tahunan'],
+                        ['x_realisasi', $capaian->masterIku->deskripsi_x ?: 'Pembilang (X)', 'Realisasi', true, 'boleh disusulkan ke TW sebelumnya, terkunci begitu disimpan'],
+                        ['y_realisasi', $capaian->masterIku->deskripsi_y ?: 'Penyebut (Y)', 'Realisasi', false, 'konstan, otomatis = Alokasi Y'],
+                    ] as [$prefix, $label, $bagian, $bisaDiedit, $keterangan])
                         <tr>
                             <td>
                                 {{ $label }} — {{ $bagian }}
-                                @if ($bisaDiedit)
-                                    <span class="muted" style="font-weight:400">(TW ini)</span>
-                                @else
-                                    <span class="muted" style="font-weight:400">
-                                        ({{ $bagian === 'Alokasi' ? 'Target Tahunan' : 'otomatis = Alokasi Y' }})
-                                    </span>
-                                @endif
+                                <span class="muted" style="font-weight:400">({{ $keterangan }})</span>
                             </td>
                             @for ($tw = 1; $tw <= 4; $tw++)
                                 <td style="text-align:center{{ $prefix === 'x_realisasi' && $tw === $twAktif ? ';min-width:220px;text-align:left' : '' }}">
                                     @if ($prefix === 'x_realisasi' && $tw === $twAktif)
-                                        <div style="max-height:140px;overflow-y:auto;display:flex;flex-direction:column;gap:3px">
+                                        <div style="max-height:170px;overflow-y:auto;display:flex;flex-direction:column;gap:3px">
                                             @foreach ($this->rincianNBisaDipilih() as $n)
-                                                <label class="fl-row" style="cursor:pointer;gap:6px;font-size:11.5px">
-                                                    <input type="checkbox" wire:model.live="rincianNPilih.{{ $n->id }}">
-                                                    <span>{{ $n->uraian }}</span>
-                                                </label>
+                                                <div class="fl-row" style="gap:6px;font-size:11.5px">
+                                                    <label class="fl-row" style="cursor:pointer;gap:6px;flex:1;min-width:0">
+                                                        <input type="checkbox" wire:model.live="rincianNPilih.{{ $n->id }}">
+                                                        <span>{{ $n->uraian }}</span>
+                                                    </label>
+                                                    @if ($n->triwulan_realisasi === null && $twAktif > 1)
+                                                        <select wire:model.live="rincianNTw.{{ $n->id }}" style="font-size:10.5px;padding:1px 3px" title="Item ini belum tercatat — pilih TW yang SEBENARNYA (boleh TW sebelumnya bila terlewat dicentang saat itu), akan terkunci ke TW pilihan ini begitu disimpan">
+                                                            @for ($twPilihan = 1; $twPilihan <= $twAktif; $twPilihan++)
+                                                                <option value="{{ $twPilihan }}">TW {{ ['I', 'II', 'III', 'IV'][$twPilihan - 1] }}</option>
+                                                            @endfor
+                                                        </select>
+                                                    @endif
+                                                </div>
                                             @endforeach
                                             @foreach ($this->rincianNTerkunci() as $n)
-                                                <div class="muted" style="font-size:11.5px" title="Direalisasikan TW {{ ['I', 'II', 'III', 'IV'][$n->triwulan_realisasi - 1] }}, tidak bisa diubah dari sesi verifikasi ini">✓ {{ $n->uraian }} <span style="font-weight:400">(TW {{ ['I', 'II', 'III', 'IV'][$n->triwulan_realisasi - 1] }})</span></div>
+                                                <div class="muted" style="font-size:11.5px" title="Direalisasikan TW {{ ['I', 'II', 'III', 'IV'][$n->triwulan_realisasi - 1] }}, sudah tersimpan — tidak bisa diubah lagi dari sesi mana pun">✓ {{ $n->uraian }} <span style="font-weight:400">(TW {{ ['I', 'II', 'III', 'IV'][$n->triwulan_realisasi - 1] }})</span></div>
                                             @endforeach
                                             @if ($this->rincianNList()->isEmpty())
                                                 <span class="muted" style="font-size:11.5px">Belum ada Rincian N — tambahkan di <a wire:navigate href="{{ route('master-iku.index') }}#target">🎯 Target Tahunan</a>.</span>
                                             @endif
                                         </div>
-                                        <div class="muted" style="font-size:10.5px;margin-top:2px">{{ $this->{"x_realisasi_tw{$tw}"} ?? 0 }} item terpilih = Realisasi X TW ini</div>
+                                        <div class="muted" style="font-size:10.5px;margin-top:2px">
+                                            Realisasi X per TW (live, tersimpan setelah "Simpan"):
+                                            @for ($i = 1; $i <= $twAktif; $i++)
+                                                TW {{ ['I', 'II', 'III', 'IV'][$i - 1] }}={{ $this->{"x_realisasi_tw{$i}"} ?? 0 }}{{ $i < $twAktif ? ' · ' : '' }}
+                                            @endfor
+                                        </div>
                                     @elseif ($bisaDiedit)
-                                        <span class="muted" title="Hanya bisa diubah dari sesi verifikasi TW {{ ['I', 'II', 'III', 'IV'][$tw - 1] }}">🔒 {{ $capaianTahunan->{"{$prefix}_tw{$tw}"} ?? '-' }}</span>
+                                        <span class="muted" title="{{ $tw < $twAktif ? 'Otomatis dari centang Rincian N di atas (termasuk yang disusulkan dari sesi TW '.['I', 'II', 'III', 'IV'][$twAktif - 1].' ini)' : 'TW ini belum berjalan, belum bisa diisi' }}">🔒 {{ $capaianTahunan->{"{$prefix}_tw{$tw}"} ?? '-' }}</span>
                                     @else
                                         <span class="muted" title="{{ $bagian === 'Alokasi' ? 'Diisi lewat halaman Target Tahunan, bukan di sini' : 'Otomatis disalin dari Alokasi Y di Target Tahunan' }}">🔒 {{ $capaianTahunan->{"{$prefix}_tw{$tw}"} ?? '-' }}</span>
                                     @endif
@@ -144,14 +155,14 @@
                             @endfor
                         </tr>
                     @endforeach
-                    <tr class="muted">
-                        <td>Alokasi Target Kumulatif (%)</td>
+                    <tr class="muted" style="border-top:2px solid var(--border)">
+                        <td title="Otomatis dihitung, BUKAN input — Alokasi X (kumulatif) ÷ Alokasi Y × 100 pada TW itu sendiri, tidak dijumlahkan lagi">↳ Alokasi Target Kumulatif (%) <span class="muted" style="font-weight:400">— otomatis, = X ÷ Y × 100</span></td>
                         @for ($tw = 1; $tw <= 4; $tw++)
                             <td style="text-align:center">{{ \App\Models\PengaturanCapaian::formatAngka($capaianTahunan->alokasiKumulatif($tw)) }}</td>
                         @endfor
                     </tr>
                     <tr class="muted">
-                        <td>Realisasi Kumulatif (%)</td>
+                        <td title="Otomatis dihitung, BUKAN input — jumlah Realisasi X TW I s.d. TW ini (Realisasi X per TW dijumlahkan aplikasi), dibagi Realisasi Y × 100">↳ Realisasi Kumulatif (%) <span class="muted" style="font-weight:400">— otomatis, = (Σ Realisasi X s.d. TW ini) ÷ Y × 100</span></td>
                         @for ($tw = 1; $tw <= 4; $tw++)
                             <td style="text-align:center">{{ \App\Models\PengaturanCapaian::formatAngka($capaianTahunan->realisasiKumulatif($tw)) }}</td>
                         @endfor
