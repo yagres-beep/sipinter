@@ -11,7 +11,11 @@
   $fontDir = 'file://'.str_replace('\\', '/', base_path('resources/fonts'));
 @endphp
 <style>
-  @page { margin: 22px 26px; }
+  {{-- Margin halaman SAMA PERSIS dengan template_notula/SIPINTER_Template_Bagian_I_Mesin.docx
+       (<w:pgMar w:top="851" w:right="1440" w:bottom="1135" w:left="1440"/>, satuan twips/1440
+       per inci): atas 0,59in, kanan/kiri 1in, bawah 0,79in -- BUKAN margin seragam kecil
+       seperti sebelumnya, yang bikin badan teks jauh lebih lebar dari template asli. --}}
+  @page { margin: 0.59in 1in 0.79in 1in; }
 
   @font-face { font-family: 'Calibri'; font-weight: normal; font-style: normal; src: url('{{ $fontDir }}/Carlito-Regular.ttf'); }
   @font-face { font-family: 'Calibri'; font-weight: bold; font-style: normal; src: url('{{ $fontDir }}/Carlito-Bold.ttf'); }

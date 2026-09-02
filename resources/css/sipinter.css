@@ -411,7 +411,7 @@ th.th-sort.active .th-arrow{opacity:1;color:var(--blue-600);font-weight:700}
   --line:#e9edf3; --line2:#f1f5f9; --blue-soft:#eff5ff; --teal-soft:#eefbf8;
 }
 .word-canvas{background:#e4e7ee;border:1px solid var(--line);border-radius:10px;padding:36px 24px;display:flex;justify-content:center;overflow-x:auto}
-.notula{background:var(--white);border:1px solid #d5d9e2;border-radius:2px;padding:96px 90px;box-shadow:0 1px 3px rgba(16,32,70,.08),0 12px 32px rgba(16,32,70,.14);font-family:'Calibri','Carlito',Arial,sans-serif;line-height:1.5;font-size:11pt;color:#0f172a;max-width:816px;width:100%;min-width:0}
+.notula{background:var(--white);border:1px solid #d5d9e2;border-radius:2px;padding:56.7px 96px 75.7px 96px;box-shadow:0 1px 3px rgba(16,32,70,.08),0 12px 32px rgba(16,32,70,.14);font-family:'Calibri','Carlito',Arial,sans-serif;line-height:1.5;font-size:11pt;color:#0f172a;max-width:793.7px;width:100%;min-width:0}
 .notula h1{font-family:'Cambria','Caladea',Georgia,serif;font-size:16px;color:#0f172a;margin-bottom:2px;font-weight:700}
 .notula h3{font-family:'Cambria','Caladea',Georgia,serif;text-align:center;font-size:13px;color:#111;margin-top:16px;margin-bottom:4px;font-weight:700}
 .notula .sub,.notula .nsub{text-align:center;color:var(--muted);font-size:11px;margin-bottom:14px;font-family:inherit}
