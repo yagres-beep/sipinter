@@ -854,11 +854,11 @@
 
     @if ($bisaDiverifikasi)
         <div class="btn-row" style="margin-top:16px">
-            <button type="button" class="btn btn-teal" wire:click="verifikasiSelesai" wire:loading.attr="disabled" wire:target="verifikasiSelesai,kembalikanKeKetuaTim,simpanSementara">
+            <button type="button" class="btn btn-teal" wire:click="verifikasiSelesai" wire:loading.attr="disabled" wire:target="verifikasiSelesai,kembalikanKeKetuaTim,simpanSementara" @disabled($adaYangDitolak) title="{{ $adaYangDitolak ? 'Ada isian yang ditandai Tidak Sesuai — gunakan "Kembalikan ke Ketua Tim"' : '' }}">
                 <span wire:loading.remove wire:target="verifikasiSelesai">✓ Verifikasi Selesai — Masukkan ke Notula</span>
                 <span wire:loading wire:target="verifikasiSelesai"><i class="spin"></i> Memproses…</span>
             </button>
-            <button type="button" class="btn btn-red" wire:click="kembalikanKeKetuaTim" wire:loading.attr="disabled" wire:target="verifikasiSelesai,kembalikanKeKetuaTim,simpanSementara">
+            <button type="button" class="btn btn-red" wire:click="kembalikanKeKetuaTim" wire:loading.attr="disabled" wire:target="verifikasiSelesai,kembalikanKeKetuaTim,simpanSementara" @disabled(! $adaYangDitolak) title="{{ ! $adaYangDitolak ? 'Tandai minimal satu isian Tidak Sesuai sebelum mengembalikan isian' : '' }}">
                 <span wire:loading.remove wire:target="kembalikanKeKetuaTim">↩ Kembalikan ke Ketua Tim</span>
                 <span wire:loading wire:target="kembalikanKeKetuaTim"><i class="spin"></i> Mengembalikan…</span>
             </button>

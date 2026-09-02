@@ -1644,6 +1644,26 @@ class VerifikasiCapaian extends Component
         return 'Isian berikut belum ditandai "Sesuai"/"Tidak Sesuai": '.implode('; ', $daftar).'.';
     }
 
+    /**
+     * True bila minimal satu isian (berkas, uraian kegiatan, kendala &amp; solusi,
+     * Bagian Kustom, realisasi RTL, atau rencana RTL berikutnya) sudah ditandai
+     * "Tidak Sesuai" -- dipakai blade untuk menonaktifkan tombol "Verifikasi
+     * Selesai" (harus "Kembalikan ke Ketua Tim" dulu bila ada yang ditolak, lihat
+     * verifikasiSelesai()) sekaligus mengaktifkan tombol "Kembalikan ke Ketua Tim"
+     * (harus minimal satu ditolak, lihat kembalikanKeKetuaTim()) -- SUPAYA
+     * larangan yang sudah ditegakkan kedua method itu juga terlihat di tombolnya,
+     * bukan cuma muncul sebagai galat setelah diklik.
+     */
+    public function adaYangDitolak(): bool
+    {
+        return $this->berkasList()->contains(fn ($b) => $b->status_verifikasi === 'ditolak')
+            || $this->kendalaSolusiList()->contains(fn ($k) => $k->status_verifikasi === 'ditolak')
+            || $this->kegiatanList()->contains(fn ($k) => $k->status_verifikasi_uraian === 'ditolak')
+            || $this->bagianKustomList()->contains(fn ($p) => $p->status_verifikasi === 'ditolak')
+            || $this->rtlEvaluasiSebelumnya()->contains(fn ($p) => $p->status_verifikasi === 'ditolak')
+            || $this->rtlBerikutnyaBaruDitetapkan()->contains(fn ($p) => $p->status_verifikasi === 'ditolak');
+    }
+
     public function verifikasiSelesai(): void
     {
         if (! $this->bisaDiverifikasi()) {
@@ -1840,6 +1860,7 @@ class VerifikasiCapaian extends Component
             'berkasPerBagianKustom' => $bagianKustomList->mapWithKeys(fn ($p) => [$p->id => $this->berkasUntukBagianKustom($p->id)]),
             'bisaDiverifikasi' => $this->bisaDiverifikasi(),
             'bisaDibukaKembali' => $this->bisaDibukaKembali(),
+            'adaYangDitolak' => $this->adaYangDitolak(),
             'riwayatStatus' => $this->capaian->riwayatStatus()->with('user')->get(),
             'capaianTahunan' => $this->capaianTahunanTerkini(),
         ]);
