@@ -83,4 +83,54 @@ class RumusMarkupTest extends TestCase
         $this->assertNull(RumusMarkup::keOmml(null));
         $this->assertSame('', RumusMarkup::keOmml(''));
     }
+
+    public function test_keHtml_sigma_tersusun_batas_bawah_atas(): void
+    {
+        $html = RumusMarkup::keHtml('IPP = [[SUM:i=1,n|xi]]');
+
+        $this->assertStringContainsString('&Sigma;', $html);
+        $this->assertStringContainsString('>n<', $html);
+        $this->assertStringContainsString('>i=1<', $html);
+        $this->assertStringContainsString('</span>xi', $html);
+    }
+
+    public function test_keTeksPolos_sigma_diratakan_jadi_notasi_biasa(): void
+    {
+        $this->assertSame('IPP = Σ(i=1..n) xi', RumusMarkup::keTeksPolos('IPP = [[SUM:i=1,n|xi]]'));
+    }
+
+    public function test_keTeksPolos_sigma_dan_pecahan_sekaligus(): void
+    {
+        $this->assertSame(
+            'w1 x Σ(i=1..n) xi + w2 x n/N',
+            RumusMarkup::keTeksPolos('w1 x [[SUM:i=1,n|xi]] + w2 x [[n|N]]')
+        );
+    }
+
+    public function test_keOmml_sigma_merakit_nary_ooxml_math(): void
+    {
+        $omml = RumusMarkup::keOmml('IPP = [[SUM:i=1,n|xi]]');
+
+        $this->assertStringContainsString('<m:nary><m:naryPr><m:chr m:val="∑"/><m:limLoc m:val="subSup"/></m:naryPr>', $omml);
+        $this->assertStringContainsString('<m:sub><m:r><m:t xml:space="preserve">i=1</m:t></m:r></m:sub>', $omml);
+        $this->assertStringContainsString('<m:sup><m:r><m:t xml:space="preserve">n</m:t></m:r></m:sup>', $omml);
+        $this->assertStringContainsString('<m:e><m:r><m:t xml:space="preserve">xi</m:t></m:r></m:e>', $omml);
+        $this->assertStringNotContainsString('<m:f>', $omml);
+    }
+
+    public function test_keOmml_sigma_dan_pecahan_sekaligus(): void
+    {
+        $omml = RumusMarkup::keOmml('[[SUM:i=1,n|xi]] dan [[a|b]]');
+
+        $this->assertStringContainsString('<m:nary>', $omml);
+        $this->assertStringContainsString('<m:f>', $omml);
+    }
+
+    public function test_keOmml_sigma_mengescape_xml_di_batas_dan_suku(): void
+    {
+        $omml = RumusMarkup::keOmml('[[SUM:i=1,<b>n</b>|x&i]]');
+
+        $this->assertStringContainsString('<m:sup><m:r><m:t xml:space="preserve">&lt;b&gt;n&lt;/b&gt;</m:t></m:r></m:sup>', $omml);
+        $this->assertStringContainsString('<m:e><m:r><m:t xml:space="preserve">x&amp;i</m:t></m:r></m:e>', $omml);
+    }
 }

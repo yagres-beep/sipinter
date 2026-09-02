@@ -548,6 +548,50 @@ class NotulaDownloadTest extends TestCase
     }
 
     /**
+     * IKU bersatuan Poin (mis. IPP) tidak punya rumus otomatis (formulaBaris() null
+     * karena satuan-nya bukan Persen) -- kalau Tim SAKIP menuliskan sintaks
+     * RumusMarkup di BARIS PERTAMA kolom "Dasar Hitung", baris itu yang dipakai
+     * sebagai rumus bersusun (lihat NotulaBagian1DocxService::formulaKustomDariDasarHitung()),
+     * termasuk sintaks sigma [[SUM:batas_bawah,batas_atas|suku]] baru untuk rumus
+     * seperti IPP = (w1 x sigma xi) + (w2 x sigma yi). Baris KEDUA dst. tetap tercetak
+     * sebagai keterangan biasa, TIDAK dobel dengan rumusnya.
+     */
+    public function test_docx_bagian1_dasar_hitung_poin_baris_pertama_jadi_rumus_sigma_bersusun(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $iku = MasterIku::create([
+            'kode' => '3002', 'indikator' => 'Indeks Uji Sigma', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
+            'sasaran' => 'Sasaran Uji Sigma', 'satuan' => 'Poin', 'metode_capaian' => MasterIku::METODE_LANGSUNG,
+            'dasar_hitung' => "IPP = (w1 x [[SUM:i=1,n|xi]]) + (w2 x [[SUM:i=1,m|yi]])\nKeterangan tambahan baris kedua.",
+        ]);
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 4, 'triwulan' => 2, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $this->verifikasiCapaian($iku, $periode);
+
+        $notula = Notula::create(['periode_id' => $periode->id]);
+
+        $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
+
+        libxml_use_internal_errors(true);
+        $valid = (new \DOMDocument)->loadXML($xml);
+        $this->assertTrue($valid, 'document.xml Bagian I harus tetap well-formed XML setelah rumus sigma disisipkan sebagai OOXML Math.');
+
+        // Rumusnya dirakit jadi <m:nary> SUNGGUHAN (batas bawah/atas bersusun), bukan
+        // diratakan jadi teks "Σ(i=1..n) xi" biasa seperti dasar_hitung lain.
+        $this->assertStringContainsString('<m:nary>', $xml);
+        $this->assertStringContainsString('<m:sub><m:r><m:t xml:space="preserve">i=1</m:t></m:r></m:sub>', $xml);
+        $this->assertStringContainsString('<m:sup><m:r><m:t xml:space="preserve">n</m:t></m:r></m:sup>', $xml);
+        $this->assertStringContainsString('<m:sup><m:r><m:t xml:space="preserve">m</m:t></m:r></m:sup>', $xml);
+
+        // Baris kedua tetap tercetak sebagai keterangan biasa (rata kiri) -- TIDAK
+        // dobel dengan sintaks "[[SUM:...]]" mentahnya.
+        $this->assertStringContainsString('Keterangan tambahan baris kedua.', $xml);
+        $this->assertStringNotContainsString('[[SUM:', $xml);
+        $this->assertStringNotContainsString('SUM:i=1,n', $xml);
+    }
+
+    /**
      * IKU bermetode Rasio (MasterIku::pakaiRasio(), yang kini SELALU memakai
      * Rincian N): Dasar Hitung .docx harus otomatis mencantumkan rincian NYATA n
      * (item yang triwulan_realisasi-nya = triwulan notula ini) & N (SELURUH item
