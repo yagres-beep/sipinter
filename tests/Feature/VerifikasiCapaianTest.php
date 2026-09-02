@@ -1023,8 +1023,8 @@ class VerifikasiCapaianTest extends TestCase
      * Siapkan skenario: kegiatan1 & kegiatan2 sudah diverifikasi lebih dulu, lalu
      * kegiatan3 ditambahkan belakangan pada IKU+bulan yang sama sehingga Capaian
      * ditarik kembali ke "diajukan" — dipakai oleh kedua tes di bawah untuk
-     * memastikan kegiatan1/kegiatan2 yang SUDAH diverifikasi tidak ikut tersentuh
-     * lagi hanya karena Capaian-nya kembali bisa diverifikasi.
+     * memastikan kegiatan1/kegiatan2 yang SUDAH diverifikasi tetap bisa dikoreksi
+     * Tim SAKIP selagi Capaian-nya sendiri masih bisa diverifikasi.
      */
     protected function siapkanSkenarioKegiatanTambahan(): array
     {
@@ -1061,16 +1061,14 @@ class VerifikasiCapaianTest extends TestCase
         return $data + ['kegiatan3' => $kegiatan3, 'berkas3' => $berkas3];
     }
 
-    public function test_kegiatan_yang_sudah_diverifikasi_tidak_ikut_tersunting_saat_ada_kegiatan_tambahan(): void
+    public function test_kegiatan_yang_sudah_diverifikasi_tetap_bisa_dikoreksi_saat_ada_kegiatan_tambahan(): void
     {
         $this->actingAs($this->buatSakip());
         $data = $this->siapkanSkenarioKegiatanTambahan();
 
         Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']->fresh()])
             ->assertSet("koreksiKegiatan.{$data['kegiatan1']->id}", 'Kegiatan pertama')
-            // Dipaksa mengganti nilai lewat properti langsung (menyimulasikan payload
-            // yang dimanipulasi) — textarea-nya sendiri sudah @readonly di tampilan.
-            ->set("koreksiKegiatan.{$data['kegiatan1']->id}", 'Dicoba diubah paksa')
+            ->set("koreksiKegiatan.{$data['kegiatan1']->id}", 'Kegiatan pertama (dikoreksi)')
             ->set("koreksiKegiatan.{$data['kegiatan3']->id}", 'Kegiatan tambahan (dikoreksi)')
             ->set('catatanBerkas.'.$data['berkas3']->id, 'Bukti kegiatan tambahan tidak sesuai')
             ->call('tandaiTolak', $data['berkas3']->id)
@@ -1078,26 +1076,28 @@ class VerifikasiCapaianTest extends TestCase
             ->call('kembalikanKeKetuaTim')
             ->assertHasNoErrors();
 
-        // kegiatan1 (sudah diverifikasi sebelumnya) TIDAK ikut berubah...
-        $this->assertSame('Kegiatan pertama', $data['kegiatan1']->fresh()->uraian_kegiatan);
-        // ...tapi kegiatan3 (baru, masih "diajukan") tetap boleh dikoreksi.
+        // kegiatan1 (sudah diverifikasi sebelumnya) tetap ikut tersunting selagi
+        // Capaian-nya sendiri masih bisa diverifikasi...
+        $this->assertSame('Kegiatan pertama (dikoreksi)', $data['kegiatan1']->fresh()->uraian_kegiatan);
+        // ...sama seperti kegiatan3 (baru, masih "diajukan").
         $this->assertSame('Kegiatan tambahan (dikoreksi)', $data['kegiatan3']->fresh()->uraian_kegiatan);
     }
 
-    public function test_berkas_kegiatan_yang_sudah_diverifikasi_tidak_bisa_ditandai_ulang(): void
+    public function test_berkas_kegiatan_yang_sudah_diverifikasi_tetap_bisa_ditandai_ulang(): void
     {
         $this->actingAs($this->buatSakip());
         $data = $this->siapkanSkenarioKegiatanTambahan();
 
         $component = Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']->fresh()]);
 
-        $this->assertFalse($component->instance()->berkasBisaDiverifikasi($data['berkas1']->id));
+        $this->assertTrue($component->instance()->berkasBisaDiverifikasi($data['berkas1']->id));
 
-        $component->call('tandaiTolak', $data['berkas1']->id);
+        $component->set('catatanBerkas.'.$data['berkas1']->id, 'Ternyata perlu diperbaiki lagi')
+            ->call('tandaiTolak', $data['berkas1']->id);
 
-        // berkas1 milik kegiatan1 yang sudah diverifikasi sebelumnya — tetap
-        // "terverifikasi", tidak ikut berubah jadi "ditolak".
-        $this->assertSame('terverifikasi', $data['berkas1']->fresh()->status_verifikasi);
+        // berkas1 milik kegiatan1 yang sudah diverifikasi sebelumnya tetap boleh
+        // ditandai ulang selagi Capaian-nya sendiri masih bisa diverifikasi.
+        $this->assertSame('ditolak', $data['berkas1']->fresh()->status_verifikasi);
     }
 
     public function test_buka_kembali_menarik_capaian_disetujui_ke_dikembalikan(): void

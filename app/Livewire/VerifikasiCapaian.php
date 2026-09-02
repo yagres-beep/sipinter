@@ -805,11 +805,10 @@ class VerifikasiCapaian extends Component
     }
 
     /**
-     * Satu berkas boleh ditandai ulang Tim SAKIP hanya bila Capaian-nya masih
-     * "diajukan" DAN — khusus bukti kegiatan — kegiatan pemiliknya sendiri belum
-     * pernah diproses sebelumnya (masih "diajukan"). Berkas evaluasi RTL dan bagian
-     * kustom belum punya status lifecycle sendiri (lihat catatan di
-     * kegiatanBisaDikoreksi()), jadi cukup mengikuti status besar Capaian untuk saat ini.
+     * Satu berkas boleh ditandai ulang Tim SAKIP selagi Capaian-nya masih
+     * "diajukan"/"sedang ditangani" (bisaDiverifikasi()) — termasuk berkas milik
+     * kegiatan yang sudah diverifikasi/disetujui pada batch sebelumnya, lihat
+     * kegiatanBisaDikoreksi().
      */
     public function berkasBisaDiverifikasi(int $berkasId): bool
     {
@@ -947,8 +946,7 @@ class VerifikasiCapaian extends Component
     /**
      * Uraian kegiatan boleh ditandai ulang Tim SAKIP dengan syarat sama persis
      * dengan bukti kegiatan (kegiatanBisaDikoreksi()) — keduanya bagian dari
-     * kegiatan yang sama, jadi mengikuti status_dokumen kegiatan itu sendiri, bukan
-     * hanya status besar Capaian.
+     * kegiatan yang sama, jadi cukup mengikuti status besar Capaian.
      */
     public function uraianBisaDiverifikasi(int $kegiatanId): bool
     {
@@ -1371,20 +1369,19 @@ class VerifikasiCapaian extends Component
     }
 
     /**
-     * Satu kegiatan boleh disunting Tim SAKIP selagi statusnya SENDIRI masih
-     * "diajukan" (belum pernah diverifikasi/disetujui pada batch sebelumnya) — TIDAK
-     * LAGI bergantung pada status BESAR Capaian (bisaDiverifikasi() dicabut dari
-     * sini), supaya Tim SAKIP tetap bisa mengoreksi kegiatan yang masih "diajukan"
-     * walau Capaian-nya sendiri sudah "diverifikasi"/"disetujui" (mis. ada kegiatan
-     * baru yang menyusul dan menarik status Capaian berubah lagi). Pengecekan
-     * status_dokumen kegiatan itu sendiri TETAP dipertahankan sebagai pertahanan
-     * berlapis: kegiatan yang sudah diproses pada batch sebelumnya tidak boleh
-     * diam-diam ikut tersunting lagi hanya karena ada kegiatan BARU di Capaian yang
-     * sama (lihat simpanKoreksiTeks()).
+     * Kegiatan (uraian &amp; RO) boleh terus disunting Tim SAKIP walau kegiatannya
+     * sendiri sudah diverifikasi/disetujui pada batch sebelumnya — sama seperti
+     * kendala &amp; solusi (kendalaBisaDiverifikasi()), Bagian Kustom
+     * (bagianKustomBisaDiverifikasi()), dan RTL, koreksi di sini TIDAK dikunci per
+     * status_dokumen kegiatan, supaya Tim SAKIP tetap bisa membetulkan salah ketik
+     * pada isian yang sudah ditandai "Sesuai" sekalipun. Satu-satunya gerbang yang
+     * tersisa adalah status BESAR Capaian (bisaDiverifikasi()) — begitu Capaian
+     * "disetujui" (masuk notula final), seluruh isian terkunci total sampai Tim
+     * SAKIP membuka kembali lewat bukaKembali().
      */
     public function kegiatanBisaDikoreksi(Kegiatan $kegiatan): bool
     {
-        return $kegiatan->status_dokumen === Kegiatan::STATUS_DIAJUKAN;
+        return $this->bisaDiverifikasi();
     }
 
     /**
@@ -1450,9 +1447,8 @@ class VerifikasiCapaian extends Component
         foreach ($this->koreksiKegiatan as $id => $teks) {
             $kegiatan = $this->kegiatanList()->firstWhere('id', (int) $id);
 
-            // Pertahanan berlapis (bukan cuma readonly di UI): kegiatan yang sudah
-            // diverifikasi/disetujui pada batch SEBELUMNYA tidak boleh ikut tersunting
-            // hanya karena ada kegiatan BARU yang membuat Capaian ini "diajukan" lagi.
+            // Pertahanan berlapis (bukan cuma readonly di UI): tidak tersunting bila
+            // Capaian-nya sendiri sudah tidak bisa diverifikasi lagi (mis. "disetujui").
             if (! $kegiatan || ! $this->kegiatanBisaDikoreksi($kegiatan)) {
                 continue;
             }

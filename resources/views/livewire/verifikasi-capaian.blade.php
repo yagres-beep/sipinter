@@ -250,9 +250,6 @@
                         {{ $kegiatan->jenis === 'survei_sensus' ? 'Survei/Sensus' : 'Bukan Survei/Sensus' }}{{ $kegiatan->tahapan_survei ? ' · '.ucfirst($kegiatan->tahapan_survei) : '' }}
                     </span>
                 </div>
-                @unless ($bisaDikoreksi)
-                    <div style="font-size:11.5px;color:var(--muted);margin-bottom:6px">🔒 Sudah diproses pada pengajuan sebelumnya — tidak ikut disunting di sini.</div>
-                @endunless
                 <textarea class="inp filled" style="height:auto;display:block;font-style:italic" rows="2" wire:model="koreksiKegiatan.{{ $kegiatan->id }}" @readonly(!$bisaDikoreksi)></textarea>
                 @error("koreksiKegiatan.{$kegiatan->id}")
                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
