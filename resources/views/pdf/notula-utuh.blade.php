@@ -2,9 +2,28 @@
 <html>
 <head>
 <meta charset="utf-8">
+@php
+  // dompdf tidak punya Calibri/Cambria (font tema default template .docx) di
+  // 5 font bawaannya -- tanpa @font-face ini dompdf diam-diam menggantinya
+  // dengan Helvetica, bikin ukuran teks "beleset" dari template asli. Carlito
+  // & Caladea adalah pengganti metric-compatible (lebar huruf identik) untuk
+  // Calibri & Cambria, dipasang di resources/fonts/.
+  $fontDir = 'file://'.str_replace('\\', '/', base_path('resources/fonts'));
+@endphp
 <style>
   @page { margin: 22px 26px; }
-  body { font-family: Arial, Helvetica, sans-serif; font-size: 11pt; line-height: 1.5; color: #0f172a; }
+
+  @font-face { font-family: 'Calibri'; font-weight: normal; font-style: normal; src: url('{{ $fontDir }}/Carlito-Regular.ttf'); }
+  @font-face { font-family: 'Calibri'; font-weight: bold; font-style: normal; src: url('{{ $fontDir }}/Carlito-Bold.ttf'); }
+  @font-face { font-family: 'Calibri'; font-weight: normal; font-style: italic; src: url('{{ $fontDir }}/Carlito-Italic.ttf'); }
+  @font-face { font-family: 'Calibri'; font-weight: bold; font-style: italic; src: url('{{ $fontDir }}/Carlito-BoldItalic.ttf'); }
+  @font-face { font-family: 'Cambria'; font-weight: normal; font-style: normal; src: url('{{ $fontDir }}/Caladea-Regular.ttf'); }
+  @font-face { font-family: 'Cambria'; font-weight: bold; font-style: normal; src: url('{{ $fontDir }}/Caladea-Bold.ttf'); }
+  @font-face { font-family: 'Cambria'; font-weight: normal; font-style: italic; src: url('{{ $fontDir }}/Caladea-Italic.ttf'); }
+  @font-face { font-family: 'Cambria'; font-weight: bold; font-style: italic; src: url('{{ $fontDir }}/Caladea-BoldItalic.ttf'); }
+
+  body { font-family: 'Calibri', sans-serif; font-size: 11pt; line-height: 1.5; color: #0f172a; }
+  h1, h3 { font-family: 'Cambria', serif; }
   h1 { font-size: 16px; margin-bottom: 2px; }
   h3 { font-size: 13px; margin-top: 16px; margin-bottom: 4px; text-align: center; }
   .sub { color: #64748b; margin-bottom: 14px; font-size: 11px; text-align: center; }
