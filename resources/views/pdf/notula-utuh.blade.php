@@ -35,16 +35,15 @@
   ul { margin: 0 0 8px 18px; padding: 0; }
   .nrow { margin-bottom: 8px; }
   .nlabel { font-weight: bold; }
-  {{-- table-layout TIDAK dikunci "fixed" -- proporsi w:tblGrid template memang
-       persis, tapi menguncinya bikin kolom seperti "Indikator Kinerja" terlalu
-       sempit untuk isian panjang, teksnya jadi berbaris banyak, dan baris tabelnya
-       (yang tidak boleh terpotong antar halaman, lihat cantSplit di
-       NotulaBagian1DocxService::cegahBarisTerpotongAntarHalaman()) malah terdorong
-       sendirian ke halaman berikutnya sementara header tabelnya tertinggal di
-       halaman sebelumnya -- menyisakan ruang kosong yang janggal. "auto" (bawaan)
-       tetap membatasi LEBAR TOTAL tabel ke 100% lebar konten (w:tblW template),
-       hanya distribusi antar-kolomnya yang menyesuaikan panjang isi. --}}
-  table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+  {{-- table-layout:fixed WAJIB -- lebar tabel di dompdf TIDAK bisa diandalkan
+       terkunci ke 100% dengan "auto" (dompdf melebarkan tabel keluar tepi halaman
+       kalau ada kata yang tidak muat di kolomnya, mis. "Publikasi/Laporan" sebagai
+       satu kata utuh) -- "fixed" MENJAMIN lebar tabel tidak pernah melampaui yang
+       dideklarasikan, sesuai <w:tblLayout w:type="fixed"/> di template .docx-nya
+       sendiri. Proporsi kolom karenanya mengikuti w:tblGrid template persis -- ini
+       yang membuat sebagian kolom tampak sempit, TAPI itu tata letak resmi template,
+       bukan bug. --}}
+  table { width: 100%; table-layout: fixed; border-collapse: collapse; margin: 8px 0; }
   td, th { border: 1px solid #999; padding: 5px 6px; text-align: left; }
   th { background: #f2f2f2; }
 
