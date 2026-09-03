@@ -47,7 +47,13 @@
        sendiri. Trade-off: kolom mengikuti w:tblGrid template persis (bukan
        menyesuaikan isi bebas), TAPI itu memang tata letak resmi template. --}}
   table { width: 100%; table-layout: fixed; border-collapse: collapse; margin: 8px 0; }
-  td, th { border: 1px solid #999; padding: 5px 6px; text-align: left; }
+  {{-- overflow-wrap:break-word gantinya spasi lebar-nol (U+200B) yang tadinya
+       disisipkan setelah "/" (LibreOfficeConversionService) -- font Carlito
+       yang dipakai tidak punya glyph untuk U+200B, jadi dompdf menggantinya
+       dengan "?" yang terlihat di PDF. Properti CSS ini bikin dompdf boleh
+       memotong kata panjang (mis. "Publikasi/Laporan") di batas sel TANPA
+       perlu karakter sisipan apa pun. --}}
+  td, th { border: 1px solid #999; padding: 5px 6px; text-align: left; overflow-wrap: break-word; }
   th { background: #f2f2f2; }
 
   {{-- Blok TTD SELALU di paling akhir (setelah Bagian III) — lihat NotulaService.
