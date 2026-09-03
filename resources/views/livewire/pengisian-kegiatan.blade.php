@@ -108,8 +108,12 @@
     @endif
 
     @if ($adaDikembalikan)
+        @php $olehKepala = $pengembalianTerakhir?->user?->namaRole() === 'Kepala'; @endphp
         <div class="info red" style="margin-bottom:14px">
-            🔴 <b>Isian ini dikembalikan oleh Tim SAKIP untuk periode ini</b> — perbaiki bagian yang ditandai merah di bawah, lalu ajukan ulang.
+            🔴 <b>Isian ini dikembalikan oleh {{ $olehKepala ? 'Kepala' : 'Tim SAKIP' }} untuk periode ini</b> — perbaiki bagian yang ditandai merah di bawah, lalu ajukan ulang.
+            @if ($pengembalianTerakhir?->catatan)
+                <p style="margin:6px 0 0">Catatan {{ $olehKepala ? 'Kepala' : 'Tim SAKIP' }}: {{ $pengembalianTerakhir->catatan }}</p>
+            @endif
             @if ($catatanPenolakan->isNotEmpty())
                 <ul style="margin:6px 0 0 18px;padding:0">
                     @foreach ($catatanPenolakan as $catatan)
@@ -259,8 +263,12 @@
                     @if ($block['status_dokumen'])
                         <x-badge-status :status="$block['status_dokumen']" />
                     @endif
-                    @if (count($blocks) > 1 && ! $block['id'])
-                        <button type="button" class="btn btn-red btn-sm" wire:click="removeBlock({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="removeBlock({{ $i }})">🗑 Hapus</button>
+                    @if (count($blocks) > 1)
+                        @if ($block['id'])
+                            <button type="button" class="btn btn-red btn-sm" @click="pendingHapus = { method: 'removeBlock', args: [{{ $i }}] }" wire:loading.class="btn-busy" wire:target="removeBlock({{ $i }})">🗑 Hapus</button>
+                        @else
+                            <button type="button" class="btn btn-red btn-sm" wire:click="removeBlock({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="removeBlock({{ $i }})">🗑 Hapus</button>
+                        @endif
                     @endif
                 </div>
 
@@ -982,13 +990,13 @@
     <div class="modal-overlay" x-show="pendingHapus" x-cloak style="display:none" @click.self="pendingHapus = null" @keydown.escape.window="pendingHapus = null">
         <div class="modal" style="max-width:420px;height:auto">
             <div class="modal-top">
-                <div class="mt-t">🗑️ Hapus Bukti</div>
+                <div class="mt-t" x-text="pendingHapus?.method === 'removeBlock' ? '🗑️ Hapus Kegiatan' : '🗑️ Hapus Bukti'"></div>
                 <button type="button" class="x" @click="pendingHapus = null">✕</button>
             </div>
             <div class="modal-body" style="flex-direction:column;padding:18px;gap:16px">
-                <p style="margin:0;font-size:13px;color:var(--ink);line-height:1.6">
-                    Bukti ini akan dihapus dan tidak bisa dikembalikan. Pastikan untuk mengunggah bukti pengganti bila memang masih diperlukan.
-                </p>
+                <p style="margin:0;font-size:13px;color:var(--ink);line-height:1.6" x-text="pendingHapus?.method === 'removeBlock'
+                    ? 'Kegiatan ini beserta seluruh bukti yang sudah diunggah akan dihapus permanen dan tidak bisa dikembalikan.'
+                    : 'Bukti ini akan dihapus dan tidak bisa dikembalikan. Pastikan untuk mengunggah bukti pengganti bila memang masih diperlukan.'"></p>
                 <div style="display:flex;gap:10px;justify-content:flex-end">
                     <button type="button" class="btn btn-ghost btn-sm" @click="pendingHapus = null">Batal</button>
                     <button type="button" class="btn btn-red btn-sm" @click="$wire.call(pendingHapus.method, ...pendingHapus.args); pendingHapus = null">🗑️ Ya, Hapus</button>

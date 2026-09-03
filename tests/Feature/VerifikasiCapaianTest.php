@@ -1205,6 +1205,60 @@ class VerifikasiCapaianTest extends TestCase
         $this->assertEquals(45, $capaianTahunan->realisasi_tw3);
     }
 
+    /**
+     * Baik ketika Kepala mengembalikan langsung ke Ketua Tim (App\Services\NotulaService::
+     * kembalikanIsian()) MAUPUN ketika Tim SAKIP sendiri yang mengembalikan
+     * (kembalikanKeKetuaTim()), Capaian::status berakhir sama-sama "dikembalikan" —
+     * di kedua kasus itu Tim SAKIP harus tetap bisa membetulkan uraian kegiatan lewat
+     * simpanPerubahan(), sama seperti saat "diajukan"/"sedang ditangani". Sebelumnya
+     * kegiatanBisaDikoreksi() salah mengunci lewat bisaDiverifikasi() (hanya true untuk
+     * diajukan/sedang ditangani), padahal banner di puncak halaman verifikasi sudah
+     * menjanjikan field ini "selalu bisa disunting Tim SAKIP ... kapan pun".
+     */
+    public function test_koreksi_uraian_kegiatan_tetap_tersimpan_saat_capaian_dikembalikan(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+
+        $data['capaian']->update(['status' => Capaian::STATUS_DIKEMBALIKAN]);
+
+        Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']->fresh()])
+            ->set("koreksiKegiatan.{$data['kegiatan1']->id}", 'Kegiatan pertama (dibetulkan Tim SAKIP saat dikembalikan)')
+            ->call('simpanPerubahan')
+            ->assertHasNoErrors();
+
+        $this->assertSame(
+            'Kegiatan pertama (dibetulkan Tim SAKIP saat dikembalikan)',
+            $data['kegiatan1']->fresh()->uraian_kegiatan
+        );
+
+        // Capaian::status tidak ikut berubah -- simpanPerubahan() murni koreksi teks,
+        // bukan transisi alur kerja (itu tugas verifikasiSelesai()/kembalikanKeKetuaTim()).
+        $this->assertSame(Capaian::STATUS_DIKEMBALIKAN, $data['capaian']->fresh()->status);
+    }
+
+    /**
+     * Begitu Capaian "disetujui" (masuk notula final), koreksi teks TETAP terkunci --
+     * satu-satunya gerbang yang boleh tersisa, sesuai docblock kegiatanBisaDikoreksi().
+     * Tim SAKIP harus membuka kembali dulu lewat bukaKembali() sebelum bisa membetulkan
+     * apa pun lagi.
+     */
+    public function test_koreksi_uraian_kegiatan_tetap_terkunci_saat_capaian_disetujui(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+
+        $data['capaian']->update(['status' => Capaian::STATUS_DISETUJUI]);
+        $uraianAsli = $data['kegiatan1']->uraian_kegiatan;
+
+        Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']->fresh()])
+            ->set("koreksiKegiatan.{$data['kegiatan1']->id}", 'Percobaan koreksi setelah disetujui')
+            ->call('simpanPerubahan')
+            ->assertHasNoErrors();
+
+        $this->assertSame($uraianAsli, $data['kegiatan1']->fresh()->uraian_kegiatan);
+    }
+
     public function test_simpan_perubahan_iku_rasio_menyimpan_kolom_x_y_bukan_alokasi_langsung(): void
     {
         $this->actingAs($this->buatSakip());

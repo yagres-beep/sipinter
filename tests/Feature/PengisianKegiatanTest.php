@@ -12,6 +12,7 @@ use App\Models\KendalaSolusi;
 use App\Models\MasterIku;
 use App\Models\Periode;
 use App\Models\Role;
+use App\Models\RiwayatStatusCapaian;
 use App\Models\RtlEvaluasi;
 use App\Models\User;
 use App\Models\UserTim;
@@ -1570,6 +1571,136 @@ class PengisianKegiatanTest extends TestCase
         $this->actingAs($data['ketua']);
 
         $this->get(route('berkas.show', $data['berkas']))->assertOk();
+    }
+
+    public function test_banner_dikembalikan_menyebut_kepala_dan_catatannya_saat_kepala_yang_mengembalikan(): void
+    {
+        $data = $this->siapkanKegiatanDikembalikanDenganBerkasDitolak();
+
+        $kepala = User::create([
+            'nama' => 'Kepala Uji Banner', 'username' => 'kepala-uji-banner@example.test', 'email' => 'kepala-uji-banner@example.test',
+            'password' => 'password', 'role_id' => Role::create(['nama' => 'Kepala'])->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $capaian = Capaian::where('iku_id', $data['iku']->id)->firstOrFail();
+
+        // Meniru NotulaService::kembalikanIsian() (Kepala mengembalikan LANGSUNG dari
+        // halaman Persetujuan Notula, lihat App\Livewire\PersetujuanNotula) — satu baris
+        // riwayat dengan user Kepala & catatan bebas ketik, TANPA menyentuh catatan
+        // per-berkas/kendala sama sekali.
+        RiwayatStatusCapaian::create([
+            'capaian_id' => $capaian->id, 'status' => Capaian::STATUS_DIKEMBALIKAN,
+            'user_id' => $kepala->id, 'catatan' => 'Realisasi belum sesuai bukti dukung',
+        ]);
+
+        $this->actingAs($data['ketua']);
+
+        Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $data['iku']->id)
+            ->assertSee('dikembalikan oleh Kepala')
+            ->assertSee('Realisasi belum sesuai bukti dukung')
+            ->assertDontSee('dikembalikan oleh Tim SAKIP');
+    }
+
+    public function test_banner_dikembalikan_tetap_menyebut_tim_sakip_saat_tim_sakip_yang_mengembalikan(): void
+    {
+        $data = $this->siapkanKegiatanDikembalikanDenganBerkasDitolak();
+
+        $timSakip = User::create([
+            'nama' => 'Tim SAKIP Uji Banner', 'username' => 'sakip-uji-banner@example.test', 'email' => 'sakip-uji-banner@example.test',
+            'password' => 'password', 'role_id' => Role::create(['nama' => 'Tim SAKIP'])->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $capaian = Capaian::where('iku_id', $data['iku']->id)->firstOrFail();
+
+        RiwayatStatusCapaian::create([
+            'capaian_id' => $capaian->id, 'status' => Capaian::STATUS_DIKEMBALIKAN,
+            'user_id' => $timSakip->id, 'catatan' => 'Tanggal tidak jelas',
+        ]);
+
+        $this->actingAs($data['ketua']);
+
+        Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $data['iku']->id)
+            ->assertSee('dikembalikan oleh Tim SAKIP')
+            ->assertDontSee('dikembalikan oleh Kepala');
+    }
+
+    public function test_ketua_tim_bisa_menghapus_permanen_kegiatan_yang_dikembalikan(): void
+    {
+        Storage::fake('local');
+        $data = $this->siapkanKegiatanDikembalikanDenganBerkasDitolak();
+        Storage::disk('local')->put($data['berkas']->path, 'isi pdf palsu');
+
+        $this->actingAs($data['ketua']);
+
+        $component = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $data['iku']->id);
+
+        $blockIndex = collect($component->get('blocks'))->search(fn ($b) => $b['id'] === $data['kegiatan']->id);
+        $this->assertNotFalse($blockIndex);
+
+        $component->call('removeBlock', $blockIndex);
+
+        // Baris Kegiatan & berkas buktinya benar-benar hilang dari DB (bukan cuma
+        // dibuang dari array in-memory) -- lihat catatan di removeBlock(): kalau
+        // hanya dibuang dari array, muatBlocksKegiatan() akan memuatnya lagi begitu
+        // form dibuka ulang karena baris Kegiatan masih ada di DB.
+        $this->assertDatabaseMissing('kegiatan', ['id' => $data['kegiatan']->id]);
+        $this->assertDatabaseMissing('berkas', ['id' => $data['berkas']->id]);
+        Storage::disk('local')->assertMissing($data['berkas']->path);
+
+        // Satu blok kosong bawaan menggantikan blok yang dihapus, form tidak "amblas".
+        $component->assertSet('blocks', [[
+            'id' => null,
+            'status_dokumen' => null,
+            'uraian_kegiatan' => '',
+            'jenis' => '',
+            'tahapan_survei' => '',
+            'bukti' => [],
+            'existing_bukti' => [],
+            'catatan_bukti_dihapus' => null,
+        ]]);
+    }
+
+    public function test_ketua_tim_tidak_bisa_menghapus_permanen_kegiatan_yang_sudah_diverifikasi(): void
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $ketua = User::create([
+            'nama' => 'Ketua Uji Hapus Terkunci', 'username' => 'ketua-uji-hapus-terkunci@example.test', 'email' => 'ketua-uji-hapus-terkunci@example.test',
+            'password' => 'password', 'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create(['kode' => 'UJI-HAPUS-2', 'indikator' => 'Indikator uji hapus terkunci', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji']);
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 8, 'triwulan' => 3, 'bulan_ke' => 2, 'flag_bulan_terlewat' => false]);
+
+        Capaian::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'status' => Capaian::STATUS_DIVERIFIKASI]);
+
+        $kegiatan = Kegiatan::create([
+            'iku_id' => $iku->id, 'periode_id' => $periode->id,
+            'uraian_kegiatan' => 'Kegiatan sudah diverifikasi', 'jenis' => 'bukan_survei_sensus',
+            'status_dokumen' => Kegiatan::STATUS_DIVERIFIKASI,
+        ]);
+
+        $this->actingAs($ketua);
+
+        $component = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $iku->id);
+
+        $blockIndex = collect($component->get('blocks'))->search(fn ($b) => $b['id'] === $kegiatan->id);
+        $this->assertNotFalse($blockIndex);
+
+        $component->call('removeBlock', $blockIndex);
+
+        $this->assertDatabaseHas('kegiatan', ['id' => $kegiatan->id]);
     }
 
     public function test_kendala_ditolak_dimuat_ulang_ke_form_dan_diperbaiki_di_baris_yang_sama(): void

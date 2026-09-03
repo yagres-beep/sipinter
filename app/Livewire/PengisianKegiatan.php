@@ -10,6 +10,7 @@ use App\Models\Kegiatan;
 use App\Models\KendalaSolusi as KendalaSolusiModel;
 use App\Models\MasterIku;
 use App\Models\Periode;
+use App\Models\RiwayatStatusCapaian;
 use App\Models\RtlEvaluasi as RtlEvaluasiModel;
 use App\Services\FolderStructureService;
 use Illuminate\Contracts\Cache\Lock;
@@ -342,19 +343,64 @@ class PengisianKegiatan extends Component
     }
 
     /**
-     * Hanya blok yang belum tersimpan (id === null) yang boleh dihapus dari sini —
-     * blok yang sudah punya baris Kegiatan di DB sengaja tidak bisa dihapus lewat
-     * tombol ini, supaya tidak menghilang dari form lalu muncul lagi tak berubah
-     * saat form dibuka ulang (lihat muatBlocksKegiatan()).
+     * Blok yang belum tersimpan (id === null) cukup dibuang dari array in-memory.
+     * Blok yang SUDAH punya baris Kegiatan di DB hanya boleh dihapus PERMANEN
+     * selagi statusnya masih 'draft' atau 'dikembalikan' (belum diajukan/dikunci
+     * Tim SAKIP, lihat STATUS_KEGIATAN_TERKUNCI) — mis. Kepala mengembalikan isian
+     * (NotulaService::kembalikanIsian()) karena satu kegiatan memang salah/tidak
+     * relevan dan Ketua Tim perlu membuangnya sama sekali, bukan cuma menyunting
+     * teksnya. Baris Kegiatan & seluruh berkas buktinya (file lokal + baris DB)
+     * ikut dihapus di sini — TIDAK cukup dibuang dari $this->blocks saja, karena
+     * muatBlocksKegiatan() akan memuat ulang SEMUA baris Kegiatan milik IKU+periode
+     * ini dari DB tiap kali form dibuka, jadi kegiatan itu akan "muncul lagi" kalau
+     * baris DB-nya sendiri tidak ikut dihapus.
      */
     public function removeBlock(int $index): void
     {
-        if (($this->blocks[$index]['id'] ?? null) !== null) {
+        $block = $this->blocks[$index] ?? null;
+
+        if (! $block) {
             return;
         }
 
+        if ($block['id'] === null) {
+            unset($this->blocks[$index]);
+            $this->blocks = array_values($this->blocks);
+
+            return;
+        }
+
+        if ($this->formTerkunciDisetujuiFresh() || $this->formTerkunciSedangDitanganiFresh()) {
+            return;
+        }
+
+        if (in_array($block['status_dokumen'], self::STATUS_KEGIATAN_TERKUNCI, true)) {
+            return;
+        }
+
+        $kegiatan = Kegiatan::with('berkas')->find($block['id']);
+
+        if (! $kegiatan) {
+            return;
+        }
+
+        foreach ($kegiatan->berkas as $berkas) {
+            if ($berkas->path) {
+                Storage::disk('local')->delete($berkas->path);
+            }
+        }
+
+        $kegiatan->berkas()->delete();
+        $kegiatan->delete();
+
         unset($this->blocks[$index]);
         $this->blocks = array_values($this->blocks);
+
+        if (empty($this->blocks)) {
+            $this->blocks = [$this->emptyBlock()];
+        }
+
+        $this->lupakanCachePeriodeIku();
     }
 
     public function removeBuktiKegiatan(int $blockIndex, int $fileIndex): void
@@ -675,7 +721,7 @@ class PengisianKegiatan extends Component
      */
     protected function lupakanCachePeriodeIku(): void
     {
-        foreach (['riwayat', 'kendala-aktif', 'rtl-berjalan', 'rtl-berikutnya-ada', 'rtl-berikutnya-aktif', 'rtl-berjalan-terpakai', 'capaian-status', 'catatan-penolakan', 'periode'] as $bagian) {
+        foreach (['riwayat', 'kendala-aktif', 'rtl-berjalan', 'rtl-berikutnya-ada', 'rtl-berikutnya-aktif', 'rtl-berjalan-terpakai', 'capaian-status', 'catatan-penolakan', 'pengembalian-terakhir', 'periode'] as $bagian) {
             Cache::forget($this->cacheKeyPeriodeIku($bagian));
         }
 
@@ -850,6 +896,44 @@ class PengisianKegiatan extends Component
                 ->filter()
                 ->unique()
                 ->values();
+        });
+    }
+
+    /**
+     * Baris riwayat status "dikembalikan" TERAKHIR milik Capaian (IKU+periode) ini —
+     * dipakai banner di puncak form untuk memberitahu Ketua Tim SIAPA yang
+     * mengembalikan (Kepala lewat NotulaService::kembalikanIsian(), ATAU Tim SAKIP
+     * lewat VerifikasiCapaian::kembalikanKeKetuaTim()/bukaKembali()) beserta
+     * catatannya — sebelumnya banner ini SELALU berbunyi "oleh Tim SAKIP" tanpa
+     * pernah mengecek siapa penggunanya, jadi salah atribusi setiap kali Kepala yang
+     * mengembalikan langsung dari halaman Persetujuan Notula (RF-44), dan catatan
+     * Kepala (kolom `catatan` pada riwayat_status_capaian) tidak pernah ditampilkan
+     * sama sekali karena catatanPenolakan() di atas hanya mengumpulkan catatan
+     * per-berkas/kendala, bukan catatan level-Capaian ini.
+     *
+     * Sama seperti catatanPenolakan(), baru boleh terlihat setelah verifikasiTerlihat()
+     * supaya tidak membocorkan hasil pemeriksaan yang masih berjalan.
+     */
+    protected function pengembalianTerakhir(): ?RiwayatStatusCapaian
+    {
+        $periode = $this->iku_id ? $this->periodeSaatIni() : null;
+
+        if (! $periode || ! $this->verifikasiTerlihat()) {
+            return null;
+        }
+
+        return Cache::remember($this->cacheKeyPeriodeIku('pengembalian-terakhir'), self::CACHE_TTL_DETIK, function () use ($periode) {
+            $capaianId = Capaian::where('iku_id', $this->iku_id)->where('periode_id', $periode->id)->value('id');
+
+            if (! $capaianId) {
+                return null;
+            }
+
+            return RiwayatStatusCapaian::where('capaian_id', $capaianId)
+                ->where('status', Capaian::STATUS_DIKEMBALIKAN)
+                ->with('user')
+                ->latest('id')
+                ->first();
         });
     }
 
@@ -2619,6 +2703,7 @@ class PengisianKegiatan extends Component
             'riwayatBagianKustom' => $bagianKustomAktif->mapWithKeys(fn ($b) => [$b->id => $this->riwayatBagianKustom($b)]),
             'statusKegiatanTerkunci' => self::STATUS_KEGIATAN_TERKUNCI,
             'catatanPenolakan' => $this->catatanPenolakan(),
+            'pengembalianTerakhir' => $this->pengembalianTerakhir(),
             'adaDikembalikan' => collect($this->blocks)->contains(fn ($b) => ($b['status_dokumen'] ?? null) === Kegiatan::STATUS_DIKEMBALIKAN)
                 || collect($this->kendalaBlocks)->contains(fn ($b) => ($b['status_verifikasi'] ?? null) === 'ditolak'),
             'formTerkunciDisetujui' => $this->formTerkunciDisetujui(),

@@ -71,11 +71,19 @@
                     @enderror
 
                     @if (! $tampilkanFormKembalikan)
-                        <button type="button" class="btn btn-teal" style="width:100%;justify-content:center;margin-bottom:10px" wire:click="setujui" wire:loading.attr="disabled" wire:target="setujui">
+                        @php $sudahDikembalikan = $notula->status === \App\Models\Notula::STATUS_DIKEMBALIKAN; @endphp
+
+                        @if ($sudahDikembalikan)
+                            <div class="badge b-kembali" style="display:block;margin-bottom:14px">Notula sudah dikembalikan ke Tim SAKIP, menunggu pengajuan ulang.</div>
+                        @endif
+
+                        <button type="button" class="btn btn-teal" style="width:100%;justify-content:center;margin-bottom:10px" wire:click="setujui" wire:loading.attr="disabled" wire:target="setujui" @disabled($sudahDikembalikan)>
                             <span wire:loading.remove wire:target="setujui">✓ Setujui &amp; Bubuhkan TTD</span>
                             <span wire:loading wire:target="setujui"><i class="spin"></i> Memproses TTD…</span>
                         </button>
-                        <button type="button" class="btn btn-red" style="width:100%;justify-content:center" wire:click="bukaFormKembalikan" wire:loading.attr="disabled" wire:target="setujui">↩ Minta Revisi</button>
+                        @unless ($sudahDikembalikan)
+                            <button type="button" class="btn btn-red" style="width:100%;justify-content:center" wire:click="bukaFormKembalikan" wire:loading.attr="disabled" wire:target="setujui">↩ Minta Revisi</button>
+                        @endunless
                     @else
                         <div class="field">
                             <label>Catatan Pengembalian <span class="req">*</span></label>

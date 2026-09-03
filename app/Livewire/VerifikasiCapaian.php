@@ -1423,17 +1423,30 @@ class VerifikasiCapaian extends Component
     /**
      * Kegiatan (uraian &amp; RO) boleh terus disunting Tim SAKIP walau kegiatannya
      * sendiri sudah diverifikasi/disetujui pada batch sebelumnya — sama seperti
-     * kendala &amp; solusi (kendalaBisaDiverifikasi()), Bagian Kustom
-     * (bagianKustomBisaDiverifikasi()), dan RTL, koreksi di sini TIDAK dikunci per
-     * status_dokumen kegiatan, supaya Tim SAKIP tetap bisa membetulkan salah ketik
-     * pada isian yang sudah ditandai "Sesuai" sekalipun. Satu-satunya gerbang yang
-     * tersisa adalah status BESAR Capaian (bisaDiverifikasi()) — begitu Capaian
-     * "disetujui" (masuk notula final), seluruh isian terkunci total sampai Tim
-     * SAKIP membuka kembali lewat bukaKembali().
+     * kendala &amp; solusi (koreksiKendala, lihat simpanKoreksiTeks()), dan RTL,
+     * koreksi di sini TIDAK dikunci per status_dokumen kegiatan MAUPUN per status
+     * alur Capaian (diajukan/sedang ditangani/diverifikasi/dikembalikan semuanya
+     * tetap boleh dikoreksi) — supaya Tim SAKIP tetap bisa membetulkan salah ketik
+     * kapan pun, termasuk selagi isian "dikembalikan" (baik oleh Tim SAKIP sendiri
+     * lewat kembalikanKeKetuaTim() MAUPUN oleh Kepala langsung lewat
+     * App\Services\NotulaService::kembalikanIsian()) sehingga Ketua Tim dan Tim
+     * SAKIP bisa sama-sama memperbaiki teksnya sebelum diajukan ulang ke Kepala.
+     * Satu-satunya gerbang yang tersisa adalah status BESAR Capaian == "disetujui"
+     * (masuk notula final) — begitu itu terjadi, seluruh isian terkunci total
+     * sampai Tim SAKIP membuka kembali lewat bukaKembali(). BUKAN bisaDiverifikasi()
+     * (yang hanya true untuk diajukan/sedang ditangani) — dulu dipakai di sini
+     * sehingga koreksi teks salah-kunci untuk diverifikasi/dikembalikan, padahal
+     * banner di puncak halaman (lihat verifikasi-capaian.blade.php) sudah lama
+     * menjanjikan teks ini "selalu bisa disunting Tim SAKIP ... kapan pun".
+     *
+     * Upload/hapus BERKAS bukti TETAP eksklusif milik Ketua Tim (lihat
+     * App\Livewire\PengisianKegiatan) — komponen ini sama sekali tidak
+     * menyediakan aksi unggah/hapus berkas, cuma menandai Sesuai/Tidak Sesuai
+     * berkas yang sudah ada, jadi tidak perlu gerbang tambahan untuk itu di sini.
      */
     public function kegiatanBisaDikoreksi(Kegiatan $kegiatan): bool
     {
-        return $this->bisaDiverifikasi();
+        return $this->capaian->status !== Capaian::STATUS_DISETUJUI;
     }
 
     /**
