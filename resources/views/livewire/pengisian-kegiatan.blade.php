@@ -278,17 +278,26 @@
                     @if ($rtlBerjalanOptions->isNotEmpty())
                         <select class="inp filled" style="margin-bottom:8px"
                             wire:change="pilihRtlUntukBlock({{ $i }}, $event.target.value)"
-                            @change="uraianTerisi = ($event.target.value !== ''); if ($event.target.value !== '') uraianTeks = $event.target.selectedOptions[0].text.trim()">
+                            @change="
+                                if ($event.target.value !== '') {
+                                    uraianTerisi = true;
+                                    uraianTeks = $event.target.selectedOptions[0].text.trim();
+                                } else {
+                                    uraianTerisi = false;
+                                    uraianTeks = '';
+                                    $nextTick(() => $refs.uraianInput.focus());
+                                }
+                            ">
                             <option value="">— Ketik bebas (di luar rencana RTL) —</option>
                             @foreach ($rtlBerjalanOptions as $opsi)
                                 @continue($opsi['terpakai'] && (int) $opsi['poin']->id !== (int) ($block['rtl_evaluasi_id'] ?? 0))
                                 <option value="{{ $opsi['poin']->id }}" @selected((int) ($block['rtl_evaluasi_id'] ?? 0) === $opsi['poin']->id)>{{ $opsi['poin']->rtl_teks }}</option>
                             @endforeach
                         </select>
-                        <div class="fhint">💡 Pilih dari rencana RTL triwulan ini untuk menaut otomatis (RTL yang sudah dipilih di kegiatan lain tidak muncul lagi di sini), atau biarkan "Ketik bebas" lalu isi uraian sendiri di luar rencana RTL.</div>
+                        <div class="fhint">💡 Pilih dari rencana RTL triwulan ini untuk menaut otomatis (RTL yang sudah dipilih di kegiatan lain tidak muncul lagi di sini), atau pilih "Ketik bebas" lalu ketik sendiri uraiannya di kolom di bawah ini.</div>
                     @endif
 
-                    <input type="text" class="inp filled" wire:model.live.blur="blocks.{{ $i }}.uraian_kegiatan"
+                    <input type="text" class="inp filled" x-ref="uraianInput" wire:model.live.blur="blocks.{{ $i }}.uraian_kegiatan"
                         @input="uraianTerisi = ($event.target.value.trim() !== ''); uraianTeks = $event.target.value"
                         placeholder="mis. Pencacahan rumah tangga Sakernas {{ $periodeLabel }}">
                     @error("blocks.{$i}.uraian_kegiatan")

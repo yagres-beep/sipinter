@@ -831,9 +831,12 @@ class PengisianKegiatanTest extends TestCase
         $test->set('blocks.0.uraian_kegiatan', 'Poin pertama (disunting Ketua Tim)')
             ->assertSet('blocks.0.rtl_evaluasi_id', $poin1->id);
 
-        // Mengembalikan dropdown ke "Ketik bebas" melepas tautannya.
+        // Mengembalikan dropdown ke "Ketik bebas" melepas tautannya DAN mengosongkan
+        // uraian kegiatan — supaya kolomnya kelihatan jelas kosong & siap diketik
+        // sendiri, bukan tetap menampilkan teks RTL lama yang terkesan "terkunci".
         $test->call('pilihRtlUntukBlock', 0, '')
-            ->assertSet('blocks.0.rtl_evaluasi_id', null);
+            ->assertSet('blocks.0.rtl_evaluasi_id', null)
+            ->assertSet('blocks.0.uraian_kegiatan', '');
     }
 
     protected function siapkanRtlBerikutnyaDitolak(): array

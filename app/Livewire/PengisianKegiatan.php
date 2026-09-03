@@ -410,6 +410,11 @@ class PengisianKegiatan extends Component
      * berubah (baru lepas lagi kalau dropdown dikembalikan ke "Ketik bebas").
      * RTL yang sudah dipilih di blok lain otomatis hilang dari opsi dropdown blok
      * ini (lihat rtlIdTerpilihDiBlocks()), jadi satu poin RTL tidak bisa dobel dipakai.
+     *
+     * Mengembalikan dropdown ke "Ketik bebas" SENGAJA mengosongkan uraian kegiatan
+     * (bukan cuma melepas tautannya) — kalau teks lama dibiarkan, kolom uraian di
+     * bawah kelihatan tetap terisi/"terkunci" dan Ketua Tim mengira tidak bisa
+     * mengetik uraiannya sendiri, padahal cuma perlu diklik & ditimpa.
      */
     public function pilihRtlUntukBlock(int $index, $rtlId): void
     {
@@ -421,6 +426,7 @@ class PengisianKegiatan extends Component
 
         if ($rtlId === null) {
             $this->blocks[$index]['rtl_evaluasi_id'] = null;
+            $this->blocks[$index]['uraian_kegiatan'] = '';
 
             return;
         }
