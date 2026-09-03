@@ -262,14 +262,21 @@ class VerifikasiCapaian extends Component
     public array $catatanRtlBerikutnya = [];
 
     /**
-     * PIC Tindak Lanjut untuk rencana RTL triwulan berikutnya (Bagian 5) — SATU nilai
-     * untuk seluruh poin dalam batch ini, sama seperti PengisianKegiatan::$rtlBaruPic.
-     * Ketua Tim boleh mengosongkannya saat mengajukan (lihat PengisianKegiatan::rules()),
-     * tapi Tim SAKIP WAJIB mengisi/mengonfirmasinya di sini sebelum "Verifikasi Selesai"
-     * bisa ditekan (lihat verifikasiSelesai()) — supaya rencana yang lolos ke notula
+     * PIC Tindak Lanjut untuk rencana RTL triwulan berikutnya (Bagian 5) — daftar tim
+     * (boleh lebih dari satu, sama seperti PengisianKegiatan::$rtlBaruPicTerpilih)
+     * untuk SELURUH poin dalam batch ini, ditambah/dihapus lewat chip (lihat
+     * tambahPicRtlBerikutnya()/hapusPicRtlBerikutnya()). Ketua Tim boleh
+     * mengosongkannya saat mengajukan (lihat PengisianKegiatan::rules()), tapi Tim
+     * SAKIP WAJIB mengisi/mengonfirmasinya di sini sebelum "Verifikasi Selesai" bisa
+     * ditekan (lihat verifikasiSelesai()) — supaya rencana yang lolos ke notula
      * final selalu punya PIC yang jelas.
+     *
+     * @var list<string>
      */
-    public ?string $picRtlBerikutnya = null;
+    public array $picRtlBerikutnyaTerpilih = [];
+
+    /** Input "tambah tim" untuk picRtlBerikutnyaTerpilih -- lihat tambahPicRtlBerikutnya(). */
+    public string $picRtlBerikutnyaBaru = '';
 
     /**
      * Cache dalam satu siklus request (di-reset otomatis tiap request baru) — DB
@@ -383,7 +390,13 @@ class VerifikasiCapaian extends Component
             $this->koreksiRtlBerikutnya[$poin->id] = $poin->rtl_teks;
         }
 
-        $this->picRtlBerikutnya = $this->rtlBerikutnyaBaruDitetapkan()->first()?->pic;
+        // rtl_evaluasi.pic tetap satu kolom teks bebas (bukan tabel relasi) -- dipisah
+        // koma/titik-koma di sini untuk dimuat balik sebagai chip, sama pola pisahnya
+        // dengan App\Livewire\PengisianKegiatan::muatPicTersimpan().
+        $picTersimpan = $this->rtlBerikutnyaBaruDitetapkan()->first()?->pic;
+        $this->picRtlBerikutnyaTerpilih = $picTersimpan !== null && trim($picTersimpan) !== ''
+            ? collect(preg_split('/[,;]/', $picTersimpan))->map(fn ($t) => trim($t))->filter()->unique()->values()->all()
+            : [];
 
         $tw = (int) $this->capaian->periode->triwulan;
         foreach ($this->rincianNList() as $n) {
@@ -1206,6 +1219,31 @@ class VerifikasiCapaian extends Component
         $this->cacheRtlBerikutnya = null;
     }
 
+    /**
+     * Tambah satu tim ke picRtlBerikutnyaTerpilih — nilainya diambil dari
+     * picRtlBerikutnyaBaru (wire:model), boleh dari saran daftarTimPic() atau nama
+     * tim baru yang diketik bebas. Sama pola UX-nya dengan
+     * App\Livewire\PengisianKegiatan::tambahRtlBaruPic().
+     */
+    public function tambahPicRtlBerikutnya(): void
+    {
+        $tim = trim($this->picRtlBerikutnyaBaru);
+
+        if ($tim === '' || in_array($tim, $this->picRtlBerikutnyaTerpilih, true)) {
+            $this->picRtlBerikutnyaBaru = '';
+
+            return;
+        }
+
+        $this->picRtlBerikutnyaTerpilih[] = $tim;
+        $this->picRtlBerikutnyaBaru = '';
+    }
+
+    public function hapusPicRtlBerikutnya(string $tim): void
+    {
+        $this->picRtlBerikutnyaTerpilih = array_values(array_diff($this->picRtlBerikutnyaTerpilih, [$tim]));
+    }
+
     protected function rules(): array
     {
         return [
@@ -1482,9 +1520,9 @@ class VerifikasiCapaian extends Component
         // sudah memastikan nilainya terisi sebelum sampai ke sini (lihat gerbang di
         // sana); kembalikanKeKetuaTim() tetap menyimpannya kalau sudah sempat diisi,
         // tapi tidak mewajibkannya.
-        if ($this->rtlBerikutnyaBaruDitetapkan()->isNotEmpty() && filled($this->picRtlBerikutnya)) {
+        if ($this->rtlBerikutnyaBaruDitetapkan()->isNotEmpty() && $this->picRtlBerikutnyaTerpilih !== []) {
             RtlEvaluasi::whereIn('id', $this->rtlBerikutnyaBaruDitetapkan()->pluck('id'))
-                ->update(['pic' => trim($this->picRtlBerikutnya)]);
+                ->update(['pic' => implode(', ', $this->picRtlBerikutnyaTerpilih)]);
         }
     }
 
@@ -1700,9 +1738,9 @@ class VerifikasiCapaian extends Component
         // PIC Tindak Lanjut opsional bagi Ketua Tim saat mengajukan, tapi WAJIB
         // dikonfirmasi/diisi Tim SAKIP di sini sebelum verifikasi benar-benar selesai
         // — supaya rencana yang lolos ke notula final selalu punya PIC yang jelas.
-        if ($rtlBerikutnya->isNotEmpty() && blank($this->picRtlBerikutnya)) {
+        if ($rtlBerikutnya->isNotEmpty() && $this->picRtlBerikutnyaTerpilih === []) {
             $pesan = 'PIC Tindak Lanjut untuk rencana RTL triwulan berikutnya wajib diisi sebelum verifikasi selesai.';
-            $this->addError('picRtlBerikutnya', $pesan);
+            $this->addError('picRtlBerikutnyaTerpilih', $pesan);
             $this->dispatch('notify', type: 'error', message: $pesan);
 
             return;

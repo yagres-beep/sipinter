@@ -674,13 +674,31 @@
                 <div class="row2" style="margin-bottom:10px;align-items:flex-end">
                     <div class="field" style="margin-bottom:0">
                         <label>PIC Tindak Lanjut <span class="req">*</span></label>
-                        <input type="text" class="inp filled" list="daftar-tim-pic" wire:model="picRtlBerikutnya" placeholder="— Isi tim PIC, boleh lebih dari satu dipisah koma —" @disabled(! $bisaDiverifikasi)>
+                        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:6px">
+                            @forelse ($picRtlBerikutnyaTerpilih as $tim)
+                                <span class="chip chip-tim" wire:key="pic-rtl-{{ $loop->index }}">
+                                    {{ $tim }}
+                                    @if ($bisaDiverifikasi)
+                                        <span class="chip-x" wire:click="hapusPicRtlBerikutnya('{{ $tim }}')">✕</span>
+                                    @endif
+                                </span>
+                            @empty
+                                <span class="muted" style="font-size:11.5px">— Pilih tim PIC —</span>
+                            @endforelse
+                        </div>
+                        @if ($bisaDiverifikasi)
+                            <div style="display:flex;gap:6px">
+                                <input type="text" class="inp filled" list="daftar-tim-pic" wire:model="picRtlBerikutnyaBaru"
+                                    wire:keydown.enter.prevent="tambahPicRtlBerikutnya" placeholder="Pilih dari saran atau ketik tim baru…">
+                                <button type="button" class="btn btn-ghost btn-sm" wire:click="tambahPicRtlBerikutnya">＋ Tambah</button>
+                            </div>
+                        @endif
                         <datalist id="daftar-tim-pic">
                             @foreach ($daftarTimPic as $tim)
                                 <option value="{{ $tim }}"></option>
                             @endforeach
                         </datalist>
-                        @error('picRtlBerikutnya')
+                        @error('picRtlBerikutnyaTerpilih')
                             <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                         @enderror
                     </div>

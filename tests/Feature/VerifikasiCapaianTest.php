@@ -7,6 +7,7 @@ use App\Models\BagianKustom;
 use App\Models\BagianKustomPoin;
 use App\Models\Berkas;
 use App\Models\Capaian;
+use App\Models\CapaianTahunan;
 use App\Models\Kegiatan;
 use App\Models\KendalaSolusi;
 use App\Models\MasterIku;
@@ -109,7 +110,7 @@ class VerifikasiCapaianTest extends TestCase
         $this->assertSame('diverifikasi', $data['kegiatan1']->fresh()->status_dokumen);
         $this->assertSame('diverifikasi', $data['kegiatan2']->fresh()->status_dokumen);
 
-        $capaianTahunan = \App\Models\CapaianTahunan::where('iku_id', $data['iku']->id)->where('tahun', 2026)->first();
+        $capaianTahunan = CapaianTahunan::where('iku_id', $data['iku']->id)->where('tahun', 2026)->first();
         $this->assertEquals(50, $capaianTahunan->alokasi_tw3);
         $this->assertEquals(45, $capaianTahunan->realisasi_tw3);
     }
@@ -804,18 +805,56 @@ class VerifikasiCapaianTest extends TestCase
             ->set('alokasi_tw3', 50)
             ->set('realisasi_tw3', 45)
             ->call('verifikasiSelesai')
-            ->assertHasErrors(['picRtlBerikutnya']);
+            ->assertHasErrors(['picRtlBerikutnyaTerpilih']);
 
         $this->assertNull($rtlBerikutnya->fresh()->pic);
 
         // Setelah Tim SAKIP mengisi PIC, verifikasi selesai baru boleh lanjut & PIC
         // tersimpan ke baris RTL berikutnya.
-        $component->set('picRtlBerikutnya', 'Tim Uji Verifikasi')
+        $component->set('picRtlBerikutnyaTerpilih', ['Tim Uji Verifikasi'])
             ->call('verifikasiSelesai')
             ->assertHasNoErrors();
 
         $this->assertSame('Tim Uji Verifikasi', $rtlBerikutnya->fresh()->pic);
         $this->assertSame('diverifikasi', $data['capaian']->fresh()->status);
+    }
+
+    /**
+     * RF baru: PIC Tindak Lanjut boleh diisi lebih dari satu tim di sini juga —
+     * ditambah satu per satu lewat chip (tambahPicRtlBerikutnya()), tersimpan sebagai
+     * satu string dipisah koma ke rtl_evaluasi.pic.
+     */
+    public function test_verifikasi_selesai_bisa_menyimpan_lebih_dari_satu_pic_rtl_berikutnya(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+
+        $periodeBerikutnya = Periode::create([
+            'tahun' => 2026, 'bulan' => 10, 'triwulan' => 4, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false,
+        ]);
+
+        $rtlBerikutnya = RtlEvaluasi::create([
+            'iku_id' => $data['iku']->id, 'periode_id' => $periodeBerikutnya->id,
+            'rtl_teks' => 'Rencana dua PIC', 'batas_waktu' => '2026-12-31',
+        ]);
+
+        $component = Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
+            ->call('tandaiSesuai', $data['berkas1']->id)
+            ->call('tandaiSesuai', $data['berkas2']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan1']->id)
+            ->call('tandaiUraianSesuai', $data['kegiatan2']->id)
+            ->call('tandaiRtlBerikutnyaSesuai', $rtlBerikutnya->id)
+            ->set('alokasi_tw3', 50)
+            ->set('realisasi_tw3', 45)
+            ->set('picRtlBerikutnyaBaru', 'Tim Pertama')
+            ->call('tambahPicRtlBerikutnya')
+            ->set('picRtlBerikutnyaBaru', 'Tim Kedua')
+            ->call('tambahPicRtlBerikutnya')
+            ->assertSet('picRtlBerikutnyaTerpilih', ['Tim Pertama', 'Tim Kedua'])
+            ->call('verifikasiSelesai')
+            ->assertHasNoErrors();
+
+        $this->assertSame('Tim Pertama, Tim Kedua', $rtlBerikutnya->fresh()->pic);
     }
 
     public function test_tandai_rtl_berikutnya_tolak_wajib_catatan(): void
@@ -1161,7 +1200,7 @@ class VerifikasiCapaianTest extends TestCase
         $this->assertSame('Analisis disunting Tim SAKIP', $capaian->analisis_capaian);
         $this->assertSame('diverifikasi', $capaian->status);
 
-        $capaianTahunan = \App\Models\CapaianTahunan::where('iku_id', $data['iku']->id)->where('tahun', 2026)->first();
+        $capaianTahunan = CapaianTahunan::where('iku_id', $data['iku']->id)->where('tahun', 2026)->first();
         $this->assertEquals(50, $capaianTahunan->alokasi_tw3);
         $this->assertEquals(45, $capaianTahunan->realisasi_tw3);
     }
@@ -1185,7 +1224,7 @@ class VerifikasiCapaianTest extends TestCase
             ->call('simpanPerubahan')
             ->assertHasNoErrors();
 
-        $capaianTahunan = \App\Models\CapaianTahunan::where('iku_id', $data['iku']->id)->where('tahun', 2026)->first();
+        $capaianTahunan = CapaianTahunan::where('iku_id', $data['iku']->id)->where('tahun', 2026)->first();
         $this->assertEquals(2, $capaianTahunan->x_alokasi_tw3);
         $this->assertEquals(3, $capaianTahunan->y_alokasi_tw3);
         $this->assertNull($capaianTahunan->alokasi_tw3);
@@ -1220,7 +1259,7 @@ class VerifikasiCapaianTest extends TestCase
         $this->assertNull($itemB->fresh()->triwulan_realisasi);
         $this->assertEquals(1, $terkunci->fresh()->triwulan_realisasi);
 
-        $capaianTahunan = \App\Models\CapaianTahunan::where('iku_id', $data['iku']->id)->where('tahun', 2026)->first();
+        $capaianTahunan = CapaianTahunan::where('iku_id', $data['iku']->id)->where('tahun', 2026)->first();
         $this->assertEquals(1, $capaianTahunan->x_realisasi_tw3);
     }
 
@@ -1249,7 +1288,7 @@ class VerifikasiCapaianTest extends TestCase
         $this->assertEquals(2, $itemTerlewatTw2->fresh()->triwulan_realisasi);
         $this->assertEquals(3, $itemTw3->fresh()->triwulan_realisasi);
 
-        $capaianTahunan = \App\Models\CapaianTahunan::where('iku_id', $data['iku']->id)->where('tahun', 2026)->first();
+        $capaianTahunan = CapaianTahunan::where('iku_id', $data['iku']->id)->where('tahun', 2026)->first();
         $this->assertEquals(1, $capaianTahunan->x_realisasi_tw1);
         $this->assertEquals(1, $capaianTahunan->x_realisasi_tw2);
         $this->assertEquals(1, $capaianTahunan->x_realisasi_tw3);
@@ -1341,7 +1380,7 @@ class VerifikasiCapaianTest extends TestCase
         // TW I sudah diisi lewat sesi verifikasi BULAN LAIN sebelumnya (langsung lewat
         // DB di sini, bukan lewat komponen ini) — periode Capaian ini sendiri triwulan
         // III (lihat siapkanIkuDenganDuaKegiatan()).
-        \App\Models\CapaianTahunan::create([
+        CapaianTahunan::create([
             'iku_id' => $data['iku']->id,
             'tahun' => 2026,
             'x_alokasi_tw1' => 1,
@@ -1358,7 +1397,7 @@ class VerifikasiCapaianTest extends TestCase
             ->call('simpanPerubahan')
             ->assertHasNoErrors();
 
-        $capaianTahunan = \App\Models\CapaianTahunan::where('iku_id', $data['iku']->id)->where('tahun', 2026)->first();
+        $capaianTahunan = CapaianTahunan::where('iku_id', $data['iku']->id)->where('tahun', 2026)->first();
 
         $this->assertEqualsWithDelta(33.33, $capaianTahunan->alokasiKumulatif(1), 0.01);
         $this->assertEqualsWithDelta(66.67, $capaianTahunan->alokasiKumulatif(3), 0.01);
@@ -1372,7 +1411,7 @@ class VerifikasiCapaianTest extends TestCase
 
         // TW I sudah diisi lewat sesi bulan lain (langsung lewat DB) — periode Capaian
         // ini sendiri triwulan III.
-        \App\Models\CapaianTahunan::create([
+        CapaianTahunan::create([
             'iku_id' => $data['iku']->id,
             'tahun' => 2026,
             'x_alokasi_tw1' => 1,
@@ -1390,7 +1429,7 @@ class VerifikasiCapaianTest extends TestCase
             ->call('simpanPerubahan')
             ->assertHasNoErrors();
 
-        $capaianTahunan = \App\Models\CapaianTahunan::where('iku_id', $data['iku']->id)->where('tahun', 2026)->first();
+        $capaianTahunan = CapaianTahunan::where('iku_id', $data['iku']->id)->where('tahun', 2026)->first();
 
         $this->assertEquals(1, $capaianTahunan->x_alokasi_tw1);
         $this->assertEquals(3, $capaianTahunan->y_alokasi_tw1);

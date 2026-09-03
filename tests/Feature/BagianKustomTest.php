@@ -216,7 +216,7 @@ class BagianKustomTest extends TestCase
             ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
             ->set('kendalaBlocks.0.kendala', 'Kendala uji')
             ->set('rtlBaru.0.rtl_teks', 'RTL uji')
-            ->set('rtlBaruPic', 'PIC Uji')
+            ->set('rtlBaruPicTerpilih', ['PIC Uji'])
             ->call('ajukanIsian')
             ->assertHasErrors();
 

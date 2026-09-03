@@ -735,16 +735,30 @@
             @unless ($sudahAdaRtlBerikutnya)
                 <div class="row2" style="margin-top:14px">
                     <div class="field"><label>PIC Tindak Lanjut</label>
-                        <input type="text" class="inp filled" list="daftar-tim-pic" wire:model="rtlBaruPic" placeholder="— Belum dipilih (diisi Tim SAKIP saat verifikasi) —">
+                        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:6px">
+                            @forelse ($rtlBaruPicTerpilih as $tim)
+                                <span class="chip chip-tim" wire:key="rtl-pic-{{ $loop->index }}">
+                                    {{ $tim }}
+                                    <span class="chip-x" wire:click="hapusRtlBaruPic('{{ $tim }}')">✕</span>
+                                </span>
+                            @empty
+                                <span class="muted" style="font-size:11.5px">— Belum dipilih (diisi Tim SAKIP saat verifikasi) —</span>
+                            @endforelse
+                        </div>
+                        <div style="display:flex;gap:6px">
+                            <input type="text" class="inp filled" list="daftar-tim-pic" wire:model="rtlBaruPicBaru"
+                                wire:keydown.enter.prevent="tambahRtlBaruPic" placeholder="Pilih dari saran atau ketik tim baru…">
+                            <button type="button" class="btn btn-ghost btn-sm" wire:click="tambahRtlBaruPic">＋ Tambah</button>
+                        </div>
                         <datalist id="daftar-tim-pic">
                             @foreach ($daftarTimPic as $tim)
                                 <option value="{{ $tim }}"></option>
                             @endforeach
                         </datalist>
                         <div class="fhint">
-                            Nama tim (bukan perorangan) yang bertanggung jawab menindaklanjuti — boleh lebih dari satu, dipisah koma. Bawaan diambil dari tim penanggung jawab IKU ini, tapi boleh diganti/ditambah bebas. Opsional di sini; wajib diisi/dikonfirmasi Tim SAKIP saat verifikasi. Berlaku untuk seluruh poin RTL {{ $labelBerikutnya }} di atas.
+                            Nama tim (bukan perorangan) yang bertanggung jawab menindaklanjuti — boleh lebih dari satu. Bawaan diambil dari tim penanggung jawab IKU ini, tapi boleh ditambah/dihapus bebas: pilih dari saran yang sudah ada di database tim, atau ketik nama tim baru lalu tekan Enter/"＋ Tambah". Opsional di sini; wajib diisi/dikonfirmasi Tim SAKIP saat verifikasi. Berlaku untuk seluruh poin RTL {{ $labelBerikutnya }} di atas.
                         </div>
-                        @error('rtlBaruPic')
+                        @error('rtlBaruPicTerpilih')
                             <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                         @enderror
                     </div>

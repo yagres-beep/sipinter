@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Livewire\PengisianKegiatan;
+use App\Models\BagianKustom;
+use App\Models\BagianKustomPoin;
 use App\Models\Berkas;
 use App\Models\Capaian;
 use App\Models\Kegiatan;
@@ -12,8 +14,11 @@ use App\Models\Periode;
 use App\Models\Role;
 use App\Models\RtlEvaluasi;
 use App\Models\User;
+use App\Models\UserTim;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -115,7 +120,7 @@ class PengisianKegiatanTest extends TestCase
             ->set('kendalaBlocks.0.kendala', 'Kendala uji riwayat')
             ->set('kendalaBlocks.0.solusi', '')
             ->set('rtlBaru.0.rtl_teks', 'RTL uji riwayat')
-            ->set('rtlBaruPic', 'PIC Uji Riwayat')
+            ->set('rtlBaruPicTerpilih', ['PIC Uji Riwayat'])
             ->call('ajukanIsian')
             ->assertHasNoErrors();
 
@@ -193,7 +198,7 @@ class PengisianKegiatanTest extends TestCase
             ->set('blocks.0.jenis', 'bukan_survei_sensus')
             ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
             ->set('rtlBaru.0.rtl_teks', 'RTL uji coba 2')
-            ->set('rtlBaruPic', 'PIC Uji 2')
+            ->set('rtlBaruPicTerpilih', ['PIC Uji 2'])
             ->call('ajukanIsian')
             ->assertHasNoErrors();
 
@@ -227,7 +232,7 @@ class PengisianKegiatanTest extends TestCase
             ->set('blocks.0.jenis', 'bukan_survei_sensus')
             ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
             ->set('rtlBaru.0.rtl_teks', 'RTL tanpa kendala')
-            ->set('rtlBaruPic', 'PIC Uji')
+            ->set('rtlBaruPicTerpilih', ['PIC Uji'])
             ->call('ajukanIsian')
             ->assertHasErrors('kendalaBlocks');
 
@@ -265,7 +270,7 @@ class PengisianKegiatanTest extends TestCase
             ->set('blocks.0.jenis', 'bukan_survei_sensus')
             ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
             ->set('rtlBaru.0.rtl_teks', 'RTL bulan terakhir')
-            ->set('rtlBaruPic', 'PIC Uji')
+            ->set('rtlBaruPicTerpilih', ['PIC Uji'])
             ->call('ajukanIsian')
             ->assertHasNoErrors();
 
@@ -303,7 +308,7 @@ class PengisianKegiatanTest extends TestCase
             ->set('kendalaBlocks.0.kendala', 'Kendala tanpa bukti solusi')
             ->set('kendalaBlocks.0.solusi', 'Solusi tanpa bukti')
             ->set('rtlBaru.0.rtl_teks', 'RTL uji coba 3')
-            ->set('rtlBaruPic', 'PIC Uji 3')
+            ->set('rtlBaruPicTerpilih', ['PIC Uji 3'])
             ->call('ajukanIsian')
             ->assertHasNoErrors();
 
@@ -494,7 +499,7 @@ class PengisianKegiatanTest extends TestCase
             ->set('blocks.0.uraian_kegiatan', 'Kegiatan PIC draf')
             ->set('blocks.0.jenis', 'bukan_survei_sensus')
             ->set('rtlBaru.0.rtl_teks', 'RTL PIC draf')
-            ->set('rtlBaruPic', 'Tim Kustom')
+            ->set('rtlBaruPicTerpilih', ['Tim Kustom'])
             ->call('simpanDraft')
             ->assertHasNoErrors();
 
@@ -507,7 +512,7 @@ class PengisianKegiatanTest extends TestCase
             ->set('tahun', 2026)
             ->set('bulan', 9)
             ->set('iku_id', $iku->id)
-            ->assertSet('rtlBaruPic', 'Tim Kustom');
+            ->assertSet('rtlBaruPicTerpilih', ['Tim Kustom']);
     }
 
     public function test_pratinjau_nama_folder_mengikuti_uraian_dan_tahapan(): void
@@ -592,7 +597,7 @@ class PengisianKegiatanTest extends TestCase
             ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
             ->set('kendalaBlocks.0.kendala', 'Kendala lengkap')
             ->set('rtlBaru.0.rtl_teks', 'RTL lengkap')
-            ->set('rtlBaruPic', 'PIC Lengkap');
+            ->set('rtlBaruPicTerpilih', ['PIC Lengkap']);
 
         $this->assertTrue($component->instance()->formLengkap());
     }
@@ -697,7 +702,7 @@ class PengisianKegiatanTest extends TestCase
             ->set('blocks.0.jenis', 'bukan_survei_sensus')
             ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
             ->set('rtlBaru.0.rtl_teks', 'RTL baru')
-            ->set('rtlBaruPic', 'PIC Uji 9')
+            ->set('rtlBaruPicTerpilih', ['PIC Uji 9'])
             ->call('ajukanIsian')
             ->assertHasErrors(['blocks']);
 
@@ -879,7 +884,7 @@ class PengisianKegiatanTest extends TestCase
             ->set("evaluasi.{$poinRtl->id}.bukti", [UploadedFile::fake()->create('realisasi.pdf', 100, 'application/pdf')])
             ->set('kendalaBlocks.0.kendala', 'Kendala uji 10')
             ->set('rtlBaru.0.rtl_teks', 'RTL baru')
-            ->set('rtlBaruPic', 'PIC Uji 10')
+            ->set('rtlBaruPicTerpilih', ['PIC Uji 10'])
             ->call('ajukanIsian')
             ->assertHasNoErrors();
 
@@ -960,7 +965,7 @@ class PengisianKegiatanTest extends TestCase
             ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
             ->set("evaluasi.{$poin1->id}.bukti", [UploadedFile::fake()->create('realisasi1.pdf', 100, 'application/pdf')])
             ->set('rtlBaru.0.rtl_teks', 'RTL uji coba triwulan berikutnya')
-            ->set('rtlBaruPic', 'PIC Uji')
+            ->set('rtlBaruPicTerpilih', ['PIC Uji'])
             ->call('ajukanIsian')
             ->assertHasErrors('evaluasi');
 
@@ -994,7 +999,7 @@ class PengisianKegiatanTest extends TestCase
             ->set("evaluasi.{$poin2->id}.bukti", [UploadedFile::fake()->create('realisasi2.pdf', 100, 'application/pdf')])
             ->set('kendalaBlocks.0.kendala', 'Kendala uji evaluasi')
             ->set('rtlBaru.0.rtl_teks', 'RTL uji coba triwulan berikutnya')
-            ->set('rtlBaruPic', 'PIC Uji')
+            ->set('rtlBaruPicTerpilih', ['PIC Uji'])
             ->call('ajukanIsian')
             ->assertHasNoErrors();
 
@@ -1020,26 +1025,66 @@ class PengisianKegiatanTest extends TestCase
             'tim' => 'Uji Otomatis',
         ]);
 
-        \App\Models\UserTim::create(['user_id' => $ketua->id, 'tim' => 'Uji Otomatis']);
+        UserTim::create(['user_id' => $ketua->id, 'tim' => 'Uji Otomatis']);
 
         $this->actingAs($ketua);
 
         $component = Livewire::test(PengisianKegiatan::class);
         $component->set('iku_id', $iku->id);
 
-        // PIC Tindak Lanjut bawaan mengikuti nama tim (master_iku.tim), BUKAN nama
-        // orang — konsisten dengan yang dipakai di notula
-        // (NotulaBagian1DocxService::isiBagianIku()). Boleh diganti Ketua Tim lewat
-        // dropdown, lihat test_ajukan_isian_berhasil_meski_pic_tindak_lanjut_kosong().
-        $this->assertSame('Uji Otomatis', $component->get('rtlBaruPic'));
+        // PIC Tindak Lanjut bawaan mengikuti tim penanggung jawab IKU
+        // (App\Models\MasterIku::namaTimList()), BUKAN nama orang — konsisten dengan
+        // yang dipakai di notula (NotulaBagian1DocxService::isiSatuIku()). Boleh
+        // ditambah/dihapus bebas Ketua Tim lewat chip, lihat
+        // test_ajukan_isian_berhasil_meski_pic_tindak_lanjut_kosong().
+        $this->assertSame(['Uji Otomatis'], $component->get('rtlBaruPicTerpilih'));
+    }
+
+    /**
+     * RF baru: PIC Tindak Lanjut boleh diisi lebih dari satu tim — ditambah/dihapus
+     * satu per satu lewat chip (tambahRtlBaruPic()/hapusRtlBaruPic()), boleh dari
+     * saran daftarTimPic() (database tim) atau nama tim baru yang diketik bebas.
+     */
+    public function test_pic_tindak_lanjut_bisa_ditambah_lebih_dari_satu_tim_lewat_chip(): void
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $ketua = User::create([
+            'nama' => 'Ketua Uji',
+            'username' => 'ketua-uji-multi-pic@example.test', 'email' => 'ketua-uji-multi-pic@example.test',
+            'password' => 'password',
+            'role_id' => $peranKetua->id,
+            'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create([
+            'kode' => 'UJI-MULTI-PIC',
+            'indikator' => 'Indikator uji multi PIC',
+            'tim' => 'Tim Bawaan',
+        ]);
+
+        $this->actingAs($ketua);
+
+        $component = Livewire::test(PengisianKegiatan::class)
+            ->set('iku_id', $iku->id)
+            ->assertSet('rtlBaruPicTerpilih', ['Tim Bawaan']);
+
+        // Tambah satu tim baru yang tidak ada di database sama sekali (diketik bebas).
+        $component->set('rtlBaruPicBaru', 'Tim Tambahan')
+            ->call('tambahRtlBaruPic')
+            ->assertSet('rtlBaruPicTerpilih', ['Tim Bawaan', 'Tim Tambahan'])
+            ->assertSet('rtlBaruPicBaru', '');
+
+        // Hapus tim bawaan, sisakan tim tambahan saja.
+        $component->call('hapusRtlBaruPic', 'Tim Bawaan')
+            ->assertSet('rtlBaruPicTerpilih', ['Tim Tambahan']);
     }
 
     /**
      * Regresi: PIC Tindak Lanjut dulu WAJIB diisi tapi field-nya dikunci hanya-baca
      * & terisi otomatis dari MasterIku::tim — begitu IKU belum dikonfigurasi tim-nya
-     * (tim kosong), rtlBaruPic tidak akan pernah terisi dan tombol "Ajukan ke Tim
-     * SAKIP" tidak akan pernah aktif sama sekali. PIC sekarang opsional bagi Ketua
-     * Tim (wajib diisi Tim SAKIP saat verifikasi, lihat VerifikasiCapaianTest).
+     * (tim kosong), rtlBaruPicTerpilih tidak akan pernah terisi dan tombol "Ajukan ke
+     * Tim SAKIP" tidak akan pernah aktif sama sekali. PIC sekarang opsional bagi
+     * Ketua Tim (wajib diisi Tim SAKIP saat verifikasi, lihat VerifikasiCapaianTest).
      */
     public function test_ajukan_isian_berhasil_meski_pic_tindak_lanjut_kosong(): void
     {
@@ -1064,7 +1109,7 @@ class PengisianKegiatanTest extends TestCase
             ->set('kendalaBlocks.0.kendala', 'Kendala uji PIC kosong')
             ->set('rtlBaru.0.rtl_teks', 'RTL uji coba tanpa PIC');
 
-        $this->assertSame('', $component->get('rtlBaruPic'));
+        $this->assertSame([], $component->get('rtlBaruPicTerpilih'));
         $this->assertTrue($component->instance()->formLengkap());
 
         $component->call('ajukanIsian')->assertHasNoErrors();
@@ -1138,7 +1183,7 @@ class PengisianKegiatanTest extends TestCase
             ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
             ->set('kendalaBlocks.0.kendala', 'Kendala cache uji')
             ->set('rtlBaru.0.rtl_teks', 'RTL cache uji')
-            ->set('rtlBaruPic', 'PIC Uji 13')
+            ->set('rtlBaruPicTerpilih', ['PIC Uji 13'])
             ->call('ajukanIsian')
             ->assertHasNoErrors();
 
@@ -1185,12 +1230,12 @@ class PengisianKegiatanTest extends TestCase
         $component = Livewire::test(PengisianKegiatan::class)
             ->set('iku_id', $iku->id);
 
-        \Illuminate\Support\Facades\DB::flushQueryLog();
-        \Illuminate\Support\Facades\DB::enableQueryLog();
+        DB::flushQueryLog();
+        DB::enableQueryLog();
 
         $component->call('addBlock');
 
-        $this->assertCount(0, \Illuminate\Support\Facades\DB::getQueryLog());
+        $this->assertCount(0, DB::getQueryLog());
         $this->assertCount(2, $component->get('blocks'));
     }
 
@@ -1368,9 +1413,9 @@ class PengisianKegiatanTest extends TestCase
 
     public function test_hapus_bukti_lama_menghapus_berkas_yang_ditolak(): void
     {
-        \Illuminate\Support\Facades\Storage::fake('local');
+        Storage::fake('local');
         $data = $this->siapkanKegiatanDikembalikanDenganBerkasDitolak();
-        \Illuminate\Support\Facades\Storage::disk('local')->put($data['berkas']->path, 'isi pdf palsu');
+        Storage::disk('local')->put($data['berkas']->path, 'isi pdf palsu');
 
         $this->actingAs($data['ketua']);
 
@@ -1385,7 +1430,7 @@ class PengisianKegiatanTest extends TestCase
         $component->call('hapusBuktiLama', $blockIndex, $data['berkas']->id);
 
         $this->assertDatabaseMissing('berkas', ['id' => $data['berkas']->id]);
-        \Illuminate\Support\Facades\Storage::disk('local')->assertMissing($data['berkas']->path);
+        Storage::disk('local')->assertMissing($data['berkas']->path);
         $this->assertEmpty($component->get("blocks.{$blockIndex}.existing_bukti"));
 
         // Catatan penolakan ("Tanggal tidak jelas", lihat fixture) tersalin ke Kegiatan
@@ -1419,10 +1464,10 @@ class PengisianKegiatanTest extends TestCase
      */
     public function test_hapus_bukti_lama_menghapus_berkas_yang_belum_ditolak_selagi_masih_bisa_diedit(): void
     {
-        \Illuminate\Support\Facades\Storage::fake('local');
+        Storage::fake('local');
         $data = $this->siapkanKegiatanDikembalikanDenganBerkasDitolak();
         $data['berkas']->update(['status_verifikasi' => 'menunggu']);
-        \Illuminate\Support\Facades\Storage::disk('local')->put($data['berkas']->path, 'isi pdf palsu');
+        Storage::disk('local')->put($data['berkas']->path, 'isi pdf palsu');
 
         $this->actingAs($data['ketua']);
 
@@ -1518,9 +1563,9 @@ class PengisianKegiatanTest extends TestCase
 
     public function test_ketua_tim_bisa_membuka_pratinjau_berkas_miliknya(): void
     {
-        \Illuminate\Support\Facades\Storage::fake('local');
+        Storage::fake('local');
         $data = $this->siapkanKegiatanDikembalikanDenganBerkasDitolak();
-        \Illuminate\Support\Facades\Storage::disk('local')->put($data['berkas']->path, 'isi pdf palsu');
+        Storage::disk('local')->put($data['berkas']->path, 'isi pdf palsu');
 
         $this->actingAs($data['ketua']);
 
@@ -1567,10 +1612,10 @@ class PengisianKegiatanTest extends TestCase
 
         $component->set('blocks.0.uraian_kegiatan', 'Kegiatan uji kendala')
             ->set('blocks.0.jenis', 'bukan_survei_sensus')
-            ->set('blocks.0.bukti', [\Illuminate\Http\UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
+            ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
             ->set('kendalaBlocks.0.kendala', 'Kendala sudah diperbaiki')
             ->set('rtlBaru.0.rtl_teks', 'RTL uji')
-            ->set('rtlBaruPic', 'PIC Uji')
+            ->set('rtlBaruPicTerpilih', ['PIC Uji'])
             ->call('ajukanIsian')
             ->assertHasNoErrors();
 
@@ -1689,7 +1734,7 @@ class PengisianKegiatanTest extends TestCase
      * Capaian-nya "dikembalikan") — dipakai test edit-ulang & hapus-bukti-lama bagian
      * kustom di bawah. Pola sama seperti siapkanKegiatanDikembalikanDenganBerkasDitolak().
      *
-     * @return array{ketua: User, iku: MasterIku, periode: Periode, bagian: \App\Models\BagianKustom, poin: \App\Models\BagianKustomPoin}
+     * @return array{ketua: User, iku: MasterIku, periode: Periode, bagian: BagianKustom, poin: BagianKustomPoin}
      */
     protected function siapkanBagianKustomDikembalikan(): array
     {
@@ -1702,14 +1747,14 @@ class PengisianKegiatanTest extends TestCase
         $iku = MasterIku::create(['kode' => 'UJI-BAGIAN', 'indikator' => 'Indikator uji bagian kustom', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji']);
         $periode = Periode::create(['tahun' => 2026, 'bulan' => 8, 'triwulan' => 3, 'bulan_ke' => 2, 'flag_bulan_terlewat' => false]);
 
-        $bagian = \App\Models\BagianKustom::create([
-            'nama' => 'Manajemen Risiko', 'frekuensi_wajib' => \App\Models\BagianKustom::FREKUENSI_OPSIONAL,
+        $bagian = BagianKustom::create([
+            'nama' => 'Manajemen Risiko', 'frekuensi_wajib' => BagianKustom::FREKUENSI_OPSIONAL,
             'bukti_wajib' => false, 'aktif' => true, 'urutan' => 1,
         ]);
 
         Capaian::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'status' => Capaian::STATUS_DIKEMBALIKAN]);
 
-        $poin = \App\Models\BagianKustomPoin::create([
+        $poin = BagianKustomPoin::create([
             'bagian_kustom_id' => $bagian->id, 'iku_id' => $iku->id, 'periode_id' => $periode->id,
             'teks' => 'Risiko lama',
         ]);
@@ -1737,7 +1782,7 @@ class PengisianKegiatanTest extends TestCase
             ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
             ->set("bagianKustomBlocks.{$data['bagian']->id}.0.teks", 'Risiko sudah diperbaiki')
             ->set('rtlBaru.0.rtl_teks', 'RTL uji')
-            ->set('rtlBaruPic', 'PIC Uji')
+            ->set('rtlBaruPicTerpilih', ['PIC Uji'])
             ->call('ajukanIsian')
             ->assertHasNoErrors();
 
@@ -1795,15 +1840,15 @@ class PengisianKegiatanTest extends TestCase
 
     public function test_hapus_bukti_lama_bagian_kustom_menghapus_berkas_yang_ditolak(): void
     {
-        \Illuminate\Support\Facades\Storage::fake('local');
+        Storage::fake('local');
         $data = $this->siapkanBagianKustomDikembalikan();
 
         $berkas = Berkas::create([
-            'ref_id' => $data['poin']->id, 'ref_type' => \App\Models\BagianKustomPoin::class, 'kategori' => 'bagian_kustom',
+            'ref_id' => $data['poin']->id, 'ref_type' => BagianKustomPoin::class, 'kategori' => 'bagian_kustom',
             'nama_file' => 'bukti-ditolak.pdf', 'path' => 'bukti-bagian-kustom/bukti-ditolak.pdf',
             'status_verifikasi' => 'ditolak', 'catatan' => 'Belum relevan',
         ]);
-        \Illuminate\Support\Facades\Storage::disk('local')->put($berkas->path, 'isi pdf palsu');
+        Storage::disk('local')->put($berkas->path, 'isi pdf palsu');
 
         $this->actingAs($data['ketua']);
 
@@ -1814,7 +1859,7 @@ class PengisianKegiatanTest extends TestCase
             ->call('hapusBuktiLamaBagianKustom', $data['poin']->id, $berkas->id);
 
         $this->assertDatabaseMissing('berkas', ['id' => $berkas->id]);
-        \Illuminate\Support\Facades\Storage::disk('local')->assertMissing($berkas->path);
+        Storage::disk('local')->assertMissing($berkas->path);
         $this->assertEmpty($component->get("bagianKustomBlocks.{$data['bagian']->id}.0.existing_bukti"));
 
         // Catatan penolakan tersalin ke poin itu sendiri sebelum berkasnya lenyap —
@@ -1830,14 +1875,14 @@ class PengisianKegiatanTest extends TestCase
      */
     public function test_hapus_bukti_lama_bagian_kustom_menghapus_berkas_yang_belum_ditolak_selagi_masih_bisa_diedit(): void
     {
-        \Illuminate\Support\Facades\Storage::fake('local');
+        Storage::fake('local');
         $data = $this->siapkanBagianKustomDikembalikan();
 
         $berkas = Berkas::create([
-            'ref_id' => $data['poin']->id, 'ref_type' => \App\Models\BagianKustomPoin::class, 'kategori' => 'bagian_kustom',
+            'ref_id' => $data['poin']->id, 'ref_type' => BagianKustomPoin::class, 'kategori' => 'bagian_kustom',
             'nama_file' => 'bukti.pdf', 'path' => 'bukti-bagian-kustom/bukti.pdf', 'status_verifikasi' => 'menunggu',
         ]);
-        \Illuminate\Support\Facades\Storage::disk('local')->put($berkas->path, 'isi pdf palsu');
+        Storage::disk('local')->put($berkas->path, 'isi pdf palsu');
 
         $this->actingAs($data['ketua']);
 
@@ -1860,7 +1905,7 @@ class PengisianKegiatanTest extends TestCase
         $data = $this->siapkanBagianKustomDikembalikan();
 
         $berkas = Berkas::create([
-            'ref_id' => $data['poin']->id, 'ref_type' => \App\Models\BagianKustomPoin::class, 'kategori' => 'bagian_kustom',
+            'ref_id' => $data['poin']->id, 'ref_type' => BagianKustomPoin::class, 'kategori' => 'bagian_kustom',
             'nama_file' => 'bukti-sesuai.pdf', 'path' => 'bukti-bagian-kustom/bukti-sesuai.pdf', 'status_verifikasi' => 'terverifikasi',
         ]);
 
@@ -1885,7 +1930,7 @@ class PengisianKegiatanTest extends TestCase
         Capaian::where('iku_id', $data['iku']->id)->update(['status' => Capaian::STATUS_SEDANG_DITANGANI]);
 
         $berkas = Berkas::create([
-            'ref_id' => $data['poin']->id, 'ref_type' => \App\Models\BagianKustomPoin::class, 'kategori' => 'bagian_kustom',
+            'ref_id' => $data['poin']->id, 'ref_type' => BagianKustomPoin::class, 'kategori' => 'bagian_kustom',
             'nama_file' => 'bukti.pdf', 'path' => 'bukti-bagian-kustom/bukti.pdf', 'status_verifikasi' => 'ditolak', 'catatan' => 'Belum relevan',
         ]);
 
@@ -1910,7 +1955,7 @@ class PengisianKegiatanTest extends TestCase
      */
     public function test_ajukan_ulang_setelah_perbaiki_bukti_rtl_memindahkan_status_ke_diajukan(): void
     {
-        \Illuminate\Support\Facades\Storage::fake('local');
+        Storage::fake('local');
 
         $peranKetua = Role::create(['nama' => 'Ketua Tim']);
         $ketua = User::create([
@@ -1965,7 +2010,7 @@ class PengisianKegiatanTest extends TestCase
 
     public function test_hapus_bukti_lama_evaluasi_menghapus_berkas_yang_ditolak(): void
     {
-        \Illuminate\Support\Facades\Storage::fake('local');
+        Storage::fake('local');
 
         $peranKetua = Role::create(['nama' => 'Ketua Tim']);
         $ketua = User::create([
@@ -1991,7 +2036,7 @@ class PengisianKegiatanTest extends TestCase
             'nama_file' => 'realisasi-ditolak.pdf', 'path' => 'bukti-evaluasi-rtl/realisasi-ditolak.pdf',
             'status_verifikasi' => 'ditolak', 'catatan' => 'Belum sesuai rencana',
         ]);
-        \Illuminate\Support\Facades\Storage::disk('local')->put($berkas->path, 'isi pdf palsu');
+        Storage::disk('local')->put($berkas->path, 'isi pdf palsu');
 
         $this->actingAs($ketua);
 
@@ -2002,7 +2047,7 @@ class PengisianKegiatanTest extends TestCase
             ->call('hapusBuktiLamaEvaluasi', $poin->id, $berkas->id);
 
         $this->assertDatabaseMissing('berkas', ['id' => $berkas->id]);
-        \Illuminate\Support\Facades\Storage::disk('local')->assertMissing($berkas->path);
+        Storage::disk('local')->assertMissing($berkas->path);
 
         // Catatan penolakan tersalin ke poin RTL itu sendiri sebelum berkasnya lenyap —
         // sama seperti hapusBuktiLama() untuk Kegiatan (lihat test di atas).
