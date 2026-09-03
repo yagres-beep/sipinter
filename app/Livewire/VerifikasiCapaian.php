@@ -1390,20 +1390,34 @@ class VerifikasiCapaian extends Component
         $fill = [];
 
         foreach (['alokasi_tw', 'realisasi_tw', 'x_alokasi_tw', 'y_alokasi_tw', 'y_realisasi_tw'] as $prefix) {
-            $fill["{$prefix}{$tw}"] = $this->{"{$prefix}{$tw}"};
+            $fill["{$prefix}{$tw}"] = $this->angkaAtauNull($this->{"{$prefix}{$tw}"});
         }
 
         if ($this->capaian->masterIku->pakaiRasio()) {
             for ($n = 1; $n <= 4; $n++) {
-                $fill["x_realisasi_tw{$n}"] = $this->{"x_realisasi_tw{$n}"};
+                $fill["x_realisasi_tw{$n}"] = $this->angkaAtauNull($this->{"x_realisasi_tw{$n}"});
             }
         } else {
-            $fill["x_realisasi_tw{$tw}"] = $this->{"x_realisasi_tw{$tw}"};
+            $fill["x_realisasi_tw{$tw}"] = $this->angkaAtauNull($this->{"x_realisasi_tw{$tw}"});
         }
 
         $model->fill($fill);
 
         return $model;
+    }
+
+    /**
+     * Livewire menyisakan string kosong "" (bukan null) untuk input angka yang
+     * dikosongkan pengguna -- kolom-kolom ini di-cast 'decimal:2' di
+     * App\Models\CapaianTahunan, dan Brick\Math (dipakai cast decimal Laravel)
+     * melempar exception untuk "" (bukan angka valid), beda dari null yang
+     * aman. Konversi di sini SEBELUM fill() supaya nilai kosong konsisten
+     * tersimpan/terbaca sebagai null, bukan menyebabkan 500 saat capaian
+     * dihitung (App\Models\CapaianTahunan::realisasiKumulatif() dst.).
+     */
+    private function angkaAtauNull(mixed $nilai): ?float
+    {
+        return $nilai === null || $nilai === '' ? null : (float) $nilai;
     }
 
     /**

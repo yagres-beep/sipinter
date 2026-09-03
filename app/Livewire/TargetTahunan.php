@@ -239,7 +239,7 @@ class TargetTahunan extends Component
                 $alokasi = collect([
                     'alokasi_tw1', 'alokasi_tw2', 'alokasi_tw3', 'alokasi_tw4',
                     'x_alokasi_tw1', 'x_alokasi_tw2', 'x_alokasi_tw3', 'x_alokasi_tw4',
-                ])->mapWithKeys(fn ($kolom) => [$kolom => $data[$kolom] ?? null]);
+                ])->mapWithKeys(fn ($kolom) => [$kolom => $this->angkaAtauNull($data[$kolom] ?? null)]);
 
                 // Alokasi Y HANYA berlaku IKU bermetode Rasio -- HANYA diminta SEKALI di
                 // blade (satu input "Total", bukan 4 kotak identik per TW -- Y tidak
@@ -286,6 +286,20 @@ class TargetTahunan extends Component
         });
 
         session()->flash('status', 'Target Tahunan tersimpan.');
+    }
+
+    /**
+     * Livewire menyisakan string kosong "" (bukan null) untuk input angka yang
+     * dikosongkan pengguna -- kolom-kolom ini di-cast 'decimal:2' di
+     * App\Models\CapaianTahunan, dan Brick\Math (dipakai cast decimal Laravel)
+     * melempar exception untuk "" (bukan angka valid), beda dari null yang
+     * aman. Konversi di sini SEBELUM fill() supaya nilai kosong konsisten
+     * tersimpan/terbaca sebagai null, sama seperti App\Livewire\
+     * VerifikasiCapaian::angkaAtauNull().
+     */
+    private function angkaAtauNull(mixed $nilai): ?float
+    {
+        return $nilai === null || $nilai === '' ? null : (float) $nilai;
     }
 
     public function render()
