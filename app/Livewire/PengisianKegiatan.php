@@ -120,8 +120,6 @@ class PengisianKegiatan extends Component
 
     protected bool $cacheIkuTerpilihDihitung = false;
 
-    protected ?Collection $cacheRtlBerjalanTerpakaiIds = null;
-
     protected ?Periode $cachePeriodeSaatIni = null;
 
     protected bool $cachePeriodeSaatIniDihitung = false;
@@ -207,6 +205,7 @@ class PengisianKegiatan extends Component
         return [
             'id' => null,
             'status_dokumen' => null,
+            'rtl_evaluasi_id' => null,
             'uraian_kegiatan' => '',
             'jenis' => '',
             'tahapan_survei' => '',
@@ -401,6 +400,39 @@ class PengisianKegiatan extends Component
         }
 
         $this->lupakanCachePeriodeIku();
+    }
+
+    /**
+     * Menautkan sebuah blok kegiatan ke poin RTL triwulan berjalan lewat dropdown
+     * (bukan lagi lewat pencocokan teks otomatis) — begitu dipilih, uraian kegiatan
+     * ikut terisi dari teks RTL-nya sebagai titik awal, tapi Ketua Tim tetap bebas
+     * menyunting teksnya sesudahnya; rtl_evaluasi_id TETAP tertaut walau teksnya
+     * berubah (baru lepas lagi kalau dropdown dikembalikan ke "Ketik bebas").
+     * RTL yang sudah dipilih di blok lain otomatis hilang dari opsi dropdown blok
+     * ini (lihat rtlIdTerpilihDiBlocks()), jadi satu poin RTL tidak bisa dobel dipakai.
+     */
+    public function pilihRtlUntukBlock(int $index, $rtlId): void
+    {
+        if (! isset($this->blocks[$index])) {
+            return;
+        }
+
+        $rtlId = $rtlId !== '' && $rtlId !== null ? (int) $rtlId : null;
+
+        if ($rtlId === null) {
+            $this->blocks[$index]['rtl_evaluasi_id'] = null;
+
+            return;
+        }
+
+        $poin = $this->rtlTriwulanBerjalan()->firstWhere('id', $rtlId);
+
+        if (! $poin) {
+            return;
+        }
+
+        $this->blocks[$index]['rtl_evaluasi_id'] = $poin->id;
+        $this->blocks[$index]['uraian_kegiatan'] = $poin->rtl_teks;
     }
 
     public function removeBuktiKegiatan(int $blockIndex, int $fileIndex): void
@@ -1181,6 +1213,7 @@ class PengisianKegiatan extends Component
         $this->blocks = $kegiatanList->map(fn (Kegiatan $kegiatan) => [
             'id' => $kegiatan->id,
             'status_dokumen' => $kegiatan->status_dokumen,
+            'rtl_evaluasi_id' => $kegiatan->rtl_evaluasi_id,
             'uraian_kegiatan' => $kegiatan->uraian_kegiatan,
             'jenis' => $kegiatan->jenis,
             'tahapan_survei' => $kegiatan->tahapan_survei ?? '',
@@ -1403,29 +1436,20 @@ class PengisianKegiatan extends Component
     }
 
     /**
-     * ID rtl_evaluasi (triwulan berjalan) yang sudah dipakai sebagai kegiatan — dipakai
-     * bersama oleh rtlBerjalanOptions() dan poinRtlBerjalanBelumTerlaksana(), dihitung
-     * sekali saja per request.
+     * ID rtl_evaluasi (triwulan berjalan) yang SEDANG tertaut ke salah satu blok
+     * kegiatan di form ini — baik kegiatan lama yang dimuat dari DB maupun pilihan
+     * dropdown yang baru saja dibuat, belum tentu tersimpan (lihat pilihRtlUntukBlock()).
+     * Dihitung langsung dari $this->blocks (bukan query DB) supaya SELALU sinkron
+     * dengan apa yang sedang terlihat di form, termasuk perubahan yang belum disimpan.
+     * Dipakai bersama oleh rtlBerjalanOptions() dan poinRtlBerjalanBelumTerlaksana().
      */
-    protected function rtlBerjalanTerpakaiIds()
+    protected function rtlIdTerpilihDiBlocks(): Collection
     {
-        if ($this->cacheRtlBerjalanTerpakaiIds !== null) {
-            return $this->cacheRtlBerjalanTerpakaiIds;
-        }
-
-        $rtlBerjalan = $this->rtlTriwulanBerjalan();
-
-        if ($rtlBerjalan->isEmpty()) {
-            return $this->cacheRtlBerjalanTerpakaiIds = collect();
-        }
-
-        return $this->cacheRtlBerjalanTerpakaiIds = Cache::remember(
-            $this->cacheKeyPeriodeIku('rtl-berjalan-terpakai'),
-            self::CACHE_TTL_DETIK,
-            fn () => Kegiatan::whereIn('rtl_evaluasi_id', $rtlBerjalan->pluck('id'))
-                ->pluck('rtl_evaluasi_id')
-                ->unique()
-        );
+        return collect($this->blocks)
+            ->pluck('rtl_evaluasi_id')
+            ->filter()
+            ->unique()
+            ->values();
     }
 
     /**
@@ -1465,7 +1489,8 @@ class PengisianKegiatan extends Component
 
     /**
      * Poin RTL triwulan berjalan (rencana yang ditetapkan triwulan sebelumnya) beserta
-     * status "sudah dipakai sebagai kegiatan?" — dipakai sebagai opsi dropdown uraian kegiatan.
+     * status "sudah dipilih di salah satu blok kegiatan?" — dipakai sebagai opsi dropdown
+     * pemilihan RTL di Bagian 2 (lewat pilihRtlUntukBlock()) dan badge di Bagian 4.
      *
      * @return Collection<int, array{poin: RtlEvaluasiModel, terpakai: bool}>
      */
@@ -1477,18 +1502,20 @@ class PengisianKegiatan extends Component
             return collect();
         }
 
-        $terpakaiIds = $this->rtlBerjalanTerpakaiIds();
+        $terpilihIds = $this->rtlIdTerpilihDiBlocks();
 
         return $rtlBerjalan->map(fn ($poin) => [
             'poin' => $poin,
-            'terpakai' => $terpakaiIds->contains($poin->id),
+            'terpakai' => $terpilihIds->contains($poin->id),
         ]);
     }
 
     /**
-     * Poin RTL triwulan berjalan yang BELUM dipakai sebagai kegiatan apa pun — baik yang
-     * tersimpan di database maupun yang uraiannya sudah cocok dengan salah satu blok kegiatan
-     * di form yang sedang diisi (akan tersimpan begitu form ini diajukan).
+     * Poin RTL triwulan berjalan yang BELUM dipilih lewat dropdown RTL di blok kegiatan
+     * mana pun — murni informatif (badge "Belum terlaksana sbg kegiatan" di Bagian 4);
+     * SEJAK aturan jumlah minimal diterapkan (lihat buatValidator()), poin di sini boleh
+     * tetap tidak dipilih dan pengajuan tetap bisa jalan selama syarat jumlah & bukti
+     * evaluasi terpenuhi — kegiatan tidak wajib memakai kata-kata RTL persis lagi.
      *
      * @return Collection<int, RtlEvaluasiModel>
      */
@@ -1504,22 +1531,15 @@ class PengisianKegiatan extends Component
             return collect();
         }
 
-        $terpakaiIds = $this->rtlBerjalanTerpakaiIds();
+        $terpilihIds = $this->rtlIdTerpilihDiBlocks();
 
-        $uraianDiForm = collect($this->blocks)
-            ->pluck('uraian_kegiatan')
-            ->map(fn ($teks) => trim(mb_strtolower($teks)))
-            ->filter();
-
-        return $rtlBerjalan->reject(function ($poin) use ($terpakaiIds, $uraianDiForm) {
-            return $terpakaiIds->contains($poin->id)
-                || $uraianDiForm->contains(trim(mb_strtolower($poin->rtl_teks)));
-        })->values();
+        return $rtlBerjalan->reject(fn ($poin) => $terpilihIds->contains($poin->id))->values();
     }
 
     /**
      * Cari poin RTL triwulan berjalan yang teksnya cocok persis (case-insensitive) dengan
-     * uraian kegiatan — dipakai saat menyimpan supaya kegiatan tertaut ke rencana RTL-nya.
+     * uraian kegiatan — jaring pengaman untuk kegiatan lama yang uraiannya diketik ulang
+     * sama persis dengan RTL tanpa lewat dropdown (lihat rtlEvaluasiIdUntukBlock()).
      */
     protected function cariRtlBerjalanCocok(string $uraianKegiatan): ?int
     {
@@ -1532,6 +1552,25 @@ class PengisianKegiatan extends Component
         }
 
         return null;
+    }
+
+    /**
+     * rtl_evaluasi_id final untuk sebuah blok kegiatan saat disimpan — utamakan pilihan
+     * eksplisit dari dropdown RTL (blocks.*.rtl_evaluasi_id, diisi lewat pilihRtlUntukBlock()
+     * dan TETAP tertaut walau uraian kegiatan-nya lalu disunting), baru jatuh ke pencocokan
+     * teks persis sebagai jaring pengaman bila field itu kosong. ID yang tersimpan divalidasi
+     * ulang terhadap rtlTriwulanBerjalan() supaya tidak ada ID basi/di luar triwulan berjalan
+     * yang lolos tersimpan.
+     */
+    protected function rtlEvaluasiIdUntukBlock(array $block): ?int
+    {
+        $idTerpilih = $block['rtl_evaluasi_id'] ?? null;
+
+        if ($idTerpilih && $this->rtlTriwulanBerjalan()->contains('id', $idTerpilih)) {
+            return (int) $idTerpilih;
+        }
+
+        return $this->cariRtlBerjalanCocok($block['uraian_kegiatan']);
     }
 
     /**
@@ -2032,14 +2071,27 @@ class PengisianKegiatan extends Component
                 }
             }
 
-            $belumTerlaksana = $this->poinRtlBerjalanBelumTerlaksana();
+            // RF-30 (diperbarui): kegiatan TIDAK wajib memakai kata-kata RTL persis lagi —
+            // boleh dipilih lewat dropdown RTL (menaut otomatis) ATAU diketik bebas di luar
+            // rencana RTL triwulan sebelumnya, ASALKAN jumlah kegiatan yang diisi triwulan
+            // ini minimal SAMA BANYAK dengan jumlah poin RTL yang diajukan triwulan
+            // sebelumnya — dan (dicek terpisah di atas) bukti evaluasi RTL sudah lengkap
+            // semua. Hanya digerbang pada bulan TERAKHIR triwulan, sama seperti aturan lain.
+            if ($this->bulanKeDari($this->bulan) === 3) {
+                $jumlahRtl = $this->rtlTriwulanBerjalan()->count();
 
-            if ($belumTerlaksana->isNotEmpty()) {
-                $daftar = $belumTerlaksana->pluck('rtl_teks')->implode('; ');
-                $validator->errors()->add(
-                    'blocks',
-                    "Masih ada {$belumTerlaksana->count()} poin RTL triwulan berjalan yang belum dilaksanakan sebagai kegiatan: {$daftar}."
-                );
+                if ($jumlahRtl > 0) {
+                    $jumlahKegiatanTerisi = collect($this->blocks)
+                        ->filter(fn ($block) => filled($block['uraian_kegiatan'] ?? null))
+                        ->count();
+
+                    if ($jumlahKegiatanTerisi < $jumlahRtl) {
+                        $validator->errors()->add(
+                            'blocks',
+                            "Jumlah kegiatan yang diisi ({$jumlahKegiatanTerisi}) masih kurang dari jumlah poin RTL yang diajukan triwulan sebelumnya ({$jumlahRtl}) — minimal harus sama banyak sebelum diajukan pada bulan terakhir triwulan ini."
+                        );
+                    }
+                }
             }
 
             // Bagian kustom: minimal satu poin wajib terisi sesuai frekuensi yang
@@ -2224,7 +2276,7 @@ class PengisianKegiatan extends Component
                 // oleh FolderStructureService, lihat catatan di model Kegiatan).
                 $kegiatan = Kegiatan::findOrFail($block['id']);
                 $kegiatan->update([
-                    'rtl_evaluasi_id' => $this->cariRtlBerjalanCocok($block['uraian_kegiatan']),
+                    'rtl_evaluasi_id' => $this->rtlEvaluasiIdUntukBlock($block),
                     'uraian_kegiatan' => $block['uraian_kegiatan'],
                     'jenis' => $block['jenis'],
                     'tahapan_survei' => $tahapan,
@@ -2233,7 +2285,7 @@ class PengisianKegiatan extends Component
             } else {
                 $kegiatan = Kegiatan::create([
                     'iku_id' => $this->iku_id,
-                    'rtl_evaluasi_id' => $this->cariRtlBerjalanCocok($block['uraian_kegiatan']),
+                    'rtl_evaluasi_id' => $this->rtlEvaluasiIdUntukBlock($block),
                     'periode_id' => $periode->id,
                     'uraian_kegiatan' => $block['uraian_kegiatan'],
                     'jenis' => $block['jenis'],

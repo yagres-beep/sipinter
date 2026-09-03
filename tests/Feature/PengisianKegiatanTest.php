@@ -662,7 +662,7 @@ class PengisianKegiatanTest extends TestCase
             ->assertOk();
     }
 
-    public function test_ajukan_diblokir_jika_rtl_berjalan_belum_terlaksana(): void
+    public function test_ajukan_diblokir_jika_jumlah_kegiatan_kurang_dari_jumlah_rtl_berjalan(): void
     {
         $peranKetua = Role::create(['nama' => 'Ketua Tim']);
         $ketua = User::create([
@@ -684,10 +684,22 @@ class PengisianKegiatanTest extends TestCase
             'tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false,
         ]);
 
+        // Dua poin RTL diajukan triwulan sebelumnya, tapi Ketua Tim cuma mengisi SATU
+        // kegiatan triwulan ini — jumlahnya kurang dari jumlah RTL, jadi tetap diblokir
+        // walau kegiatan yang diisi sudah punya bukti capaian.
         RtlEvaluasi::create([
             'iku_id' => $iku->id,
             'periode_id' => $periodeBerjalan->id,
             'rtl_teks' => 'Rencana yang belum dilaksanakan',
+            'berlaku_bulan' => 'Juli, Agustus, dan September',
+            'pic' => 'PIC Rencana',
+            'batas_waktu' => '2026-09-30',
+        ]);
+
+        RtlEvaluasi::create([
+            'iku_id' => $iku->id,
+            'periode_id' => $periodeBerjalan->id,
+            'rtl_teks' => 'Rencana kedua yang belum dilaksanakan',
             'berlaku_bulan' => 'Juli, Agustus, dan September',
             'pic' => 'PIC Rencana',
             'batas_waktu' => '2026-09-30',
@@ -708,6 +720,120 @@ class PengisianKegiatanTest extends TestCase
             ->assertHasErrors(['blocks']);
 
         $this->assertDatabaseCount('kegiatan', 0);
+    }
+
+    public function test_ajukan_boleh_dengan_kegiatan_di_luar_rtl_asal_jumlah_cukup_dan_bukti_eval_lengkap(): void
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $ketua = User::create([
+            'nama' => 'Ketua Uji',
+            'username' => 'ketua-uji9b@example.test', 'email' => 'ketua-uji9b@example.test',
+            'password' => 'password',
+            'role_id' => $peranKetua->id,
+            'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create([
+            'kode' => 'UJI-009B',
+            'indikator' => 'Indikator uji coba 9b',
+            'tim' => 'Uji',
+            'penanggung_jawab' => 'Ketua Uji',
+        ]);
+
+        $periodeBerjalan = Periode::create([
+            'tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false,
+        ]);
+
+        $poinRtl = RtlEvaluasi::create([
+            'iku_id' => $iku->id,
+            'periode_id' => $periodeBerjalan->id,
+            'rtl_teks' => 'Rencana yang belum dilaksanakan',
+            'berlaku_bulan' => 'Juli, Agustus, dan September',
+            'pic' => 'PIC Rencana',
+            'batas_waktu' => '2026-09-30',
+        ]);
+
+        $this->actingAs($ketua);
+
+        // Uraian kegiatan SENGAJA tidak sama dengan teks RTL (tidak dipilih lewat
+        // dropdown RTL) — tetap boleh diajukan karena jumlah kegiatan (1) sudah sama
+        // banyak dengan jumlah RTL (1) dan bukti evaluasi RTL-nya sudah lengkap.
+        Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 9)
+            ->set('iku_id', $iku->id)
+            ->set('blocks.0.uraian_kegiatan', 'Kegiatan lain yang tidak terkait RTL')
+            ->set('blocks.0.jenis', 'bukan_survei_sensus')
+            ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
+            ->set("evaluasi.{$poinRtl->id}.bukti", [UploadedFile::fake()->create('realisasi.pdf', 100, 'application/pdf')])
+            ->set('kendalaBlocks.0.kendala', 'Kendala uji 9b')
+            ->set('rtlBaru.0.rtl_teks', 'RTL baru')
+            ->set('rtlBaruPicTerpilih', ['PIC Uji 9b'])
+            ->call('ajukanIsian')
+            ->assertHasNoErrors();
+
+        $kegiatan = Kegiatan::first();
+        $this->assertNotNull($kegiatan);
+        $this->assertNull($kegiatan->rtl_evaluasi_id);
+    }
+
+    public function test_pilih_rtl_untuk_block_menaut_dan_mengisi_uraian_lalu_tetap_tertaut_setelah_diedit(): void
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $ketua = User::create([
+            'nama' => 'Ketua Uji',
+            'username' => 'ketua-uji9c@example.test', 'email' => 'ketua-uji9c@example.test',
+            'password' => 'password',
+            'role_id' => $peranKetua->id,
+            'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create([
+            'kode' => 'UJI-009C',
+            'indikator' => 'Indikator uji coba 9c',
+            'tim' => 'Uji',
+            'penanggung_jawab' => 'Ketua Uji',
+        ]);
+
+        $periodeBerjalan = Periode::create([
+            'tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false,
+        ]);
+
+        $poin1 = RtlEvaluasi::create([
+            'iku_id' => $iku->id, 'periode_id' => $periodeBerjalan->id,
+            'rtl_teks' => 'Poin pertama', 'berlaku_bulan' => 'Juli, Agustus, dan September', 'pic' => 'PIC', 'batas_waktu' => '2026-09-30',
+        ]);
+
+        $poin2 = RtlEvaluasi::create([
+            'iku_id' => $iku->id, 'periode_id' => $periodeBerjalan->id,
+            'rtl_teks' => 'Poin kedua', 'berlaku_bulan' => 'Juli, Agustus, dan September', 'pic' => 'PIC', 'batas_waktu' => '2026-09-30',
+        ]);
+
+        $this->actingAs($ketua);
+
+        $test = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 9)
+            ->set('iku_id', $iku->id)
+            ->call('pilihRtlUntukBlock', 0, $poin1->id);
+
+        $test->assertSet('blocks.0.rtl_evaluasi_id', $poin1->id)
+            ->assertSet('blocks.0.uraian_kegiatan', 'Poin pertama');
+
+        // Blok kedua tidak boleh lagi menawarkan poin1 (sudah dipakai blok pertama)
+        // sebagai opsi terpilihnya sendiri — hanya poin2 yang masih bebas dipilih.
+        $test->call('addBlock')
+            ->call('pilihRtlUntukBlock', 1, $poin2->id)
+            ->assertSet('blocks.1.rtl_evaluasi_id', $poin2->id)
+            ->assertSet('blocks.1.uraian_kegiatan', 'Poin kedua');
+
+        // Menyunting teks setelah dipilih TIDAK melepas tautannya.
+        $test->set('blocks.0.uraian_kegiatan', 'Poin pertama (disunting Ketua Tim)')
+            ->assertSet('blocks.0.rtl_evaluasi_id', $poin1->id);
+
+        // Mengembalikan dropdown ke "Ketik bebas" melepas tautannya.
+        $test->call('pilihRtlUntukBlock', 0, '')
+            ->assertSet('blocks.0.rtl_evaluasi_id', null);
     }
 
     protected function siapkanRtlBerikutnyaDitolak(): array
@@ -1660,6 +1786,7 @@ class PengisianKegiatanTest extends TestCase
         $component->assertSet('blocks', [[
             'id' => null,
             'status_dokumen' => null,
+            'rtl_evaluasi_id' => null,
             'uraian_kegiatan' => '',
             'jenis' => '',
             'tahapan_survei' => '',

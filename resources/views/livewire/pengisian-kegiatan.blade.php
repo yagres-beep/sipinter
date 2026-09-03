@@ -274,17 +274,23 @@
 
                 <div class="field">
                     <label>Uraian Kegiatan <span class="req">*</span></label>
-                    <input type="text" class="inp filled" list="dl-uraian-{{ $i }}" wire:model.live.blur="blocks.{{ $i }}.uraian_kegiatan"
+
+                    @if ($rtlBerjalanOptions->isNotEmpty())
+                        <select class="inp filled" style="margin-bottom:8px"
+                            wire:change="pilihRtlUntukBlock({{ $i }}, $event.target.value)"
+                            @change="uraianTerisi = ($event.target.value !== ''); if ($event.target.value !== '') uraianTeks = $event.target.selectedOptions[0].text.trim()">
+                            <option value="">— Ketik bebas (di luar rencana RTL) —</option>
+                            @foreach ($rtlBerjalanOptions as $opsi)
+                                @continue($opsi['terpakai'] && (int) $opsi['poin']->id !== (int) ($block['rtl_evaluasi_id'] ?? 0))
+                                <option value="{{ $opsi['poin']->id }}" @selected((int) ($block['rtl_evaluasi_id'] ?? 0) === $opsi['poin']->id)>{{ $opsi['poin']->rtl_teks }}</option>
+                            @endforeach
+                        </select>
+                        <div class="fhint">💡 Pilih dari rencana RTL triwulan ini untuk menaut otomatis (RTL yang sudah dipilih di kegiatan lain tidak muncul lagi di sini), atau biarkan "Ketik bebas" lalu isi uraian sendiri di luar rencana RTL.</div>
+                    @endif
+
+                    <input type="text" class="inp filled" wire:model.live.blur="blocks.{{ $i }}.uraian_kegiatan"
                         @input="uraianTerisi = ($event.target.value.trim() !== ''); uraianTeks = $event.target.value"
                         placeholder="mis. Pencacahan rumah tangga Sakernas {{ $periodeLabel }}">
-                    @if ($rtlBerjalanOptions->isNotEmpty())
-                        <datalist id="dl-uraian-{{ $i }}">
-                            @foreach ($rtlBerjalanOptions as $opsi)
-                                <option value="{{ $opsi['poin']->rtl_teks }}">{{ $opsi['poin']->rtl_teks }}@if ($opsi['terpakai']) — sudah pernah dipilih @endif</option>
-                            @endforeach
-                        </datalist>
-                        <div class="fhint">💡 Ketik bebas atau pilih dari rencana RTL triwulan ini (muncul sebagai saran ketikan).</div>
-                    @endif
                     @error("blocks.{$i}.uraian_kegiatan")
                         <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                     @enderror
@@ -546,7 +552,7 @@
             <div wire:loading wire:target="iku_id,bulan,tahun" class="info">⏳ Memuat data RTL &amp; evaluasi untuk IKU ini…</div>
 
             <div wire:loading.remove wire:target="iku_id,bulan,tahun">
-            <div class="info teal">✅ Poin di bawah adalah RTL yang ditetapkan pada triwulan sebelumnya untuk dilaksanakan triwulan ini — sama dengan yang muncul sebagai saran uraian kegiatan di Bagian 2. Lampirkan bukti realisasinya (boleh lebih dari satu berkas) — {{ $bulanKe === 3 ? 'WAJIB semua poin sudah punya bukti sebelum bisa diajukan pada bulan terakhir triwulan ini.' : 'opsional untuk bulan ini, tapi wajib sudah lengkap semua sebelum bulan terakhir triwulan.' }}</div>
+            <div class="info teal">✅ Poin di bawah adalah RTL yang ditetapkan pada triwulan sebelumnya untuk dilaksanakan triwulan ini — sama dengan yang muncul sebagai pilihan dropdown uraian kegiatan di Bagian 2. Lampirkan bukti realisasinya (boleh lebih dari satu berkas) — {{ $bulanKe === 3 ? 'WAJIB semua poin sudah punya bukti sebelum bisa diajukan pada bulan terakhir triwulan ini.' : 'opsional untuk bulan ini, tapi wajib sudah lengkap semua sebelum bulan terakhir triwulan.' }}</div>
 
             @if ($rtlSebelumnya->isEmpty())
                 <p style="color:var(--muted);font-size:13px">Tidak ada poin RTL triwulan sebelumnya untuk IKU ini.</p>
@@ -554,8 +560,8 @@
 
             @if ($rtlBerjalanBelumTerlaksana->isNotEmpty())
                 <div class="info red" style="margin-bottom:8px">
-                    ⚠️ {{ $rtlBerjalanBelumTerlaksana->count() }} poin RTL di bawah belum pernah dipilih sebagai uraian kegiatan pada triwulan ini.
-                    Semua wajib terlaksana sebelum bisa diajukan ke Tim SAKIP di bulan terakhir triwulan ({{ $this->labelBulanTerakhirTriwulanIni() }}).
+                    ⚠️ {{ $rtlBerjalanBelumTerlaksana->count() }} poin RTL di bawah belum pernah dipilih lewat dropdown uraian kegiatan pada triwulan ini.
+                    Boleh diganti kegiatan lain di luar rencana RTL — asal jumlah kegiatan yang diisi triwulan ini minimal sama banyak dengan jumlah poin RTL ({{ $rtlSebelumnya->count() }}) dan bukti realisasi semua poin di bawah sudah lengkap, sebelum bisa diajukan ke Tim SAKIP di bulan terakhir triwulan ({{ $this->labelBulanTerakhirTriwulanIni() }}).
                 </div>
             @endif
 
@@ -567,9 +573,9 @@
                             <span class="pl-lbl">Direncanakan ({{ $poin->berlaku_bulan }})</span>
                             {{ $poin->rtl_teks }}
                             @if ($rtlBerjalanBelumTerlaksana->contains('id', $poin->id))
-                                <span class="badge b-tunggu" style="margin-left:6px">Belum terlaksana sbg kegiatan</span>
+                                <span class="badge b-tunggu" style="margin-left:6px">Belum dipilih sbg kegiatan</span>
                             @else
-                                <span class="badge b-approve" style="margin-left:6px">Terlaksana sbg kegiatan</span>
+                                <span class="badge b-approve" style="margin-left:6px">Sudah dipilih sbg kegiatan</span>
                             @endif
                             <div style="color:var(--muted);font-size:11px;margin-top:4px">PIC: {{ $poin->pic }} · Batas waktu: {{ $poin->batas_waktu?->translatedFormat('d F Y') }}</div>
                         </div>
