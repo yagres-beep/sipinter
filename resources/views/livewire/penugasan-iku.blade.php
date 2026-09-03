@@ -21,7 +21,7 @@
         </div>
     </div>
 
-    <div class="info">ℹ️ Chip abu-abu "via tim" otomatis dari Keanggotaan Tim — klik ✕ pada chip itu untuk mengecualikannya dari IKU ini saja (tetap anggota tim). Chip biru adalah penugasan manual tambahan — saring dulu lewat dropdown Tim (opsional), lalu pilih satu/lebih nama (tahan Ctrl/Cmd) sebelum menekan "Tambah Terpilih".</div>
+    <div class="info">ℹ️ Chip abu-abu "via tim" otomatis dari Keanggotaan Tim — klik ✕ pada chip itu untuk mengecualikannya dari IKU ini saja (tetap anggota tim). Chip biru adalah penugasan manual tambahan — klik "+ Tambah PJ" lalu pilih satu nama untuk langsung menambahkannya.</div>
 
     <div class="card">
         <div class="toolbar">
@@ -50,7 +50,7 @@
                             Indikator <span class="th-arrow">{{ $urutanKolom === 'indikator' ? ($urutanArah === 'asc' ? '▲' : '▼') : '↕' }}</span>
                         </th>
                         <th style="width:120px">Tim</th>
-                        <th style="min-width:260px;width:260px">Penanggung Jawab</th>
+                        <th style="min-width:220px">Penanggung Jawab</th>
                     </tr>
                 </thead>
                 <tbody x-ref="tbody">
@@ -66,8 +66,8 @@
                             </td>
                             <td class="muted">{{ $iku->tim }}</td>
                             <td>
-                                <div style="display:flex;flex-direction:column;gap:6px;padding:6px 0" x-data="{ open: false, timFilter: '' }">
-                                    <div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center">
+                                <div class="pj-cell" x-data="{ open: false }">
+                                    <div class="pj-chips">
                                         @foreach ($baris['otomatis'] as $orang)
                                             <span class="chip chip-auto">
                                                 {{ $orang->nama }} <span class="chip-via">via tim</span>
@@ -88,7 +88,7 @@
                                     </div>
 
                                     @if ($baris['dikecualikan']->isNotEmpty())
-                                        <div style="display:flex;flex-wrap:wrap;gap:5px">
+                                        <div class="pj-chips" style="margin-top:5px">
                                             @foreach ($baris['dikecualikan'] as $p)
                                                 <span class="chip chip-auto" style="opacity:.55" wire:key="kecuali-{{ $p['pengecualian_id'] }}">
                                                     {{ $p['user']->nama }} <span class="chip-via">dikecualikan</span>
@@ -99,30 +99,20 @@
                                     @endif
 
                                     @if ($baris['kandidat']->isNotEmpty())
-                                        <div class="pj-picker" x-show="open" x-cloak>
-                                            @if ($baris['tim_kandidat']->isNotEmpty())
-                                                <select class="inp filled" x-model="timFilter">
-                                                    <option value="">Semua tim</option>
-                                                    @foreach ($baris['tim_kandidat'] as $timOpsi)
-                                                        <option value="{{ $timOpsi }}">{{ $timOpsi }}</option>
-                                                    @endforeach
-                                                </select>
-                                            @endif
-                                            <select class="pj-picker-select" multiple size="{{ min(5, max(2, $baris['kandidat']->count())) }}"
-                                                wire:model="orangBaru.{{ $iku->id }}">
-                                                @foreach ($baris['kandidat'] as $orang)
-                                                    <option value="{{ $orang->id }}" :hidden="!!timFilter && !{{ \Illuminate\Support\Js::from($orang->namaTimList()) }}.includes(timFilter)">{{ $orang->nama }}</option>
-                                                @endforeach
-                                            </select>
-                                            <div style="display:flex;gap:6px">
-                                                <button type="button" class="btn btn-primary btn-sm" wire:click="tambahManual({{ $iku->id }})"
-                                                    wire:loading.attr="disabled" wire:target="tambahManual({{ $iku->id }})">
-                                                    <span wire:loading.remove wire:target="tambahManual({{ $iku->id }})">＋ Tambah Terpilih</span>
-                                                    <span wire:loading wire:target="tambahManual({{ $iku->id }})"><i class="spin"></i> Menambahkan…</span>
-                                                </button>
-                                                <button type="button" class="btn btn-ghost btn-sm" @click="open = false; timFilter = ''">Batal</button>
-                                            </div>
-                                        </div>
+                                        <select class="pj-add-select" x-show="open" x-cloak
+                                            x-on:change="open = false"
+                                            wire:change="tambahManual({{ $iku->id }}, $event.target.value)"
+                                            wire:loading.attr="disabled" wire:target="tambahManual({{ $iku->id }})">
+                                            <option value="">Pilih nama untuk ditambahkan…</option>
+                                            @foreach ($baris['kandidat'] as $orang)
+                                                <option value="{{ $orang->id }}">
+                                                    {{ $orang->nama }}
+                                                    @unless (in_array($iku->tim, $orang->namaTimList(), true))
+                                                        &nbsp;({{ implode(', ', $orang->namaTimList()) }})
+                                                    @endunless
+                                                </option>
+                                            @endforeach
+                                        </select>
                                     @endif
                                 </div>
                             </td>

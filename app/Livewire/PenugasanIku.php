@@ -13,7 +13,8 @@ use Livewire\Component;
  * Penugasan IKU — tabel datar (bukan dikelompokkan per tim, lihat perbaikan
  * tampilan) menampilkan penanggung jawab otomatis (via keanggotaan tim, chip
  * abu-abu, bisa dikecualikan per-IKU tanpa mengeluarkan dari tim) dan penanggung
- * jawab manual (tambahan/override, chip biru yang bisa dihapus, multi-pilih).
+ * jawab manual (tambahan/override, chip biru yang bisa dihapus, ditambah satu
+ * per satu lewat dropdown ramping).
  */
 class PenugasanIku extends Component
 {
@@ -25,14 +26,6 @@ class PenugasanIku extends Component
     public string $urutanKolom = 'kode';
 
     public string $urutanArah = 'asc';
-
-    /**
-     * Pilihan "tambah manual" per IKU, dikunci pada id IKU — array karena field
-     * namanya adalah multi-select (bisa menugaskan beberapa orang sekaligus).
-     *
-     * @var array<int, list<string>>
-     */
-    public array $orangBaru = [];
 
     public function urutkan(string $kolom): void
     {
@@ -52,21 +45,15 @@ class PenugasanIku extends Component
         $this->urutanArah = 'asc';
     }
 
-    public function tambahManual(int $ikuId): void
+    public function tambahManual(int $ikuId, int $userId): void
     {
-        $userIds = collect((array) ($this->orangBaru[$ikuId] ?? []))->filter()->unique();
-
-        if ($userIds->isEmpty()) {
+        if ($userId <= 0) {
             return;
         }
 
-        foreach ($userIds as $userId) {
-            IkuPenugasan::firstOrCreate(['iku_id' => $ikuId, 'user_id' => $userId]);
-        }
+        IkuPenugasan::firstOrCreate(['iku_id' => $ikuId, 'user_id' => $userId]);
 
-        $this->orangBaru[$ikuId] = [];
-
-        session()->flash('status', 'Penugasan IKU berhasil ditambahkan.');
+        session()->flash('status', 'Penanggung jawab berhasil ditambahkan.');
     }
 
     public function hapusManual(int $penugasanId): void
@@ -127,7 +114,12 @@ class PenugasanIku extends Component
             $manual = $iku->penugasanManual;
 
             $sudahDitugaskan = $manual->pluck('user_id')->merge($otomatis->pluck('id'));
-            $kandidat = $ketuaTimList->whereNotIn('id', $sudahDitugaskan)->values();
+            $kandidat = $ketuaTimList->whereNotIn('id', $sudahDitugaskan)
+                ->sortBy([
+                    fn ($a, $b) => in_array($iku->tim, $b->namaTimList(), true) <=> in_array($iku->tim, $a->namaTimList(), true),
+                    fn ($a, $b) => $a->nama <=> $b->nama,
+                ])
+                ->values();
 
             return [
                 'iku' => $iku,
@@ -135,7 +127,6 @@ class PenugasanIku extends Component
                 'dikecualikan' => $dikecualikan,
                 'manual' => $manual,
                 'kandidat' => $kandidat,
-                'tim_kandidat' => $kandidat->flatMap(fn ($o) => $o->namaTimList())->unique()->sort()->values(),
                 'punya_pj' => $otomatis->isNotEmpty() || $manual->isNotEmpty(),
             ];
         });

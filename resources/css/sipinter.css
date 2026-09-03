@@ -353,13 +353,12 @@ th.th-sort.active .th-arrow{opacity:1;color:var(--blue-600);font-weight:700}
 .subtab.on{background:linear-gradient(135deg,var(--blue),var(--blue-600));color:#fff;border-color:transparent}
 .subtab.disabled{opacity:.5;cursor:not-allowed}
 
-/* widget pemilih penanggung jawab manual (tab Penugasan IKU) — dibungkus jadi satu
-   kotak supaya terasa satu unit, bukan kontrol lepas yang menumpuk tinggi tak
-   beraturan antar baris. */
-.pj-picker{display:flex;flex-direction:column;gap:7px;padding:10px;border:1.5px solid var(--line);border-radius:10px;background:var(--ro-bg);max-width:250px}
-.pj-picker select{width:100%}
-.pj-picker-select{width:100%;padding:6px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:12.5px;background:var(--white);color:var(--ink)}
-.pj-picker-select option{padding:3px 4px}
+/* sel penanggung jawab (tab Penugasan IKU) — chip beserta satu dropdown ramping
+   untuk menambah PJ manual, dipilih langsung tanpa panel/tombol terpisah supaya
+   baris tabel tidak melebar tinggi. */
+.pj-cell{display:flex;flex-direction:column;gap:5px;padding:6px 0}
+.pj-chips{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.pj-add-select{max-width:210px;padding:5px 8px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;background:var(--white);color:var(--ink)}
 
 /* keanggotaan tim / penugasan IKU (chip) */
 .tim-group{margin-bottom:22px}

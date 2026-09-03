@@ -83,8 +83,7 @@ class KeanggotaanDanPenugasanTest extends TestCase
         ]);
 
         Livewire::test(PenugasanIku::class)
-            ->set("orangBaru.{$iku->id}", [(string) $ketua->id])
-            ->call('tambahManual', $iku->id)
+            ->call('tambahManual', $iku->id, $ketua->id)
             ->assertHasNoErrors();
 
         $this->assertDatabaseHas('iku_penugasan', ['iku_id' => $iku->id, 'user_id' => $ketua->id]);
@@ -96,7 +95,7 @@ class KeanggotaanDanPenugasanTest extends TestCase
         $this->assertDatabaseMissing('iku_penugasan', ['id' => $penugasan->id]);
     }
 
-    public function test_tambah_penugasan_manual_bisa_pilih_lebih_dari_satu_orang_sekaligus(): void
+    public function test_tambah_penugasan_manual_bisa_pilih_lebih_dari_satu_orang(): void
     {
         $this->loginSebagaiSakip();
         $ketuaSatu = $this->buatKetua('Dewi Lestari', 'dewi@example.test');
@@ -107,8 +106,8 @@ class KeanggotaanDanPenugasanTest extends TestCase
         ]);
 
         Livewire::test(PenugasanIku::class)
-            ->set("orangBaru.{$iku->id}", [(string) $ketuaSatu->id, (string) $ketuaDua->id])
-            ->call('tambahManual', $iku->id)
+            ->call('tambahManual', $iku->id, $ketuaSatu->id)
+            ->call('tambahManual', $iku->id, $ketuaDua->id)
             ->assertHasNoErrors();
 
         $this->assertDatabaseHas('iku_penugasan', ['iku_id' => $iku->id, 'user_id' => $ketuaSatu->id]);
