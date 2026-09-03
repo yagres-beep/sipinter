@@ -174,6 +174,26 @@ class NotulaBagian1DocxService
         return "\n".$daftar->map(fn ($teks, $i) => ($i + 1).'. '.$teks)->implode("\n");
     }
 
+    /**
+     * Gabungkan daftar nama dengan "dan" -- TANPA koma bila cuma DUA nama ("A dan
+     * B"), koma di antara SISANYA baru "dan" sebelum nama terakhir bila TIGA atau
+     * lebih ("A, B, dan C"). Collection::join() bawaan Laravel selalu memakai
+     * $finalGlue yang sama utuh berapa pun jumlah itemnya -- tidak bisa membedakan
+     * kasus dua item dari tiga+ seperti aturan penulisan Indonesia yang diminta di
+     * sini, jadi dipisah manual per jumlah item.
+     */
+    private function gabungDenganDan(iterable $items): string
+    {
+        $daftar = collect($items)->filter()->values();
+
+        return match ($daftar->count()) {
+            0 => '',
+            1 => $daftar->first(),
+            2 => $daftar->implode(' dan '),
+            default => $daftar->join(', ', ', dan '),
+        };
+    }
+
     private function isiHeader(TemplateProcessor $p, Notula $notula, array $data): void
     {
         $periode = $data['periode'];
@@ -349,12 +369,10 @@ class NotulaBagian1DocxService
 
         $rtlTeks = $this->daftarBernomor($rtlIku->pluck('rtl_teks')->filter());
         // PIC Tindak Lanjut = tim (boleh lebih dari satu, digabung dengan "dan" --
-        // sama pola perangkainya dengan daftar bulan RTL, lihat
-        // App\Livewire\PengisianKegiatan::ajukanIsian()) yang ditugaskan pada IKU
-        // ini di Master IKU (App\Models\IkuTim), BUKAN nama orang yang diketik
-        // bebas per poin RTL.
+        // lihat gabungDenganDan()) yang ditugaskan pada IKU ini di Master IKU
+        // (App\Models\IkuTim), BUKAN nama orang yang diketik bebas per poin RTL.
         $this->set($sub, 'rtl', $rtlTeks);
-        $this->set($sub, 'pic_rtl', collect($iku->namaTimList())->join(', ', ', dan '));
+        $this->set($sub, 'pic_rtl', $this->gabungDenganDan($iku->namaTimList()));
         // Batas Waktu Tindak Lanjut SELALU akhir bulan triwulan tsb (RF-34, sesuai
         // Kertas Kerja resmi -- satu batas waktu yang sama untuk SEMUA poin RTL
         // triwulan yang sama) -- dihitung LANGSUNG dari triwulan/tahun periode

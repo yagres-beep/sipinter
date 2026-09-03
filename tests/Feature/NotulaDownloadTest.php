@@ -781,17 +781,16 @@ class NotulaDownloadTest extends TestCase
 
     /**
      * Satu IKU boleh ditugaskan ke lebih dari satu tim (App\Models\IkuTim) -- PIC
-     * Tindak Lanjut pada .docx harus menggabungkan namanya dengan "dan", sama pola
-     * perangkainya dengan daftar bulan RTL (App\Livewire\PengisianKegiatan), bukan
-     * sekadar dipisah koma.
+     * Tindak Lanjut pada .docx harus menggabungkan namanya dengan "dan", TANPA koma
+     * bila cuma dua tim (lihat NotulaBagian1DocxService::gabungDenganDan()).
      */
-    public function test_docx_bagian1_pic_tindak_lanjut_menggabungkan_lebih_dari_satu_tim_dengan_dan(): void
+    public function test_docx_bagian1_pic_tindak_lanjut_menggabungkan_dua_tim_dengan_dan_tanpa_koma(): void
     {
         $this->loginSebagai('Tim SAKIP');
 
         $iku = MasterIku::create([
             'kode' => '3011',
-            'indikator' => 'Indikator Uji PIC Multi Tim',
+            'indikator' => 'Indikator Uji PIC Dua Tim',
             'tim' => 'Tim Satu, Tim Dua',
             'penanggung_jawab' => 'Uji',
             'sasaran' => 'Sasaran Uji PIC',
@@ -803,7 +802,7 @@ class NotulaDownloadTest extends TestCase
         RtlEvaluasi::create([
             'iku_id' => $iku->id,
             'periode_id' => $periode->id,
-            'rtl_teks' => 'RTL uji PIC multi tim',
+            'rtl_teks' => 'RTL uji PIC dua tim',
             'pic' => 'Diabaikan',
             'batas_waktu' => '2026-09-30',
         ]);
@@ -814,7 +813,44 @@ class NotulaDownloadTest extends TestCase
 
         // Urutan tim SELALU alfabet (App\Models\MasterIku::timList()), jadi "Tim Dua"
         // tampil lebih dulu daripada "Tim Satu" meski diisi/diketik sebaliknya.
-        $this->assertStringContainsString('Tim Dua, dan Tim Satu', $xml);
+        $this->assertStringContainsString('Tim Dua dan Tim Satu', $xml);
+        $this->assertStringNotContainsString('Tim Dua, dan Tim Satu', $xml);
+    }
+
+    /**
+     * Tiga tim atau lebih HARUS dipisah koma di antaranya, baru "dan" sebelum nama
+     * terakhir (mis. "Tim Dua, Tim Satu, dan Tim Tiga") -- beda dari kasus dua tim
+     * di atas yang tanpa koma sama sekali.
+     */
+    public function test_docx_bagian1_pic_tindak_lanjut_menggabungkan_tiga_tim_dengan_koma_dan_dan(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $iku = MasterIku::create([
+            'kode' => '3012',
+            'indikator' => 'Indikator Uji PIC Tiga Tim',
+            'tim' => 'Tim Satu, Tim Dua, Tim Tiga',
+            'penanggung_jawab' => 'Uji',
+            'sasaran' => 'Sasaran Uji PIC',
+        ]);
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $this->verifikasiCapaian($iku, $periode);
+
+        RtlEvaluasi::create([
+            'iku_id' => $iku->id,
+            'periode_id' => $periode->id,
+            'rtl_teks' => 'RTL uji PIC tiga tim',
+            'pic' => 'Diabaikan',
+            'batas_waktu' => '2026-09-30',
+        ]);
+
+        $notula = Notula::create(['periode_id' => $periode->id]);
+
+        $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
+
+        // Urutan alfabet: Tim Dua, Tim Satu, Tim Tiga.
+        $this->assertStringContainsString('Tim Dua, Tim Satu, dan Tim Tiga', $xml);
     }
 
     /**
