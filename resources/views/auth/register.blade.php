@@ -70,7 +70,12 @@
                             </label>
                         @endforeach
                     </div>
-                    <input class="inp filled" type="text" name="tim_baru" value="{{ old('tim_baru') }}" placeholder="Tim lain (pisahkan dengan koma bila lebih dari satu)">
+                    <input class="inp filled" type="text" name="tim_baru" value="{{ old('tim_baru') }}" placeholder="Tim lain (pisahkan dengan koma bila lebih dari satu)" list="daftar-tim-saran">
+                    <datalist id="daftar-tim-saran">
+                        @foreach ($daftarTim as $tim)
+                            <option value="{{ $tim }}"></option>
+                        @endforeach
+                    </datalist>
                     <div class="fhint">Boleh pilih lebih dari satu tim, atau ketik tim baru. Bisa diubah lagi nanti oleh Tim SAKIP setelah akun disetujui.</div>
                 </div>
                 <div class="field">

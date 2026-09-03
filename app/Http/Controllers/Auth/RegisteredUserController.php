@@ -18,9 +18,11 @@ class RegisteredUserController extends Controller
     {
         return view('auth.register', [
             'roles' => Role::orderBy('nama')->get(),
-            // Saran tim yang sudah ada (dari Master IKU) — dipilih lewat checkbox bila
-            // peran yang diajukan Ketua Tim; boleh juga mengetik tim baru (lihat blade).
-            'daftarTim' => MasterIku::whereNotNull('tim')->distinct()->orderBy('tim')->pluck('tim'),
+            // Saran tim yang sudah ada (Master IKU + keanggotaan tim pengguna lain,
+            // lihat MasterIku::daftarTimGabungan()) — dipilih lewat checkbox atau
+            // diketik (dengan datalist) bila peran yang diajukan Ketua Tim, supaya
+            // nama tim yang diketik ulang tetap konsisten dengan yang sudah ada.
+            'daftarTim' => MasterIku::daftarTimGabungan(),
         ]);
     }
 
@@ -54,10 +56,19 @@ class RegisteredUserController extends Controller
         // begitu Tim SAKIP menyetujui, keanggotaan timnya sudah siap tanpa langkah
         // tambahan (lihat AkunAktif — hanya menampilkan akun terverifikasi).
         if ($user->namaRole() === 'Ketua Tim') {
+            // Samakan ejaan tim yang diketik manual (tim_baru) dengan tim yang
+            // sudah ada di database bila hanya beda huruf besar/kecil atau spasi,
+            // supaya tidak lahir tim "kembar" akibat salah ketik (mis. "Tim IT"
+            // vs "tim it") — lihat MasterIku::daftarTimGabungan().
+            $timTerdaftar = collect(MasterIku::daftarTimGabungan());
+
             $timDiajukan = collect($validated['tim'] ?? [])
                 ->merge(explode(',', $validated['tim_baru'] ?? ''))
                 ->map(fn ($tim) => trim($tim))
                 ->filter()
+                ->map(fn ($tim) => $timTerdaftar->first(
+                    fn ($ada) => mb_strtolower($ada) === mb_strtolower($tim)
+                ) ?? $tim)
                 ->unique();
 
             foreach ($timDiajukan as $tim) {
