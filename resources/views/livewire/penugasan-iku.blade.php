@@ -21,7 +21,7 @@
         </div>
     </div>
 
-    <div class="info">ℹ️ Chip abu-abu "via tim" otomatis dari Keanggotaan Tim — klik ✕ pada chip itu untuk mengecualikannya dari IKU ini saja (tetap anggota tim). Chip biru adalah penugasan manual tambahan — klik "+ Tambah PJ" lalu pilih satu nama untuk langsung menambahkannya.</div>
+    <div class="info">ℹ️ Pilih Tim di kolom Tim — daftar Penanggung Jawab otomatis terisi dari anggota tim tersebut (chip abu-abu "via tim", klik ✕ untuk mengecualikan dari IKU ini saja, tetap anggota tim). Chip biru adalah penugasan manual tambahan — klik "+ Tambah PJ" lalu pilih satu nama untuk langsung menambahkannya.</div>
 
     <div class="card">
         <div class="toolbar">
@@ -49,7 +49,7 @@
                         <th class="th-sort {{ $urutanKolom === 'indikator' ? 'active' : '' }}" wire:click="urutkan('indikator')">
                             Indikator <span class="th-arrow">{{ $urutanKolom === 'indikator' ? ($urutanArah === 'asc' ? '▲' : '▼') : '↕' }}</span>
                         </th>
-                        <th style="width:120px">Tim</th>
+                        <th style="width:190px">Tim</th>
                         <th style="min-width:220px">Penanggung Jawab</th>
                     </tr>
                 </thead>
@@ -64,7 +64,15 @@
                                     <span class="badge b-tolak" style="margin-left:6px">Belum ada PJ</span>
                                 @endunless
                             </td>
-                            <td class="muted">{{ $iku->tim }}</td>
+                            <td>
+                                <select class="tim-select" wire:change="pilihTim({{ $iku->id }}, $event.target.value)"
+                                    wire:loading.attr="disabled" wire:target="pilihTim({{ $iku->id }})">
+                                    <option value="" {{ blank($iku->tim) ? 'selected' : '' }}>— pilih tim —</option>
+                                    @foreach ($daftarTim as $t)
+                                        <option value="{{ $t }}" {{ $iku->tim === $t ? 'selected' : '' }}>{{ $t }}</option>
+                                    @endforeach
+                                </select>
+                            </td>
                             <td>
                                 <div class="pj-cell" x-data="{ open: false }">
                                     <div class="pj-chips">

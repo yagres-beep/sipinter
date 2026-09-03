@@ -73,6 +73,27 @@ class KeanggotaanDanPenugasanTest extends TestCase
         $this->assertSame('Rina Marlina', $iku->penanggungJawabOtomatis()->first()->nama);
     }
 
+    public function test_pilih_tim_pada_iku_mengisi_penanggung_jawab_otomatis(): void
+    {
+        $this->loginSebagaiSakip();
+        $ketua = $this->buatKetua('Siti Aminah', 'siti@example.test');
+        UserTim::create(['user_id' => $ketua->id, 'tim' => 'Statistik Sosial']);
+
+        $iku = MasterIku::create(['kode' => 'IKU-Z', 'indikator' => 'Indikator Z']);
+
+        $this->assertNull($iku->fresh()->tim);
+
+        Livewire::test(PenugasanIku::class)
+            ->call('pilihTim', $iku->id, 'Statistik Sosial')
+            ->assertHasNoErrors();
+
+        $iku->refresh();
+
+        $this->assertSame('Statistik Sosial', $iku->tim);
+        $this->assertCount(1, $iku->penanggungJawabOtomatis());
+        $this->assertSame('Siti Aminah', $iku->penanggungJawabOtomatis()->first()->nama);
+    }
+
     public function test_tambah_dan_hapus_penugasan_manual(): void
     {
         $this->loginSebagaiSakip();

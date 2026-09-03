@@ -45,6 +45,19 @@ class PenugasanIku extends Component
         $this->urutanArah = 'asc';
     }
 
+    /**
+     * Set/ganti tim penanggung jawab IKU ini — begitu tim dipilih, chip PJ
+     * "via tim" otomatis langsung mengikuti keanggotaan tim tersebut.
+     */
+    public function pilihTim(int $ikuId, string $tim): void
+    {
+        MasterIku::whereKey($ikuId)->update(['tim' => $tim ?: null]);
+
+        MasterIku::lupakanCache();
+
+        session()->flash('status', 'Tim IKU diperbarui.');
+    }
+
     public function tambahManual(int $ikuId, int $userId): void
     {
         if ($userId <= 0) {
@@ -141,7 +154,7 @@ class PenugasanIku extends Component
 
                 if (str_contains(mb_strtolower($iku->kode), $kataKunci)
                     || str_contains(mb_strtolower($iku->indikator), $kataKunci)
-                    || str_contains(mb_strtolower($iku->tim), $kataKunci)) {
+                    || str_contains(mb_strtolower((string) $iku->tim), $kataKunci)) {
                     return true;
                 }
 
@@ -167,7 +180,8 @@ class PenugasanIku extends Component
         return view('livewire.penugasan-iku', [
             'data' => $data,
             'totalIku' => $ikuList->count(),
-            'totalTim' => $ikuList->pluck('tim')->unique()->count(),
+            'totalTim' => $ikuList->pluck('tim')->filter()->unique()->count(),
+            'daftarTim' => MasterIku::daftarTimGabungan(),
             'totalTanpaPenanggungJawab' => $totalTanpaPenanggungJawab,
         ]);
     }

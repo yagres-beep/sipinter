@@ -359,6 +359,7 @@ th.th-sort.active .th-arrow{opacity:1;color:var(--blue-600);font-weight:700}
 .pj-cell{display:flex;flex-direction:column;gap:5px;padding:6px 0}
 .pj-chips{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
 .pj-add-select{max-width:210px;padding:5px 8px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;background:var(--white);color:var(--ink)}
+.tim-select{width:100%;max-width:175px;padding:5px 8px;border:1.5px solid var(--line);border-radius:8px;font-size:12px;background:var(--white);color:var(--ink)}
 
 /* keanggotaan tim / penugasan IKU (chip) */
 .tim-group{margin-bottom:22px}
