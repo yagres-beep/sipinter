@@ -112,10 +112,20 @@ class PenugasanIku extends Component
             ->groupBy('tim')
             ->map(fn ($baris) => $baris->pluck('user')->filter()->unique('id')->values());
 
+        // Satu query untuk keanggotaan tim SEMUA ketua tim, dikelompokkan per user di PHP —
+        // dipakai untuk urutan & label kandidat PJ manual. JANGAN panggil User::namaTimList()
+        // di dalam loop/komparator di bawah: method itu selalu query ulang ke DB (bukan
+        // memakai relasi yang sudah di-eager-load), jadi dipanggil ratusan kali per render
+        // (tiap perbandingan sortBy × tiap kandidat dirender) dan bikin halaman ini lambat.
+        $timPerUser = UserTim::whereIn('user_id', $ketuaTimList->pluck('id'))
+            ->get(['user_id', 'tim'])
+            ->groupBy('user_id')
+            ->map(fn ($baris) => $baris->pluck('tim')->all());
+
         // Susun data per-IKU sekali di sini (otomatis dikurangi pengecualian, kandidat
         // manual, dst) supaya blade tidak menghitung ulang & supaya pencarian/filter
         // status bisa memakainya langsung.
-        $data = $ikuList->map(function (MasterIku $iku) use ($anggotaPerTim, $ketuaTimList) {
+        $data = $ikuList->map(function (MasterIku $iku) use ($anggotaPerTim, $ketuaTimList, $timPerUser) {
             $anggotaTim = $anggotaPerTim->get($iku->tim, collect());
             $idDikecualikan = $iku->pengecualianOtomatis->pluck('user_id');
 
@@ -129,7 +139,7 @@ class PenugasanIku extends Component
             $sudahDitugaskan = $manual->pluck('user_id')->merge($otomatis->pluck('id'));
             $kandidat = $ketuaTimList->whereNotIn('id', $sudahDitugaskan)
                 ->sortBy([
-                    fn ($a, $b) => in_array($iku->tim, $b->namaTimList(), true) <=> in_array($iku->tim, $a->namaTimList(), true),
+                    fn ($a, $b) => in_array($iku->tim, $timPerUser->get($b->id, []), true) <=> in_array($iku->tim, $timPerUser->get($a->id, []), true),
                     fn ($a, $b) => $a->nama <=> $b->nama,
                 ])
                 ->values();
@@ -179,6 +189,7 @@ class PenugasanIku extends Component
 
         return view('livewire.penugasan-iku', [
             'data' => $data,
+            'timPerUser' => $timPerUser,
             'totalIku' => $ikuList->count(),
             'totalTim' => $ikuList->pluck('tim')->filter()->unique()->count(),
             'daftarTim' => MasterIku::daftarTimGabungan(),

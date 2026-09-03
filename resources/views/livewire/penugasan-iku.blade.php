@@ -113,10 +113,11 @@
                                             wire:loading.attr="disabled" wire:target="tambahManual({{ $iku->id }})">
                                             <option value="">Pilih nama untuk ditambahkan…</option>
                                             @foreach ($baris['kandidat'] as $orang)
+                                                @php $timOrang = $timPerUser->get($orang->id, []); @endphp
                                                 <option value="{{ $orang->id }}">
                                                     {{ $orang->nama }}
-                                                    @unless (in_array($iku->tim, $orang->namaTimList(), true))
-                                                        &nbsp;({{ implode(', ', $orang->namaTimList()) }})
+                                                    @unless (in_array($iku->tim, $timOrang, true))
+                                                        &nbsp;({{ implode(', ', $timOrang) }})
                                                     @endunless
                                                 </option>
                                             @endforeach
