@@ -817,8 +817,10 @@ class NotulaDownloadTest extends TestCase
     }
 
     /**
-     * TTD (Kepala Satker/Notulis) dan header rapat (hari/waktu/tempat/pimpinan) harus
-     * benar-benar tercetak di .docx begitu diisi lewat Detail Rapat -- bukan cuma "…".
+     * Header rapat (hari/waktu/tempat/pimpinan) dan tempat ttd Notulis harus benar-benar
+     * tercetak di .docx begitu diisi lewat Detail Rapat -- bukan cuma "…". Tempat ttd
+     * Kepala SENGAJA belum tercetak di sini (notula masih draft) -- lihat
+     * test_docx_bagian1_mencetak_ttd_kepala_setelah_disetujui() untuk kasus disetujui.
      */
     public function test_docx_bagian1_mencetak_detail_rapat_dan_ttd(): void
     {
@@ -843,8 +845,34 @@ class NotulaDownloadTest extends TestCase
         $this->assertStringContainsString('Ruang Rapat Uji', $xml);
         $this->assertStringContainsString('Budi Pimpinan', $xml);
         $this->assertStringContainsString('Sri Notulis', $xml);
-        $this->assertStringContainsString('Andi Kepala', $xml);
         $this->assertStringContainsString('Kulisusu', $xml);
+        $this->assertStringNotContainsString('Andi Kepala', $xml);
+    }
+
+    /**
+     * Tempat ttd Kepala hanya tercetak begitu notula berstatus disetujui (RF-44) --
+     * sebelum itu dikosongkan (lihat test di atas) supaya dokumen tidak tampak sudah
+     * ditandatangani padahal baru isian form. Tanggal "Mengetahui" yang menyertainya
+     * mengikuti hari_tanggal rapat, bukan tanggal klik "Setuju" di sistem.
+     */
+    public function test_docx_bagian1_mencetak_ttd_kepala_setelah_disetujui(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $notula = Notula::create([
+            'periode_id' => $periode->id,
+            'hari_tanggal' => 'Senin, 12 Oktober 2026',
+            'notulis' => 'Sri Notulis',
+            'kepala_satker' => 'Andi Kepala',
+            'kota_ttd' => 'Kulisusu',
+            'status' => Notula::STATUS_DISETUJUI,
+        ]);
+
+        $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
+
+        $this->assertStringContainsString('Andi Kepala', $xml);
+        $this->assertStringContainsString('Senin, 12 Oktober 2026', $xml);
     }
 
     /**

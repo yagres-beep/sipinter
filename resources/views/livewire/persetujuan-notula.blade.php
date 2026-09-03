@@ -44,8 +44,11 @@
 
                 @if ($notula->status === \App\Models\Notula::STATUS_DISETUJUI)
                     <div class="ttd-box" style="margin-top:12px">
-                        ttd<br>
-                        <b>{{ $notula->disetujuiOleh?->nama }}</b> · {{ $notula->disetujui_pada?->wita()->translatedFormat('d F Y') }}
+                        Mengetahui,<br>
+                        <b>{{ $notula->disetujuiOleh?->nama }}</b>
+                        @if ($notula->hari_tanggal)
+                            · {{ $notula->hari_tanggal }}
+                        @endif
                     </div>
                 @endif
 
@@ -61,7 +64,7 @@
                     <div class="badge b-approve" style="display:block;margin-bottom:14px">Notula sudah disetujui</div>
                     <a href="{{ route('notula.unduh-final', $notula) }}" class="btn btn-teal" style="width:100%;justify-content:center">⬇ Unduh Final</a>
                 @else
-                    <div class="info teal">✅ Notula 3 bagian tergabung. Setelah <b>Setujui</b> ditekan: blok TTD terisi otomatis + nama Kepala + tanggal persetujuan elektronik, versi final ber-TTD tersimpan ke Drive, dan tombol Unduh final aktif.</div>
+                    <div class="info teal">✅ Notula 3 bagian tergabung. Setelah <b>Setujui</b> ditekan: tempat tanda tangan Kepala terisi otomatis dengan nama Kepala + tanggal rapat, versi final tersimpan ke Drive, dan tombol Unduh final aktif.</div>
 
                     @error('aksi')
                         <div style="color:var(--red);font-size:11.5px;margin-bottom:10px">{{ $message }}</div>

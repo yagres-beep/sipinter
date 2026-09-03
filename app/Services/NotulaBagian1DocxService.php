@@ -644,8 +644,37 @@ class NotulaBagian1DocxService
     private function isiPenutup(TemplateProcessor $p, Notula $notula): void
     {
         $this->set($p, 'kota_tanggal_ttd', $notula->kota_ttd);
-        $this->set($p, 'ttd_kepala', $notula->kepala_satker);
+        $this->isiTtdKepala($p, $notula);
         $this->set($p, 'ttd_notulis', $notula->notulis);
+    }
+
+    /**
+     * Tempat ttd Kepala HANYA tercetak setelah notula disetujui Kepala (RF-44) --
+     * SEBELUM itu dikosongkan TOTAL (bukan placeholder "…" dari set(), lewat
+     * setValue() langsung di bawah) supaya pratinjau Kompilasi Notula & unduhan
+     * Bagian I tidak menampilkan nama Kepala seolah dokumen sudah ditandatangani
+     * padahal baru isian form Detail Rapat -- notula BELUM disetujui hanya
+     * menyisakan tempat ttd Notulis (lihat isiPenutup()).
+     *
+     * Tanggal "Mengetahui" yang menyertai nama Kepala mengikuti hari_tanggal
+     * rapat yang SUDAH diisi Tim SAKIP di Detail Rapat -- BUKAN tanggal klik
+     * "Setuju" di sistem (Notula::disetujui_pada), yang bisa berbeda dari
+     * tanggal rapatnya sendiri.
+     */
+    private function isiTtdKepala(TemplateProcessor $p, Notula $notula): void
+    {
+        if ($notula->status !== Notula::STATUS_DISETUJUI) {
+            $p->setValue('ttd_kepala', '', -1);
+
+            return;
+        }
+
+        $isi = trim((string) $notula->kepala_satker);
+        if ($notula->hari_tanggal) {
+            $isi .= ($isi !== '' ? "\n" : '').$notula->hari_tanggal;
+        }
+
+        $this->set($p, 'ttd_kepala', $isi);
     }
 
     // ------------------------------------------------------------------
