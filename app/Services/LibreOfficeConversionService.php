@@ -212,9 +212,22 @@ class LibreOfficeConversionService
             }
         }
 
-        $cssTerlingkup = $this->lingkupkanCss($css, '.notula-inline');
+        // Kelas pembungkus dibuat UNIK per pemanggilan (bukan ".notula-inline" tetap)
+        // -- LibreOffice menamai kelas paragraf/tabel secara generik per dokumen
+        // (P1, P2, T1, dst., diberi ULANG dari nol tiap kali mengekspor .docx yang
+        // beda), jadi kelas "P1" di Bagian I bisa berarti "judul tebal rata tengah"
+        // sementara "P1" di Bagian II berarti "teks biasa rata kiri". Selama SEMUA
+        // potongan memakai scope tetap yang sama, aturan `.notula-inline .P1 {...}`
+        // dari <style> Bagian II/III (ditempel BELAKANGAN di dokumen notula menyatu,
+        // lihat NotulaService::sisipkanBagianDuaTiga()) menang atas aturan Bagian I
+        // untuk kelas bernama sama walau isi paragrafnya beda total -- inilah sebab
+        // format Bagian I ikut rusak begitu Bagian II/III ditambahkan padahal
+        // masing-masing normal saat dilihat sendiri-sendiri. Scope unik memastikan
+        // <style> tiap potongan HANYA berlaku untuk <div> miliknya sendiri.
+        $lingkup = 'notula-inline-'.Str::random(12);
+        $cssTerlingkup = $this->lingkupkanCss($css, '.'.$lingkup);
 
-        return '<style>'.$cssTerlingkup.'</style><div class="notula-inline">'.$bodyHtml.'</div>';
+        return '<style>'.$cssTerlingkup.'</style><div class="notula-inline '.$lingkup.'">'.$bodyHtml.'</div>';
     }
 
     /**
