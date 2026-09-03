@@ -105,6 +105,18 @@ class LibreOfficeConversionService
         // setelah proses selesai supaya tidak menumpuk di /tmp.
         $profileDir = sys_get_temp_dir().DIRECTORY_SEPARATOR.'libreoffice-profile-'.Str::random(16);
 
+        // "file://".$profileDir SAJA cuma sah untuk path Unix (dimulai "/", jadi hasil
+        // gabungannya otomatis "file:///tmp/...", tiga garis miring). Path Windows
+        // (mis. "C:\Users\...", backslash + huruf drive) menghasilkan URI RUSAK
+        // ("file://C:\Users\..." -- dua garis miring, backslash mentah) yang membuat
+        // soffice.exe menggantung TANPA BATAS saat membangun profil baru (bukan error,
+        // proses/CPU-nya diam total) -- tidak pernah ketahuan di server produksi (Linux)
+        // tapi memblokir pengembangan/pengujian lokal di Windows sepenuhnya. Normalisasi
+        // ke URI file:// yang sah di KEDUA platform: backslash jadi garis miring, lalu
+        // pastikan PERSIS tiga garis miring sebelum path (ltrim garis miring depan dulu
+        // supaya path Unix yang sudah diawali "/" tidak dobel jadi empat).
+        $profileUri = 'file:///'.ltrim(str_replace('\\', '/', $profileDir), '/');
+
         // --headless    : jalan tanpa membuka jendela GUI (cocok dipanggil dari server).
         // --norestore   : jangan coba memulihkan sesi macet sebelumnya (bisa membuka
         //                 dialog yang menggantung tanpa GUI).
@@ -114,7 +126,7 @@ class LibreOfficeConversionService
             $binary,
             '--headless',
             '--norestore',
-            '-env:UserInstallation=file://'.$profileDir,
+            '-env:UserInstallation='.$profileUri,
             '--convert-to', $format,
             '--outdir', $outputDir,
             $inputPath,
@@ -174,6 +186,7 @@ class LibreOfficeConversionService
             $this->buangAtributBerbahaya($dom->documentElement);
             $this->pindahkanAlignKeStyle($dom->documentElement);
             $this->gabungkanTbodyBersebelahan($dom);
+            $this->satukanColgroup($dom);
         }
 
         // LibreOffice menaruh definisi kelas paragraf/tabel (P1, T1, dst.) di
@@ -293,6 +306,60 @@ class LibreOfficeConversionService
                 }
                 $tbodies[$i]->parentNode?->removeChild($tbodies[$i]);
             }
+        }
+    }
+
+    /**
+     * Sama seperti gabungkanTbodyBersebelahan() di atas -- artefak LAIN dari tabel
+     * yang diekspor per-baris/per-kelompok: TIAP potongan bisa bawa <colgroup>
+     * SENDIRI (lebar kolom per baris tsb), padahal HTML cuma boleh punya SATU
+     * <colgroup> yang sah, langsung di bawah <table> SEBELUM <tbody> mana pun.
+     *
+     * Baris header "Sasaran" (kolom digabung lewat colspan, cuma 3 sel fisik) sering
+     * jadi baris PERTAMA tabel -- <colgroup> miliknya sendiri (kalau ada) cuma tahu 3
+     * lebar kasar, BUKAN 7 lebar kolom asli tabel. <table-layout:fixed> (dipakai baik
+     * gaya bawaan LibreOffice maupun `.notula table` di sipinter.css) HANYA memakai
+     * SATU <colgroup> yang benar-benar berlaku -- <colgroup> tambahan yang nyempil di
+     * antara <tbody> membuat parser HTML5 (dipakai Chrome/Blink, BEDA dari libxml
+     * yang dipakai method ini sendiri saat mem-parsing) menutup <tbody> yang sedang
+     * berjalan lalu memproses ulang <colgroup> itu sebagai anak <table> yang sah --
+     * hasilnya BISA jadi kolom-kolom baru yang menambah (bukan menggantikan) kolom
+     * dari <colgroup> pertama, membuat total kolom tabel lebih banyak dari sel
+     * sungguhan di tiap baris -- kolom jadi sempit sekali (teks terpotong huruf per
+     * huruf) walau baris "Sasaran"-nya sendiri tampil normal. Satukan jadi SATU
+     * <colgroup> (ambil yang PALING RINCI -- jumlah <col> terbanyak, biasanya dari
+     * baris yang tidak digabung colspan) di posisi paling awal <table> supaya seluruh
+     * baris memakai definisi lebar kolom yang SAMA dan LENGKAP.
+     */
+    private function satukanColgroup(DOMDocument $dom): void
+    {
+        foreach ($dom->getElementsByTagName('table') as $table) {
+            $colgroups = [];
+            foreach (iterator_to_array($table->childNodes) as $anak) {
+                if ($anak instanceof DOMElement && strtolower($anak->tagName) === 'colgroup') {
+                    $colgroups[] = $anak;
+                }
+            }
+
+            if (count($colgroups) < 2) {
+                continue;
+            }
+
+            $terpilih = $colgroups[0];
+            foreach ($colgroups as $cg) {
+                if ($cg->getElementsByTagName('col')->length > $terpilih->getElementsByTagName('col')->length) {
+                    $terpilih = $cg;
+                }
+            }
+
+            foreach ($colgroups as $cg) {
+                if ($cg !== $terpilih) {
+                    $cg->parentNode?->removeChild($cg);
+                }
+            }
+
+            $table->removeChild($terpilih);
+            $table->insertBefore($terpilih, $table->firstChild);
         }
     }
 
