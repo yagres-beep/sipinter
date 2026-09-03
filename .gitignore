@@ -23,3 +23,11 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+~$*
+
+# Berkas kerja sementara, bukan bagian dari proyek (lihat nama folder)
+/_export/
+/_to_delete/
+/template_notula/_to_delete/
+/_docs/Template Notula Sipinter*.docx
+/_docs/notula-pratinjau-*.pdf
