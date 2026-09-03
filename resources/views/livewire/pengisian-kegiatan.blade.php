@@ -110,17 +110,22 @@
     @if ($adaDikembalikan)
         @php $olehKepala = $pengembalianTerakhir?->user?->namaRole() === 'Kepala'; @endphp
         <div class="info red" style="margin-bottom:14px">
-            🔴 <b>Isian ini dikembalikan oleh {{ $olehKepala ? 'Kepala' : 'Tim SAKIP' }} untuk periode ini</b> — perbaiki bagian yang ditandai merah di bawah, lalu ajukan ulang.
-            @if ($pengembalianTerakhir?->catatan)
-                <p style="margin:6px 0 0">Catatan {{ $olehKepala ? 'Kepala' : 'Tim SAKIP' }}: {{ $pengembalianTerakhir->catatan }}</p>
-            @endif
-            @if ($catatanPenolakan->isNotEmpty())
-                <ul style="margin:6px 0 0 18px;padding:0">
-                    @foreach ($catatanPenolakan as $catatan)
-                        <li>{{ $catatan }}</li>
-                    @endforeach
-                </ul>
-            @endif
+            <span>🔴</span>
+            <div>
+                <b>Isian ini dikembalikan oleh {{ $olehKepala ? 'Kepala' : 'Tim SAKIP' }} untuk periode ini</b> — perbaiki bagian yang ditandai merah di bawah, lalu ajukan ulang.
+                @if ($pengembalianTerakhir?->catatan)
+                    <div class="catatan-pengembalian">
+                        <b>Catatan {{ $olehKepala ? 'Kepala' : 'Tim SAKIP' }}:</b> {{ $pengembalianTerakhir->catatan }}
+                    </div>
+                @endif
+                @if ($catatanPenolakan->isNotEmpty())
+                    <ul style="margin:6px 0 0 18px;padding:0">
+                        @foreach ($catatanPenolakan as $catatan)
+                            <li>{{ $catatan }}</li>
+                        @endforeach
+                    </ul>
+                @endif
+            </div>
         </div>
     @endif
 

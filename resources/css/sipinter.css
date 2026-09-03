@@ -314,6 +314,10 @@ tr.clickable:hover{background:var(--blue-soft)}
 .info.teal{background:var(--teal-soft);border-color:color-mix(in srgb, var(--teal) 45%, transparent);color:var(--teal)}
 .info.red{background:var(--red-soft);border-color:color-mix(in srgb, var(--red) 45%, transparent);color:var(--red)}
 
+/* catatan pengembalian — dipisahkan dari kalimat judul banner merah supaya menonjol,
+   bukan cuma menyambung sebagai teks biasa (gampang kelewat dibaca) */
+.catatan-pengembalian{margin-top:8px;padding:9px 11px;border-radius:8px;background:var(--white);border:1px solid color-mix(in srgb, var(--red) 35%, transparent);color:var(--ink);font-size:12.5px;line-height:1.55}
+
 /* toolbar pencarian & filter daftar */
 .toolbar{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
 .search-box{display:flex;align-items:center;gap:7px;flex:1;min-width:180px;background:var(--bg);border:1.5px solid var(--line);border-radius:10px;padding:9px 11px;font-size:12px;color:var(--faint)}
