@@ -348,11 +348,13 @@ class NotulaBagian1DocxService
         $this->set($sub, 'solusi', $this->daftarBernomor($semuaKendalaSolusi->pluck('solusi')->filter()));
 
         $rtlTeks = $this->daftarBernomor($rtlIku->pluck('rtl_teks')->filter());
-        // PIC Tindak Lanjut = tim (boleh lebih dari satu, digabung dipisah koma)
-        // yang ditugaskan pada IKU ini di Master IKU (App\Models\IkuTim), BUKAN
-        // nama orang yang diketik bebas per poin RTL.
+        // PIC Tindak Lanjut = tim (boleh lebih dari satu, digabung dengan "dan" --
+        // sama pola perangkainya dengan daftar bulan RTL, lihat
+        // App\Livewire\PengisianKegiatan::ajukanIsian()) yang ditugaskan pada IKU
+        // ini di Master IKU (App\Models\IkuTim), BUKAN nama orang yang diketik
+        // bebas per poin RTL.
         $this->set($sub, 'rtl', $rtlTeks);
-        $this->set($sub, 'pic_rtl', implode(', ', $iku->namaTimList()));
+        $this->set($sub, 'pic_rtl', collect($iku->namaTimList())->join(', ', ', dan '));
         // Batas Waktu Tindak Lanjut SELALU akhir bulan triwulan tsb (RF-34, sesuai
         // Kertas Kerja resmi -- satu batas waktu yang sama untuk SEMUA poin RTL
         // triwulan yang sama) -- dihitung LANGSUNG dari triwulan/tahun periode

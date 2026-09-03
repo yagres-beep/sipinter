@@ -195,7 +195,12 @@ class MasterIku extends Model
      */
     public function timList(): HasMany
     {
-        return $this->hasMany(IkuTim::class, 'iku_id');
+        // orderBy('tim') SENGAJA ditambahkan (bukan dibiarkan urutan bawaan DB) --
+        // tanpa ORDER BY eksplisit, SQLite/Postgres bebas mengembalikan baris lewat
+        // index unik (iku_id, tim) yang urut ALFABET, bukan urutan tim ditambahkan --
+        // bikin daftar PIC (Penugasan IKU, notula) tampak "acak" & berubah-ubah tiap
+        // render. Alfabet dipilih supaya juga stabil & mudah ditebak pembaca notula.
+        return $this->hasMany(IkuTim::class, 'iku_id')->orderBy('tim');
     }
 
     /**
