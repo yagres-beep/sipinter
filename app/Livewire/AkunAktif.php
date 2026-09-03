@@ -214,7 +214,10 @@ class AkunAktif extends Component
             ->orderBy('nama')
             ->get();
 
-        $daftarTim = MasterIku::whereNotNull('tim')->distinct()->orderBy('tim')->pluck('tim');
+        // daftarTimGabungan() sudah menggabungkan tim dari IKU (App\Models\IkuTim,
+        // satu IKU boleh punya lebih dari satu tim) & keanggotaan tim pengguna —
+        // sumber saran yang sama dipakai di halaman Master IKU/Penugasan IKU.
+        $daftarTim = MasterIku::daftarTimGabungan();
 
         return view('livewire.akun-aktif', [
             'userList' => $userList,

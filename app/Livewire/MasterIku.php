@@ -63,7 +63,17 @@ class MasterIku extends Component
 
     public string $indikator = '';
 
-    public string $tim = '';
+    /**
+     * Tim penanggung jawab -- satu IKU boleh punya lebih dari satu tim (lihat
+     * App\Models\IkuTim), ditambah/dihapus satu per satu lewat tambahTim()/
+     * hapusTimTerpilih() di bawah, sama pola UX-nya dengan keanggotaan tim di
+     * App\Livewire\AkunAktif.
+     *
+     * @var list<string>
+     */
+    public array $timTerpilih = [];
+
+    public string $timBaru = '';
 
     public string $sasaran = '';
 
@@ -119,6 +129,30 @@ class MasterIku extends Component
         return auth()->user()?->namaRole() === 'Tim SAKIP';
     }
 
+    /**
+     * Tambah satu tim ke daftar tim penanggung jawab yang sedang disusun di form
+     * ini (belum tersimpan sampai save() ditekan) -- nilainya diambil dari
+     * $timBaru (wire:model), sama pola UX-nya dengan App\Livewire\AkunAktif::tambahTim().
+     */
+    public function tambahTim(): void
+    {
+        $tim = trim($this->timBaru);
+
+        if ($tim === '' || in_array($tim, $this->timTerpilih, true)) {
+            $this->timBaru = '';
+
+            return;
+        }
+
+        $this->timTerpilih[] = $tim;
+        $this->timBaru = '';
+    }
+
+    public function hapusTimTerpilih(string $tim): void
+    {
+        $this->timTerpilih = array_values(array_diff($this->timTerpilih, [$tim]));
+    }
+
     protected function rules(): array
     {
         return [
@@ -127,7 +161,8 @@ class MasterIku extends Component
                 'unique:master_iku,kode,'.($this->editingId ?? 'NULL').',id',
             ],
             'indikator' => ['required', 'string'],
-            'tim' => ['required', 'string', 'max:255'],
+            'timTerpilih' => ['required', 'array', 'min:1'],
+            'timTerpilih.*' => ['string', 'max:255'],
             'sasaran' => ['nullable', 'string', 'max:255'],
             'dasarHitung' => ['nullable', 'string'],
             'basisData' => ['nullable', 'string', 'max:255'],
@@ -152,7 +187,7 @@ class MasterIku extends Component
         return [
             'kode' => 'kode',
             'indikator' => 'indikator',
-            'tim' => 'tim',
+            'timTerpilih' => 'tim',
             'sasaran' => 'sasaran',
             'dasarHitung' => 'dasar hitung',
             'basisData' => 'basis data',
@@ -256,7 +291,8 @@ class MasterIku extends Component
         $this->editingId = $iku->id;
         $this->kode = $iku->kode;
         $this->indikator = $iku->indikator;
-        $this->tim = $iku->tim ?? '';
+        $this->timTerpilih = $iku->namaTimList();
+        $this->timBaru = '';
         $this->sasaran = $iku->sasaran ?? '';
         $this->dasarHitung = $iku->dasar_hitung ?? '';
         $this->basisData = $iku->basis_data ?? '';
@@ -270,7 +306,7 @@ class MasterIku extends Component
 
     public function cancelEdit(): void
     {
-        $this->reset(['editingId', 'kode', 'indikator', 'tim', 'sasaran', 'dasarHitung', 'basisData', 'deskripsiX', 'deskripsiY', 'formulaCapaian']);
+        $this->reset(['editingId', 'kode', 'indikator', 'timTerpilih', 'timBaru', 'sasaran', 'dasarHitung', 'basisData', 'deskripsiX', 'deskripsiY', 'formulaCapaian']);
         $this->satuan = 'Persen';
         $this->metodeCapaian = 'langsung';
         $this->jenisPeriode = 'tahunan';
@@ -287,7 +323,10 @@ class MasterIku extends Component
             // tetap konsisten walau seseorang terbiasa mengetik "IKU-1131" di kolom Kode.
             'kode' => preg_replace('/^\D+/', '', trim($this->kode)) ?: trim($this->kode),
             'indikator' => $this->indikator,
-            'tim' => $this->tim,
+            // Kolom master_iku.tim disimpan sebagai daftar gabungan koma murni supaya
+            // event MasterIku::booted()/saved() (sinkron ke iku_tim) tetap terpicu --
+            // lihat komentarnya. Sumber kebenaran untuk PIC tetap iku_tim/timTerpilih.
+            'tim' => implode(', ', $this->timTerpilih),
             'sasaran' => $this->sasaran ?: null,
             'dasar_hitung' => $this->dasarHitung ?: null,
             'basis_data' => $this->basisData ?: null,
@@ -381,7 +420,7 @@ class MasterIku extends Component
         // ini sengaja TIDAK memakai cache Laravel untuk ikuList sendiri (supaya
         // perubahan sendiri selalu terlihat instan), tapi query distinct terpisah
         // untuk saran datalist itu murni pemborosan — datanya sudah ada di sini.
-        $ikuList = MasterIkuModel::orderBy('kode')->get();
+        $ikuList = MasterIkuModel::with('timList')->orderBy('kode')->get();
 
         $pratinjau = collect($this->pratinjau);
 

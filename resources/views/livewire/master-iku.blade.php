@@ -230,7 +230,7 @@
                                 @endif
                             </td>
                             <td class="muted">{{ $iku->pakaiTriwulanan() ? 'Triwulanan' : 'Tahunan' }}</td>
-                            <td class="muted">{{ $iku->tim ?? '—' }}</td>
+                            <td class="muted">{{ $iku->timList->isNotEmpty() ? $iku->timList->pluck('tim')->implode(', ') : '—' }}</td>
                             <td style="text-align:right;white-space:nowrap">
                                 <button type="button" class="btn btn-ghost btn-sm" wire:click="edit({{ $iku->id }})" wire:loading.attr="disabled" wire:target="edit({{ $iku->id }})">
                                     <span wire:loading.remove wire:target="edit({{ $iku->id }})">Ubah</span>
@@ -252,7 +252,7 @@
             <x-table-pagination />
         </div>
 
-        <div class="info" style="margin:14px 0 0">ℹ️ Bisa juga tambah/perbaiki satu IKU manual (Kode, Indikator, Tim) tanpa Excel.</div>
+        <div class="info" style="margin:14px 0 0">ℹ️ Bisa juga tambah/perbaiki satu IKU manual (Kode, Indikator, Tim — boleh lebih dari satu) tanpa Excel.</div>
     </div>
 
     @if ($pendingDeleteId && $alasanTidakBisaHapus)

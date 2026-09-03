@@ -674,12 +674,12 @@
                 <div class="row2" style="margin-bottom:10px;align-items:flex-end">
                     <div class="field" style="margin-bottom:0">
                         <label>PIC Tindak Lanjut <span class="req">*</span></label>
-                        <select class="inp filled" wire:model="picRtlBerikutnya" @disabled(! $bisaDiverifikasi)>
-                            <option value="">— Pilih tim PIC —</option>
+                        <input type="text" class="inp filled" list="daftar-tim-pic" wire:model="picRtlBerikutnya" placeholder="— Isi tim PIC, boleh lebih dari satu dipisah koma —" @disabled(! $bisaDiverifikasi)>
+                        <datalist id="daftar-tim-pic">
                             @foreach ($daftarTimPic as $tim)
-                                <option value="{{ $tim }}">{{ $tim }}</option>
+                                <option value="{{ $tim }}"></option>
                             @endforeach
-                        </select>
+                        </datalist>
                         @error('picRtlBerikutnya')
                             <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                         @enderror

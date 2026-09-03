@@ -12,15 +12,19 @@ use App\Models\MasterIku;
 use App\Models\Periode;
 use App\Models\RtlEvaluasi as RtlEvaluasiModel;
 use App\Services\FolderStructureService;
+use Illuminate\Contracts\Cache\Lock;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Validation\Validator;
 use Livewire\Component;
 use Livewire\WithFileUploads;
-use RuntimeException;
 
 /**
  * Ketua Tim — Isian Kegiatan (satu alur, sesuai mockup S4): IKU → Kegiatan →
@@ -93,21 +97,21 @@ class PengisianKegiatan extends Component
      * DAN formLengkap() dipanggil di request yang sama; tanpa cache ini query yang sama
      * terulang belasan kali per klik/blur dan bikin halaman terasa lambat.
      */
-    protected ?\Illuminate\Support\Collection $cacheRtlBerjalan = null;
+    protected ?Collection $cacheRtlBerjalan = null;
 
     protected ?bool $cacheRtlBerikutnyaSudahAda = null;
 
-    protected ?\Illuminate\Support\Collection $cacheRtlBerikutnyaDitolak = null;
+    protected ?Collection $cacheRtlBerikutnyaDitolak = null;
 
-    protected ?\Illuminate\Support\Collection $cacheRtlBerikutnyaAktif = null;
+    protected ?Collection $cacheRtlBerikutnyaAktif = null;
 
-    protected ?\Illuminate\Support\Collection $cacheKendalaAktif = null;
+    protected ?Collection $cacheKendalaAktif = null;
 
     protected ?MasterIku $cacheIkuTerpilih = null;
 
     protected bool $cacheIkuTerpilihDihitung = false;
 
-    protected ?\Illuminate\Support\Collection $cacheRtlBerjalanTerpakaiIds = null;
+    protected ?Collection $cacheRtlBerjalanTerpakaiIds = null;
 
     protected ?Periode $cachePeriodeSaatIni = null;
 
@@ -134,7 +138,7 @@ class PengisianKegiatan extends Component
      * menunggu request pertama selesai (dan snapshot-nya sudah mutakhir) sebelum
      * mulai diproses, bukan langsung jalan dari snapshot yang sudah basi.
      */
-    protected ?\Illuminate\Contracts\Cache\Lock $requestLock = null;
+    protected ?Lock $requestLock = null;
 
     public function boot(): void
     {
@@ -144,7 +148,7 @@ class PengisianKegiatan extends Component
 
         try {
             $this->requestLock->block(25);
-        } catch (\Illuminate\Contracts\Cache\LockTimeoutException $e) {
+        } catch (LockTimeoutException $e) {
             // Kunci basi tertinggal dari request sebelumnya yang mati mendadak (mis. timeout
             // DB/Google Drive) sehingga dehydrate() tidak sempat memanggil release(). Daripada
             // membiarkan exception ini menjadi halaman 500 kosong, lewati kunci untuk request
@@ -258,7 +262,7 @@ class PengisianKegiatan extends Component
      * Daftar bagian kustom aktif — dipakai untuk merender bagian tambahan di form
      * (mis. Manajemen Risiko) dan untuk validasi/penyimpanannya.
      *
-     * @return \Illuminate\Support\Collection<int, BagianKustom>
+     * @return Collection<int, BagianKustom>
      */
     protected function bagianKustomAktif()
     {
@@ -682,7 +686,7 @@ class PengisianKegiatan extends Component
      * yang SUDAH diterima (terverifikasi) tetap tampil di sini seperti biasa —
      * itulah cara pasangan yang sudah diterima terlihat terkunci/hanya-baca.
      *
-     * @return \Illuminate\Support\Collection<int, \Illuminate\Support\Collection<int, KendalaSolusiModel>>
+     * @return Collection<int, Collection<int, KendalaSolusiModel>>
      */
     protected function riwayatKendalaSolusi()
     {
@@ -728,7 +732,7 @@ class PengisianKegiatan extends Component
      * sendiri (poin baru ditambahkan tiap submit, bukan diedit), jadi "memuat isian
      * lama" untuk bagian ini berarti menampilkan riwayatnya, bukan edit-in-place.
      *
-     * @return \Illuminate\Support\Collection<int, \Illuminate\Support\Collection<int, BagianKustomPoin>>
+     * @return Collection<int, Collection<int, BagianKustomPoin>>
      */
     protected function riwayatBagianKustom(BagianKustom $bagian)
     {
@@ -788,7 +792,7 @@ class PengisianKegiatan extends Component
      * VerifikasiCapaian::berkasList(), tapi di-scope ke iku_id+periode (bukan
      * capaian_id) karena komponen ini belum tentu sedang menampilkan satu Capaian.
      *
-     * @return \Illuminate\Support\Collection<int, string>
+     * @return Collection<int, string>
      */
     protected function catatanPenolakan()
     {
@@ -1175,7 +1179,7 @@ class PengisianKegiatan extends Component
      * (ditolak, perlu diperbaiki) — jadi tidak ada lagi yang perlu tampil "aktif"
      * di sini.
      *
-     * @return \Illuminate\Support\Collection<int, KendalaSolusiModel>
+     * @return Collection<int, KendalaSolusiModel>
      */
     protected function kendalaAktif()
     {
@@ -1371,7 +1375,7 @@ class PengisianKegiatan extends Component
      * Poin RTL triwulan berjalan (rencana yang ditetapkan triwulan sebelumnya) beserta
      * status "sudah dipakai sebagai kegiatan?" — dipakai sebagai opsi dropdown uraian kegiatan.
      *
-     * @return \Illuminate\Support\Collection<int, array{poin: RtlEvaluasiModel, terpakai: bool}>
+     * @return Collection<int, array{poin: RtlEvaluasiModel, terpakai: bool}>
      */
     protected function rtlBerjalanOptions()
     {
@@ -1394,7 +1398,7 @@ class PengisianKegiatan extends Component
      * tersimpan di database maupun yang uraiannya sudah cocok dengan salah satu blok kegiatan
      * di form yang sedang diisi (akan tersimpan begitu form ini diajukan).
      *
-     * @return \Illuminate\Support\Collection<int, RtlEvaluasiModel>
+     * @return Collection<int, RtlEvaluasiModel>
      */
     protected function poinRtlBerjalanBelumTerlaksana()
     {
@@ -1438,13 +1442,19 @@ class PengisianKegiatan extends Component
         return null;
     }
 
+    /**
+     * Bawaan PIC Tindak Lanjut — gabungan (dipisah koma) SELURUH tim penanggung
+     * jawab IKU terpilih, karena satu IKU boleh ditugaskan ke lebih dari satu tim
+     * (lihat App\Models\MasterIku::namaTimList()). Tetap boleh diubah bebas oleh
+     * Ketua Tim (field teks bersaran, lihat daftarTimPic()).
+     */
     protected function pilihPicOtomatis(): void
     {
-        $this->rtlBaruPic = $this->ikuTerpilih()?->tim ?? '';
+        $this->rtlBaruPic = implode(', ', $this->ikuTerpilih()?->namaTimList() ?? []);
     }
 
     /**
-     * Opsi dropdown PIC Tindak Lanjut — lihat MasterIku::daftarTimGabungan().
+     * Saran PIC Tindak Lanjut — lihat MasterIku::daftarTimGabungan().
      *
      * @return list<string>
      */
@@ -1538,7 +1548,7 @@ class PengisianKegiatan extends Component
      * ulang. Lihat catatan di rtlTriwulanBerikutnyaSudahAda() soal kenapa draft tidak
      * dianggap "sudah ditetapkan".
      *
-     * @return \Illuminate\Support\Collection<int, RtlEvaluasiModel>
+     * @return Collection<int, RtlEvaluasiModel>
      */
     protected function rtlBerikutnyaDraftSendiri()
     {
@@ -1562,7 +1572,7 @@ class PengisianKegiatan extends Component
      * membuka kembali Bagian 5 berisi poin-poin ini (siap diperbaiki & diajukan
      * ulang) dan blade untuk menampilkan alasan penolakannya.
      *
-     * @return \Illuminate\Support\Collection<int, RtlEvaluasiModel>
+     * @return Collection<int, RtlEvaluasiModel>
      */
     protected function rtlBerikutnyaDitolak()
     {
@@ -1590,7 +1600,7 @@ class PengisianKegiatan extends Component
      * bukan cuma badge "Sudah ditetapkan" tanpa detail (beda dari bagian lain di form
      * ini yang semuanya tetap menampilkan isian sebelumnya).
      *
-     * @return \Illuminate\Support\Collection<int, RtlEvaluasiModel>
+     * @return Collection<int, RtlEvaluasiModel>
      */
     protected function rtlBerikutnyaAktif()
     {
@@ -1833,7 +1843,7 @@ class PengisianKegiatan extends Component
      * lewat array rules biasa): minimal satu evaluasi RTL sebelumnya wajib diisi, dan seluruh
      * poin RTL triwulan berjalan wajib sudah terlaksana sebelum bulan terakhir triwulan diajukan.
      */
-    protected function buatValidator(): \Illuminate\Validation\Validator
+    protected function buatValidator(): Validator
     {
         $data = [
             'tahun' => $this->tahun,
@@ -1987,7 +1997,7 @@ class PengisianKegiatan extends Component
                     'in:persiapan,pelaksanaan,pengolahan,diseminasi',
                 ],
             ], [], $this->validationAttributes());
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             $this->dispatch('notify', type: 'error', message: 'Draf gagal disimpan — lengkapi data yang wajib diisi lebih dulu.');
 
             throw $e;
@@ -2273,10 +2283,13 @@ class PengisianKegiatan extends Component
             $namaBulanTarget = collect($this->bulanBulanTarget())->map(fn ($b) => $this->namaBulanIndo($b));
             $berlakuBulan = 'RTL untuk '.$namaBulanTarget->join(', ', ', dan ');
 
-            // PIC dipilih bebas oleh Ketua Tim lewat dropdown (daftarTimPic(), lihat
-            // blade) — boleh dikosongkan; kalau kosong, jatuh ke nama tim IKU ini
-            // (App\Models\MasterIku::tim) sebagai bawaan.
-            $picTim = trim($this->rtlBaruPic) !== '' ? trim($this->rtlBaruPic) : $this->ikuTerpilih()?->tim;
+            // PIC dipilih bebas oleh Ketua Tim lewat field bersaran (daftarTimPic(),
+            // lihat blade) — boleh dikosongkan; kalau kosong, jatuh ke gabungan
+            // SELURUH tim penanggung jawab IKU ini (App\Models\MasterIku::namaTimList())
+            // sebagai bawaan.
+            $picTim = trim($this->rtlBaruPic) !== ''
+                ? trim($this->rtlBaruPic)
+                : (implode(', ', $this->ikuTerpilih()?->namaTimList() ?? []) ?: null);
 
             // Batch sudah ditetapkan sebelumnya — poin BARU yang ditambahkan harus
             // ikut PIC batch yang sama (bukan bawaan IKU/dropdown yang tidak
@@ -2475,7 +2488,7 @@ class PengisianKegiatan extends Component
 
         try {
             $this->buatValidator()->validate();
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             $this->dispatch('notify', type: 'error', message: 'Belum bisa diajukan — masih ada data wajib yang belum lengkap.');
 
             throw $e;

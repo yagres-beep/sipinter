@@ -8,6 +8,8 @@ use App\Models\KendalaSolusi;
 use App\Models\MasterIku;
 use App\Models\RtlEvaluasi;
 use App\Models\StorageAccount;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 
 /**
@@ -69,7 +71,7 @@ class DasborUtama extends Component
      * saat ini) — bukan pemblokiran (satu IKU boleh saja tidak diisi tiap bulan), hanya
      * pengingat visual karena tiap IKU tetap diharapkan terisi minimal sekali per triwulan.
      *
-     * @return \Illuminate\Support\Collection<int, MasterIku>
+     * @return Collection<int, MasterIku>
      */
     protected function ikuBelumTerisiTriwulanIni()
     {
@@ -126,7 +128,7 @@ class DasborUtama extends Component
      * Peran lain tetap melihat baris draft milik mereka sendiri (Ketua Tim perlu
      * lihat draftnya sendiri di dasbor).
      *
-     * @return \Illuminate\Support\Collection<int, Capaian>
+     * @return Collection<int, Capaian>
      */
     protected function daftarCapaian(string $role)
     {
@@ -134,7 +136,7 @@ class DasborUtama extends Component
             ->join('master_iku', 'capaian.iku_id', '=', 'master_iku.id')
             ->join('periode', 'capaian.periode_id', '=', 'periode.id')
             ->select('capaian.*')
-            ->with(['masterIku', 'periode']);
+            ->with(['masterIku.timList', 'periode']);
 
         if ($role === 'Tim SAKIP') {
             $query->where('capaian.status', '!=', Capaian::STATUS_DRAFT);
@@ -156,15 +158,32 @@ class DasborUtama extends Component
             $query->where(function ($q) use ($kataKunci) {
                 $q->whereRaw('LOWER(master_iku.kode) LIKE ?', [$kataKunci])
                     ->orWhereRaw('LOWER(master_iku.indikator) LIKE ?', [$kataKunci])
-                    ->orWhereRaw('LOWER(master_iku.tim) LIKE ?', [$kataKunci]);
+                    // Satu IKU boleh punya lebih dari satu tim (App\Models\IkuTim) --
+                    // dicocokkan lewat EXISTS ke iku_tim, bukan lagi kolom scalar
+                    // master_iku.tim.
+                    ->orWhereExists(function ($sub) use ($kataKunci) {
+                        $sub->select(DB::raw(1))
+                            ->from('iku_tim')
+                            ->whereColumn('iku_tim.iku_id', 'master_iku.id')
+                            ->whereRaw('LOWER(iku_tim.tim) LIKE ?', [$kataKunci]);
+                    });
             });
+        }
+
+        if ($this->urutanKolom === 'tim') {
+            // Diurutkan dari tim "terkecil" (alfabet) milik tiap IKU -- portable di
+            // Postgres (production) & SQLite (tests), MIN() berlaku sama di keduanya.
+            $query->orderByRaw(
+                '(select min(tim) from iku_tim where iku_tim.iku_id = master_iku.id) '.$this->urutanArah
+            );
+
+            return $query->take(20)->get();
         }
 
         $kolomUrut = match ($this->urutanKolom) {
             'kode' => 'master_iku.kode',
             'indikator' => 'master_iku.indikator',
             'triwulan' => 'periode.triwulan',
-            'tim' => 'master_iku.tim',
             'status' => 'capaian.status',
             default => 'periode.tahun',
         };
@@ -185,8 +204,8 @@ class DasborUtama extends Component
      * supaya campuran status dalam satu Capaian (mis. "3 diverifikasi, 2 dikembalikan")
      * tetap terlihat di tabel ini tanpa perlu buka halaman lain.
      *
-     * @param  \Illuminate\Support\Collection<int, Capaian>  $daftarCapaian
-     * @return \Illuminate\Support\Collection<int, \Illuminate\Support\Collection<int, Kegiatan>>
+     * @param  Collection<int, Capaian>  $daftarCapaian
+     * @return Collection<int, Collection<int, Kegiatan>>
      */
     protected function kegiatanPerCapaian($daftarCapaian)
     {
@@ -213,8 +232,8 @@ class DasborUtama extends Component
      * yang ditolak Tim SAKIP tidak kelihatan sama sekali di sini, cuma lewat badge
      * besar Capaian::status.
      *
-     * @param  \Illuminate\Support\Collection<int, Capaian>  $daftarCapaian
-     * @return \Illuminate\Support\Collection<int, \Illuminate\Support\Collection<int, KendalaSolusi>>
+     * @param  Collection<int, Capaian>  $daftarCapaian
+     * @return Collection<int, Collection<int, KendalaSolusi>>
      */
     protected function kendalaSolusiPerCapaian($daftarCapaian)
     {
@@ -246,8 +265,8 @@ class DasborUtama extends Component
      * realisasinya sudah dilaporkan Ketua Tim yang disertakan — poin yang belum
      * dilaporkan tidak relevan dengan status verifikasi apa pun.
      *
-     * @param  \Illuminate\Support\Collection<int, Capaian>  $daftarCapaian
-     * @return \Illuminate\Support\Collection<int, \Illuminate\Support\Collection<int, RtlEvaluasi>>
+     * @param  Collection<int, Capaian>  $daftarCapaian
+     * @return Collection<int, Collection<int, RtlEvaluasi>>
      */
     protected function rtlPerCapaian($daftarCapaian)
     {
@@ -290,8 +309,8 @@ class DasborUtama extends Component
      * (Tim SAKIP tidak akan melihatnya karena Capaian berstatus draft sudah disaring
      * lebih dulu di daftarCapaian()).
      *
-     * @param  \Illuminate\Support\Collection<int, Capaian>  $daftarCapaian
-     * @return \Illuminate\Support\Collection<int, \Illuminate\Support\Collection<int, RtlEvaluasi>>
+     * @param  Collection<int, Capaian>  $daftarCapaian
+     * @return Collection<int, Collection<int, RtlEvaluasi>>
      */
     protected function rtlBerikutnyaPerCapaian($daftarCapaian)
     {
@@ -325,8 +344,8 @@ class DasborUtama extends Component
      * terpisah seperti sebelumnya), Ketua Tim &amp; Kepala menuju halaman kerja utama
      * mereka (tidak ada halaman detail per Capaian untuk kedua peran ini).
      *
-     * @param  \Illuminate\Support\Collection<int, Capaian>  $daftarCapaian
-     * @return \Illuminate\Support\Collection<int, ?string>
+     * @param  Collection<int, Capaian>  $daftarCapaian
+     * @return Collection<int, ?string>
      */
     protected function tautanSemuaBaris($daftarCapaian, string $role)
     {

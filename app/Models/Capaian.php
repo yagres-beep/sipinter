@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 
 /**
  * Angka capaian IKU pada satu periode (RF-38) — satu baris per (iku_id, periode_id),
@@ -227,21 +228,23 @@ class Capaian extends Model
     }
 
     /**
-     * Tim yang ditampilkan untuk sekumpulan Capaian — MasterIku::tim bila terisi;
-     * kalau kosong (sejumlah IKU lama belum pernah diisi kolom ini), jatuh ke tim
-     * Ketua Tim yang benar-benar mengajukan isian ini (keanggotaan tim lewat
+     * Tim yang ditampilkan untuk sekumpulan Capaian — tim penanggung jawab IKU
+     * (App\Models\MasterIku::timList(), boleh lebih dari satu) bila terisi; kalau
+     * kosong (sejumlah IKU lama belum pernah diisi tim penanggung jawabnya), jatuh
+     * ke tim Ketua Tim yang benar-benar mengajukan isian ini (keanggotaan tim lewat
      * App\Models\UserTim, diisi saat registrasi) supaya kolom "Tim" di dasbor/daftar
      * verifikasi tidak tampil "—" padahal Ketua Tim pengaju sebenarnya sudah
      * terdaftar di satu/lebih tim. SATU query batch untuk seluruh daftar (bukan N+1
      * lewat relasi riwayatStatus() per baris), sama polanya dengan
-     * DasborUtama::kegiatanPerCapaian().
+     * DasborUtama::kegiatanPerCapaian(). Pemanggil WAJIB eager-load 'masterIku.timList'
+     * supaya $c->masterIku->timList di sini tidak memicu query per baris.
      *
-     * @param  \Illuminate\Support\Collection<int, self>  $daftarCapaian
-     * @return \Illuminate\Support\Collection<int, string>  capaian_id => nama tim (string kosong bila benar-benar tidak diketahui)
+     * @param  Collection<int, self>  $daftarCapaian
+     * @return Collection<int, string> capaian_id => nama tim (string kosong bila benar-benar tidak diketahui)
      */
     public static function timTampilBanyak($daftarCapaian)
     {
-        $perluFallback = $daftarCapaian->filter(fn ($c) => blank($c->masterIku->tim ?? null));
+        $perluFallback = $daftarCapaian->filter(fn ($c) => $c->masterIku->timList->isEmpty());
 
         $timPengaju = collect();
 
@@ -256,7 +259,9 @@ class Capaian extends Model
         }
 
         return $daftarCapaian->mapWithKeys(fn ($c) => [
-            $c->id => filled($c->masterIku->tim ?? null) ? $c->masterIku->tim : $timPengaju->get($c->id, ''),
+            $c->id => $c->masterIku->timList->isNotEmpty()
+                ? $c->masterIku->timList->pluck('tim')->implode(', ')
+                : $timPengaju->get($c->id, ''),
         ]);
     }
 }

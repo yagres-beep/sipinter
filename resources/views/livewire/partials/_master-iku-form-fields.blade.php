@@ -14,14 +14,28 @@
     </div>
     <div class="field">
         <label>Penanggung Jawab (Tim) <span class="req">*</span></label>
-        <input type="text" class="inp filled" list="daftar-tim" wire:model="tim" placeholder="mis. Produksi Statistik">
+        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:6px">
+            @forelse ($timTerpilih as $t)
+                <span class="chip chip-tim" wire:key="tim-terpilih-{{ $loop->index }}">
+                    {{ $t }}
+                    <span class="chip-x" wire:click="hapusTimTerpilih('{{ $t }}')">✕</span>
+                </span>
+            @empty
+                <span class="muted" style="font-size:11.5px">Belum ada tim dipilih.</span>
+            @endforelse
+        </div>
+        <div style="display:flex;gap:6px">
+            <input type="text" class="inp filled" list="daftar-tim" wire:model="timBaru"
+                wire:keydown.enter.prevent="tambahTim" placeholder="mis. Produksi Statistik">
+            <button type="button" class="btn btn-ghost btn-sm" wire:click="tambahTim">＋ Tambah</button>
+        </div>
         <datalist id="daftar-tim">
             @foreach ($daftarTim as $opsi)
                 <option value="{{ $opsi }}"></option>
             @endforeach
         </datalist>
-        <div class="fhint">Pilih dari saran yang sudah ada, atau ketik tim baru. Tim ini berlaku sebagai Penanggung Jawab IKU (ditampilkan di Daftar Master IKU) — tidak perlu isian nama orang terpisah.</div>
-        @error('tim')
+        <div class="fhint">Pilih dari saran yang sudah ada, atau ketik tim baru lalu tekan Enter/"＋ Tambah". Boleh lebih dari satu tim — semuanya berlaku sebagai Penanggung Jawab IKU (ditampilkan di Daftar Master IKU) — tidak perlu isian nama orang terpisah.</div>
+        @error('timTerpilih')
             <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
         @enderror
     </div>

@@ -163,6 +163,7 @@ class MasterIkuTest extends TestCase
         $this->assertSame('rasio', $iku->metode_capaian);
         $this->assertSame('Sasaran Satu', $iku->sasaran);
         $this->assertSame('Tim Statistik', $iku->tim);
+        $this->assertSame(['Tim Statistik'], $iku->namaTimList());
         $this->assertSame('y = [[n|N]] x 100%', $iku->dasar_hitung);
         $this->assertSame('Data internal', $iku->basis_data);
 
@@ -322,7 +323,7 @@ class MasterIkuTest extends TestCase
         Livewire::test(MasterIku::class)
             ->set('kode', '9001')
             ->set('indikator', 'Indikator uji metode default')
-            ->set('tim', 'Tim Uji')
+            ->set('timTerpilih', ['Tim Uji'])
             ->call('save')
             ->assertHasNoErrors();
 
@@ -338,7 +339,7 @@ class MasterIkuTest extends TestCase
         Livewire::test(MasterIku::class)
             ->set('kode', '9002')
             ->set('indikator', 'Persentase publikasi berkualitas')
-            ->set('tim', 'Tim Uji')
+            ->set('timTerpilih', ['Tim Uji'])
             ->set('metodeCapaian', 'rasio')
             ->set('deskripsiX', 'Jumlah publikasi berkualitas')
             ->set('deskripsiY', 'Jumlah seluruh publikasi')
@@ -365,7 +366,7 @@ class MasterIkuTest extends TestCase
         Livewire::test(MasterIku::class)
             ->set('kode', '9003')
             ->set('indikator', 'Indikator uji satuan otomatis')
-            ->set('tim', 'Tim Uji')
+            ->set('timTerpilih', ['Tim Uji'])
             ->set('metodeCapaian', 'langsung')
             ->set('satuan', 'Persen')
             ->call('save')
@@ -425,7 +426,7 @@ class MasterIkuTest extends TestCase
         Livewire::test(MasterIku::class)
             ->set('kode', '9004')
             ->set('indikator', 'Indikator uji dasar hitung')
-            ->set('tim', 'Tim Uji')
+            ->set('timTerpilih', ['Tim Uji'])
             ->set('dasarHitung', 'Jumlah realisasi dibagi target dikali 100')
             ->set('basisData', 'Data internal BPS')
             ->call('save')
@@ -458,7 +459,7 @@ class MasterIkuTest extends TestCase
         Livewire::test(MasterIku::class)
             ->set('kode', '9009')
             ->set('indikator', 'Indikator uji formula')
-            ->set('tim', 'Tim Uji')
+            ->set('timTerpilih', ['Tim Uji'])
             ->set('metodeCapaian', 'langsung')
             ->set('formulaCapaian', 'min(realisasi / alokasi * 100, batas)')
             ->call('save')
@@ -475,7 +476,7 @@ class MasterIkuTest extends TestCase
         Livewire::test(MasterIku::class)
             ->set('kode', '9010')
             ->set('indikator', 'Indikator uji formula salah')
-            ->set('tim', 'Tim Uji')
+            ->set('timTerpilih', ['Tim Uji'])
             ->set('metodeCapaian', 'langsung')
             ->set('formulaCapaian', 'realisasi / / alokasi')
             ->call('save')
@@ -491,7 +492,7 @@ class MasterIkuTest extends TestCase
         Livewire::test(MasterIku::class)
             ->set('kode', '9011')
             ->set('indikator', 'Indikator uji formula rasio')
-            ->set('tim', 'Tim Uji')
+            ->set('timTerpilih', ['Tim Uji'])
             ->set('metodeCapaian', 'rasio')
             // formulaCapaian tidak pernah tampil di form untuk rasio, tapi tetap
             // dicoba diisi langsung ke properti komponen di sini -- harus dipaksa
@@ -516,6 +517,25 @@ class MasterIkuTest extends TestCase
 
         Livewire::test(MasterIku::class)
             ->call('edit', $iku->id)
-            ->assertSet('tim', '');
+            ->assertSet('timTerpilih', []);
+    }
+
+    public function test_iku_bisa_disimpan_dengan_lebih_dari_satu_tim(): void
+    {
+        $this->loginSebagaiTimSakip();
+
+        Livewire::test(MasterIku::class)
+            ->set('kode', '9012')
+            ->set('indikator', 'Indikator uji multi tim')
+            ->set('timBaru', 'Tim Satu')
+            ->call('tambahTim')
+            ->set('timBaru', 'Tim Dua')
+            ->call('tambahTim')
+            ->assertSet('timTerpilih', ['Tim Satu', 'Tim Dua'])
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $iku = MasterIkuModel::where('kode', '9012')->first();
+        $this->assertEqualsCanonicalizing(['Tim Satu', 'Tim Dua'], $iku->namaTimList());
     }
 }

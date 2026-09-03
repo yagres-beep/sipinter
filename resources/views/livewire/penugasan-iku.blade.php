@@ -21,7 +21,7 @@
         </div>
     </div>
 
-    <div class="info">ℹ️ Pilih Tim di kolom Tim — daftar Penanggung Jawab otomatis terisi dari anggota tim tersebut (chip abu-abu "via tim", klik ✕ untuk mengecualikan dari IKU ini saja, tetap anggota tim). Chip biru adalah penugasan manual tambahan — klik "+ Tambah PJ" lalu pilih satu nama untuk langsung menambahkannya.</div>
+    <div class="info">ℹ️ Tambahkan satu/lebih Tim di kolom Tim (satu IKU boleh ditangani lebih dari satu tim) — daftar Penanggung Jawab otomatis terisi dari anggota tim-tim tersebut (chip abu-abu "via tim", klik ✕ untuk mengecualikan dari IKU ini saja, tetap anggota tim). Chip biru adalah penugasan manual tambahan — klik "+ Tambah PJ" lalu pilih satu nama untuk langsung menambahkannya.</div>
 
     <div class="card">
         <div class="toolbar">
@@ -64,14 +64,29 @@
                                     <span class="badge b-tolak" style="margin-left:6px">Belum ada PJ</span>
                                 @endunless
                             </td>
-                            <td>
-                                <select class="tim-select" wire:change="pilihTim({{ $iku->id }}, $event.target.value)"
-                                    wire:loading.attr="disabled" wire:target="pilihTim({{ $iku->id }})">
-                                    <option value="" {{ blank($iku->tim) ? 'selected' : '' }}>— pilih tim —</option>
-                                    @foreach ($daftarTim as $t)
-                                        <option value="{{ $t }}" {{ $iku->tim === $t ? 'selected' : '' }}>{{ $t }}</option>
-                                    @endforeach
-                                </select>
+                            <td style="min-width:160px">
+                                <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+                                    @forelse ($iku->timList as $timRow)
+                                        <span class="chip chip-tim" wire:key="tim-{{ $timRow->id }}">
+                                            {{ $timRow->tim }}
+                                            <span class="chip-x" wire:click="hapusTim({{ $timRow->id }})" wire:loading.class="btn-busy" wire:target="hapusTim({{ $timRow->id }})">✕</span>
+                                        </span>
+                                    @empty
+                                        <span class="muted" style="font-size:11.5px">Belum ada tim.</span>
+                                    @endforelse
+
+                                    <input type="text" list="daftar-tim-penugasan" class="inp filled"
+                                        style="width:auto;min-width:110px;display:inline-block;font-size:11.5px;padding:6px 9px"
+                                        wire:model="timBaru.{{ $iku->id }}" wire:keydown.enter="tambahTim({{ $iku->id }})"
+                                        wire:loading.attr="disabled" wire:target="tambahTim({{ $iku->id }})"
+                                        placeholder="+ tim…">
+                                    <button type="button" class="btn btn-ghost btn-sm" style="padding:5px 9px"
+                                        wire:click="tambahTim({{ $iku->id }})"
+                                        wire:loading.attr="disabled" wire:target="tambahTim({{ $iku->id }})">
+                                        <span wire:loading.remove wire:target="tambahTim({{ $iku->id }})">＋</span>
+                                        <span wire:loading wire:target="tambahTim({{ $iku->id }})"><i class="spin"></i></span>
+                                    </button>
+                                </div>
                             </td>
                             <td>
                                 <div class="pj-cell" x-data="{ open: false }">
@@ -116,7 +131,7 @@
                                                 @php $timOrang = $timPerUser->get($orang->id, []); @endphp
                                                 <option value="{{ $orang->id }}">
                                                     {{ $orang->nama }}
-                                                    @unless (in_array($iku->tim, $timOrang, true))
+                                                    @unless (array_intersect($baris['namaTimIku'], $timOrang) !== [])
                                                         &nbsp;({{ implode(', ', $timOrang) }})
                                                     @endunless
                                                 </option>
@@ -136,4 +151,10 @@
             <x-table-pagination />
         </div>
     </div>
+
+    <datalist id="daftar-tim-penugasan">
+        @foreach ($daftarTim as $t)
+            <option value="{{ $t }}"></option>
+        @endforeach
+    </datalist>
 </div>

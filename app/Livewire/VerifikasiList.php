@@ -6,6 +6,7 @@ use App\Models\Capaian;
 use App\Models\Kegiatan;
 use App\Models\KendalaSolusi;
 use App\Models\RtlEvaluasi;
+use Illuminate\Support\Collection;
 use Livewire\Component;
 
 /**
@@ -113,7 +114,7 @@ class VerifikasiList extends Component
     }
 
     /**
-     * @return \Illuminate\Support\Collection<int, Capaian>
+     * @return Collection<int, Capaian>
      */
     protected function daftarCapaian()
     {
@@ -131,7 +132,7 @@ class VerifikasiList extends Component
         // tidak sedang dicari.
         $statusDicari = filled($this->status) ? $this->status : self::statusTersedia();
 
-        $daftar = Capaian::with(['masterIku', 'periode'])
+        $daftar = Capaian::with(['masterIku.timList', 'periode'])
             ->whereIn('status', $statusDicari)
             ->whereHas('periode', function ($q) {
                 $q->where('tahun', $this->tahun)->where('triwulan', $this->triwulan);
@@ -148,14 +149,14 @@ class VerifikasiList extends Component
             $daftar = $daftar->filter(function ($capaian) use ($kataKunci) {
                 return str_contains(mb_strtolower($capaian->masterIku->kode), $kataKunci)
                     || str_contains(mb_strtolower($capaian->masterIku->indikator), $kataKunci)
-                    || str_contains(mb_strtolower($capaian->masterIku->tim), $kataKunci);
+                    || str_contains(mb_strtolower($capaian->masterIku->timList->pluck('tim')->implode(' ')), $kataKunci);
             });
         }
 
         $pengurut = match ($this->urutanKolom) {
             'kode' => fn ($c) => $c->masterIku->kode,
             'indikator' => fn ($c) => $c->masterIku->indikator,
-            'tim' => fn ($c) => $c->masterIku->tim,
+            'tim' => fn ($c) => $c->masterIku->timList->pluck('tim')->implode(', '),
             default => fn ($c) => $c->periode_id,
         };
 
@@ -172,8 +173,8 @@ class VerifikasiList extends Component
      * (lihat App\Models\Capaian); rincian ini cuma pelengkap supaya campurannya (mis.
      * "3 diverifikasi, 2 dikembalikan") tetap terlihat tanpa buka detail.
      *
-     * @param  \Illuminate\Support\Collection<int, Capaian>  $daftarCapaian
-     * @return \Illuminate\Support\Collection<int, \Illuminate\Support\Collection<int, Kegiatan>>
+     * @param  Collection<int, Capaian>  $daftarCapaian
+     * @return Collection<int, Collection<int, Kegiatan>>
      */
     protected function kegiatanPerCapaian($daftarCapaian)
     {
@@ -197,8 +198,8 @@ class VerifikasiList extends Component
      * (lihat KendalaSolusi::rincianStatusVerifikasi()), supaya kendala-solusi yang
      * ditolak Tim SAKIP kelihatan di sini juga, bukan cuma lewat badge status besar.
      *
-     * @param  \Illuminate\Support\Collection<int, Capaian>  $daftarCapaian
-     * @return \Illuminate\Support\Collection<int, \Illuminate\Support\Collection<int, KendalaSolusi>>
+     * @param  Collection<int, Capaian>  $daftarCapaian
+     * @return Collection<int, Collection<int, KendalaSolusi>>
      */
     protected function kendalaSolusiPerCapaian($daftarCapaian)
     {
@@ -222,8 +223,8 @@ class VerifikasiList extends Component
      * lewat (iku_id, tahun, triwulan) bukan periode_id, dan kenapa hanya poin yang
      * realisasinya sudah dilaporkan Ketua Tim yang disertakan.
      *
-     * @param  \Illuminate\Support\Collection<int, Capaian>  $daftarCapaian
-     * @return \Illuminate\Support\Collection<int, \Illuminate\Support\Collection<int, RtlEvaluasi>>
+     * @param  Collection<int, Capaian>  $daftarCapaian
+     * @return Collection<int, Collection<int, RtlEvaluasi>>
      */
     protected function rtlPerCapaian($daftarCapaian)
     {
@@ -256,8 +257,8 @@ class VerifikasiList extends Component
      * untuk alasan dicocokkan lewat (iku_id, tahun, triwulan) SASARAN (bukan
      * periode_id Capaian ini).
      *
-     * @param  \Illuminate\Support\Collection<int, Capaian>  $daftarCapaian
-     * @return \Illuminate\Support\Collection<int, \Illuminate\Support\Collection<int, RtlEvaluasi>>
+     * @param  Collection<int, Capaian>  $daftarCapaian
+     * @return Collection<int, Collection<int, RtlEvaluasi>>
      */
     protected function rtlBerikutnyaPerCapaian($daftarCapaian)
     {

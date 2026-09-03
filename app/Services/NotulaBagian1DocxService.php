@@ -8,8 +8,8 @@ use App\Models\Notula;
 use App\Models\PengaturanCapaian;
 use App\Models\Periode;
 use App\Models\RincianN;
-use App\Services\GoogleDriveService;
 use App\Support\RumusMarkup;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -348,10 +348,11 @@ class NotulaBagian1DocxService
         $this->set($sub, 'solusi', $this->daftarBernomor($semuaKendalaSolusi->pluck('solusi')->filter()));
 
         $rtlTeks = $this->daftarBernomor($rtlIku->pluck('rtl_teks')->filter());
-        // PIC Tindak Lanjut = tim yang ditugaskan pada IKU ini di Master IKU
-        // (master_iku.tim), BUKAN nama orang yang diketik bebas per poin RTL.
+        // PIC Tindak Lanjut = tim (boleh lebih dari satu, digabung dipisah koma)
+        // yang ditugaskan pada IKU ini di Master IKU (App\Models\IkuTim), BUKAN
+        // nama orang yang diketik bebas per poin RTL.
         $this->set($sub, 'rtl', $rtlTeks);
-        $this->set($sub, 'pic_rtl', $iku->tim);
+        $this->set($sub, 'pic_rtl', implode(', ', $iku->namaTimList()));
         // Batas Waktu Tindak Lanjut SELALU akhir bulan triwulan tsb (RF-34, sesuai
         // Kertas Kerja resmi -- satu batas waktu yang sama untuk SEMUA poin RTL
         // triwulan yang sama) -- dihitung LANGSUNG dari triwulan/tahun periode
@@ -400,9 +401,9 @@ class NotulaBagian1DocxService
      * III->September, IV->Desember) -- dipakai untuk Batas Waktu Tindak Lanjut,
      * lihat pemanggilnya di isiSatuIku().
      */
-    private function akhirTriwulan(int $tahun, int $triwulan): \Illuminate\Support\Carbon
+    private function akhirTriwulan(int $tahun, int $triwulan): Carbon
     {
-        return \Illuminate\Support\Carbon::create($tahun, $triwulan * 3, 1)->endOfMonth();
+        return Carbon::create($tahun, $triwulan * 3, 1)->endOfMonth();
     }
 
     /**
@@ -745,7 +746,7 @@ class NotulaBagian1DocxService
             $processor = $this->newTemplateProcessor($templatePath);
             $processor->setMacroChars('{{', '}}');
             $xml = $this->getMainPart($processor);
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             throw new RuntimeException("Berkas bukan .docx yang valid atau rusak: {$e->getMessage()}");
         }
 

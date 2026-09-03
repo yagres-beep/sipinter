@@ -6,6 +6,7 @@ use App\Livewire\AkunAktif;
 use App\Livewire\PenugasanIku;
 use App\Models\IkuPengecualian;
 use App\Models\IkuPenugasan;
+use App\Models\IkuTim;
 use App\Models\MasterIku;
 use App\Models\Role;
 use App\Models\User;
@@ -73,7 +74,7 @@ class KeanggotaanDanPenugasanTest extends TestCase
         $this->assertSame('Rina Marlina', $iku->penanggungJawabOtomatis()->first()->nama);
     }
 
-    public function test_pilih_tim_pada_iku_mengisi_penanggung_jawab_otomatis(): void
+    public function test_tambah_tim_pada_iku_mengisi_penanggung_jawab_otomatis(): void
     {
         $this->loginSebagaiSakip();
         $ketua = $this->buatKetua('Siti Aminah', 'siti@example.test');
@@ -81,17 +82,57 @@ class KeanggotaanDanPenugasanTest extends TestCase
 
         $iku = MasterIku::create(['kode' => 'IKU-Z', 'indikator' => 'Indikator Z']);
 
-        $this->assertNull($iku->fresh()->tim);
+        $this->assertSame([], $iku->fresh()->namaTimList());
 
         Livewire::test(PenugasanIku::class)
-            ->call('pilihTim', $iku->id, 'Statistik Sosial')
+            ->set('timBaru.'.$iku->id, 'Statistik Sosial')
+            ->call('tambahTim', $iku->id)
             ->assertHasNoErrors();
 
         $iku->refresh();
 
-        $this->assertSame('Statistik Sosial', $iku->tim);
+        $this->assertSame(['Statistik Sosial'], $iku->namaTimList());
         $this->assertCount(1, $iku->penanggungJawabOtomatis());
         $this->assertSame('Siti Aminah', $iku->penanggungJawabOtomatis()->first()->nama);
+    }
+
+    /**
+     * RF baru: satu IKU boleh ditugaskan ke LEBIH DARI SATU tim sekaligus (lihat
+     * App\Models\IkuTim) — penanggung jawab otomatis harus menggabungkan anggota
+     * SELURUH tim yang ditugaskan, bukan cuma satu tim seperti sebelumnya.
+     */
+    public function test_iku_dengan_lebih_dari_satu_tim_menggabungkan_penanggung_jawab_otomatis(): void
+    {
+        $this->loginSebagaiSakip();
+        $ketuaSatu = $this->buatKetua('Siti Aminah', 'siti2@example.test');
+        $ketuaDua = $this->buatKetua('Joko Widodo', 'joko@example.test');
+        UserTim::create(['user_id' => $ketuaSatu->id, 'tim' => 'Statistik Sosial']);
+        UserTim::create(['user_id' => $ketuaDua->id, 'tim' => 'Statistik Produksi']);
+
+        $iku = MasterIku::create(['kode' => 'IKU-MULTI', 'indikator' => 'Indikator Multi Tim']);
+
+        $livewire = Livewire::test(PenugasanIku::class)
+            ->set('timBaru.'.$iku->id, 'Statistik Sosial')
+            ->call('tambahTim', $iku->id)
+            ->set('timBaru.'.$iku->id, 'Statistik Produksi')
+            ->call('tambahTim', $iku->id)
+            ->assertHasNoErrors();
+
+        $iku->refresh();
+
+        $this->assertEqualsCanonicalizing(['Statistik Sosial', 'Statistik Produksi'], $iku->namaTimList());
+
+        $otomatis = $iku->penanggungJawabOtomatis();
+        $this->assertCount(2, $otomatis);
+        $this->assertTrue($otomatis->pluck('nama')->contains('Siti Aminah'));
+        $this->assertTrue($otomatis->pluck('nama')->contains('Joko Widodo'));
+
+        $timRow = IkuTim::where('iku_id', $iku->id)->where('tim', 'Statistik Produksi')->first();
+        $livewire->call('hapusTim', $timRow->id);
+
+        $iku->refresh();
+        $this->assertSame(['Statistik Sosial'], $iku->namaTimList());
+        $this->assertCount(1, $iku->penanggungJawabOtomatis());
     }
 
     public function test_tambah_dan_hapus_penugasan_manual(): void

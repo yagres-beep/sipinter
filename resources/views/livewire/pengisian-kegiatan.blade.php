@@ -735,14 +735,14 @@
             @unless ($sudahAdaRtlBerikutnya)
                 <div class="row2" style="margin-top:14px">
                     <div class="field"><label>PIC Tindak Lanjut</label>
-                        <select class="inp filled" wire:model="rtlBaruPic">
-                            <option value="">— Belum dipilih (diisi Tim SAKIP saat verifikasi) —</option>
+                        <input type="text" class="inp filled" list="daftar-tim-pic" wire:model="rtlBaruPic" placeholder="— Belum dipilih (diisi Tim SAKIP saat verifikasi) —">
+                        <datalist id="daftar-tim-pic">
                             @foreach ($daftarTimPic as $tim)
-                                <option value="{{ $tim }}">{{ $tim }}</option>
+                                <option value="{{ $tim }}"></option>
                             @endforeach
-                        </select>
+                        </datalist>
                         <div class="fhint">
-                            Nama tim (bukan perorangan) yang bertanggung jawab menindaklanjuti — bawaan diambil dari tim penanggung jawab IKU ini, tapi boleh diganti. Opsional di sini; wajib diisi/dikonfirmasi Tim SAKIP saat verifikasi. Berlaku untuk seluruh poin RTL {{ $labelBerikutnya }} di atas.
+                            Nama tim (bukan perorangan) yang bertanggung jawab menindaklanjuti — boleh lebih dari satu, dipisah koma. Bawaan diambil dari tim penanggung jawab IKU ini, tapi boleh diganti/ditambah bebas. Opsional di sini; wajib diisi/dikonfirmasi Tim SAKIP saat verifikasi. Berlaku untuk seluruh poin RTL {{ $labelBerikutnya }} di atas.
                         </div>
                         @error('rtlBaruPic')
                             <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>

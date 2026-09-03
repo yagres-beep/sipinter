@@ -28,7 +28,7 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
  */
 class MasterIkuTemplateSheet implements FromArray, WithColumnWidths, WithHeadings, WithStyles, WithTitle
 {
-    public const BARIS_PETUNJUK = 'Petunjuk: mulai isi data IKU dari baris ke-5 ke bawah. Kode Indikator harus unik. Kolom Penanggung Jawab (Tim) wajib diisi — boleh tim baru atau salin dari sheet "Daftar Nama". Kolom Dasar Hitung & Basis Data boleh dikosongkan. Jenis Nilai "%" wajib mengisi kolom L-O (jumlah Alokasi Target TW I-IV harus sama dengan Target X, dan Target Tahunan harus sama dengan Target X ÷ Target Y × 100). Jenis Nilai "Non %" WAJIB mengosongkan kolom L-O (jumlah Alokasi Target TW I-IV harus sama dengan Target Tahunan). Jangan mengubah atau menghapus baris contoh (baris 2-3) dan baris petunjuk ini (baris 4) agar validasi unggahan berhasil.';
+    public const BARIS_PETUNJUK = 'Petunjuk: mulai isi data IKU dari baris ke-5 ke bawah. Kode Indikator harus unik. Kolom Penanggung Jawab (Tim) wajib diisi — boleh tim baru atau salin dari sheet "Daftar Nama"; boleh lebih dari satu tim, pisahkan dengan koma (mis. "Statistik Produksi, Statistik Distribusi"). Kolom Dasar Hitung & Basis Data boleh dikosongkan. Jenis Nilai "%" wajib mengisi kolom L-O (jumlah Alokasi Target TW I-IV harus sama dengan Target X, dan Target Tahunan harus sama dengan Target X ÷ Target Y × 100). Jenis Nilai "Non %" WAJIB mengosongkan kolom L-O (jumlah Alokasi Target TW I-IV harus sama dengan Target Tahunan). Jangan mengubah atau menghapus baris contoh (baris 2-3) dan baris petunjuk ini (baris 4) agar validasi unggahan berhasil.';
 
     /**
      * Formula bantuan (Cek Total Alokasi/Target Acuan/Status) disiapkan sampai

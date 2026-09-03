@@ -4,6 +4,7 @@ namespace App\Livewire;
 
 use App\Models\IkuPengecualian;
 use App\Models\IkuPenugasan;
+use App\Models\IkuTim;
 use App\Models\MasterIku;
 use App\Models\User;
 use App\Models\UserTim;
@@ -14,7 +15,10 @@ use Livewire\Component;
  * tampilan) menampilkan penanggung jawab otomatis (via keanggotaan tim, chip
  * abu-abu, bisa dikecualikan per-IKU tanpa mengeluarkan dari tim) dan penanggung
  * jawab manual (tambahan/override, chip biru yang bisa dihapus, ditambah satu
- * per satu lewat dropdown ramping).
+ * per satu lewat dropdown ramping). Satu IKU boleh ditugaskan ke LEBIH DARI SATU
+ * tim sekaligus (lihat App\Models\IkuTim) — kolom Tim jadi chip yang bisa
+ * ditambah/dihapus satu per satu, sama pola UX-nya dengan chip PJ manual di
+ * bawahnya dan dengan keanggotaan tim di App\Livewire\AkunAktif.
  */
 class PenugasanIku extends Component
 {
@@ -26,6 +30,14 @@ class PenugasanIku extends Component
     public string $urutanKolom = 'kode';
 
     public string $urutanArah = 'asc';
+
+    /**
+     * Input "tambah tim" per IKU, dikunci pada id IKU — mengikuti pola
+     * App\Livewire\AkunAktif::$timBaru.
+     *
+     * @var array<int, string>
+     */
+    public array $timBaru = [];
 
     public function urutkan(string $kolom): void
     {
@@ -46,16 +58,36 @@ class PenugasanIku extends Component
     }
 
     /**
-     * Set/ganti tim penanggung jawab IKU ini — begitu tim dipilih, chip PJ
-     * "via tim" otomatis langsung mengikuti keanggotaan tim tersebut.
+     * Tambah satu tim penanggung jawab ke IKU ini — begitu tim ditambah, chip PJ
+     * "via tim" otomatis langsung ikut mengikuti keanggotaan tim tersebut. Satu
+     * IKU boleh punya lebih dari satu tim, tambahkan satu per satu lewat ini.
+     * Mengikuti pola App\Livewire\AkunAktif::tambahTim() -- nilai tim diambil dari
+     * $timBaru[$ikuId] (wire:model), bukan lewat parameter, supaya tombol ＋ dan
+     * Enter di kotak input sama-sama bisa memicunya tanpa mengetik ulang nilainya.
      */
-    public function pilihTim(int $ikuId, string $tim): void
+    public function tambahTim(int $ikuId): void
     {
-        MasterIku::whereKey($ikuId)->update(['tim' => $tim ?: null]);
+        $tim = trim($this->timBaru[$ikuId] ?? '');
+
+        if ($tim === '') {
+            return;
+        }
+
+        IkuTim::firstOrCreate(['iku_id' => $ikuId, 'tim' => $tim]);
+        $this->timBaru[$ikuId] = '';
 
         MasterIku::lupakanCache();
 
-        session()->flash('status', 'Tim IKU diperbarui.');
+        session()->flash('status', 'Tim ditambahkan ke IKU ini.');
+    }
+
+    public function hapusTim(int $ikuTimId): void
+    {
+        IkuTim::whereKey($ikuTimId)->delete();
+
+        MasterIku::lupakanCache();
+
+        session()->flash('status', 'Tim dihapus dari IKU ini.');
     }
 
     public function tambahManual(int $ikuId, int $userId): void
@@ -97,17 +129,20 @@ class PenugasanIku extends Component
 
     public function render()
     {
-        $ikuList = MasterIku::with(['penugasanManual.user', 'pengecualianOtomatis'])->get();
+        $ikuList = MasterIku::with(['penugasanManual.user', 'pengecualianOtomatis', 'timList'])->get();
 
         $ketuaTimList = User::whereHas('role', fn ($q) => $q->where('nama', 'Ketua Tim'))
             ->where('status_verifikasi', 'terverifikasi')
             ->orderBy('nama')
             ->get();
 
-        // Satu query untuk anggota tim SELURUH tim yang muncul di $ikuList, dikelompokkan
+        // Satu query untuk anggota tim SELURUH tim yang muncul di $ikuList (satu IKU
+        // boleh punya lebih dari satu tim, lihat App\Models\IkuTim), dikelompokkan
         // per tim di PHP — bukan satu query per baris IKU.
+        $semuaNamaTim = $ikuList->flatMap(fn ($iku) => $iku->timList->pluck('tim'))->unique();
+
         $anggotaPerTim = UserTim::with('user')
-            ->whereIn('tim', $ikuList->pluck('tim')->unique()->filter())
+            ->whereIn('tim', $semuaNamaTim)
             ->get()
             ->groupBy('tim')
             ->map(fn ($baris) => $baris->pluck('user')->filter()->unique('id')->values());
@@ -126,7 +161,12 @@ class PenugasanIku extends Component
         // manual, dst) supaya blade tidak menghitung ulang & supaya pencarian/filter
         // status bisa memakainya langsung.
         $data = $ikuList->map(function (MasterIku $iku) use ($anggotaPerTim, $ketuaTimList, $timPerUser) {
-            $anggotaTim = $anggotaPerTim->get($iku->tim, collect());
+            $namaTimIku = $iku->timList->pluck('tim')->all();
+
+            $anggotaTim = collect($namaTimIku)
+                ->flatMap(fn ($tim) => $anggotaPerTim->get($tim, collect()))
+                ->unique('id')
+                ->values();
             $idDikecualikan = $iku->pengecualianOtomatis->pluck('user_id');
 
             $otomatis = $anggotaTim->whereNotIn('id', $idDikecualikan)->values();
@@ -139,13 +179,14 @@ class PenugasanIku extends Component
             $sudahDitugaskan = $manual->pluck('user_id')->merge($otomatis->pluck('id'));
             $kandidat = $ketuaTimList->whereNotIn('id', $sudahDitugaskan)
                 ->sortBy([
-                    fn ($a, $b) => in_array($iku->tim, $timPerUser->get($b->id, []), true) <=> in_array($iku->tim, $timPerUser->get($a->id, []), true),
+                    fn ($a, $b) => (array_intersect($namaTimIku, $timPerUser->get($b->id, [])) !== []) <=> (array_intersect($namaTimIku, $timPerUser->get($a->id, [])) !== []),
                     fn ($a, $b) => $a->nama <=> $b->nama,
                 ])
                 ->values();
 
             return [
                 'iku' => $iku,
+                'namaTimIku' => $namaTimIku,
                 'otomatis' => $otomatis,
                 'dikecualikan' => $dikecualikan,
                 'manual' => $manual,
@@ -164,7 +205,7 @@ class PenugasanIku extends Component
 
                 if (str_contains(mb_strtolower($iku->kode), $kataKunci)
                     || str_contains(mb_strtolower($iku->indikator), $kataKunci)
-                    || str_contains(mb_strtolower((string) $iku->tim), $kataKunci)) {
+                    || collect($baris['namaTimIku'])->contains(fn ($tim) => str_contains(mb_strtolower($tim), $kataKunci))) {
                     return true;
                 }
 
@@ -191,7 +232,7 @@ class PenugasanIku extends Component
             'data' => $data,
             'timPerUser' => $timPerUser,
             'totalIku' => $ikuList->count(),
-            'totalTim' => $ikuList->pluck('tim')->filter()->unique()->count(),
+            'totalTim' => $semuaNamaTim->count(),
             'daftarTim' => MasterIku::daftarTimGabungan(),
             'totalTanpaPenanggungJawab' => $totalTanpaPenanggungJawab,
         ]);

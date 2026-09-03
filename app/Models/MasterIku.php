@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 
 class MasterIku extends Model
@@ -68,6 +69,43 @@ class MasterIku extends Model
                 ? self::SATUAN_PERSEN
                 : self::SATUAN_POIN;
         });
+
+        // Kolom lama master_iku.tim (satu string, dulu SATU-SATUNYA tempat tim
+        // penanggung jawab tersimpan) dipertahankan sebagai jalur tulis ringkas untuk
+        // pemanggil yang belum/tidak perlu memilih banyak tim sekaligus (mis. import
+        // Excel App\Services\MasterIkuImportValidator, fixture pengujian) -- begitu
+        // kolom ini disertakan/berubah pada satu penyimpanan, isinya (boleh dipisah
+        // koma/titik-koma untuk lebih dari satu nama) otomatis disinkronkan jadi
+        // baris-baris iku_tim (lihat timList()/namaTimList()), yang SEKARANG jadi
+        // sumber kebenaran untuk penanggungJawabOtomatis()/daftarTimGabungan().
+        // Jalur tulis BARU (App\Livewire\PenugasanIku::tambahTim()/hapusTim(),
+        // App\Livewire\MasterIku multi-pilih tim) menulis LANGSUNG ke iku_tim tanpa
+        // lewat kolom ini sama sekali -- aman, tidak saling menimpa, karena hook ini
+        // hanya jalan kalau atribut 'tim' benar-benar ikut disimpan.
+        static::saved(function (self $iku) {
+            // isDirty() (BUKAN wasChanged()) -- pada event 'saved', syncOriginal()
+            // belum sempat dipanggil untuk INSERT (Eloquent hanya memanggil
+            // syncChanges() di performUpdate(), tidak di performInsert(), jadi
+            // wasChanged() SELALU false setelah create()) — isDirty() tetap
+            // membandingkan ke $original SEBELUM disinkronkan, benar untuk create()
+            // MAUPUN update().
+            if (! $iku->isDirty('tim')) {
+                return;
+            }
+
+            $daftarTim = collect(preg_split('/[,;]/', (string) $iku->tim))
+                ->map(fn ($t) => trim($t))
+                ->filter()
+                ->unique();
+
+            $iku->timList()->whereNotIn('tim', $daftarTim)->delete();
+
+            foreach ($daftarTim as $tim) {
+                IkuTim::firstOrCreate(['iku_id' => $iku->id, 'tim' => $tim]);
+            }
+
+            static::lupakanCache();
+        });
     }
 
     /**
@@ -107,7 +145,7 @@ class MasterIku extends Model
      * JANGAN dipakai di halaman Master IKU sendiri (App\Livewire\MasterIku) — halaman
      * itu tetap query langsung supaya perubahan sendiri selalu terlihat instan.
      *
-     * @return \Illuminate\Support\Collection<int, self>
+     * @return Collection<int, self>
      */
     public static function daftarUrutKode()
     {
@@ -140,13 +178,34 @@ class MasterIku extends Model
      */
     public static function daftarTimGabungan(): array
     {
-        return Cache::remember('master-iku-tim-gabungan', 300, fn () => static::whereNotNull('tim')->distinct()->pluck('tim')
+        return Cache::remember('master-iku-tim-gabungan', 300, fn () => IkuTim::distinct()->pluck('tim')
             ->merge(UserTim::pluck('tim'))
             ->filter()
             ->unique()
             ->sort()
             ->values()
             ->all());
+    }
+
+    /**
+     * Tim penanggung jawab IKU ini -- SATU IKU boleh punya LEBIH DARI SATU tim
+     * (lihat App\Models\IkuTim). Sumber kebenaran untuk penanggungJawabOtomatis()
+     * di bawah, menggantikan kolom lama master_iku.tim (masih ada, disinkronkan
+     * otomatis ke sini lewat booted(), lihat komentarnya).
+     */
+    public function timList(): HasMany
+    {
+        return $this->hasMany(IkuTim::class, 'iku_id');
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function namaTimList(): array
+    {
+        return $this->relationLoaded('timList')
+            ? $this->timList->pluck('tim')->all()
+            : $this->timList()->pluck('tim')->all();
     }
 
     public function kegiatan(): HasMany
@@ -225,18 +284,24 @@ class MasterIku extends Model
 
     /**
      * Ketua Tim yang otomatis bertanggung jawab atas IKU ini (RF: "via tim") —
-     * dihitung dari keanggotaan tim (user_tim.tim === master_iku.tim), BUKAN
-     * disimpan tersendiri, supaya selalu ikut berubah begitu keanggotaan tim
-     * berubah — dikurangi anggota yang sengaja dikecualikan (lihat
-     * pengecualianOtomatis()) untuk IKU ini saja.
+     * dihitung dari keanggotaan tim (user_tim.tim ada di antara namaTimList() IKU
+     * ini, BOLEH lebih dari satu tim -- lihat timList()), BUKAN disimpan tersendiri,
+     * supaya selalu ikut berubah begitu keanggotaan tim berubah — dikurangi anggota
+     * yang sengaja dikecualikan (lihat pengecualianOtomatis()) untuk IKU ini saja.
      *
-     * @return \Illuminate\Support\Collection<int, User>
+     * @return Collection<int, User>
      */
     public function penanggungJawabOtomatis()
     {
+        $namaTim = $this->namaTimList();
+
+        if ($namaTim === []) {
+            return collect();
+        }
+
         $dikecualikan = $this->pengecualianOtomatis()->pluck('user_id');
 
-        return User::whereHas('timList', fn ($q) => $q->where('tim', $this->tim))
+        return User::whereHas('timList', fn ($q) => $q->whereIn('tim', $namaTim))
             ->whereNotIn('id', $dikecualikan)
             ->get();
     }
@@ -244,7 +309,7 @@ class MasterIku extends Model
     /**
      * Gabungan penanggung jawab otomatis (via tim) + manual, tanpa duplikat.
      *
-     * @return \Illuminate\Support\Collection<int, User>
+     * @return Collection<int, User>
      */
     public function semuaPenanggungJawab()
     {
