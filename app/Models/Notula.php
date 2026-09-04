@@ -123,6 +123,29 @@ class Notula extends Model
         return filled($this->bagian1_html) && filled($this->bagian2_html) && filled($this->bagian3_html);
     }
 
+    /**
+     * Tanggal TTD "Mengetahui" SELALU tanggal saja, TANPA nama hari -- dipetik dari
+     * hari_tanggal rapat (field bebas yang tampil di kepala dokumen, mis. "Selasa, 1
+     * September 2026" atau "Jumat/17 Juli 2026") dengan membuang nama hari & pemisahnya
+     * di depan bila ada, supaya baris TTD tercetak "Kulisusu, 1 September 2026" --
+     * BUKAN ikut mencetak "Selasa,". hari_tanggal sendiri (dipakai di kepala dokumen)
+     * TIDAK diubah -- ini cuma dipakai untuk blok TTD.
+     *
+     * Dipakai baik oleh blok TTD dokumen gabungan (NotulaService::dataNotulaUtuh())
+     * maupun tabel TTD bawaan template .docx (NotulaBagian1DocxService::isiPenutup()),
+     * supaya keduanya SELALU sinkron -- taruh logikanya di sini (bukan diduplikasi di
+     * kedua kelas itu) satu-satunya tempat yang keduanya boleh sama-sama bergantung.
+     */
+    public function tanggalTtd(): ?string
+    {
+        $teks = trim((string) $this->hari_tanggal);
+        if ($teks === '') {
+            return null;
+        }
+
+        return preg_replace('/^(Senin|Selasa|Rabu|Kamis|Jumat|Sabtu|Minggu)\s*[\/,:]\s*/iu', '', $teks);
+    }
+
     public function canTransitionTo(string $status): bool
     {
         return in_array($status, self::TRANSITIONS[$this->status] ?? [], true);

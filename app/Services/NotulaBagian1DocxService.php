@@ -687,16 +687,16 @@ class NotulaBagian1DocxService
      * -- baik terisi atau tidak, "…" placeholder tidak akan pernah tercetak karena
      * seluruh tabelnya sudah tidak ada.
      *
-     * 'tanggal' mengikuti hari_tanggal RAPAT yang sudah diisi Tim SAKIP di Detail
-     * Rapat (sama seperti tampil di kepala dokumen) -- BUKAN tanggal klik "Setuju" di
-     * sistem (Notula::disetujui_pada), yang bisa berbeda dari tanggal rapatnya sendiri.
-     * Konsisten dengan $tanggal di blok TTD dokumen gabungan, lihat
+     * 'tanggal' cuma TANGGAL, tanpa nama hari (lihat Notula::tanggalTtd()) -- mengikuti
+     * hari_tanggal RAPAT yang sudah diisi Tim SAKIP di Detail Rapat, BUKAN tanggal klik
+     * "Setuju" di sistem (Notula::disetujui_pada), yang bisa berbeda dari tanggal
+     * rapatnya sendiri. Konsisten dengan $tanggal di blok TTD dokumen gabungan, lihat
      * NotulaService::dataNotulaUtuh().
      */
     private function isiPenutup(TemplateProcessor $p, Notula $notula): void
     {
         $this->set($p, 'kotaTtd', $notula->kota_ttd);
-        $this->set($p, 'tanggal', $notula->hari_tanggal);
+        $this->set($p, 'tanggal', $notula->tanggalTtd());
         $this->set($p, 'namaKepala', $notula->kepala_satker);
         $this->set($p, 'namaNotulis', $notula->notulis);
     }

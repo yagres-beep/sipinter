@@ -360,12 +360,12 @@ class NotulaService
             'tahun' => $periode->tahun,
             'sertakanTtd' => $sertakanTtd,
             'kotaTtd' => $notula->kota_ttd,
-            // Tanggal TTD mengikuti hari_tanggal RAPAT yang sudah diisi Tim SAKIP di
-            // Detail Rapat (sama seperti tampil di kepala dokumen) -- BUKAN tanggal klik
-            // "Setuju" di sistem (Notula::disetujui_pada), yang bisa berbeda dari
-            // tanggal rapatnya sendiri. Konsisten dengan ttd_kepala di jalur .docx Bagian
-            // I, lihat NotulaBagian1DocxService::isiTtdKepala().
-            'tanggal' => $sertakanTtd ? $notula->hari_tanggal : null,
+            // Tanggal TTD (tanggal SAJA, tanpa nama hari -- lihat Notula::tanggalTtd())
+            // mengikuti hari_tanggal RAPAT yang sudah diisi Tim SAKIP di Detail Rapat --
+            // BUKAN tanggal klik "Setuju" di sistem (Notula::disetujui_pada), yang bisa
+            // berbeda dari tanggal rapatnya sendiri. Konsisten dengan macro {{tanggal}}
+            // di jalur .docx Bagian I, lihat NotulaBagian1DocxService::isiPenutup().
+            'tanggal' => $sertakanTtd ? $notula->tanggalTtd() : null,
             'namaKepala' => $sertakanTtd ? $notula->disetujuiOleh?->nama : null,
             'namaNotulis' => $notula->notulis,
         ];

@@ -112,6 +112,8 @@ class NotulaMenyatuTest extends TestCase
      * Tanggal TTD mengikuti hari_tanggal RAPAT (Detail Rapat), BUKAN tanggal klik
      * "Setuju" di sistem (disetujui_pada) -- keduanya sengaja dibuat BEDA di sini
      * supaya tes ini gagal kalau kode diam-diam kembali memakai disetujui_pada.
+     * Nama harinya juga sengaja DIBUANG (lihat Notula::tanggalTtd()) -- baris TTD
+     * cuma boleh mencetak tanggalnya saja, bukan "Jumat/17 Juli 2026" apa adanya.
      */
     public function test_render_notula_utuh_tanggal_ttd_mengikuti_hari_tanggal_rapat(): void
     {
@@ -130,7 +132,8 @@ class NotulaMenyatuTest extends TestCase
 
         $html = app(NotulaService::class)->renderNotulaUtuhHtml($notula, sertakanTtd: true);
 
-        $this->assertStringContainsString('Jumat/17 Juli 2026', $html);
+        $this->assertStringContainsString('17 Juli 2026', $html);
+        $this->assertStringNotContainsString('Jumat/17 Juli 2026', $html);
         $this->assertStringNotContainsString('25 Agustus 2026', $html);
     }
 
