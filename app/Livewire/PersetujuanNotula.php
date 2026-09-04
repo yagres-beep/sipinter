@@ -120,7 +120,7 @@ class PersetujuanNotula extends Component
         $this->cacheNotulaDihitung = true;
         $bulanPertama = ($this->triwulan - 1) * 3 + 1;
 
-        return $this->cacheNotula = Notula::with(['periode', 'disetujuiOleh'])
+        return $this->cacheNotula = Notula::with(['periode', 'disetujuiOleh', 'riwayatStatus.user'])
             ->whereHas('periode', fn ($q) => $q->where('tahun', $this->tahun)->where('bulan', $bulanPertama))
             ->first();
     }
@@ -137,6 +137,7 @@ class PersetujuanNotula extends Component
             app(NotulaService::class)->setujui($notula, Auth::user());
 
             session()->flash('status', 'Notula berhasil disetujui. Blok TTD elektronik & PDF final sudah tersedia.');
+            $this->cacheNotulaDihitung = false;
         } catch (InvalidStatusTransitionException $e) {
             $this->addError('aksi', $e->getMessage());
         }
@@ -165,10 +166,11 @@ class PersetujuanNotula extends Component
         }
 
         try {
-            app(NotulaService::class)->kembalikan($notula, $this->catatanPengembalian);
+            app(NotulaService::class)->kembalikan($notula, $this->catatanPengembalian, Auth::user());
 
             session()->flash('status', 'Notula dikembalikan ke Tim SAKIP.');
             $this->reset(['catatanPengembalian', 'tampilkanFormKembalikan']);
+            $this->cacheNotulaDihitung = false;
         } catch (InvalidStatusTransitionException $e) {
             $this->addError('aksi', $e->getMessage());
         }

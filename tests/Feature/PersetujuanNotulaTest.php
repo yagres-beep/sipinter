@@ -124,6 +124,29 @@ class PersetujuanNotulaTest extends TestCase
         $this->actingAs($this->buatUser('Tim SAKIP'))->get('/persetujuan')->assertForbidden();
     }
 
+    public function test_kepala_mengembalikan_notula_mencatat_riwayat_dan_tampil_di_riwayat_tindakan(): void
+    {
+        Queue::fake();
+
+        $kepala = $this->buatUser('Kepala');
+        $this->actingAs($kepala);
+        $data = $this->siapkanNotulaMenungguDenganIkuTerverifikasi();
+
+        Livewire::test(PersetujuanNotula::class)
+            ->set('tahun', 2026)
+            ->set('triwulan', 3)
+            ->call('bukaFormKembalikan')
+            ->set('catatanPengembalian', 'Bagian II perlu diperbaiki')
+            ->call('kembalikan')
+            ->assertSee('Riwayat Tindakan')
+            ->assertSee('Bagian II perlu diperbaiki');
+
+        $riwayat = $data['notula']->fresh()->riwayatStatus->first();
+        $this->assertSame(Notula::STATUS_DIKEMBALIKAN, $riwayat->status);
+        $this->assertSame($kepala->id, $riwayat->user_id);
+        $this->assertSame('Bagian II perlu diperbaiki', $riwayat->catatan);
+    }
+
     public function test_ketua_tim_bisa_ajukan_ulang_kegiatan_setelah_dikembalikan_kepala(): void
     {
         $kepala = $this->buatUser('Kepala');

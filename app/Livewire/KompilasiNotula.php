@@ -8,6 +8,7 @@ use App\Models\Notula;
 use App\Models\User;
 use App\Services\NotulaService;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use RuntimeException;
@@ -351,7 +352,7 @@ class KompilasiNotula extends Component
     public function gabungkan(): void
     {
         try {
-            app(NotulaService::class)->gabungkan($this->notula());
+            app(NotulaService::class)->gabungkan($this->notula(), Auth::user());
             session()->flash('status', 'Ketiga bagian berhasil digabungkan. Notula menunggu persetujuan Kepala.');
         } catch (RuntimeException $e) {
             $this->addError('gabung', $e->getMessage());

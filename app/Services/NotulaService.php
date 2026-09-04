@@ -468,7 +468,7 @@ class NotulaService
      * tombol "kirim" terpisah, jadi "sudah digabung" DAN "menunggu persetujuan"
      * adalah hal yang sama.
      */
-    public function gabungkan(Notula $notula): void
+    public function gabungkan(Notula $notula, ?User $user = null): void
     {
         if (! $notula->bagianLengkap()) {
             throw new RuntimeException('Bagian I, II, dan III harus lengkap terlebih dahulu sebelum digabungkan.');
@@ -481,7 +481,7 @@ class NotulaService
         $notula->update(['pdf_gabungan' => "notula/{$notula->id}/gabungan-draf.pdf"]);
 
         if (in_array($notula->status, [Notula::STATUS_DRAFT, Notula::STATUS_DIKEMBALIKAN], true)) {
-            $notula->kirimKePersetujuan();
+            $notula->kirimKePersetujuan($user);
         }
     }
 
@@ -557,9 +557,9 @@ class NotulaService
     /**
      * RF-44: Kepala mengembalikan notula ke Tim SAKIP beserta catatan alasannya.
      */
-    public function kembalikan(Notula $notula, string $catatan): void
+    public function kembalikan(Notula $notula, string $catatan, ?User $user = null): void
     {
-        $notula->kembalikan($catatan);
+        $notula->kembalikan($catatan, $user);
     }
 
     /**
@@ -596,7 +596,7 @@ class NotulaService
 
             if ($notula->status === Notula::STATUS_MENUNGGU_PERSETUJUAN) {
                 $indikator = $capaian->masterIku->indikator ?? "IKU #{$capaian->iku_id}";
-                $notula->kembalikan("Isian IKU \"{$indikator}\" dikembalikan langsung ke Ketua Tim oleh Kepala. Catatan: {$catatan}");
+                $notula->kembalikan("Isian IKU \"{$indikator}\" dikembalikan langsung ke Ketua Tim oleh Kepala. Catatan: {$catatan}", $kepala);
             }
         });
     }

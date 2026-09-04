@@ -7,6 +7,7 @@ use App\Exceptions\InvalidStatusTransitionException;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Notula extends Model
@@ -85,6 +86,24 @@ class Notula extends Model
     }
 
     /**
+     * Riwayat tindakan (kirim ke Kepala / disetujui / dikembalikan), ditampilkan
+     * sebagai "Riwayat Tindakan" di halaman Persetujuan Notula.
+     */
+    public function riwayatStatus(): HasMany
+    {
+        return $this->hasMany(RiwayatStatusNotula::class)->latest('id');
+    }
+
+    protected function catatRiwayat(?User $user, ?string $catatan = null): void
+    {
+        $this->riwayatStatus()->create([
+            'status' => $this->status,
+            'user_id' => $user?->id,
+            'catatan' => $catatan,
+        ]);
+    }
+
+    /**
      * Arsip PDF final di Drive institusi (RF-44a), lewat pola Berkas polimorfik yang
      * sama dipakai bukti dukung lain — kategori "notula".
      */
@@ -121,9 +140,11 @@ class Notula extends Model
     /**
      * Tim SAKIP mengirim notula gabungan ke Kepala (draft/dikembalikan -> menunggu_persetujuan).
      */
-    public function kirimKePersetujuan(): void
+    public function kirimKePersetujuan(?User $user = null): void
     {
         $this->transitionTo(self::STATUS_MENUNGGU_PERSETUJUAN);
+
+        $this->catatRiwayat($user);
 
         event(new NotulaStatusDiubah($this));
     }
@@ -141,16 +162,20 @@ class Notula extends Model
             'disetujui_oleh_user_id' => $kepala->id,
             'disetujui_pada' => now(),
         ]);
+
+        $this->catatRiwayat($kepala);
     }
 
     /**
      * Kepala mengembalikan notula ke Tim SAKIP (menunggu_persetujuan -> dikembalikan).
      */
-    public function kembalikan(string $catatan): void
+    public function kembalikan(string $catatan, ?User $user = null): void
     {
         $this->transitionTo(self::STATUS_DIKEMBALIKAN);
 
         $this->update(['catatan_pengembalian' => $catatan]);
+
+        $this->catatRiwayat($user, $catatan);
 
         event(new NotulaStatusDiubah($this));
     }
