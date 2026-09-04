@@ -290,6 +290,25 @@ class KompilasiNotulaTest extends TestCase
     }
 
     /**
+     * susunBagianSatu() HARUS membuang tabel "Mengetahui/Kepala Satker/Notulis" bawaan
+     * template -- HTML-nya disisipkan ke tengah dokumen gabungan Bagian I+II+III, yang
+     * sudah punya blok TTD akhirnya sendiri di paling bawah (lihat pdf.notula-utuh,
+     * .ttd-blok). Tanpa ini, blok itu tercetak DUA KALI di dokumen gabungan/final --
+     * lihat NotulaBagian1DocxService::generate(), parameter sertakanBlokTtdMandiri.
+     */
+    public function test_susun_bagian_satu_membuang_blok_ttd_mandiri_bawaan_template(): void
+    {
+        $this->fakeKonversiBagian1KeXmlMentah();
+
+        MasterIku::create(['kode' => '9008', 'indikator' => 'Uji IKU Delapan', 'sasaran' => 'Sasaran Uji', 'tim' => 'Uji', 'penanggung_jawab' => 'A']);
+
+        $notula = app(NotulaService::class)->untukTriwulan(2026, 1);
+        $html = app(NotulaService::class)->susunBagianSatu($notula);
+
+        $this->assertStringNotContainsString('Kepala Satker', $html);
+    }
+
+    /**
      * susunBagianSatu() harus benar-benar menjalankan seluruh pipa: generate docx dari
      * template resmi -> konversi ke HTML -> simpan ke bagian1_html -> bersihkan berkas
      * docx sementara (tidak dibiarkan menumpuk di storage/app/private).

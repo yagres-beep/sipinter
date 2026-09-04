@@ -891,10 +891,11 @@ class NotulaDownloadTest extends TestCase
     }
 
     /**
-     * Header rapat (hari/waktu/tempat/pimpinan) dan tempat ttd Notulis harus benar-benar
-     * tercetak di .docx begitu diisi lewat Detail Rapat -- bukan cuma "…". Tempat ttd
-     * Kepala SENGAJA belum tercetak di sini (notula masih draft) -- lihat
-     * test_docx_bagian1_mencetak_ttd_kepala_setelah_disetujui() untuk kasus disetujui.
+     * Header rapat (hari/waktu/tempat/pimpinan) harus benar-benar tercetak di .docx
+     * begitu diisi lewat Detail Rapat -- bukan cuma "…". Tabel TTD (Mengetahui/Kepala/
+     * Notulis) SENGAJA tidak tercetak SAMA SEKALI di sini (notula masih draft, belum
+     * disetujui Kepala) -- lihat test_docx_bagian1_mencetak_ttd_setelah_disetujui()
+     * untuk kasus disetujui.
      */
     public function test_docx_bagian1_mencetak_detail_rapat_dan_ttd(): void
     {
@@ -918,18 +919,20 @@ class NotulaDownloadTest extends TestCase
         $this->assertStringContainsString('09.00 - 11.00 WITA', $xml);
         $this->assertStringContainsString('Ruang Rapat Uji', $xml);
         $this->assertStringContainsString('Budi Pimpinan', $xml);
-        $this->assertStringContainsString('Sri Notulis', $xml);
-        $this->assertStringContainsString('Kulisusu', $xml);
+        $this->assertStringNotContainsString('Sri Notulis', $xml);
+        $this->assertStringNotContainsString('Kulisusu', $xml);
         $this->assertStringNotContainsString('Andi Kepala', $xml);
+        $this->assertStringNotContainsString('Mengetahui,', $xml);
     }
 
     /**
-     * Tempat ttd Kepala hanya tercetak begitu notula berstatus disetujui (RF-44) --
-     * sebelum itu dikosongkan (lihat test di atas) supaya dokumen tidak tampak sudah
-     * ditandatangani padahal baru isian form. Tanggal "Mengetahui" yang menyertainya
-     * mengikuti hari_tanggal rapat, bukan tanggal klik "Setuju" di sistem.
+     * Tabel TTD (Mengetahui/Kepala/Notulis) hanya tercetak begitu notula berstatus
+     * disetujui (RF-44) -- sebelum itu tabelnya dibuang total (lihat test di atas)
+     * supaya draf tidak tampak sudah tinggal ditandatangani padahal baru isian form.
+     * Tanggal "Mengetahui" yang menyertainya mengikuti hari_tanggal rapat, bukan
+     * tanggal klik "Setuju" di sistem.
      */
-    public function test_docx_bagian1_mencetak_ttd_kepala_setelah_disetujui(): void
+    public function test_docx_bagian1_mencetak_ttd_setelah_disetujui(): void
     {
         $this->loginSebagai('Tim SAKIP');
 
@@ -945,7 +948,10 @@ class NotulaDownloadTest extends TestCase
 
         $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
 
+        $this->assertStringContainsString('Mengetahui,', $xml);
         $this->assertStringContainsString('Andi Kepala', $xml);
+        $this->assertStringContainsString('Sri Notulis', $xml);
+        $this->assertStringContainsString('Kulisusu', $xml);
         $this->assertStringContainsString('Senin, 12 Oktober 2026', $xml);
     }
 

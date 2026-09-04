@@ -61,7 +61,7 @@
        tapi tetap boleh menyambung di halaman yang sama bila muat. --}}
   .ttd-blok { margin-top: 40px; page-break-inside: avoid; }
   .ttd-kolom { width: 46%; }
-  .ttd-kolom.kiri { float: left; text-align: left; }
+  .ttd-kolom.kiri { float: left; text-align: center; }
   .ttd-kolom.kanan { float: right; text-align: center; }
   .ttd-spasi { height: 46px; }
 </style>

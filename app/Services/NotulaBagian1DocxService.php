@@ -54,8 +54,22 @@ class NotulaBagian1DocxService
      * yang sejak susunBagianSatu() memakai kelas ini untuk menghasilkan HTML Bagian I
      * (lihat NotulaService) sudah jadi dependensi searah lainnya -- dependensi dua
      * arah di antara keduanya akan bikin container Laravel gagal resolve (circular).
+     *
+     * $sertakanBlokTtdMandiri mengatur tabel "Mengetahui/Kepala.../Notulis" bawaan
+     * template (setelah {{bagian_3}}, lihat hapusBlokTtdMandiri()) -- TETAP boleh
+     * disertakan (default true) untuk unduhan Bagian I .docx tersendiri
+     * (NotulaDownloadController::unduhBagian1Docx()) karena dokumen itu berdiri
+     * sendiri dan butuh tempat TTD-nya sendiri. DIBUANG (false) khusus saat dipanggil
+     * dari NotulaService::susunBagianSatu() -- hasil HTML-nya disisipkan ke tengah
+     * dokumen gabungan Bagian I+II+III, yang SUDAH punya blok TTD akhirnya sendiri di
+     * paling bawah (lihat resources/views/pdf/notula-utuh.blade.php, .ttd-blok) --
+     * tanpa ini, blok "Mengetahui/Kepala.../Notulis" muncul DUA KALI di dokumen
+     * gabungan/final (sekali dari sini di tengah, sekali lagi di akhir).
+     *
+     * TERLEPAS dari $sertakanBlokTtdMandiri, tabelnya JUGA selalu dibuang bila notula
+     * belum berstatus disetujui (RF-44) -- lihat catatan hapusBlokTtdMandiri().
      */
-    public function generate(Notula $notula, array $data, string $outputPath): string
+    public function generate(Notula $notula, array $data, string $outputPath, bool $sertakanBlokTtdMandiri = true): string
     {
         $templatePath = $this->resolveTemplatePath();
 
@@ -70,6 +84,9 @@ class NotulaBagian1DocxService
         $this->isiPerIkuDinamis($processor, $templatePath, $data);
         $this->isiHeader($processor, $notula, $data);
         $this->isiPenutup($processor, $notula);
+        if (! $sertakanBlokTtdMandiri || $notula->status !== Notula::STATUS_DISETUJUI) {
+            $this->hapusBlokTtdMandiri($processor);
+        }
         $this->cegahBarisTerpotongAntarHalaman($processor);
 
         $dir = dirname($outputPath);
@@ -661,41 +678,70 @@ class NotulaBagian1DocxService
      * {{bagian_2}} dan {{bagian_3}} SENGAJA dibiarkan sebagai kode mentah (tidak
      * disubstitusi) -- keduanya jadi penanda tempat Tim SAKIP menempelkan/menggabungkan
      * dokumen Bagian II dan III yang disusun terpisah di luar sistem.
+     *
+     * Isi tabel "Mengetahui/Kepala.../Notulis" bawaan template diisi TANPA SYARAT di
+     * sini -- tabelnya sendiri (label + keempat macro ini) baru tercetak SAMA SEKALI
+     * bila notula sudah disetujui Kepala (RF-44), dibuang TOTAL sebelum itu lewat
+     * hapusBlokTtdMandiri() yang dipanggil dari generate(). Jadi tidak perlu lagi
+     * kosongkan nilai per-macro seperti sebelumnya (bandingkan versi lama isiTtdKepala())
+     * -- baik terisi atau tidak, "…" placeholder tidak akan pernah tercetak karena
+     * seluruh tabelnya sudah tidak ada.
+     *
+     * 'tanggal' mengikuti hari_tanggal RAPAT yang sudah diisi Tim SAKIP di Detail
+     * Rapat (sama seperti tampil di kepala dokumen) -- BUKAN tanggal klik "Setuju" di
+     * sistem (Notula::disetujui_pada), yang bisa berbeda dari tanggal rapatnya sendiri.
+     * Konsisten dengan $tanggal di blok TTD dokumen gabungan, lihat
+     * NotulaService::dataNotulaUtuh().
      */
     private function isiPenutup(TemplateProcessor $p, Notula $notula): void
     {
-        $this->set($p, 'kota_tanggal_ttd', $notula->kota_ttd);
-        $this->isiTtdKepala($p, $notula);
-        $this->set($p, 'ttd_notulis', $notula->notulis);
+        $this->set($p, 'kotaTtd', $notula->kota_ttd);
+        $this->set($p, 'tanggal', $notula->hari_tanggal);
+        $this->set($p, 'namaKepala', $notula->kepala_satker);
+        $this->set($p, 'namaNotulis', $notula->notulis);
     }
 
     /**
-     * Tempat ttd Kepala HANYA tercetak setelah notula disetujui Kepala (RF-44) --
-     * SEBELUM itu dikosongkan TOTAL (bukan placeholder "…" dari set(), lewat
-     * setValue() langsung di bawah) supaya pratinjau Kompilasi Notula & unduhan
-     * Bagian I tidak menampilkan nama Kepala seolah dokumen sudah ditandatangani
-     * padahal baru isian form Detail Rapat -- notula BELUM disetujui hanya
-     * menyisakan tempat ttd Notulis (lihat isiPenutup()).
+     * Buang tabel "Mengetahui/Kepala.../Notulis" bawaan template -- satu-satunya
+     * <w:tbl> di dokumen yang memuat label "Kepala Badan Pusat Statistik Kabupaten
+     * Buton Utara" (dicari lewat teks label itu, BUKAN posisi relatif ke {{bagian_3}},
+     * supaya tetap kena walau template disunting ulang Tim SAKIP selama labelnya
+     * sendiri tidak diganti), berikut satu <w:p/> kosong tepat sebelumnya (pemisah
+     * antar-paragraf {{bagian_3}} dan tabel ini di template asli).
      *
-     * Tanggal "Mengetahui" yang menyertai nama Kepala mengikuti hari_tanggal
-     * rapat yang SUDAH diisi Tim SAKIP di Detail Rapat -- BUKAN tanggal klik
-     * "Setuju" di sistem (Notula::disetujui_pada), yang bisa berbeda dari
-     * tanggal rapatnya sendiri.
+     * Dipanggil dari generate() bila $sertakanBlokTtdMandiri false (dokumen gabungan,
+     * lihat catatan parameter itu di generate()) ATAU notula BELUM disetujui Kepala
+     * (RF-44) -- tabel TTD ini (baik untuk unduhan Bagian I sendirian maupun dokumen
+     * gabungan) baru tercetak SAMA SEKALI setelah disetujui, supaya draf tidak
+     * menampilkan tempat TTD seolah tinggal ditandatangani padahal baru isian form
+     * Detail Rapat.
+     *
+     * Tidak melakukan apa-apa (bukan melempar exception) bila label tsb tidak
+     * ditemukan -- template kustom Tim SAKIP boleh saja tidak/sudah tidak punya blok
+     * ini sama sekali.
      */
-    private function isiTtdKepala(TemplateProcessor $p, Notula $notula): void
+    private function hapusBlokTtdMandiri(TemplateProcessor $p): void
     {
-        if ($notula->status !== Notula::STATUS_DISETUJUI) {
-            $p->setValue('ttd_kepala', '', -1);
+        $xml = $this->getMainPart($p);
 
+        $labelPos = strpos($xml, 'Kepala Badan Pusat Statistik Kabupaten Buton Utara</w:t>');
+        if ($labelPos === false) {
             return;
         }
 
-        $isi = trim((string) $notula->kepala_satker);
-        if ($notula->hari_tanggal) {
-            $isi .= ($isi !== '' ? "\n" : '').$notula->hari_tanggal;
+        $tblStart = strrpos(substr($xml, 0, $labelPos), '<w:tbl>');
+        $tblEndTagPos = strpos($xml, '</w:tbl>', $labelPos);
+        if ($tblStart === false || $tblEndTagPos === false) {
+            return;
+        }
+        $tblEnd = $tblEndTagPos + strlen('</w:tbl>');
+
+        $before = substr($xml, 0, $tblStart);
+        if (str_ends_with($before, '<w:p/>')) {
+            $before = substr($before, 0, -strlen('<w:p/>'));
         }
 
-        $this->set($p, 'ttd_kepala', $isi);
+        $this->setMainPart($p, $before.substr($xml, $tblEnd));
     }
 
     // ------------------------------------------------------------------

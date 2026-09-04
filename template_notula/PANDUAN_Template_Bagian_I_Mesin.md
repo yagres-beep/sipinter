@@ -41,9 +41,20 @@ Delimiter macro-nya `{{...}}` (bukan `${...}` bawaan PhpWord — lihat
 `{{tahun}}`, `{{triwulan_angka}}`, `{{nama_satker}}`, `{{agenda_pembahasan}}`,
 `{{hari_tanggal}}`, `{{waktu}}`, `{{tempat}}`, `{{pimpinan_rapat}}`,
 `{{capaian_triwulanan_persen}}`, `{{capaian_pk_persen}}`, `{{lampiran_basis_data}}`,
-`{{kota_tanggal_ttd}}`, `{{ttd_kepala}}`, `{{ttd_notulis}}`, `{{bagian_2}}`, `{{bagian_3}}`
-(dua yang terakhir SENGAJA dibiarkan sebagai kode mentah — jadi penanda tempat Tim
-SAKIP menempelkan Bagian II/III yang disusun terpisah di luar sistem).
+`{{kotaTtd}}`, `{{tanggal}}`, `{{namaKepala}}`, `{{namaNotulis}}`, `{{bagian_2}}`,
+`{{bagian_3}}` (dua yang terakhir SENGAJA dibiarkan sebagai kode mentah — jadi
+penanda tempat Tim SAKIP menempelkan Bagian II/III yang disusun terpisah di luar
+sistem).
+
+`{{kotaTtd}}`/`{{tanggal}}`/`{{namaKepala}}`/`{{namaNotulis}}` ada di dalam SATU
+tabel "Mengetahui/Kepala Badan Pusat Statistik Kabupaten Buton Utara/Notulis" tepat
+setelah `{{bagian_3}}` — tabel ini (dicari lewat teks label "Kepala Badan Pusat
+Statistik Kabupaten Buton Utara", lihat `NotulaBagian1DocxService::
+hapusBlokTtdMandiri()`) DIBUANG TOTAL, bukan cuma dikosongkan, bila notula belum
+berstatus disetujui Kepala (RF-44) ATAU saat dipakai membangun dokumen gabungan
+Bagian I+II+III (yang punya blok TTD akhirnya sendiri, lihat `pdf.notula-utuh.
+blade.php`). Jadi label tabel itu JANGAN diganti tanpa ikut menyesuaikan teks yang
+dicari `hapusBlokTtdMandiri()`.
 
 ### Blok berulang per IKU: `{{iku_blok}}` ... `{{/iku_blok}}`
 

@@ -77,7 +77,11 @@ class NotulaService
         $this->pastikanFolder($dir);
         $docxPath = $dir.'/bagian1.docx';
 
-        $this->docx->generate($notula, $data, $docxPath);
+        // sertakanBlokTtdMandiri: false -- HTML ini disisipkan ke tengah dokumen
+        // gabungan Bagian I+II+III, yang sudah punya blok TTD akhirnya sendiri di
+        // paling bawah (lihat pdf.notula-utuh, .ttd-blok) -- lihat catatan parameter
+        // itu di NotulaBagian1DocxService::generate().
+        $this->docx->generate($notula, $data, $docxPath, sertakanBlokTtdMandiri: false);
 
         try {
             $html = $this->konversi->convertToHtml($docxPath, $dir);
@@ -356,11 +360,12 @@ class NotulaService
             'tahun' => $periode->tahun,
             'sertakanTtd' => $sertakanTtd,
             'kotaTtd' => $notula->kota_ttd,
-            // disetujui_pada tersimpan UTC (config('app.timezone')) -- ->wita() dulu
-            // supaya tanggal TTD tidak meleset sehari untuk persetujuan dekat tengah
-            // malam WITA (mis. disetujui 23:30 WITA = 15:30 UTC hari yang sama, tapi
-            // 00:30 WITA keesokan harinya = 16:30 UTC hari SEBELUMNYA).
-            'tanggal' => $sertakanTtd ? $notula->disetujui_pada?->wita()->translatedFormat('d F Y') : null,
+            // Tanggal TTD mengikuti hari_tanggal RAPAT yang sudah diisi Tim SAKIP di
+            // Detail Rapat (sama seperti tampil di kepala dokumen) -- BUKAN tanggal klik
+            // "Setuju" di sistem (Notula::disetujui_pada), yang bisa berbeda dari
+            // tanggal rapatnya sendiri. Konsisten dengan ttd_kepala di jalur .docx Bagian
+            // I, lihat NotulaBagian1DocxService::isiTtdKepala().
+            'tanggal' => $sertakanTtd ? $notula->hari_tanggal : null,
             'namaKepala' => $sertakanTtd ? $notula->disetujuiOleh?->nama : null,
             'namaNotulis' => $notula->notulis,
         ];
