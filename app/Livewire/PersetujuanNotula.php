@@ -15,6 +15,12 @@ use Livewire\Component;
  * Kepala meninjau PDF notula gabungan (belum ber-TTD) lalu menyetujui atau
  * mengembalikannya ke Tim SAKIP beserta catatan. Setelah disetujui, blok TTD
  * elektronik + tanggal otomatis muncul pada PDF final dan diarsipkan ke Drive.
+ *
+ * Persetujuan BUKAN titik akhir yang mengunci selamanya: bila Kepala menemukan isian
+ * IKU yang keliru setelah notula ber-TTD, isian itu tetap bisa dikembalikan dari sini —
+ * notula triwulan ybs otomatis ditarik lagi ke awal (draft) sebagai VERSI BERIKUTNYA
+ * (lihat NotulaService::kembalikanIsian() & Notula::bukaVersiBaru()) untuk disusun ulang
+ * Tim SAKIP lalu disetujui ulang di halaman ini juga.
  */
 class PersetujuanNotula extends Component
 {
@@ -63,9 +69,10 @@ class PersetujuanNotula extends Component
     /**
      * Daftar IKU (Capaian) triwulan yang sedang ditinjau, supaya Kepala bisa melihat rincian
      * per-IKU (bukan cuma PDF gabungan) dan menunjuk isian mana yang perlu dikembalikan —
-     * lihat kembalikanIsian(). "diverifikasi" adalah satu-satunya status yang tombol
-     * pengembaliannya aktif (lihat Capaian::bisaDikembalikanOlehKepala()); status lain
-     * (dikembalikan/disetujui) ditampilkan sebagai konteks saja.
+     * lihat kembalikanIsian(). Tombol pengembaliannya aktif untuk status "diverifikasi"
+     * (notula sedang ditinjau) MAUPUN "disetujui" (notula sudah ber-TTD, pengembalian
+     * membuka versi barunya) — lihat Capaian::bisaDikembalikanOlehKepala(); status
+     * "dikembalikan" ditampilkan sebagai konteks saja.
      */
     protected function daftarCapaian()
     {
@@ -103,9 +110,15 @@ class PersetujuanNotula extends Component
         try {
             app(NotulaService::class)->kembalikanIsian($capaian, Auth::user(), $this->catatanKembalikanIsian);
 
-            session()->flash('status', 'Isian dikembalikan langsung ke Ketua Tim.');
             $this->reset(['capaianDikembalikanId', 'catatanKembalikanIsian']);
             $this->cacheNotulaDihitung = false;
+
+            $notula = $this->notula();
+
+            session()->flash('status', 'Isian dikembalikan langsung ke Ketua Tim.'
+                .($notula && $notula->status === Notula::STATUS_DRAFT && $notula->versiSaatIni() > 1
+                    ? ' Notula yang sudah disetujui ditarik kembali ke awal sebagai versi '.$notula->versiSaatIni().' — Tim SAKIP menyusun & mengirim ulang, lalu Anda membubuhkan persetujuan lagi.'
+                    : ''));
         } catch (InvalidStatusTransitionException $e) {
             $this->addError('aksiIsian', $e->getMessage());
         }

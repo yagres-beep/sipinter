@@ -217,14 +217,20 @@ class Capaian extends Model
 
     /**
      * Kepala boleh mengembalikan isian ini langsung ke Ketua Tim (lihat
-     * NotulaService::kembalikanIsian()) HANYA selagi berstatus "diverifikasi" — yaitu saat
-     * notula yang memuatnya sedang ditinjau Kepala. Sebelum diverifikasi bukan urusan Kepala
-     * (masih di tangan Tim SAKIP); sesudah disetujui, pembukaan kembali sudah difasilitasi
-     * jalur terpisah (lihat VerifikasiCapaian::bukaKembali(), khusus Tim SAKIP).
+     * NotulaService::kembalikanIsian()) selagi berstatus "diverifikasi" (notula yang
+     * memuatnya sedang ditinjau Kepala) MAUPUN "disetujui" (notula triwulan itu sudah
+     * ber-TTD, tapi Kepala baru menemukan isian yang keliru setelahnya) — pada kasus
+     * kedua, notulanya ikut dibuka lagi dari awal sebagai versi baru, lihat
+     * Notula::bukaVersiBaru(), supaya dokumen final tidak pernah berisi data yang
+     * sudah diketahui salah tanpa persetujuan ulang.
+     *
+     * Sebelum diverifikasi bukan urusan Kepala (masih di tangan Tim SAKIP). Tim SAKIP
+     * punya jalurnya sendiri untuk membuka isian yang sudah disetujui (lihat
+     * VerifikasiCapaian::bukaKembali()) — keduanya berdiri sendiri.
      */
     public function bisaDikembalikanOlehKepala(): bool
     {
-        return $this->status === self::STATUS_DIVERIFIKASI;
+        return in_array($this->status, [self::STATUS_DIVERIFIKASI, self::STATUS_DISETUJUI], true);
     }
 
     /**

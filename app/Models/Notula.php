@@ -41,7 +41,12 @@ class Notula extends Model
         // untuk digabung ulang (lihat Notula::tandaiPerluDigabungUlang()).
         self::STATUS_MENUNGGU_PERSETUJUAN => [self::STATUS_DISETUJUI, self::STATUS_DIKEMBALIKAN, self::STATUS_DRAFT],
         self::STATUS_DIKEMBALIKAN => [self::STATUS_MENUNGGU_PERSETUJUAN],
-        self::STATUS_DISETUJUI => [],
+        // "Disetujui" BUKAN lagi jalan buntu: bila isian yang termuat di dalamnya
+        // berubah setelah ditandatangani (Kepala mengembalikan satu isian IKU, atau
+        // Tim SAKIP mengganti Bagian I/II/III), notula ditarik balik ke draft sebagai
+        // VERSI BARU — lihat bukaVersiBaru(). Dari draft alurnya kembali normal:
+        // digabung ulang -> menunggu persetujuan -> Kepala membubuhkan TTD lagi.
+        self::STATUS_DISETUJUI => [self::STATUS_DRAFT],
     ];
 
     protected $fillable = [
@@ -63,6 +68,7 @@ class Notula extends Model
         'pdf_gabungan',
         'pdf_final',
         'status',
+        'versi',
         'disetujui_oleh_user_id',
         'disetujui_pada',
         'catatan_pengembalian',
@@ -72,8 +78,22 @@ class Notula extends Model
     {
         return [
             'disetujui_pada' => 'datetime',
+            'versi' => 'integer',
         ];
     }
+
+    /**
+     * Notula dibuat lewat firstOrCreate() tanpa menyebut 'versi' (lihat
+     * NotulaService::untukTriwulan()) — tanpa default di sisi MODEL, instance yang baru
+     * saja dibuat punya versi null sampai di-refresh, padahal nilainya langsung dipakai
+     * menyusun nama berkas. Default di sini membuatnya SELALU terisi 1, sama dengan
+     * default kolomnya di basis data.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'versi' => 1,
+    ];
 
     public function periode(): BelongsTo
     {
@@ -204,16 +224,111 @@ class Notula extends Model
     }
 
     /**
-     * RF-42e: dipanggil saat Bagian II/III diganti — hasil gabungan lama tidak lagi
-     * valid, dan bila notula sudah terlanjur menunggu persetujuan Kepala, ditarik
-     * kembali ke draft supaya Tim SAKIP wajib menggabungkan ulang sebelum dikirim lagi.
+     * RF-42e: dipanggil saat isi notula berubah (Bagian I disunting, Bagian II/III
+     * diganti) — hasil gabungan lama tidak lagi valid:
+     *
+     * - menunggu persetujuan -> ditarik kembali ke draft, supaya Tim SAKIP wajib
+     *   menggabungkan ulang sebelum dikirim lagi (versi TIDAK naik: dokumen itu
+     *   belum pernah ditandatangani siapa pun).
+     * - sudah DISETUJUI -> dibuka sebagai VERSI BARU (lihat bukaVersiBaru()), karena
+     *   dokumen yang sudah ber-TTD tidak boleh diam-diam berubah isinya; yang beredar
+     *   harus dokumen baru yang disetujui ulang.
      */
-    public function tandaiPerluDigabungUlang(): void
+    public function tandaiPerluDigabungUlang(?User $user = null, ?string $catatan = null): void
     {
+        if ($this->status === self::STATUS_DISETUJUI) {
+            $this->bukaVersiBaru($user, $catatan ?? 'Isi notula diubah setelah disetujui — notula dibuka kembali sebagai versi baru dan perlu digabung serta disetujui ulang.');
+
+            return;
+        }
+
         if ($this->status === self::STATUS_MENUNGGU_PERSETUJUAN) {
             $this->transitionTo(self::STATUS_DRAFT);
         }
 
         $this->update(['pdf_gabungan' => null, 'pdf_final' => null]);
+    }
+
+    /**
+     * Tarik notula yang SUDAH disetujui kembali ke awal (draft) sebagai versi
+     * berikutnya — dipakai saat ada data/isian yang berubah setelah notula
+     * ditandatangani: Kepala mengembalikan satu isian IKU dari halaman Persetujuan
+     * (lihat NotulaService::kembalikanIsian()), atau Tim SAKIP menyunting/mengganti
+     * salah satu bagian (lihat tandaiPerluDigabungUlang() di atas).
+     *
+     * Kolom hasil & persetujuan DIKOSONGKAN karena seluruhnya menggambarkan versi
+     * SEBELUMNYA, bukan versi yang sedang disusun ini: alur wajib diulang dari awal
+     * (gabungkan -> kirim ke Kepala -> Kepala membubuhkan TTD lagi). Jejak versi lama
+     * TIDAK hilang — berkas PDF tiap versi tersimpan dengan nama berbeda (lihat
+     * namaUnduhan(), dipakai NotulaService::gabungkan()/setujui() termasuk untuk nama
+     * arsip Drive yang dicatat sebagai App\Models\Berkas tersendiri per versi), dan
+     * siapa/kapan menyetujuinya tetap tercatat di riwayatStatus().
+     *
+     * Aman dipanggil pada status apa pun: hanya berlaku untuk notula yang benar-benar
+     * sudah disetujui, selain itu tidak melakukan apa-apa (pemanggilnya tidak perlu
+     * mengecek ulang statusnya sendiri).
+     */
+    public function bukaVersiBaru(?User $user = null, ?string $catatan = null): void
+    {
+        if ($this->status !== self::STATUS_DISETUJUI) {
+            return;
+        }
+
+        $this->transitionTo(self::STATUS_DRAFT);
+
+        $this->update([
+            'versi' => $this->versiSaatIni() + 1,
+            'pdf_gabungan' => null,
+            'pdf_final' => null,
+            'disetujui_oleh_user_id' => null,
+            'disetujui_pada' => null,
+            'catatan_pengembalian' => $catatan,
+        ]);
+
+        $this->catatRiwayat($user, $catatan);
+
+        event(new NotulaStatusDiubah($this));
+    }
+
+    /**
+     * Nomor versi yang sedang disusun — selalu minimal 1, termasuk untuk baris notula
+     * lama yang dibuat sebelum kolom `versi` ada.
+     */
+    public function versiSaatIni(): int
+    {
+        return max(1, (int) ($this->versi ?? 1));
+    }
+
+    /**
+     * Catatan yang menyertai pembukaan versi terakhir (alasan notula yang sudah
+     * disetujui ditarik lagi ke draft) — ditampilkan sebagai banner di layar
+     * Kompilasi Notula supaya Tim SAKIP tahu kenapa harus menyusun ulang. Null bila
+     * notula ini memang belum pernah disetujui sama sekali (versi masih 1) atau sudah
+     * berjalan lagi melewati draft.
+     */
+    public function catatanVersiBaru(): ?string
+    {
+        if ($this->status !== self::STATUS_DRAFT || $this->versiSaatIni() <= 1) {
+            return null;
+        }
+
+        return $this->riwayatStatus()->where('status', self::STATUS_DRAFT)->value('catatan');
+    }
+
+    /**
+     * Nama berkas unduhan notula, SELALU bernomor versi di belakang ("-v2") supaya
+     * berkas tiap versi tidak saling menimpa dan pembacanya langsung tahu ini versi
+     * ke berapa — mis. "notula-final-tw3-2026-v2.pdf".
+     *
+     * Satu-satunya tempat pola penamaan ini didefinisikan: dipakai jalur unduhan
+     * (App\Http\Controllers\NotulaDownloadController), nama berkas fisik di disk
+     * (NotulaService::gabungkan()/setujui()), maupun nama arsip di Google Drive.
+     */
+    public function namaUnduhan(string $jenis, string $ekstensi = 'pdf'): string
+    {
+        $tw = $this->periode?->triwulan ?? '-';
+        $tahun = $this->periode?->tahun ?? '-';
+
+        return "notula-{$jenis}-tw{$tw}-{$tahun}-v{$this->versiSaatIni()}.{$ekstensi}";
     }
 }

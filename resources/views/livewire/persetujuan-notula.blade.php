@@ -27,10 +27,24 @@
         </div>
         @if ($notula)
             <x-badge-status :status="$notula->status" />
+            <x-badge-versi :versi="$notula->versiSaatIni()" />
         @else
             <span class="badge b-draft">-</span>
         @endif
     </div>
+
+    @if ($notula && $notula->status === \App\Models\Notula::STATUS_DRAFT && $notula->versiSaatIni() > 1)
+        <div class="card card-red" style="margin-bottom:16px">
+            <div class="sec"><span>↩ Notula Dibuka Kembali — Versi {{ $notula->versiSaatIni() }}</span></div>
+            <p style="font-size:13px;margin:0 0 6px">
+                Notula triwulan ini sudah pernah Anda setujui, tetapi ada isian yang berubah setelahnya sehingga ditarik kembali ke awal (draft) sebagai versi {{ $notula->versiSaatIni() }}.
+                Tim SAKIP perlu menyusun &amp; mengirim ulang — persetujuan serta TTD Anda dibubuhkan lagi pada versi barunya.
+            </p>
+            @if ($notula->catatan_pengembalian)
+                <p style="color:var(--muted);font-size:12.5px;margin:0">📝 {{ $notula->catatan_pengembalian }}</p>
+            @endif
+        </div>
+    @endif
 
     @if (! $notula || ! $notula->pdf_gabungan)
         <div class="card">
@@ -61,8 +75,9 @@
                 <div class="sec"><span>Tindakan</span></div>
 
                 @if ($notula->status === \App\Models\Notula::STATUS_DISETUJUI)
-                    <div class="badge b-approve" style="display:block;margin-bottom:14px">Notula sudah disetujui</div>
+                    <div class="badge b-approve" style="display:block;margin-bottom:14px">Notula sudah disetujui (versi {{ $notula->versiSaatIni() }})</div>
                     <a href="{{ route('notula.unduh-final', $notula) }}" class="btn btn-teal" style="width:100%;justify-content:center">⬇ Unduh Final</a>
+                    <div class="fhint" style="margin-top:8px">Masih ada isian yang keliru? Kembalikan isian IKU-nya di bawah — notula otomatis dibuka lagi dari awal sebagai versi {{ $notula->versiSaatIni() + 1 }} untuk disetujui ulang.</div>
                 @else
                     <div class="info teal">✅ Notula 3 bagian tergabung. Setelah <b>Setujui</b> ditekan: tempat tanda tangan Kepala terisi otomatis dengan nama Kepala + tanggal rapat, versi final tersimpan ke Drive, dan tombol Unduh final aktif.</div>
 
@@ -109,7 +124,7 @@
     @if ($notula && $daftarCapaian->isNotEmpty())
         <div class="card" style="margin-top:16px">
             <div class="sec"><span>Rincian per IKU</span></div>
-            <div class="info teal">📌 Tinjau isian per IKU di bawah. Kalau ada yang bermasalah, kembalikan isian itu saja langsung ke Ketua Tim — tidak perlu menunggu Tim SAKIP meneruskannya, dan Tim SAKIP tetap diberi tahu otomatis (email + riwayat status) supaya bisa menunggu perbaikannya.</div>
+            <div class="info teal">📌 Tinjau isian per IKU di bawah. Kalau ada yang bermasalah, kembalikan isian itu saja langsung ke Ketua Tim — tidak perlu menunggu Tim SAKIP meneruskannya, dan Tim SAKIP tetap diberi tahu otomatis (email + riwayat status) supaya bisa menunggu perbaikannya. Isian yang sudah disetujui pun masih bisa dikembalikan: notula triwulan ini otomatis ditarik ke awal (draft) sebagai versi berikutnya, lalu disusun &amp; disetujui ulang.</div>
 
             @error('aksiIsian')
                 <div style="color:var(--red);font-size:11.5px;margin-bottom:10px">{{ $message }}</div>
@@ -173,7 +188,7 @@
             <div class="sec"><span>Riwayat Versi Ber-TTD</span></div>
             @foreach ($riwayatDisetujui as $n)
                 <div class="filechip ok" wire:key="riwayat-{{ $n->id }}">
-                    <span class="nm">📄 Notula TW {{ ['I', 'II', 'III', 'IV'][$n->periode->triwulan - 1] }} {{ $n->periode->tahun }}
+                    <span class="nm">📄 Notula TW {{ ['I', 'II', 'III', 'IV'][$n->periode->triwulan - 1] }} {{ $n->periode->tahun }} (versi {{ $n->versiSaatIni() }})
                         <span class="sub">Disetujui {{ $n->disetujui_pada?->wita()->translatedFormat('d F Y') }}</span>
                     </span>
                     <a href="{{ route('notula.unduh-final', $n) }}" class="btn btn-ghost btn-sm">⬇ Unduh</a>

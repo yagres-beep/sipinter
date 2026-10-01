@@ -389,9 +389,11 @@ class NotulaService
      *   menyatu (lihat gabungkan()/setujui()) supaya bisa menyambung antar bagian.
      *
      * Mengganti berkas yang sudah ada sebelumnya (RF-42e) otomatis membatalkan
-     * hasil gabungan lama.
+     * hasil gabungan lama — dan bila notula-nya sudah terlanjur disetujui Kepala,
+     * membukanya kembali sebagai VERSI BARU (lihat Notula::tandaiPerluDigabungUlang()).
+     * $pelaku hanya dipakai untuk mencatat siapa yang memicu pembukaan versi itu.
      */
-    public function terimaUploadBagian(Notula $notula, int $bagianKe, UploadedFile $file): void
+    public function terimaUploadBagian(Notula $notula, int $bagianKe, UploadedFile $file, ?User $pelaku = null): void
     {
         if (! in_array($bagianKe, [2, 3], true)) {
             throw new RuntimeException('Bagian harus 2 atau 3.');
@@ -418,7 +420,8 @@ class NotulaService
         $kolomHtml = $bagianKe === 2 ? 'bagian2_html' : 'bagian3_html';
         $notula->update([$kolomPdf => $relatifTujuanPdf, $kolomHtml => $kontenInline]);
 
-        $notula->tandaiPerluDigabungUlang();
+        $romawi = $bagianKe === 2 ? 'II' : 'III';
+        $notula->tandaiPerluDigabungUlang($pelaku, "Berkas Bagian {$romawi} diganti setelah notula disetujui — notula dibuka kembali sebagai versi baru dan perlu digabung serta disetujui ulang.");
     }
 
     /**
@@ -472,6 +475,9 @@ class NotulaService
      * terkirim ke Kepala begitu berhasil digabungkan — mockup tidak menyediakan
      * tombol "kirim" terpisah, jadi "sudah digabung" DAN "menunggu persetujuan"
      * adalah hal yang sama.
+     *
+     * Nama berkasnya bernomor versi (lihat Notula::namaUnduhan()) supaya hasil
+     * gabungan versi baru tidak menimpa berkas versi sebelumnya yang sudah beredar.
      */
     public function gabungkan(Notula $notula, ?User $user = null): void
     {
@@ -479,11 +485,12 @@ class NotulaService
             throw new RuntimeException('Bagian I, II, dan III harus lengkap terlebih dahulu sebelum digabungkan.');
         }
 
+        $namaBerkas = $notula->namaUnduhan('draf');
         $dir = storage_path("app/private/notula/{$notula->id}");
-        $gabunganPath = $dir.'/gabungan-draf.pdf';
+        $gabunganPath = $dir.'/'.$namaBerkas;
         $this->renderNotulaUtuhPdf($notula, sertakanTtd: false, outputPath: $gabunganPath);
 
-        $notula->update(['pdf_gabungan' => "notula/{$notula->id}/gabungan-draf.pdf"]);
+        $notula->update(['pdf_gabungan' => "notula/{$notula->id}/{$namaBerkas}"]);
 
         if (in_array($notula->status, [Notula::STATUS_DRAFT, Notula::STATUS_DIKEMBALIKAN], true)) {
             $notula->kirimKePersetujuan($user);
@@ -504,15 +511,18 @@ class NotulaService
             $this->setujuiKegiatanTriwulan($notula->periode, $kepala);
         });
 
+        // Nama berkas final bernomor versi (lihat Notula::namaUnduhan()) — versi lama
+        // yang pernah ditandatangani Kepala TETAP utuh di disk maupun di arsip Drive,
+        // tidak ditimpa oleh versi berikutnya.
+        $namaBerkas = $notula->namaUnduhan('final');
         $dir = storage_path("app/private/notula/{$notula->id}");
-        $gabunganFinalPath = $dir.'/gabungan-final.pdf';
+        $gabunganFinalPath = $dir.'/'.$namaBerkas;
         $this->renderNotulaUtuhPdf($notula, sertakanTtd: true, outputPath: $gabunganFinalPath);
 
-        $relatifFinal = "notula/{$notula->id}/gabungan-final.pdf";
+        $relatifFinal = "notula/{$notula->id}/{$namaBerkas}";
         $notula->update(['pdf_final' => $relatifFinal]);
 
         try {
-            $namaBerkas = "notula-tw{$notula->periode->triwulan}-{$notula->periode->tahun}-final.pdf";
             $hasil = $this->folder->unggahArsipNotula($notula->periode, $gabunganFinalPath, $namaBerkas);
 
             Berkas::create([
@@ -580,7 +590,17 @@ class NotulaService
      *
      * Kegiatan yang sudah "diverifikasi" di bawah Capaian ini ikut ditarik ke "dikembalikan"
      * (bukan per-berkas seperti VerifikasiCapaian::kembalikanKeKetuaTim(), karena Kepala
-     * meninjau di level IKU, bukan sampai ke rincian berkas/kendala-solusi).
+     * meninjau di level IKU, bukan sampai ke rincian berkas/kendala-solusi). Kegiatan yang
+     * sudah "disetujui" (notula versi sebelumnya sudah final) SENGAJA dibiarkan terkunci —
+     * sama persis dengan VerifikasiCapaian::bukaKembali(): yang dibuka cuma Capaian-nya,
+     * supaya Ketua Tim bisa memperbaiki/menambah isian baru tanpa mengubah catatan kegiatan
+     * yang sudah ikut ditandatangani di versi lama.
+     *
+     * Dampaknya ke notula triwulan yang memuat isian ini:
+     * - menunggu persetujuan -> notula ikut "dikembalikan" ke Tim SAKIP (alur normal).
+     * - SUDAH disetujui       -> notula dibuka lagi dari awal sebagai VERSI BARU (draft,
+     *   lihat Notula::bukaVersiBaru()), karena isi dokumen ber-TTD itu sekarang berubah;
+     *   Tim SAKIP menyusun & mengirim ulang, lalu Kepala membubuhkan persetujuan lagi.
      */
     public function kembalikanIsian(Capaian $capaian, User $kepala, string $catatan): void
     {
@@ -598,10 +618,13 @@ class NotulaService
             $capaian->catatStatus(Capaian::STATUS_DIKEMBALIKAN, $kepala, $catatan);
 
             $notula = $this->untukTriwulan($capaian->periode->tahun, $capaian->periode->triwulan);
+            $indikator = $capaian->masterIku->indikator ?? "IKU #{$capaian->iku_id}";
+            $pesan = "Isian IKU \"{$indikator}\" dikembalikan langsung ke Ketua Tim oleh Kepala. Catatan: {$catatan}";
 
             if ($notula->status === Notula::STATUS_MENUNGGU_PERSETUJUAN) {
-                $indikator = $capaian->masterIku->indikator ?? "IKU #{$capaian->iku_id}";
-                $notula->kembalikan("Isian IKU \"{$indikator}\" dikembalikan langsung ke Ketua Tim oleh Kepala. Catatan: {$catatan}", $kepala);
+                $notula->kembalikan($pesan, $kepala);
+            } else {
+                $notula->bukaVersiBaru($kepala, $pesan.' Notula dibuka kembali sebagai versi '.($notula->versiSaatIni() + 1).' dan perlu digabung serta disetujui ulang.');
             }
         });
     }

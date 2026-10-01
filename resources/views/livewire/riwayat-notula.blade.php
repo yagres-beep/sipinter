@@ -7,13 +7,14 @@
     <div class="card">
         <table>
             <thead>
-                <tr><th>Periode</th><th>Ringkasan</th><th>Status</th><th style="text-align:right">Aksi</th></tr>
+                <tr><th>Periode</th><th>Ringkasan</th><th>Versi</th><th>Status</th><th style="text-align:right">Aksi</th></tr>
             </thead>
             <tbody>
                 @forelse ($daftarNotula as $notula)
                     <tr wire:key="notula-{{ $notula->id }}">
                         <td><b>Triwulan {{ ['I', 'II', 'III', 'IV'][$notula->periode->triwulan - 1] }} {{ $notula->periode->tahun }}</b></td>
                         <td>Notula capaian kinerja SAKIP</td>
+                        <td><x-badge-versi :versi="$notula->versiSaatIni()" /></td>
                         <td><x-badge-status :status="$notula->status" /></td>
                         <td style="text-align:right">
                             @if ($notula->status === \App\Models\Notula::STATUS_DISETUJUI && $notula->pdf_final)
@@ -25,7 +26,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="4" style="color:var(--muted)">Belum ada notula yang disusun.</td>
+                        <td colspan="5" style="color:var(--muted)">Belum ada notula yang disusun.</td>
                     </tr>
                 @endforelse
             </tbody>

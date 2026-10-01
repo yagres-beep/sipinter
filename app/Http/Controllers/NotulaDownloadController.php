@@ -30,21 +30,20 @@ class NotulaDownloadController extends Controller
             'Belum seluruh bukti kegiatan pada triwulan ini terverifikasi.'
         );
 
-        $namaUnduhan = "notula-draf-tw{$notula->periode->triwulan}-{$notula->periode->tahun}.pdf";
-
-        return Storage::disk('local')->response($notula->pdf_gabungan, $namaUnduhan);
+        return Storage::disk('local')->response($notula->pdf_gabungan, $notula->namaUnduhan('draf'));
     }
 
     /**
      * "Unduh final" — DENGAN blok TTD, hanya aktif setelah Kepala menyetujui (RF-43, RF-44).
+     * Begitu notula dibuka lagi sebagai versi baru (Notula::bukaVersiBaru()), statusnya
+     * balik ke draft dan unduhan ini otomatis tertutup lagi sampai versi barunya
+     * disetujui — PDF versi lama tetap utuh di disk & arsip Drive dengan namanya sendiri.
      */
     public function final(Notula $notula): StreamedResponse
     {
         abort_unless($notula->status === Notula::STATUS_DISETUJUI && $this->berkasAda($notula->pdf_final), 403, 'Notula belum disetujui Kepala, atau berkas PDF final tidak ditemukan di server.');
 
-        $namaUnduhan = "notula-final-tw{$notula->periode->triwulan}-{$notula->periode->tahun}.pdf";
-
-        return Storage::disk('local')->response($notula->pdf_final, $namaUnduhan);
+        return Storage::disk('local')->response($notula->pdf_final, $notula->namaUnduhan('final'));
     }
 
     /**
@@ -120,9 +119,7 @@ class NotulaDownloadController extends Controller
         $data = $notulaService->kumpulkanDataBagianSatu($notula);
         $docxService->generate($notula, $data, $path);
 
-        $namaUnduhan = "notula-bagian1-tw{$notula->periode->triwulan}-{$notula->periode->tahun}.docx";
-
-        return response()->download($path, $namaUnduhan)->deleteFileAfterSend();
+        return response()->download($path, $notula->namaUnduhan('bagian1', 'docx'))->deleteFileAfterSend();
     }
 
     /**
@@ -137,9 +134,7 @@ class NotulaDownloadController extends Controller
         $path = storage_path("app/private/notula/{$notula->id}/pratinjau-cepat.pdf");
         $notulaService->renderPratinjauPdf($notula, $path);
 
-        $namaUnduhan = "notula-pratinjau-tw{$notula->periode->triwulan}-{$notula->periode->tahun}.pdf";
-
-        return response()->download($path, $namaUnduhan)->deleteFileAfterSend();
+        return response()->download($path, $notula->namaUnduhan('pratinjau'))->deleteFileAfterSend();
     }
 
     /**

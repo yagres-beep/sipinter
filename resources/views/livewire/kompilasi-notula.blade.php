@@ -11,6 +11,7 @@
         <div class="page-sub">
             Susun tiga bagian jadi satu notula utuh, lalu kirim ke Kepala untuk persetujuan.
             <x-badge-status :status="$notula->status" />
+            <x-badge-versi :versi="$notula->versiSaatIni()" />
         </div>
     </div>
 
@@ -22,6 +23,20 @@
         <div class="card card-red" style="margin-bottom:16px">
             <div class="sec"><span>↩ Dikembalikan Kepala</span></div>
             <p style="color:var(--red);font-size:13px;margin:0">{{ $notula->catatan_pengembalian }}</p>
+        </div>
+    @endif
+
+    {{-- Notula yang sudah ber-TTD lalu dibuka kembali karena ada data/isian yang
+         berubah (lihat App\Models\Notula::bukaVersiBaru()) — alasannya diambil dari
+         riwayat status, supaya Tim SAKIP tahu kenapa harus menyusun ulang. --}}
+    @if ($catatanVersiBaru = $notula->catatanVersiBaru())
+        <div class="card card-red" style="margin-bottom:16px">
+            <div class="sec"><span>🔄 Dibuka Kembali sebagai Versi {{ $notula->versiSaatIni() }}</span></div>
+            <p style="font-size:13px;margin:0 0 6px">
+                Notula triwulan ini sudah pernah disetujui Kepala, tetapi ada data/isian yang berubah sehingga ditarik kembali ke draft.
+                Susun ulang lalu kirim lagi ke Kepala — PDF final versi {{ $notula->versiSaatIni() }} akan dibuat terpisah dari versi sebelumnya (nama berkas berakhiran <b>-v{{ $notula->versiSaatIni() }}</b>).
+            </p>
+            <p style="color:var(--red);font-size:12.5px;margin:0">📝 {{ $catatanVersiBaru }}</p>
         </div>
     @endif
 
@@ -551,7 +566,7 @@
             <div class="sec"><span>Riwayat Versi Ber-TTD</span></div>
             @foreach ($riwayatDisetujui as $n)
                 <div class="filechip ok" wire:key="riwayat-{{ $n->id }}">
-                    <span class="nm">📄 Notula TW {{ ['I', 'II', 'III', 'IV'][$n->periode->triwulan - 1] }} {{ $n->periode->tahun }}
+                    <span class="nm">📄 Notula TW {{ ['I', 'II', 'III', 'IV'][$n->periode->triwulan - 1] }} {{ $n->periode->tahun }} (versi {{ $n->versiSaatIni() }})
                         <span class="sub">Disetujui {{ $n->disetujui_pada?->wita()->translatedFormat('d F Y') }}</span>
                     </span>
                     <a href="{{ route('notula.unduh-final', $n) }}" class="btn btn-ghost btn-sm">⬇ Unduh</a>

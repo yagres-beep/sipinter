@@ -10,9 +10,13 @@ use App\Models\PengaturanTemplatePengingat;
 use Illuminate\Contracts\Queue\ShouldQueue;
 
 /**
- * Pengingat email real-time untuk 2 kejadian alur persetujuan Notula:
+ * Pengingat email real-time untuk kejadian alur persetujuan Notula:
  * - menunggu_persetujuan -> Kepala perlu menandatangani/menyetujui.
  * - dikembalikan         -> Tim SAKIP perlu memperbaiki.
+ * - draft                -> notula yang SUDAH ber-TTD dibuka kembali sebagai versi baru
+ *   (lihat Notula::bukaVersiBaru(), satu-satunya jalur yang menembakkan event dengan
+ *   status draft) — Tim SAKIP perlu menyusun & mengirim ulang, jadi pemberitahuannya
+ *   sama dengan "dikembalikan"; alasannya ikut terbawa lewat catatan_pengembalian.
  */
 class KirimPengingatStatusNotula implements ShouldQueue
 {
@@ -22,7 +26,7 @@ class KirimPengingatStatusNotula implements ShouldQueue
 
         match ($notula->status) {
             Notula::STATUS_MENUNGGU_PERSETUJUAN => $this->kirimKeKepala($notula),
-            Notula::STATUS_DIKEMBALIKAN => $this->kirimKeTimSakip($notula),
+            Notula::STATUS_DIKEMBALIKAN, Notula::STATUS_DRAFT => $this->kirimKeTimSakip($notula),
             default => null,
         };
     }

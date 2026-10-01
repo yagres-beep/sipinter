@@ -244,10 +244,33 @@ class KompilasiNotula extends Component
         }
 
         $html = app(NotulaService::class)->susunBagianSatu($notula);
+
+        // Isi notula berubah -> hasil gabungan lama tidak valid lagi, dan kalau notula
+        // triwulan ini sudah terlanjur ber-TTD, ia dibuka kembali sebagai versi baru
+        // (lihat Notula::tandaiPerluDigabungUlang()) supaya dokumen final yang beredar
+        // tidak pernah berbeda isi dari yang benar-benar disetujui Kepala.
+        $notula->tandaiPerluDigabungUlang(Auth::user(), 'Bagian I disusun ulang otomatis setelah notula disetujui — notula dibuka kembali sebagai versi baru dan perlu digabung serta disetujui ulang.');
+
         $this->bagian1EditText = $html;
         $this->dispatchKontenBagian1();
 
-        session()->flash('status', 'Bagian I berhasil disusun ulang otomatis dari data terverifikasi. Suntingan sebelumnya dicadangkan -- tombol "Pulihkan Suntingan Sebelumnya" tersedia bila diperlukan.');
+        session()->flash('status', 'Bagian I berhasil disusun ulang otomatis dari data terverifikasi. Suntingan sebelumnya dicadangkan -- tombol "Pulihkan Suntingan Sebelumnya" tersedia bila diperlukan.'.$this->imbuhanVersiBaru($notula));
+    }
+
+    /**
+     * Imbuhan pesan "notula dibuka jadi versi N" untuk aksi-aksi yang mengubah isi
+     * notula (sunting/susun ulang/pulihkan Bagian I, unggah Bagian II/III) — hanya
+     * muncul bila aksi tsb BENAR-BENAR menarik notula yang sudah ber-TTD kembali ke
+     * draft (lihat Notula::tandaiPerluDigabungUlang()), supaya Tim SAKIP langsung tahu
+     * bahwa notula perlu digabung & dikirim ulang, bukan diam-diam berubah status.
+     */
+    protected function imbuhanVersiBaru(Notula $notula): string
+    {
+        if ($notula->status !== Notula::STATUS_DRAFT || $notula->versiSaatIni() <= 1) {
+            return '';
+        }
+
+        return ' Notula yang sudah disetujui dibuka kembali sebagai versi '.$notula->versiSaatIni().' — gabungkan lalu kirim ulang ke Kepala untuk disetujui lagi.';
     }
 
     /**
@@ -278,10 +301,12 @@ class KompilasiNotula extends Component
         }
 
         $notula->update(['bagian1_html' => $notula->bagian1_html_cadangan]);
+        $notula->tandaiPerluDigabungUlang(Auth::user(), 'Suntingan Bagian I dipulihkan setelah notula disetujui — notula dibuka kembali sebagai versi baru dan perlu digabung serta disetujui ulang.');
+
         $this->bagian1EditText = $notula->bagian1_html_cadangan;
         $this->dispatchKontenBagian1();
 
-        session()->flash('status', 'Suntingan sebelumnya berhasil dipulihkan.');
+        session()->flash('status', 'Suntingan sebelumnya berhasil dipulihkan.'.$this->imbuhanVersiBaru($notula));
     }
 
     /**
@@ -315,9 +340,9 @@ class KompilasiNotula extends Component
     {
         $notula = $this->notula();
         $notula->update(['bagian1_html' => $this->bagian1EditText]);
-        $notula->tandaiPerluDigabungUlang();
+        $notula->tandaiPerluDigabungUlang(Auth::user(), 'Bagian I disunting setelah notula disetujui — notula dibuka kembali sebagai versi baru dan perlu digabung serta disetujui ulang.');
 
-        session()->flash('status', 'Pratinjau Bagian I berhasil disimpan.');
+        session()->flash('status', 'Pratinjau Bagian I berhasil disimpan.'.$this->imbuhanVersiBaru($notula));
     }
 
     /**
@@ -338,8 +363,8 @@ class KompilasiNotula extends Component
         ]);
 
         try {
-            app(NotulaService::class)->terimaUploadBagian($this->notula(), $bagianKe, $this->{$field});
-            session()->flash('status', "Bagian {$bagianKe} berhasil diunggah & dikonversi ke PDF.");
+            app(NotulaService::class)->terimaUploadBagian($this->notula(), $bagianKe, $this->{$field}, Auth::user());
+            session()->flash('status', "Bagian {$bagianKe} berhasil diunggah & dikonversi ke PDF.".$this->imbuhanVersiBaru($this->notula()));
         } catch (RuntimeException $e) {
             $this->addError($field, $e->getMessage());
 
