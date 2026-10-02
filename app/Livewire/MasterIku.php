@@ -7,6 +7,7 @@ use App\Imports\MasterIkuImport;
 use App\Models\CapaianTahunan;
 use App\Models\MasterIku as MasterIkuModel;
 use App\Services\FormulaCapaianService;
+use App\Support\RumusMarkup;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
@@ -180,6 +181,18 @@ class MasterIku extends Component
             'deskripsiX' => ['nullable', 'string', 'max:255'],
             'deskripsiY' => ['nullable', 'string', 'max:255'],
         ];
+    }
+
+    /**
+     * Pratinjau HTML live kolom "Dasar Hitung" di samping textarea-nya (lihat
+     * _master-iku-form-fields.blade.php) -- dirender lewat RumusMarkup::keHtml()
+     * PERSIS seperti yang nanti tercetak di PDF Notula, supaya Tim SAKIP bisa
+     * langsung melihat hasil sintaks [[a|b]]/[[SUM:...|...]] yang diketik SEBELUM
+     * menyimpan, tanpa perlu generate notula dulu untuk tahu apakah sintaksnya benar.
+     */
+    public function dasarHitungPreview(): string
+    {
+        return RumusMarkup::keHtml($this->dasarHitung);
     }
 
     protected function validationAttributes(): array

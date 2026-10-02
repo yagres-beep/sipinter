@@ -48,6 +48,20 @@ class NotulaBagian1DocxService
     private const DEFAULT_TEMPLATE_PATH = 'template_notula/SIPINTER_Template_Bagian_I_Mesin.docx';
 
     /**
+     * Rumus (baris $formulaDicetak, lihat isiSatuIku()) yang disisipkan sebagai
+     * OOXML Math di generate() TERAKHIR, urut PERSIS seperti kemunculannya di
+     * dokumen -- dipakai NotulaService::susunBagianSatu() untuk mengganti gambar
+     * rumus hasil rasterisasi LibreOffice (kualitasnya rendah/buram, lihat
+     * NotulaService::gantiGambarRumusDenganHtml()) dengan HTML bersusun yang SAMA
+     * persis dipakai jalur PDF langsung (RumusMarkup::keHtml()), tanpa
+     * bergantung ke LibreOffice sama sekali untuk bagian ini. Di-reset di awal
+     * tiap generate() supaya pemanggilan berikutnya tidak membawa sisa data lama.
+     *
+     * @var list<string>
+     */
+    private array $formulaUrutan = [];
+
+    /**
      * $data WAJIB hasil NotulaService::kumpulkanDataBagianSatu($notula) milik
      * pemanggil sendiri -- diterima sebagai parameter (bukan resolve NotulaService
      * lewat constructor) supaya kelas ini TIDAK bergantung balik ke NotulaService,
@@ -71,6 +85,8 @@ class NotulaBagian1DocxService
      */
     public function generate(Notula $notula, array $data, string $outputPath, bool $sertakanBlokTtdMandiri = true): string
     {
+        $this->formulaUrutan = [];
+
         $templatePath = $this->resolveTemplatePath();
 
         $processor = $this->newTemplateProcessor($templatePath);
@@ -98,6 +114,14 @@ class NotulaBagian1DocxService
         $processor->setMacroChars('${', '}');
 
         return $outputPath;
+    }
+
+    /**
+     * @return list<string> lihat catatan $formulaUrutan di atas.
+     */
+    public function formulaUrutanTerakhir(): array
+    {
+        return $this->formulaUrutan;
     }
 
     /**
@@ -410,6 +434,7 @@ class NotulaBagian1DocxService
         // notasi "a/b" biasa, supaya .docx tercetak persis seperti dokumen resmi.
         if ($tampilkanFormula) {
             $this->setFormula($sub, $formulaDicetak);
+            $this->formulaUrutan[] = $formulaDicetak;
         }
 
         // Kolom dasar_hitung sendiri (kalau diisi) TETAP ditampilkan sebagai keterangan

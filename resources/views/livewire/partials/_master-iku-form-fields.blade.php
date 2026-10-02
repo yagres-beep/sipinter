@@ -64,23 +64,41 @@
     @enderror
 </div>
 
-<div class="row2">
-    <div class="field">
-        <label>Dasar Hitung</label>
-        <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model="dasarHitung"
-            placeholder="Rumus/cara menghitung realisasi IKU ini"></textarea>
-        <div class="fhint">Ditampilkan pada baris "Dasar Hitung dan Basis Data Realisasi IKU" di Notula Bagian I. Untuk pecahan bersusun (mis. rumus persentase), ketik <code>[[pembilang|penyebut]]</code> — contoh: <code>y = [[n|N]] x 100%</code>. Tercetak sebagai pecahan bergaris di PDF; di unduhan .docx otomatis diratakan jadi "n/N".</div>
-        @error('dasarHitung')
-            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-        @enderror
+<div class="field">
+    <label>Dasar Hitung</label>
+    <div class="dasar-hitung-editor">
+        <div class="dasar-hitung-editor-field">
+            <textarea class="inp filled" style="height:auto;display:block" rows="4" wire:model.live.debounce.400ms="dasarHitung"
+                placeholder="Rumus/cara menghitung realisasi IKU ini"></textarea>
+            <div class="fhint">
+                Ditampilkan pada baris "Dasar Hitung dan Basis Data Realisasi IKU" di Notula Bagian I.
+                Untuk pecahan bersusun (mis. rumus persentase), ketik <code>[[pembilang|penyebut]]</code> — contoh: <code>y = [[n|N]] x 100%</code>.
+                Untuk notasi sigma bersusun (mis. rumus IPP/TPSS), ketik <code>[[SUM:batas_bawah,batas_atas|suku]]</code> — contoh: <code>IPP = (w1 x [[SUM:i=1,n|xi]]) + (w2 x [[SUM:i=1,m|yj]])</code>.
+                Boleh digabung bebas dengan teks biasa dan dipakai berkali-kali dalam satu isian. Tercetak bersusun persis di PDF &amp; .docx (lihat pratinjau di samping) — cek dulu di sini sebelum disimpan.
+            </div>
+            @error('dasarHitung')
+                <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+            @enderror
+        </div>
+        <div class="dasar-hitung-editor-preview">
+            <div class="dhep-label">🔍 Pratinjau</div>
+            <div class="dhep-body">
+                @if (trim($dasarHitung) !== '')
+                    {!! $this->dasarHitungPreview() !!}
+                @else
+                    <span class="muted">Isi Dasar Hitung di samping untuk melihat pratinjaunya di sini.</span>
+                @endif
+            </div>
+        </div>
     </div>
-    <div class="field">
-        <label>Basis Data</label>
-        <input type="text" class="inp filled" wire:model="basisData" placeholder="mis. Data internal BPS, hasil survei">
-        @error('basisData')
-            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-        @enderror
-    </div>
+</div>
+
+<div class="field">
+    <label>Basis Data</label>
+    <input type="text" class="inp filled" wire:model="basisData" placeholder="mis. Data internal BPS, hasil survei">
+    @error('basisData')
+        <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+    @enderror
 </div>
 
 <div class="row2">

@@ -33,6 +33,25 @@ class KompilasiNotulaTest extends TestCase
         return $user;
     }
 
+    /**
+     * Ambil notula milik tahun/triwulan YANG SEDANG DIUJI secara eksplisit --
+     * BUKAN Notula::first(), yang diam-diam mengandalkan notula ini kebetulan
+     * jadi baris PERTAMA di tabel. Asumsi itu meleset begitu tanggal sungguhan
+     * (now()) berada di triwulan LAIN dari (2026, 3) yang dipakai tiap test di
+     * sini: KompilasiNotula::mount() (lewat muatBagian1EditText()) otomatis
+     * menyusun & menyimpan notula untuk triwulan SEKARANG SUNGGUHAN lebih dulu
+     * (sebelum test sempat ->set('tahun', 2026)->set('triwulan', 3)), jadi baris
+     * itu yang lebih dulu punya id kecil -- Notula::first() lalu mengembalikan
+     * baris triwulan sungguhan itu, BUKAN baris (2026, 3) yang benar-benar
+     * disunting test. untukTriwulan() dipakai di sini (sama seperti dipakai
+     * komponennya sendiri) supaya SELALU mengambil baris yang tepat terlepas
+     * dari triwulan sungguhan saat test dijalankan.
+     */
+    protected function notulaUji(int $tahun, int $triwulan): Notula
+    {
+        return app(NotulaService::class)->untukTriwulan($tahun, $triwulan)->fresh();
+    }
+
     public function test_susun_ulang_otomatis_mengirim_event_untuk_memperbarui_editor_wysiwyg(): void
     {
         $this->fakeKonversiBagian1KeXmlMentah();
@@ -59,7 +78,7 @@ class KompilasiNotulaTest extends TestCase
 
         $this->assertStringContainsString(
             'Uji Editor Word',
-            Notula::first()->bagian1_html
+            $this->notulaUji(2026, 3)->bagian1_html
         );
     }
 
@@ -82,7 +101,7 @@ class KompilasiNotulaTest extends TestCase
 
         $this->assertStringContainsString(
             'Suntingan manual sebelum disusun ulang.',
-            Notula::first()->bagian1_html_cadangan
+            $this->notulaUji(2026, 3)->bagian1_html_cadangan
         );
     }
 
@@ -106,11 +125,11 @@ class KompilasiNotulaTest extends TestCase
             ->set('tahun', 2026)
             ->set('triwulan', 3);
 
-        Notula::first()->update(['bagian1_html' => null]);
+        $this->notulaUji(2026, 3)->update(['bagian1_html' => null]);
 
         $component->call('susunUlangOtomatis');
 
-        $this->assertNull(Notula::first()->bagian1_html_cadangan);
+        $this->assertNull($this->notulaUji(2026, 3)->bagian1_html_cadangan);
     }
 
     public function test_pulihkan_suntingan_bagian1_mengembalikan_isi_cadangan(): void
@@ -131,7 +150,7 @@ class KompilasiNotulaTest extends TestCase
 
         $this->assertSame(
             '<p>Suntingan manual sebelum disusun ulang.</p>',
-            Notula::first()->bagian1_html
+            $this->notulaUji(2026, 3)->bagian1_html
         );
     }
 
@@ -191,7 +210,7 @@ class KompilasiNotulaTest extends TestCase
 
         $component->call('susunUlangOtomatis');
 
-        $html = Notula::first()->bagian1_html;
+        $html = $this->notulaUji(2026, 3)->bagian1_html;
         $this->assertStringContainsString('Senin, 12 Oktober 2026', $html);
         $this->assertStringContainsString('Kepala BPS', $html);
     }

@@ -299,6 +299,7 @@
             <a href="{{ route('notula.template-bagian1') }}" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-block">⬇ Unduh Panduan Bagian I (referensi, tidak perlu diunggah balik)</a>
         </div>
         <p class="fhint" style="margin-bottom:10px">Klik lalu ketik langsung di dalam Bagian I pada pratinjau di bawah untuk menyunting — Bagian II &amp; III ikut tampil di bawahnya persis dari berkas yang diunggah.</p>
+        <p class="fhint" style="margin-bottom:10px">🔒 Rumus (mis. pecahan/sigma pada baris "Dasar Hitung dan Basis Data Realisasi IKU") tercetak otomatis pada tiap indikator yang mengisinya dan DIKUNCI di sini agar strukturnya tidak rusak saat mengetik — untuk mengubah rumusnya sendiri, sunting field "Dasar Hitung" di Data Master &amp; Konfigurasi &gt; Master IKU, lalu tekan "↻ Susun Ulang Otomatis" di bawah supaya pratinjau ini mengikuti.</p>
 
         <div x-data="{
             aktifBold: false, aktifItalic: false, aktifUnderline: false,
