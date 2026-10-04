@@ -78,24 +78,15 @@ class PengisianKegiatan extends Component
     public array $rtlBaru = [];
 
     /**
-     * PIC Tindak Lanjut — tim (BUKAN perorangan) penanggung jawab, boleh lebih dari
-     * satu, ditambah/dihapus satu per satu lewat chip (lihat tambahRtlBaruPic()/
-     * hapusRtlBaruPic()) sama pola UX-nya dengan App\Livewire\AkunAktif::tambahTim().
-     * Diisi otomatis dari tim penanggung jawab IKU terpilih (lihat
-     * pilihPicOtomatis()) tapi BOLEH diubah bebas oleh Ketua Tim -- pilih dari
-     * daftar tim yang ada (lihat daftarTimPic()) ATAU ketik nama tim baru sendiri.
-     * TIDAK wajib diisi di sini — kalau dikosongkan, Tim SAKIP yang wajib
-     * mengisi/mengonfirmasinya saat verifikasi (lihat
-     * App\Livewire\VerifikasiCapaian::verifikasiSelesai()), supaya Ketua Tim tidak
-     * pernah terhalang mengajukan isian hanya gara-gara tim IKU ini belum
-     * dikonfigurasi (MasterIku::tim kosong).
+     * PIC Tindak Lanjut — tim (BUKAN perorangan) penanggung jawab IKU terpilih,
+     * HANYA untuk ditampilkan (lihat pilihPicOtomatis()). Ketua Tim tidak perlu &
+     * tidak bisa mengisinya; nilai yang disimpan selalu dibaca ulang dari tim IKU
+     * saat simpan (lihat simpanBagianIsian()). Kalau tim IKU belum dikonfigurasi,
+     * Tim SAKIP yang mengisinya saat verifikasi (VerifikasiCapaian::verifikasiSelesai()).
      *
      * @var list<string>
      */
     public array $rtlBaruPicTerpilih = [];
-
-    /** Input "tambah tim" untuk rtlBaruPicTerpilih -- lihat tambahRtlBaruPic(). */
-    public string $rtlBaruPicBaru = '';
 
     public string $rtlBaruBatasWaktu = '';
 
@@ -1580,48 +1571,15 @@ class PengisianKegiatan extends Component
     }
 
     /**
-     * Bawaan PIC Tindak Lanjut — SELURUH tim penanggung jawab IKU terpilih, karena
-     * satu IKU boleh ditugaskan ke lebih dari satu tim (lihat
-     * App\Models\MasterIku::namaTimList()). Tetap boleh diubah bebas oleh Ketua Tim
-     * lewat chip (lihat tambahRtlBaruPic()/hapusRtlBaruPic()).
+     * PIC Tindak Lanjut — SELURUH tim penanggung jawab IKU terpilih (satu IKU boleh
+     * ditugaskan ke lebih dari satu tim, lihat App\Models\MasterIku::namaTimList()),
+     * sumber yang SAMA dengan kolom Tim di Penugasan IKU & "Penanggung Jawab (Tim)"
+     * di Master IKU. Tidak diisi/diubah Ketua Tim — perubahan tim di sana otomatis
+     * ikut ke PIC poin RTL yang belum terverifikasi (MasterIku::sinkronkanTim()).
      */
     protected function pilihPicOtomatis(): void
     {
         $this->rtlBaruPicTerpilih = $this->ikuTerpilih()?->namaTimList() ?? [];
-    }
-
-    /**
-     * Tambah satu tim ke rtlBaruPicTerpilih — nilainya diambil dari rtlBaruPicBaru
-     * (wire:model), boleh dari saran daftarTimPic() atau nama tim baru yang diketik
-     * bebas. Sama pola UX-nya dengan App\Livewire\AkunAktif::tambahTim().
-     */
-    public function tambahRtlBaruPic(): void
-    {
-        $tim = trim($this->rtlBaruPicBaru);
-
-        if ($tim === '' || in_array($tim, $this->rtlBaruPicTerpilih, true)) {
-            $this->rtlBaruPicBaru = '';
-
-            return;
-        }
-
-        $this->rtlBaruPicTerpilih[] = $tim;
-        $this->rtlBaruPicBaru = '';
-    }
-
-    public function hapusRtlBaruPic(string $tim): void
-    {
-        $this->rtlBaruPicTerpilih = array_values(array_diff($this->rtlBaruPicTerpilih, [$tim]));
-    }
-
-    /**
-     * Saran PIC Tindak Lanjut — lihat MasterIku::daftarTimGabungan().
-     *
-     * @return list<string>
-     */
-    protected function daftarTimPic(): array
-    {
-        return MasterIku::daftarTimGabungan();
     }
 
     protected function targetTriwulanBerikutnya(): array
@@ -1814,7 +1772,6 @@ class PengisianKegiatan extends Component
 
         if ($ditolak->isNotEmpty()) {
             $this->rtlBaru = $ditolak->map(fn ($poin) => ['id' => $poin->id, 'rtl_teks' => $poin->rtl_teks])->values()->all();
-            $this->muatPicTersimpan($ditolak->first()->pic);
 
             return;
         }
@@ -1823,35 +1780,11 @@ class PengisianKegiatan extends Component
 
         if ($draftSendiri->isNotEmpty()) {
             $this->rtlBaru = $draftSendiri->map(fn ($poin) => ['id' => $poin->id, 'rtl_teks' => $poin->rtl_teks])->values()->all();
-            $this->muatPicTersimpan($draftSendiri->first()->pic);
 
             return;
         }
 
         $this->rtlBaru = $this->rtlTriwulanBerikutnyaSudahAda() ? [] : [$this->emptyRtlBlock()];
-    }
-
-    /**
-     * Pulihkan PIC Tindak Lanjut yang sudah pernah dipilih & disimpan (draft
-     * sendiri/ditolak Tim SAKIP) — HARUS dipanggil SETELAH pilihPicOtomatis()
-     * (lihat mount()/updatedIkuId()), supaya pilihan Ketua Tim sebelumnya tidak
-     * hilang tertimpa bawaan nama tim IKU begitu form dibuka/dimuat ulang. Kalau
-     * PIC tersimpan memang sengaja dikosongkan dulu, biarkan bawaan otomatis dari
-     * pilihPicOtomatis() yang tetap tampil.
-     */
-    protected function muatPicTersimpan(?string $pic): void
-    {
-        if ($pic !== null && trim($pic) !== '') {
-            // rtl_evaluasi.pic tetap satu kolom teks bebas (bukan tabel relasi) --
-            // dipisah koma/titik-koma di sini untuk dimuat balik sebagai chip, sama
-            // pola pisahnya dengan App\Models\MasterIku::booted() (sinkron ke iku_tim).
-            $this->rtlBaruPicTerpilih = collect(preg_split('/[,;]/', $pic))
-                ->map(fn ($t) => trim($t))
-                ->filter()
-                ->unique()
-                ->values()
-                ->all();
-        }
     }
 
     protected function labelTriwulanBerikutnya(): string
@@ -1948,18 +1881,11 @@ class PengisianKegiatan extends Component
         // RF-32/33/34: RTL triwulan berikutnya hanya boleh (dan wajib) ditetapkan pada bulan
         // terakhir triwulan berjalan, kecuali sudah pernah ditetapkan sebelumnya.
         //
-        // rtlBaruPicTerpilih SENGAJA nullable/opsional di sini (bukan required) — PIC
-        // boleh dikosongkan Ketua Tim; Tim SAKIP yang wajib mengisi/mengonfirmasinya
-        // sebelum verifikasi selesai (lihat VerifikasiCapaian::verifikasiSelesai()).
-        // Sebelumnya wajib di sini padahal field-nya dikunci hanya-baca & terisi
-        // otomatis dari MasterIku::tim — begitu tim IKU belum dikonfigurasi (tim
-        // kosong), Ketua Tim tidak akan pernah bisa mengaktifkan tombol "Ajukan ke
-        // Tim SAKIP" sama sekali.
+        // PIC Tindak Lanjut TIDAK divalidasi di sini sama sekali — tidak diisi Ketua
+        // Tim, selalu otomatis dari tim penanggung jawab IKU (lihat pilihPicOtomatis()).
         if ($this->rtlBaruBisaDiisi() && ! $this->rtlTriwulanBerikutnyaSudahAda()) {
             $rules['rtlBaru'] = ['required', 'array', 'min:1'];
             $rules['rtlBaru.*.rtl_teks'] = ['required', 'string'];
-            $rules['rtlBaruPicTerpilih'] = ['nullable', 'array'];
-            $rules['rtlBaruPicTerpilih.*'] = ['string', 'max:255'];
             $rules['rtlBaruBatasWaktu'] = ['required', 'date'];
         } elseif ($this->rtlBaruBisaDiisi()) {
             // RTL triwulan berikutnya sudah pernah ditetapkan (lihat blade: poin lama
@@ -1983,7 +1909,6 @@ class PengisianKegiatan extends Component
             'kendalaBlocks.*.kendala' => 'kendala',
             'kendalaBlocks.*.solusi' => 'solusi',
             'rtlBaru.*.rtl_teks' => 'RTL',
-            'rtlBaruPicTerpilih' => 'PIC Tindak Lanjut',
             'rtlBaruBatasWaktu' => 'batas waktu',
         ];
 
@@ -2024,7 +1949,6 @@ class PengisianKegiatan extends Component
             'kendalaBlocks' => $this->kendalaBlocks,
             'evaluasi' => $this->evaluasi,
             'rtlBaru' => $this->rtlBaru,
-            'rtlBaruPicTerpilih' => $this->rtlBaruPicTerpilih,
             'rtlBaruBatasWaktu' => $this->rtlBaruBatasWaktu,
             'bagianKustomBlocks' => $this->bagianKustomBlocks,
         ];
@@ -2467,26 +2391,12 @@ class PengisianKegiatan extends Component
             $namaBulanTarget = collect($this->bulanBulanTarget())->map(fn ($b) => $this->namaBulanIndo($b));
             $berlakuBulan = 'RTL untuk '.$namaBulanTarget->join(', ', ', dan ');
 
-            // PIC dipilih bebas oleh Ketua Tim lewat chip (tambahRtlBaruPic(), lihat
-            // blade) -- rtl_evaluasi.pic tetap satu kolom teks, jadi beberapa tim
-            // digabung dipisah koma di sini (dimuat balik jadi chip lagi lewat
-            // muatPicTersimpan()). Boleh benar-benar dikosongkan (hapus semua chip) --
-            // pilihPicOtomatis() sudah membawakan SELURUH tim penanggung jawab IKU ini
-            // (App\Models\MasterIku::namaTimList()) sebagai bawaan begitu form dibuka,
-            // jadi array kosong di sini berarti Ketua Tim sengaja menghapusnya.
-            $picTim = $this->rtlBaruPicTerpilih !== [] ? implode(', ', $this->rtlBaruPicTerpilih) : null;
-
-            // Batch sudah ditetapkan sebelumnya — poin BARU yang ditambahkan harus
-            // ikut PIC batch yang sama (bukan bawaan IKU/dropdown yang tidak
-            // ditampilkan lagi di blade untuk kasus ini), supaya satu batch RTL tidak
-            // punya PIC berbeda-beda antar poinnya.
-            if ($sudahAda) {
-                $picAktif = $this->rtlBerikutnyaAktif()->first()?->pic;
-
-                if (filled($picAktif)) {
-                    $picTim = $picAktif;
-                }
-            }
+            // PIC SELALU tim penanggung jawab IKU terkini (dibaca ulang dari DB, BUKAN
+            // dari properti publik yang bisa dimanipulasi klien) -- rtl_evaluasi.pic
+            // tetap satu kolom teks, beberapa tim digabung dipisah koma, format yang
+            // sama dengan MasterIku::sinkronkanTim().
+            $namaTimIku = $this->ikuTerpilih()?->namaTimList() ?? [];
+            $picTim = $namaTimIku !== [] ? implode(', ', $namaTimIku) : null;
 
             foreach ($this->rtlBaru as &$blok) {
                 if (trim($blok['rtl_teks'] ?? '') === '') {
@@ -2756,7 +2666,6 @@ class PengisianKegiatan extends Component
             'bulanTargetBerikutnya' => collect($this->bulanBulanTarget())->mapWithKeys(fn ($b) => [$b => $this->namaBulanIndo($b)]),
             'rtlBerjalanOptions' => $this->rtlBerjalanOptions(),
             'rtlBerjalanBelumTerlaksana' => $this->poinRtlBerjalanBelumTerlaksana(),
-            'daftarTimPic' => $this->daftarTimPic(),
             'bagianKustomAktif' => $bagianKustomAktif,
             'riwayatBagianKustom' => $bagianKustomAktif->mapWithKeys(fn ($b) => [$b->id => $this->riwayatBagianKustom($b)]),
             'statusKegiatanTerkunci' => self::STATUS_KEGIATAN_TERKUNCI,

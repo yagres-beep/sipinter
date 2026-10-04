@@ -394,9 +394,11 @@ class VerifikasiCapaian extends Component
         // koma/titik-koma di sini untuk dimuat balik sebagai chip, sama pola pisahnya
         // dengan App\Livewire\PengisianKegiatan::muatPicTersimpan().
         $picTersimpan = $this->rtlBerikutnyaBaruDitetapkan()->first()?->pic;
+        // Kosong -> bawaan tim penanggung jawab IKU (sumber yang sama dengan Penugasan
+        // IKU/Master IKU, lihat MasterIku::sinkronkanTim()).
         $this->picRtlBerikutnyaTerpilih = $picTersimpan !== null && trim($picTersimpan) !== ''
             ? collect(preg_split('/[,;]/', $picTersimpan))->map(fn ($t) => trim($t))->filter()->unique()->values()->all()
-            : [];
+            : ($this->capaian->masterIku?->namaTimList() ?? []);
 
         $tw = (int) $this->capaian->periode->triwulan;
         foreach ($this->rincianNList() as $n) {

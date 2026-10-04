@@ -76,16 +76,24 @@ class PenugasanIku extends Component
         IkuTim::firstOrCreate(['iku_id' => $ikuId, 'tim' => $tim]);
         $this->timBaru[$ikuId] = '';
 
-        MasterIku::lupakanCache();
+        // Ikut menyinkronkan kolom Penanggung Jawab (Tim) di Master IKU & PIC Tindak
+        // Lanjut RTL yang belum terverifikasi (lihat MasterIku::sinkronkanTim()).
+        MasterIku::sinkronkanTim($ikuId);
 
         session()->flash('status', 'Tim ditambahkan ke IKU ini.');
     }
 
     public function hapusTim(int $ikuTimId): void
     {
-        IkuTim::whereKey($ikuTimId)->delete();
+        $ikuTim = IkuTim::find($ikuTimId);
 
-        MasterIku::lupakanCache();
+        if (! $ikuTim) {
+            return;
+        }
+
+        $ikuTim->delete();
+
+        MasterIku::sinkronkanTim($ikuTim->iku_id);
 
         session()->flash('status', 'Tim dihapus dari IKU ini.');
     }

@@ -474,12 +474,11 @@ class PengisianKegiatanTest extends TestCase
     }
 
     /**
-     * Regresi: PIC Tindak Lanjut yang sudah dipilih & disimpan (draft/ditolak) hilang
-     * tertimpa bawaan nama tim IKU begitu form dibuka ulang — pilihPicOtomatis()
-     * dipanggil SETELAH muatRtlBaruBlocks() memuat draft, jadi PIC kustom yang baru
-     * saja disimpan tidak pernah ikut termuat. Lihat muatPicTersimpan().
+     * PIC Tindak Lanjut tidak bisa diubah Ketua Tim — nilai dari klien diabaikan,
+     * yang disimpan selalu tim penanggung jawab IKU; begitu tim IKU diubah (Penugasan
+     * IKU/Master IKU), PIC poin RTL yang belum terverifikasi ikut berubah.
      */
-    public function test_pic_tindak_lanjut_draf_tetap_tersimpan_saat_form_dibuka_ulang(): void
+    public function test_pic_tindak_lanjut_selalu_mengikuti_tim_iku_dan_ikut_tersinkron(): void
     {
         $peranKetua = Role::create(['nama' => 'Ketua Tim']);
         $ketua = User::create([
@@ -505,15 +504,29 @@ class PengisianKegiatanTest extends TestCase
             ->assertHasNoErrors();
 
         $rtl = RtlEvaluasi::first();
-        $this->assertSame('Tim Kustom', $rtl->pic);
+        $this->assertSame('Tim Bawaan', $rtl->pic);
 
-        // Buka ulang komponen — PIC kustom yang sudah disimpan harus tetap tampil,
-        // BUKAN tertimpa balik ke bawaan nama tim IKU ("Tim Bawaan").
+        // Tim IKU diubah dari Master IKU (kolom tim) -> PIC draf ikut berubah.
+        $iku->update(['tim' => 'Tim Bawaan, Tim Baru']);
+        $this->assertSame('Tim Baru, Tim Bawaan', $rtl->fresh()->pic); // urut alfabet, lihat MasterIku::timList()
+
+        // Tim dihapus dari Penugasan IKU (iku_tim langsung) -> PIC & kolom Master IKU ikut.
+        \App\Models\IkuTim::where('iku_id', $iku->id)->where('tim', 'Tim Bawaan')->delete();
+        MasterIku::sinkronkanTim($iku->id);
+        $this->assertSame('Tim Baru', $rtl->fresh()->pic);
+        $this->assertSame('Tim Baru', $iku->fresh()->tim);
+
+        // Poin yang sudah terverifikasi tidak ikut diubah.
+        $rtl->update(['status_verifikasi' => 'terverifikasi']);
+        \App\Models\IkuTim::create(['iku_id' => $iku->id, 'tim' => 'Tim Lain']);
+        MasterIku::sinkronkanTim($iku->id);
+        $this->assertSame('Tim Baru', $rtl->fresh()->pic);
+
         Livewire::test(PengisianKegiatan::class)
             ->set('tahun', 2026)
             ->set('bulan', 9)
             ->set('iku_id', $iku->id)
-            ->assertSet('rtlBaruPicTerpilih', ['Tim Kustom']);
+            ->assertSet('rtlBaruPicTerpilih', ['Tim Baru', 'Tim Lain']);
     }
 
     public function test_pratinjau_nama_folder_mengikuti_uraian_dan_tahapan(): void
@@ -1171,11 +1184,10 @@ class PengisianKegiatanTest extends TestCase
     }
 
     /**
-     * RF baru: PIC Tindak Lanjut boleh diisi lebih dari satu tim — ditambah/dihapus
-     * satu per satu lewat chip (tambahRtlBaruPic()/hapusRtlBaruPic()), boleh dari
-     * saran daftarTimPic() (database tim) atau nama tim baru yang diketik bebas.
+     * PIC Tindak Lanjut berisi SELURUH tim IKU (boleh lebih dari satu) — sumber yang
+     * sama dengan Penugasan IKU/Master IKU.
      */
-    public function test_pic_tindak_lanjut_bisa_ditambah_lebih_dari_satu_tim_lewat_chip(): void
+    public function test_pic_tindak_lanjut_berisi_semua_tim_iku(): void
     {
         $peranKetua = Role::create(['nama' => 'Ketua Tim']);
         $ketua = User::create([
@@ -1189,24 +1201,15 @@ class PengisianKegiatanTest extends TestCase
         $iku = MasterIku::create([
             'kode' => 'UJI-MULTI-PIC',
             'indikator' => 'Indikator uji multi PIC',
-            'tim' => 'Tim Bawaan',
+            'tim' => 'Tim Bawaan, Tim Tambahan',
         ]);
 
         $this->actingAs($ketua);
 
-        $component = Livewire::test(PengisianKegiatan::class)
+        Livewire::test(PengisianKegiatan::class)
             ->set('iku_id', $iku->id)
-            ->assertSet('rtlBaruPicTerpilih', ['Tim Bawaan']);
-
-        // Tambah satu tim baru yang tidak ada di database sama sekali (diketik bebas).
-        $component->set('rtlBaruPicBaru', 'Tim Tambahan')
-            ->call('tambahRtlBaruPic')
             ->assertSet('rtlBaruPicTerpilih', ['Tim Bawaan', 'Tim Tambahan'])
-            ->assertSet('rtlBaruPicBaru', '');
-
-        // Hapus tim bawaan, sisakan tim tambahan saja.
-        $component->call('hapusRtlBaruPic', 'Tim Bawaan')
-            ->assertSet('rtlBaruPicTerpilih', ['Tim Tambahan']);
+            ->assertDontSee('Pilih dari saran atau ketik tim baru');
     }
 
     /**

@@ -802,6 +802,9 @@ class VerifikasiCapaianTest extends TestCase
             ->call('tandaiUraianSesuai', $data['kegiatan1']->id)
             ->call('tandaiUraianSesuai', $data['kegiatan2']->id)
             ->call('tandaiRtlBerikutnyaSesuai', $rtlBerikutnya->id)
+            // PIC kosong terisi bawaan tim IKU; dikosongkan manual untuk menguji gerbangnya.
+            ->assertSet('picRtlBerikutnyaTerpilih', $data['iku']->namaTimList())
+            ->set('picRtlBerikutnyaTerpilih', [])
             ->set('alokasi_tw3', 50)
             ->set('realisasi_tw3', 45)
             ->call('verifikasiSelesai')
@@ -846,6 +849,7 @@ class VerifikasiCapaianTest extends TestCase
             ->call('tandaiRtlBerikutnyaSesuai', $rtlBerikutnya->id)
             ->set('alokasi_tw3', 50)
             ->set('realisasi_tw3', 45)
+            ->set('picRtlBerikutnyaTerpilih', [])
             ->set('picRtlBerikutnyaBaru', 'Tim Pertama')
             ->call('tambahPicRtlBerikutnya')
             ->set('picRtlBerikutnyaBaru', 'Tim Kedua')

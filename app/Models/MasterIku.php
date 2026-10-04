@@ -104,8 +104,36 @@ class MasterIku extends Model
                 IkuTim::firstOrCreate(['iku_id' => $iku->id, 'tim' => $tim]);
             }
 
-            static::lupakanCache();
+            static::sinkronkanTim($iku->id);
         });
+    }
+
+    /**
+     * Satu titik sinkron setiap kali tim penanggung jawab IKU (iku_tim) berubah —
+     * dari Penugasan IKU (App\Livewire\PenugasanIku::tambahTim()/hapusTim()) maupun
+     * Master IKU (lewat booted()/saved() di atas):
+     *  1. Kolom lama master_iku.tim ditulis ulang dari iku_tim (query builder, TANPA
+     *     event, supaya tidak memicu booted() lagi) — tanpa ini kolom itu basi setelah
+     *     tim diubah di Penugasan IKU, lalu isDirty('tim') di Master IKU bisa keliru
+     *     menganggap "tidak berubah" & penghapusan tim di sana tidak tersinkron.
+     *  2. PIC Tindak Lanjut (rtl_evaluasi.pic) seluruh poin RTL IKU ini yang BELUM
+     *     terverifikasi ikut diganti dengan tim terbaru — PIC tidak lagi diisi Ketua
+     *     Tim, selalu mengikuti tim penanggung jawab IKU (lihat
+     *     App\Livewire\PengisianKegiatan::pilihPicOtomatis()). Poin yang sudah
+     *     terverifikasi Tim SAKIP dibiarkan apa adanya sebagai arsip.
+     */
+    public static function sinkronkanTim(int $ikuId): void
+    {
+        $namaTim = IkuTim::where('iku_id', $ikuId)->orderBy('tim')->pluck('tim')->all();
+        $teksTim = $namaTim !== [] ? implode(', ', $namaTim) : null;
+
+        static::whereKey($ikuId)->update(['tim' => $teksTim]);
+
+        RtlEvaluasi::where('iku_id', $ikuId)
+            ->where(fn ($q) => $q->whereNull('status_verifikasi')->orWhere('status_verifikasi', '!=', 'terverifikasi'))
+            ->update(['pic' => $teksTim]);
+
+        static::lupakanCache();
     }
 
     /**
