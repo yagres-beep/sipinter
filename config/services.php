@@ -101,4 +101,27 @@ return [
         'binary_path' => env('LIBREOFFICE_PATH', 'C:\\Program Files\\LibreOffice\\program\\soffice.exe'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | PostgreSQL client tools (fitur Backup Database)
+    |--------------------------------------------------------------------------
+    |
+    | pg_dump BUKAN paket Composer -- dipakai App\Services\BackupService lewat
+    | Symfony Process untuk membuat dump SQL penuh database (database SIPINTER
+    | memakai Postgres terkelola di Supabase, lihat DB_CONNECTION di .env).
+    |
+    | Di server produksi (Docker, lihat Dockerfile): paket apt "postgresql-client"
+    | sudah terpasang, binary-nya ada di /usr/bin/pg_dump.
+    |
+    | Di komputer Windows (opsional, hanya untuk mencoba fitur ini secara lokal):
+    | pasang "Command Line Tools" dari installer PostgreSQL EDB
+    | (https://www.postgresql.org/download/windows/), lalu sesuaikan PG_DUMP_PATH
+    | di .env ke lokasi pg_dump.exe (biasanya
+    | "C:\Program Files\PostgreSQL\<versi>\bin\pg_dump.exe").
+    |
+    */
+    'postgres' => [
+        'pg_dump_path' => env('PG_DUMP_PATH', 'pg_dump'),
+    ],
+
 ];

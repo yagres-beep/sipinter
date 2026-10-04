@@ -456,6 +456,33 @@ class FolderStructureService
         ];
     }
 
+    // ================================================================
+    // Fitur Backup Database
+    // ================================================================
+
+    /**
+     * Arsipkan satu dump database (hasil pg_dump, lihat App\Services\BackupService)
+     * ke folder "Backup Database" langsung di bawah root akun aktif -- dump ini
+     * dokumen tunggal milik aplikasi (bukan berkas bukti per-IKU/triwulan), jadi
+     * tidak lewat hierarki Tahun/Triwulan/IKU seperti unggahBerkas().
+     */
+    public function unggahBackupDatabase(string $localPath, string $namaBerkas): array
+    {
+        $akun = $this->akunAktifAtauGagal();
+
+        $folderBackup = $this->findOrCreateFolderCached('Backup Database', $akun->drive_folder_id);
+
+        $hasil = $this->drive->uploadFile($localPath, $namaBerkas, $folderBackup, 'application/sql');
+
+        $akun->tambahKuotaTerpakai($hasil['size_bytes']);
+
+        return [
+            'drive_file_id' => $hasil['id'],
+            'storage_account_id' => $akun->id,
+            'ukuran_bytes' => $hasil['size_bytes'],
+        ];
+    }
+
     /**
      * Pola folder yang berlaku untuk SATU IKU tertentu — pola KHUSUS IKU ini bila ada
      * baris override di iku_folder_config, jatuh ke pola GLOBAL (FolderConfig) bila
