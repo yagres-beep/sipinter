@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Livewire\Concerns\GantiNamaBerkas;
 use App\Models\BagianKustom;
 use App\Models\BagianKustomPoin;
 use App\Models\Berkas;
@@ -35,7 +36,7 @@ use Livewire\WithFileUploads;
  */
 class PengisianKegiatan extends Component
 {
-    use WithFileUploads;
+    use GantiNamaBerkas, WithFileUploads;
 
     public int $tahun;
 
@@ -1084,13 +1085,40 @@ class PengisianKegiatan extends Component
     }
 
     /**
+     * Dipanggil GantiNamaBerkas setelah nama berkas diubah — existing_bukti disimpan
+     * sebagai array di properti publik (bukan query ulang tiap render), jadi salinan
+     * namanya diperbarui di sini supaya pratinjau & daftar langsung ikut nama baru.
+     */
+    protected function setelahNamaBerkasDiubah(int $berkasId, string $namaFile): void
+    {
+        foreach ($this->blocks as &$block) {
+            foreach ($block['existing_bukti'] ?? [] as $i => $file) {
+                if ($file['id'] === $berkasId) {
+                    $block['existing_bukti'][$i]['nama_file'] = $namaFile;
+                }
+            }
+        }
+        unset($block);
+
+        foreach ($this->bagianKustomBlocks as $bagianId => $daftar) {
+            foreach ($daftar as $j => $blok) {
+                foreach ($blok['existing_bukti'] ?? [] as $i => $file) {
+                    if ($file['id'] === $berkasId) {
+                        $this->bagianKustomBlocks[$bagianId][$j]['existing_bukti'][$i]['nama_file'] = $namaFile;
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * Sembunyikan status_verifikasi & catatan satu berkas (array bentuk existing_bukti,
      * lihat muatBlocksKegiatan()/muatBagianKustomBlocks()) selagi verifikasiTerlihat()
      * masih false — dipakai supaya seluruh tempat yang menyusun existing_bukti tidak
      * perlu mengulang pengecekan yang sama.
      *
-     * @param  array{id: int, nama_file: string, status_verifikasi: string, catatan: ?string}  $berkas
-     * @return array{id: int, nama_file: string, status_verifikasi: string, catatan: ?string}
+     * @param  array{id: int, nama_file: string, diunggah_oleh: ?int, status_verifikasi: string, catatan: ?string}  $berkas
+     * @return array{id: int, nama_file: string, diunggah_oleh: ?int, status_verifikasi: string, catatan: ?string}
      */
     protected function maskBerkas(array $berkas): array
     {
@@ -1218,6 +1246,7 @@ class PengisianKegiatan extends Component
             'existing_bukti' => $kegiatan->berkas->map(fn (Berkas $b) => $this->maskBerkas([
                 'id' => $b->id,
                 'nama_file' => $b->nama_file,
+                'diunggah_oleh' => $b->diunggah_oleh,
                 'status_verifikasi' => $b->status_verifikasi,
                 'catatan' => $b->catatan,
             ]))->all(),
@@ -1373,6 +1402,7 @@ class PengisianKegiatan extends Component
                 'existing_bukti' => $poin->berkas->map(fn (Berkas $b) => $this->maskBerkas([
                     'id' => $b->id,
                     'nama_file' => $b->nama_file,
+                    'diunggah_oleh' => $b->diunggah_oleh,
                     'status_verifikasi' => $b->status_verifikasi,
                     'catatan' => $b->catatan,
                 ]))->all(),

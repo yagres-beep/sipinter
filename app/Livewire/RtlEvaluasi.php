@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Livewire\Concerns\GantiNamaBerkas;
 use App\Models\Berkas;
 use App\Models\MasterIku;
 use App\Models\Periode;
@@ -25,7 +26,7 @@ use RuntimeException;
  */
 class RtlEvaluasi extends Component
 {
-    use WithFileUploads;
+    use GantiNamaBerkas, WithFileUploads;
 
     public int $tahun;
 

@@ -159,6 +159,41 @@ class GoogleDriveService
     }
 
     /**
+     * Ganti nama sebuah berkas/folder Drive yang sudah ada (ID-nya tetap sama,
+     * jadi tautan lama tidak rusak). Dipakai untuk mengganti nama berkas bukti dari
+     * web (Berkas::gantiNama()) & merapikan nama folder IKU lama.
+     */
+    public function renameFile(string $fileId, string $namaBaru): void
+    {
+        $this->panggilApi(
+            fn () => $this->drive()->files->update($fileId, new DriveFile(['name' => $namaBaru]), ['fields' => 'id']),
+            "mengganti nama menjadi \"{$namaBaru}\""
+        );
+    }
+
+    /**
+     * Daftar folder anak langsung (tidak termasuk yang sudah di-trash) di dalam
+     * sebuah folder, sebagai [id => nama].
+     *
+     * @return array<string, string>
+     */
+    public function foldersInFolder(string $parentFolderId): array
+    {
+        $hasil = $this->panggilApi(fn () => $this->drive()->files->listFiles([
+            'q' => sprintf("mimeType = 'application/vnd.google-apps.folder' and '%s' in parents and trashed = false", $parentFolderId),
+            'fields' => 'files(id, name)',
+            'pageSize' => 1000,
+        ]), 'membaca daftar folder');
+
+        $folder = [];
+        foreach ($hasil->getFiles() as $file) {
+            $folder[$file->getId()] = $file->getName();
+        }
+
+        return $folder;
+    }
+
+    /**
      * Daftar nama anak langsung (file atau folder, tidak termasuk yang sudah di-trash)
      * di dalam sebuah folder. Dipakai untuk mengecek tabrakan nama sebelum membuat
      * folder/berkas baru (RF-17: "diberi penomoran berurutan bila terjadi duplikasi").

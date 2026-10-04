@@ -1,0 +1,96 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Livewire\VerifikasiCapaian;
+use App\Models\Berkas;
+use App\Models\Capaian;
+use App\Models\Kegiatan;
+use App\Models\MasterIku;
+use App\Models\Periode;
+use App\Models\Role;
+use App\Models\User;
+use App\Services\FolderStructureService;
+use App\Services\GoogleDriveService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
+use Mockery;
+use Tests\TestCase;
+
+class GantiNamaBerkasTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected function buatUser(string $peran, string $username): User
+    {
+        $role = Role::firstOrCreate(['nama' => $peran]);
+
+        return User::create([
+            'nama' => $username,
+            'username' => $username, 'email' => "{$username}@example.test",
+            'password' => 'password',
+            'role_id' => $role->id,
+            'status_verifikasi' => 'terverifikasi',
+        ]);
+    }
+
+    protected function siapkanBerkas(?User $pengunggah = null): array
+    {
+        $iku = MasterIku::create(['kode' => '1111', 'indikator' => 'Persentase Publikasi/Laporan Uji']);
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 8, 'triwulan' => 3, 'bulan_ke' => 2, 'flag_bulan_terlewat' => false]);
+        $capaian = Capaian::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'status' => Capaian::STATUS_DIAJUKAN]);
+        $kegiatan = Kegiatan::create([
+            'iku_id' => $iku->id, 'periode_id' => $periode->id, 'uraian_kegiatan' => 'Kegiatan uji',
+            'jenis' => 'bukan_survei_sensus', 'status_dokumen' => Kegiatan::STATUS_DIAJUKAN,
+        ]);
+        $berkas = Berkas::create([
+            'ref_id' => $kegiatan->id, 'ref_type' => Kegiatan::class, 'kategori' => 'capaian',
+            'nama_file' => 'Kegiatan uji.pdf', 'status_verifikasi' => 'menunggu',
+            'diunggah_oleh' => $pengunggah?->id,
+        ]);
+
+        return compact('iku', 'capaian', 'berkas');
+    }
+
+    public function test_nama_folder_iku_berisi_kode_diikuti_indikator(): void
+    {
+        $iku = new MasterIku(['kode' => '1111', 'indikator' => 'Persentase Publikasi/Laporan Statistik']);
+
+        $this->assertSame('1111. Persentase Publikasi Laporan Statistik', FolderStructureService::namaFolderIku($iku));
+    }
+
+    public function test_pengunggah_tercatat_otomatis_saat_berkas_dibuat(): void
+    {
+        $ketua = $this->buatUser('Ketua Tim', 'ketua');
+        $this->actingAs($ketua);
+
+        $data = $this->siapkanBerkas();
+
+        $this->assertSame($ketua->id, $data['berkas']->fresh()->diunggah_oleh);
+    }
+
+    public function test_tim_sakip_bisa_ganti_nama_dan_ekstensi_dipertahankan_serta_drive_ikut_diganti(): void
+    {
+        $this->actingAs($this->buatUser('Tim SAKIP', 'sakip'));
+        $data = $this->siapkanBerkas($this->buatUser('Ketua Tim', 'ketua'));
+        $data['berkas']->update(['drive_file_id' => 'drive-123']);
+
+        $this->app->instance(GoogleDriveService::class, Mockery::mock(GoogleDriveService::class, function ($mock) {
+            $mock->shouldReceive('renameFile')->once()->with('drive-123', 'Laporan baru.pdf');
+        }));
+
+        Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
+            ->call('gantiNamaBerkas', $data['berkas']->id, 'Laporan baru');
+
+        $this->assertSame('Laporan baru.pdf', $data['berkas']->fresh()->nama_file);
+    }
+
+    public function test_pengguna_lain_tidak_bisa_ganti_nama_berkas_orang_lain(): void
+    {
+        $data = $this->siapkanBerkas($this->buatUser('Ketua Tim', 'ketua'));
+        $lain = $this->buatUser('Ketua Tim', 'ketua-lain');
+
+        $this->assertFalse($data['berkas']->bisaDiubahNamaOleh($lain));
+        $this->assertTrue($data['berkas']->bisaDiubahNamaOleh(User::where('username', 'ketua')->first()));
+    }
+}

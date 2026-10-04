@@ -210,7 +210,7 @@
                             @forelse ($block['existing_bukti'] as $file)
                                 <div class="filechip {{ $file['status_verifikasi'] === 'terverifikasi' ? 'ok' : ($file['status_verifikasi'] === 'ditolak' ? 'no' : '') }}">
                                     <span class="nm">
-                                        📄 {{ $file['nama_file'] }}
+                                        <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" />
                                         @if ($file['status_verifikasi'] === 'ditolak' && $file['catatan'])
                                             <span class="sub" style="color:var(--red)">{{ $file['catatan'] }}</span>
                                         @endif
@@ -368,7 +368,7 @@
                             @foreach ($block['existing_bukti'] as $file)
                                 <div class="filechip {{ $file['status_verifikasi'] === 'terverifikasi' ? 'ok' : ($file['status_verifikasi'] === 'ditolak' ? 'no' : '') }}">
                                     <span class="nm">
-                                        📄 {{ $file['nama_file'] }}
+                                        <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" />
                                         @if ($file['status_verifikasi'] === 'ditolak' && $file['catatan'])
                                             <span class="sub" style="color:var(--red)">{{ $file['catatan'] }}</span>
                                         @endif
@@ -614,7 +614,7 @@
                             @foreach ($poin->berkas as $file)
                                 <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}">
                                     <span class="nm">
-                                        📄 {{ $file->nama_file }}
+                                        <x-nama-berkas :id="$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" />
                                         @if ($file->status_verifikasi === 'ditolak' && $file->catatan)
                                             <span class="sub" style="color:var(--red)">{{ $file->catatan }}</span>
                                         @endif
@@ -821,7 +821,7 @@
                                                          jadi tidak perlu tombol hapus di sini. --}}
                                                     <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}">
                                                         <span class="nm">
-                                                            📄 {{ $file->nama_file }}
+                                                            <x-nama-berkas :id="$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" />
                                                             @if ($file->status_verifikasi === 'ditolak' && $file->catatan)
                                                                 <span class="sub" style="color:var(--red)">{{ $file->catatan }}</span>
                                                             @endif
@@ -877,7 +877,7 @@
                                     @foreach ($blok['existing_bukti'] as $file)
                                         <div class="filechip {{ $file['status_verifikasi'] === 'terverifikasi' ? 'ok' : ($file['status_verifikasi'] === 'ditolak' ? 'no' : '') }}">
                                             <span class="nm">
-                                                📄 {{ $file['nama_file'] }}
+                                                <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" />
                                                 @if ($file['status_verifikasi'] === 'ditolak' && $file['catatan'])
                                                     <span class="sub" style="color:var(--red)">{{ $file['catatan'] }}</span>
                                                 @endif

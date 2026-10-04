@@ -86,7 +86,7 @@
                         <div class="filechip-grid">
                             @foreach ($poin->berkas as $file)
                                 <div class="filechip">
-                                    <span class="nm">📄 {{ $file->nama_file }}</span>
+                                    <span class="nm"><x-nama-berkas :id="$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" /></span>
                                 </div>
                             @endforeach
                         </div>

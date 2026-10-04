@@ -154,6 +154,16 @@ a{text-decoration:none;color:inherit}
 .filechip-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:8px;margin-top:8px}
 .filechip-grid .filechip{margin-top:0;min-width:0}
 .filechip-grid .filechip .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+/* Ganti nama berkas langsung dari web (komponen <x-nama-berkas>) */
+.btn-ubah-nama{background:none;border:0;padding:0 2px;margin-left:4px;cursor:pointer;font-size:12px;opacity:.55;vertical-align:baseline}
+.btn-ubah-nama:hover{opacity:1}
+.filechip .nm:has(.sedang-ubah){white-space:normal;overflow:visible;flex:1}
+.filechip:has(.sedang-ubah){flex-wrap:wrap}
+.nama-berkas.sedang-ubah{display:block;width:100%}
+.ubah-nama-form{display:flex;flex-wrap:wrap;align-items:center;gap:6px;width:100%}
+.ubah-nama-form .inp{flex:1 1 180px;min-width:0;padding:6px 9px;font-size:12.5px}
+.ubah-nama-form .ext{color:var(--muted);font-weight:400}
+.ubah-nama-form .sub{flex-basis:100%}
 
 /* buttons */
 .btn{display:inline-flex;align-items:center;gap:7px;padding:10px 17px;border-radius:10px;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}

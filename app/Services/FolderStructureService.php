@@ -210,7 +210,7 @@ class FolderStructureService
 
     /**
      * Susun/temukan folder induk sampai ke folder IKU itu sendiri (mis. ".../2026/
-     * Triwulan II/IKU 1131"), SEBELUM masuk ke kategori mana pun — dipakai
+     * Triwulan II/1131. <indikator>"), SEBELUM masuk ke kategori mana pun — dipakai
      * resolveKategoriFolder() di atas, dan juga linkBuktiDukungIku() untuk
      * menautkan Notula langsung ke folder IKU (bukan ke satu kategori tertentu).
      */
@@ -226,22 +226,82 @@ class FolderStructureService
                 continue; // sudah ditangani resolveTahunFolder() di atas.
             }
 
+            if ($level === FolderConfig::LEVEL_IKU) {
+                $folderId = $this->resolveFolderIkuDi($iku, $folderId);
+
+                continue;
+            }
+
             $namaLevel = match ($level) {
                 FolderConfig::LEVEL_TRIWULAN => 'Triwulan '.(['I', 'II', 'III', 'IV'][$periode->triwulan - 1] ?? $periode->triwulan),
-                // Nama folder IKU mengikuti apa adanya nilai kolom "Kode" yang diisi Tim
-                // SAKIP di Master IKU (RF-08) — sistem tidak memformat ulang nilainya.
-                FolderConfig::LEVEL_IKU => $iku->kode,
                 // Tingkat kustom (RF-15) — namanya sendiri dipakai apa adanya sebagai
                 // folder tetap (sama untuk semua periode/IKU), bukan nilai yang dihitung.
                 default => $level,
             };
 
-            if ($namaLevel !== null) {
-                $folderId = $this->findOrCreateFolderCached($namaLevel, $folderId);
-            }
+            $folderId = $this->findOrCreateFolderCached($namaLevel, $folderId);
         }
 
         return $folderId;
+    }
+
+    /**
+     * Nama folder IKU: kode diikuti indikatornya, mis. "1111. Persentase Publikasi
+     * Laporan Statistik ..." — supaya isi Drive langsung terbaca tanpa harus
+     * mencocokkan kode ke Master IKU. Karakter terlarang (mis. "/" di
+     * "Publikasi/Laporan") dirapikan lewat namaOtomatis().
+     */
+    public static function namaFolderIku(MasterIku $iku): string
+    {
+        $indikator = trim((string) $iku->indikator);
+
+        return self::namaOtomatis($indikator !== '' ? "{$iku->kode}. {$indikator}" : (string) $iku->kode, 150);
+    }
+
+    /**
+     * Temukan/buat folder IKU di dalam $parentFolderId dengan nama namaFolderIku().
+     *
+     * Folder yang dulu dibuat dengan nama kode saja ("1111"), atau dengan indikator
+     * lama sebelum indikatornya diubah di Master IKU ("1111. <indikator lama>"),
+     * TIDAK dibiarkan jadi folder kembar — folder itu diganti nama ke nama terbaru,
+     * supaya berkas yang sudah ada tetap berkumpul di satu folder IKU yang sama.
+     */
+    protected function resolveFolderIkuDi(MasterIku $iku, string $parentFolderId): string
+    {
+        $nama = self::namaFolderIku($iku);
+        $key = "{$parentFolderId}|{$nama}";
+
+        if (isset($this->cacheFolderId[$key])) {
+            return $this->cacheFolderId[$key];
+        }
+
+        $kode = (string) $iku->kode;
+        $folderAda = $this->drive->foldersInFolder($parentFolderId);
+
+        $folderId = array_search($nama, $folderAda, true);
+
+        if ($folderId === false) {
+            foreach ($folderAda as $id => $namaAda) {
+                if ($namaAda === $kode || str_starts_with($namaAda, "{$kode}. ")) {
+                    $folderId = $id;
+
+                    try {
+                        $this->drive->renameFile($id, $nama);
+                    } catch (RuntimeException $e) {
+                        // Tetap pakai folder lama apa adanya — gagal merapikan nama
+                        // tidak boleh menggagalkan unggahan berkas.
+                    }
+
+                    break;
+                }
+            }
+        }
+
+        if ($folderId === false) {
+            $folderId = $this->drive->createFolder($nama, $parentFolderId);
+        }
+
+        return $this->cacheFolderId[$key] = (string) $folderId;
     }
 
     /**
@@ -532,7 +592,7 @@ class FolderStructureService
         }
 
         if ($iku) {
-            $folderId = $this->drive->findOrCreateFolder($iku->kode, $folderId);
+            $folderId = $this->resolveFolderIkuDi($iku, $folderId);
         }
 
         if ($kategoriNama) {

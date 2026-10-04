@@ -313,7 +313,7 @@
                 @forelse ($berkasKegiatan as $file)
                     <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}" style="margin-top:8px" wire:key="berkas-{{ $file->id }}">
                         <span class="nm">
-                            📄 {{ $file->nama_file }}
+                            <x-nama-berkas :id="$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" />
                             @if ($file->status_verifikasi === 'ditolak')
                                 <span class="sub" style="color:var(--red)">Tidak Sesuai</span>
                             @endif
@@ -527,7 +527,7 @@
 
                         @forelse ($berkasPoin as $file)
                             <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}" wire:key="berkas-{{ $file->id }}">
-                                <span class="nm">📄 {{ $file->nama_file }} <span class="sub">Bukti dukung</span></span>
+                                <span class="nm"><x-nama-berkas :id="$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" /> <span class="sub">Bukti dukung</span></span>
                                 <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file->id }}">🔍 Periksa</button>
                             </div>
                         @empty
@@ -853,7 +853,7 @@
                         @foreach ($poin->berkas as $file)
                             <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}" style="margin-top:10px" wire:key="berkas-{{ $file->id }}">
                                 <span class="nm">
-                                    📄 {{ $file->nama_file }}
+                                    <x-nama-berkas :id="$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" />
                                     @if ($file->status_verifikasi === 'ditolak')
                                         <span class="sub" style="color:var(--red)">Tidak Sesuai</span>
                                     @endif

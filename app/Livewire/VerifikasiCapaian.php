@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use App\Exceptions\InvalidStatusTransitionException;
+use App\Livewire\Concerns\GantiNamaBerkas;
 use App\Models\BagianKustomPoin;
 use App\Models\Berkas;
 use App\Models\Capaian;
@@ -31,6 +32,8 @@ use Livewire\Component;
  */
 class VerifikasiCapaian extends Component
 {
+    use GantiNamaBerkas;
+
     public Capaian $capaian;
 
     public ?string $analisis_capaian = null;
