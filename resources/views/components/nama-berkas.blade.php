@@ -8,11 +8,17 @@
     wire:ignore + wire:key berisi nama: nama baru hasil Alpine tidak ditimpa nama lama
     saat induk re-render, tapi bila nama dari server memang berubah elemen dibuat ulang.
 --}}
-@props(['id', 'nama', 'diunggahOleh' => null])
+@props(['id', 'nama', 'diunggahOleh' => null, 'aksi' => 'gantiNamaBerkas', 'bisaUbah' => null])
 
+{{--
+    aksi: method Livewire yang dipanggil (id, namaBaru) dan mengembalikan
+    {ok, nama_file|pesan}. Bawaan gantiNamaBerkas (berkas yang sudah tersimpan);
+    form Isian Kegiatan memakai aturNamaBuktiBaru untuk berkas yang BARU dipilih
+    (belum tersimpan), dengan bisaUbah=true karena itu berkas milik pengisi sendiri.
+--}}
 @php
     $user = auth()->user();
-    $bisaUbah = $user && (
+    $bisaUbah ??= $user && (
         $user->namaRole() === 'Tim SAKIP'
         || $diunggahOleh === null
         || (int) $diunggahOleh === (int) $user->id
@@ -37,7 +43,7 @@
             if (this.simpan) return;
             if (this.draf.trim() === '') { this.galat = 'Nama tidak boleh kosong.'; return; }
             this.simpan = true;
-            const hasil = await this.$wire.gantiNamaBerkas({{ (int) $id }}, this.draf);
+            const hasil = await this.$wire.{{ $aksi }}(@js($id), this.draf);
             this.simpan = false;
             if (hasil && hasil.ok) { this.nama = hasil.nama_file; this.edit = false; }
             else { this.galat = (hasil && hasil.pesan) || 'Gagal mengganti nama berkas.'; }

@@ -402,8 +402,15 @@
                                          pernah diperiksa Tim SAKIP sama sekali, jadi belum punya
                                          status apa-apa (bukan "Sesuai"). Hijau baru muncul begitu
                                          benar-benar ditandai "Sesuai" (lihat existing_bukti di atas). --}}
-                                    <div class="filechip">
-                                        <span class="nm">📄 {{ $file->getClientOriginalName() }}</span>
+                                    @php
+                                        $kunciBaru = $this->kunciBuktiBaru($file);
+                                        $namaTampil = ($namaBuktiBaru[$kunciBaru] ?? '') ?: trim('Kegiatan '.$block['uraian_kegiatan']);
+                                    @endphp
+                                    <div class="filechip" wire:key="bukti-baru-{{ $kunciBaru }}">
+                                        <span class="nm">
+                                            <x-nama-berkas :id="$kunciBaru" :nama="$namaTampil.'.pdf'" aksi="aturNamaBuktiBaru" :bisa-ubah="true" />
+                                            <span class="sub">Berkas asli: {{ $file->getClientOriginalName() }}</span>
+                                        </span>
                                         <span class="x" style="cursor:pointer" title="Hapus bukti" wire:click="removeBuktiKegiatan({{ $i }}, {{ $fi }})" wire:loading.class="btn-busy" wire:target="removeBuktiKegiatan({{ $i }}, {{ $fi }})">🗑️</span>
                                     </div>
                                 @endforeach
@@ -626,8 +633,15 @@
                             @endforeach
 
                             @foreach ($evaluasi[$poin->id]['bukti'] ?? [] as $fi => $file)
-                                <div class="filechip">
-                                    <span class="nm">📄 {{ $file->getClientOriginalName() }}</span>
+                                @php
+                                    $kunciBaru = $this->kunciBuktiBaru($file);
+                                    $namaTampil = ($namaBuktiBaru[$kunciBaru] ?? '') ?: trim('Evaluasi RTL '.$poin->rtl_teks);
+                                @endphp
+                                <div class="filechip" wire:key="bukti-baru-{{ $kunciBaru }}">
+                                    <span class="nm">
+                                        <x-nama-berkas :id="$kunciBaru" :nama="$namaTampil.'.pdf'" aksi="aturNamaBuktiBaru" :bisa-ubah="true" />
+                                        <span class="sub">Berkas asli: {{ $file->getClientOriginalName() }}</span>
+                                    </span>
                                     <span class="x" style="cursor:pointer" title="Hapus bukti" wire:click="removeBuktiEvaluasi({{ $poin->id }}, {{ $fi }})" wire:loading.class="btn-busy" wire:target="removeBuktiEvaluasi({{ $poin->id }}, {{ $fi }})">🗑️</span>
                                 </div>
                             @endforeach
@@ -902,8 +916,15 @@
                                     @foreach ($blok['bukti'] as $fi => $file)
                                         {{-- TANPA kelas "ok" (hijau) — sama seperti bukti Kegiatan di
                                              atas, belum pernah diperiksa Tim SAKIP sama sekali. --}}
-                                        <div class="filechip">
-                                            <span class="nm">📄 {{ $file->getClientOriginalName() }}</span>
+                                        @php
+                                            $kunciBaru = $this->kunciBuktiBaru($file);
+                                            $namaTampil = ($namaBuktiBaru[$kunciBaru] ?? '') ?: trim($bagian->nama.' '.($blok['teks'] ?? ''));
+                                        @endphp
+                                        <div class="filechip" wire:key="bukti-baru-{{ $kunciBaru }}">
+                                            <span class="nm">
+                                                <x-nama-berkas :id="$kunciBaru" :nama="$namaTampil.'.pdf'" aksi="aturNamaBuktiBaru" :bisa-ubah="true" />
+                                                <span class="sub">Berkas asli: {{ $file->getClientOriginalName() }}</span>
+                                            </span>
                                             <span class="x" style="cursor:pointer" title="Hapus bukti" wire:click="removeBuktiBagianKustom({{ $bagian->id }}, {{ $i }}, {{ $fi }})" wire:loading.class="btn-busy" wire:target="removeBuktiBagianKustom({{ $bagian->id }}, {{ $i }}, {{ $fi }})">🗑️</span>
                                         </div>
                                     @endforeach

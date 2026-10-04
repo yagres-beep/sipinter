@@ -50,6 +50,58 @@ class PengisianKegiatan extends Component
     public array $blocks = [];
 
     /**
+     * Nama kustom untuk berkas bukti yang BARU dipilih (belum tersimpan), diisi
+     * lewat ✏️ di chip berkas — kunci = kunciBuktiBaru() berkas sementaranya, nilai =
+     * nama tanpa ekstensi. Kosong berarti pakai nama default (mis. "Kegiatan <uraian>").
+     *
+     * @var array<string, string>
+     */
+    public array $namaBuktiBaru = [];
+
+    /**
+     * Kunci stabil satu berkas sementara Livewire (nama file tmp-nya unik per
+     * unggahan) — di-md5 supaya aman dipakai sebagai kunci array/JS (tanpa titik).
+     */
+    public function kunciBuktiBaru($file): string
+    {
+        return md5($file->getFilename());
+    }
+
+    /**
+     * Nama akhir berkas baru: nama kustom bila diisi, selain itu nama default.
+     */
+    protected function namaBuktiBaruAtauDefault($file, string $namaDefault): string
+    {
+        $kustom = trim($this->namaBuktiBaru[$this->kunciBuktiBaru($file)] ?? '');
+
+        return $kustom !== '' ? $kustom : $namaDefault;
+    }
+
+    /**
+     * Dipanggil <x-nama-berkas aksi="aturNamaBuktiBaru"> untuk berkas yang belum
+     * tersimpan — cukup dicatat, baru dipakai saat Simpan Draf/Ajukan.
+     *
+     * @return array{ok: bool, nama_file?: string, pesan?: string}
+     */
+    public function aturNamaBuktiBaru(string $kunci, string $nama): array
+    {
+        $nama = trim($nama);
+        if (str_ends_with(strtolower($nama), '.pdf')) {
+            $nama = substr($nama, 0, -4);
+        }
+
+        $nama = FolderStructureService::namaOtomatis($nama, 150);
+
+        if ($nama === '') {
+            return ['ok' => false, 'pesan' => 'Nama berkas tidak boleh kosong.'];
+        }
+
+        $this->namaBuktiBaru[$kunci] = $nama;
+
+        return ['ok' => true, 'nama_file' => $nama.'.pdf'];
+    }
+
+    /**
      * @var array<int, array{kendala: string, solusi: string}>
      */
     public array $kendalaBlocks = [];
@@ -2269,13 +2321,14 @@ class PengisianKegiatan extends Component
             $namaBerkasDasar = 'Kegiatan '.$block['uraian_kegiatan'];
 
             foreach ($block['bukti'] as $file) {
+                $namaBerkas = $this->namaBuktiBaruAtauDefault($file, $namaBerkasDasar);
                 $path = $file->store('bukti-capaian', 'local');
 
                 $berkas = Berkas::create([
                     'ref_id' => $kegiatan->id,
                     'ref_type' => Kegiatan::class,
                     'kategori' => 'capaian',
-                    'nama_file' => $namaBerkasDasar.'.pdf',
+                    'nama_file' => $namaBerkas.'.pdf',
                     'path' => $path,
                     'status_verifikasi' => 'menunggu',
                 ]);
@@ -2285,7 +2338,7 @@ class PengisianKegiatan extends Component
                 try {
                     $this->streamProgresUnggah($file->getClientOriginalName(), 'bukti kegiatan');
                     $localFullPath = Storage::disk('local')->path($path);
-                    $hasilDrive = $folderService->unggahBerkasKegiatan($kegiatan, 'capaian', $localFullPath, namaBerkasOverride: $namaBerkasDasar);
+                    $hasilDrive = $folderService->unggahBerkasKegiatan($kegiatan, 'capaian', $localFullPath, namaBerkasOverride: $namaBerkas);
                     $berkas->update($hasilDrive);
                     $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti kegiatan', true);
                 } catch (\Throwable $e) {
@@ -2367,13 +2420,14 @@ class PengisianKegiatan extends Component
             // "ditolak" juga tidak pernah direset otomatis di sini).
 
             foreach ($data['bukti'] as $file) {
+                $namaBerkas = $this->namaBuktiBaruAtauDefault($file, $namaBerkasDasar);
                 $path = $file->store('bukti-evaluasi-rtl', 'local');
 
                 $berkas = Berkas::create([
                     'ref_id' => $poin->id,
                     'ref_type' => RtlEvaluasiModel::class,
                     'kategori' => 'evaluasi_rtl',
-                    'nama_file' => $namaBerkasDasar.'.pdf',
+                    'nama_file' => $namaBerkas.'.pdf',
                     'path' => $path,
                     'status_verifikasi' => 'menunggu',
                 ]);
@@ -2381,7 +2435,7 @@ class PengisianKegiatan extends Component
                 try {
                     $this->streamProgresUnggah($file->getClientOriginalName(), 'bukti evaluasi RTL');
                     $localFullPath = Storage::disk('local')->path($path);
-                    $hasilDrive = $folderService->unggahBerkas($poin->periode, $poin->masterIku, 'evaluasi_rtl', $localFullPath, namaBerkasOverride: $namaBerkasDasar);
+                    $hasilDrive = $folderService->unggahBerkas($poin->periode, $poin->masterIku, 'evaluasi_rtl', $localFullPath, namaBerkasOverride: $namaBerkas);
                     $berkas->update($hasilDrive);
                     $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti evaluasi RTL', true);
                 } catch (\Throwable $e) {
@@ -2512,13 +2566,14 @@ class PengisianKegiatan extends Component
                 $namaBerkasDasar = $bagian->nama.' '.$poin->teks;
 
                 foreach ($blok['bukti'] as $file) {
+                    $namaBerkas = $this->namaBuktiBaruAtauDefault($file, $namaBerkasDasar);
                     $path = $file->store('bukti-bagian-kustom', 'local');
 
                     $berkas = Berkas::create([
                         'ref_id' => $poin->id,
                         'ref_type' => BagianKustomPoin::class,
                         'kategori' => 'bagian_kustom',
-                        'nama_file' => $namaBerkasDasar.'.pdf',
+                        'nama_file' => $namaBerkas.'.pdf',
                         'path' => $path,
                         'status_verifikasi' => 'menunggu',
                     ]);
@@ -2529,7 +2584,7 @@ class PengisianKegiatan extends Component
                         $hasilDrive = $folderService->unggahBerkas(
                             $periode, $iku, 'bagian_kustom', $localFullPath,
                             namaFolderOverride: $bagian->nama,
-                            namaBerkasOverride: $namaBerkasDasar,
+                            namaBerkasOverride: $namaBerkas,
                         );
                         $berkas->update($hasilDrive);
                         $this->notifikasiHasilUnggah($file->getClientOriginalName(), "bukti {$bagian->nama}", true);

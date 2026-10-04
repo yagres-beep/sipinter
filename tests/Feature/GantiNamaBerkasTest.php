@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Livewire\PengisianKegiatan;
 use App\Livewire\VerifikasiCapaian;
 use App\Models\Berkas;
 use App\Models\Capaian;
@@ -13,6 +14,7 @@ use App\Models\User;
 use App\Services\FolderStructureService;
 use App\Services\GoogleDriveService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Livewire\Livewire;
 use Mockery;
 use Tests\TestCase;
@@ -83,6 +85,32 @@ class GantiNamaBerkasTest extends TestCase
             ->call('gantiNamaBerkas', $data['berkas']->id, 'Laporan baru');
 
         $this->assertSame('Laporan baru.pdf', $data['berkas']->fresh()->nama_file);
+    }
+
+    public function test_berkas_baru_menampilkan_nama_default_dan_nama_kustom_dipakai_saat_disimpan(): void
+    {
+        $this->actingAs($this->buatUser('Ketua Tim', 'ketua'));
+        $iku = MasterIku::create(['kode' => 'UJI-001', 'indikator' => 'Indikator uji coba', 'tim' => 'Uji']);
+
+        $komponen = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 9)
+            ->set('iku_id', $iku->id)
+            ->set('blocks.0.uraian_kegiatan', 'Rapat koordinasi')
+            ->set('blocks.0.jenis', 'bukan_survei_sensus')
+            ->set('blocks.0.bukti', [UploadedFile::fake()->create('scan001.pdf', 100, 'application/pdf')])
+            ->assertSee('Kegiatan Rapat koordinasi.pdf');
+
+        $kunci = $komponen->instance()->kunciBuktiBaru($komponen->get('blocks.0.bukti')[0]);
+
+        $komponen->call('aturNamaBuktiBaru', $kunci, 'Undangan rapat.pdf')
+            ->assertSee('Undangan rapat.pdf')
+            ->set('kendalaBlocks.0.kendala', 'Kendala uji')
+            ->set('rtlBaru.0.rtl_teks', 'RTL uji')
+            ->call('ajukanIsian')
+            ->assertHasNoErrors();
+
+        $this->assertSame('Undangan rapat.pdf', Berkas::first()->nama_file);
     }
 
     public function test_pengguna_lain_tidak_bisa_ganti_nama_berkas_orang_lain(): void
