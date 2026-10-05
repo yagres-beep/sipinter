@@ -101,6 +101,12 @@ class VerifikasiCapaian extends Component
     public array $rincianNTw = [];
 
     /**
+     * Mode koreksi checklist Rincian N -- true membuka kembali item yang sudah
+     * tersimpan di TW I s.d. TW aktif (lihat mulaiEditRincianN()).
+     */
+    public bool $editRincianN = false;
+
+    /**
      * Nilai form Alokasi/Realisasi Triwulanan — diikat lewat wire:model (properti
      * FLAT, bukan atribut model relasi, karena Livewire di sini tidak mendukung
      * wire:model langsung ke atribut model — "Can't set model properties
@@ -403,14 +409,52 @@ class VerifikasiCapaian extends Component
             ? collect(preg_split('/[,;]/', $picTersimpan))->map(fn ($t) => trim($t))->filter()->unique()->values()->all()
             : ($this->capaian->masterIku?->namaTimList() ?? []);
 
+        $this->muatPilihanRincianN();
+    }
+
+    /**
+     * Isi ulang $rincianNPilih/$rincianNTw dari kondisi DB -- dipakai mount(),
+     * mulaiEditRincianN() & batalEditRincianN(). Di mode edit SELURUH item yang
+     * sudah direalisasikan s.d. TW aktif ikut dimuat tercentang di kolom TW-nya
+     * masing-masing supaya bisa dilepas/dipindah bila ada salah centang.
+     */
+    protected function muatPilihanRincianN(): void
+    {
         $tw = (int) $this->capaian->periode->triwulan;
+        $this->rincianNPilih = [];
+        $this->rincianNTw = [];
+
         foreach ($this->rincianNList() as $n) {
-            if ($n->triwulan_realisasi === $tw) {
-                $this->rincianNPilih[$n->id] = true;
-            } elseif ($n->triwulan_realisasi === null) {
+            if ($n->triwulan_realisasi === null) {
                 $this->rincianNTw[$n->id] = $tw;
+            } elseif ($n->triwulan_realisasi === $tw || ($this->editRincianN && $n->triwulan_realisasi < $tw)) {
+                $this->rincianNPilih[$n->id] = true;
+                $this->rincianNTw[$n->id] = $n->triwulan_realisasi;
             }
         }
+    }
+
+    /**
+     * Buka kunci checklist Rincian N yang sudah tersimpan di TW I s.d. TW aktif
+     * (termasuk TW sebelumnya) supaya bisa dikoreksi bila salah centang --
+     * terkunci lagi begitu disimpan (syncRincianN()) atau dibatalkan.
+     */
+    public function mulaiEditRincianN(): void
+    {
+        if (! $this->bisaDiverifikasi()) {
+            return;
+        }
+
+        $this->editRincianN = true;
+        $this->muatPilihanRincianN();
+        $this->recomputeXRealisasiLive();
+    }
+
+    public function batalEditRincianN(): void
+    {
+        $this->editRincianN = false;
+        $this->muatPilihanRincianN();
+        $this->recomputeXRealisasiLive();
     }
 
     /**
@@ -444,7 +488,18 @@ class VerifikasiCapaian extends Component
     {
         $tw = (int) $this->capaian->periode->triwulan;
 
-        return $this->rincianNList()->filter(fn (RincianN $n) => $n->triwulan_realisasi === null || $n->triwulan_realisasi === $tw)->values();
+        return $this->rincianNList()->filter(fn (RincianN $n) => $this->rincianNBisaDiubah($n, $tw))->values();
+    }
+
+    /**
+     * Normal: item kosong atau tersimpan di TW aktif. Mode edit: juga item yang
+     * tersimpan di TW sebelum TW aktif (item TW SESUDAH TW aktif tetap terkunci).
+     */
+    protected function rincianNBisaDiubah(RincianN $n, int $tw): bool
+    {
+        return $n->triwulan_realisasi === null
+            || $n->triwulan_realisasi === $tw
+            || ($this->editRincianN && $n->triwulan_realisasi < $tw);
     }
 
     /**
@@ -456,7 +511,7 @@ class VerifikasiCapaian extends Component
     {
         $tw = (int) $this->capaian->periode->triwulan;
 
-        return $this->rincianNList()->filter(fn (RincianN $n) => $n->triwulan_realisasi !== null && $n->triwulan_realisasi !== $tw)->values();
+        return $this->rincianNList()->filter(fn (RincianN $n) => ! $this->rincianNBisaDiubah($n, $tw))->values();
     }
 
     /**
@@ -469,7 +524,7 @@ class VerifikasiCapaian extends Component
      */
     protected function twTujuanRincianN(RincianN $n, int $twAktif): int
     {
-        if ($n->triwulan_realisasi === $twAktif) {
+        if (! $this->editRincianN && $n->triwulan_realisasi === $twAktif) {
             return $twAktif;
         }
 
@@ -496,7 +551,7 @@ class VerifikasiCapaian extends Component
         $hitung = array_fill(1, 4, 0);
 
         foreach ($this->rincianNList() as $n) {
-            if ($n->triwulan_realisasi !== null && $n->triwulan_realisasi !== $twAktif) {
+            if (! $this->rincianNBisaDiubah($n, $twAktif)) {
                 $hitung[$n->triwulan_realisasi]++;
 
                 continue;
@@ -558,7 +613,7 @@ class VerifikasiCapaian extends Component
         } else {
             $this->rincianNPilih[$id] = true;
 
-            if ($n->triwulan_realisasi === null) {
+            if ($this->editRincianN || $n->triwulan_realisasi === null) {
                 $this->rincianNTw[$id] = $tw;
             }
         }
@@ -588,15 +643,16 @@ class VerifikasiCapaian extends Component
 
         foreach ($this->rincianNBisaDipilih() as $n) {
             $dicentang = (bool) ($this->rincianNPilih[$n->id] ?? false);
+            $tujuan = $dicentang ? $this->twTujuanRincianN($n, $twAktif) : null;
 
-            if ($dicentang && $n->triwulan_realisasi === null) {
-                $n->update(['triwulan_realisasi' => $this->twTujuanRincianN($n, $twAktif)]);
-            } elseif (! $dicentang && $n->triwulan_realisasi === $twAktif) {
-                $n->update(['triwulan_realisasi' => null]);
+            if ($n->triwulan_realisasi !== $tujuan) {
+                $n->update(['triwulan_realisasi' => $tujuan]);
             }
         }
 
         $this->cacheRincianNList = null;
+        $this->editRincianN = false;
+        $this->muatPilihanRincianN();
 
         for ($tw = 1; $tw <= 4; $tw++) {
             $this->{"x_realisasi_tw{$tw}"} = RincianN::where('iku_id', $this->capaian->iku_id)

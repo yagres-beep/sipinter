@@ -81,7 +81,7 @@
             </div>
         </div>
         @if ($capaian->masterIku->pakaiRasio())
-            <div class="fhint" style="margin:10px 0 6px">Alokasi Pembilang (X) &amp; Penyebut (Y) TW I-IV sudah ditetapkan sekali di awal tahun lewat <a wire:navigate href="{{ route('master-iku.index') }}#target">🎯 Target Tahunan</a> — di sini centang item Rincian N yang sudah direalisasikan, LANGSUNG di kolom TW yang sebenarnya (checklist terbuka di kolom TW I s.d. TW aktif sekaligus, tidak cuma TW aktif — kalau ada item yang terlewat dicentang saat TW itu berjalan, klik saja checkbox-nya di kolom TW itu dari sini). Begitu tersimpan, item itu terkunci permanen ke kolom tempat dicentang, tidak bisa diedit lagi dari sesi mana pun. Realisasi Penyebut (Y) otomatis mengikuti Alokasi Y. Kumulatif TW I s.d. TW berjalan &amp; persentasenya (X÷Y×100) dihitung otomatis di bawah.</div>
+            <div class="fhint" style="margin:10px 0 6px">Alokasi Pembilang (X) &amp; Penyebut (Y) TW I-IV sudah ditetapkan sekali di awal tahun lewat <a wire:navigate href="{{ route('master-iku.index') }}#target">🎯 Target Tahunan</a> — di sini centang item Rincian N yang sudah direalisasikan, LANGSUNG di kolom TW yang sebenarnya (checklist terbuka di kolom TW I s.d. TW aktif sekaligus, tidak cuma TW aktif — kalau ada item yang terlewat dicentang saat TW itu berjalan, klik saja checkbox-nya di kolom TW itu dari sini). Begitu tersimpan, item itu terkunci ke kolom tempat dicentang dan tetap ditampilkan — bila ada salah centang, klik <strong>✏️ Edit Pilihan</strong> di baris Realisasi untuk membuka kuncinya (TW I s.d. TW aktif), lalu simpan. Realisasi Penyebut (Y) otomatis mengikuti Alokasi Y. Kumulatif TW I s.d. TW berjalan &amp; persentasenya (X÷Y×100) dihitung otomatis di bawah.</div>
         @else
             <div class="fhint" style="margin:10px 0 6px">Alokasi Target TW I-IV sudah ditetapkan sekali di awal tahun lewat <a wire:navigate href="{{ route('master-iku.index') }}#target">🎯 Target Tahunan</a> — di sini cukup isi <strong>Realisasi sebagai angka KUMULATIF s.d. TW ini</strong> (mis. TW I=25, TW II=85, TW III=95 — BUKAN kontribusi 25, 60, 10 yang perlu dijumlah). Capaian %-nya dihitung otomatis di bawah.</div>
         @endif
@@ -89,7 +89,7 @@
         @php $twAktif = (int) $capaian->periode->triwulan; @endphp
         <div class="fhint" style="margin-bottom:8px">🔒 Hanya kolom TW {{ ['I', 'II', 'III', 'IV'][$twAktif - 1] }} yang bisa diubah dari sesi verifikasi ini (sesuai periode isian ini) — kolom triwulan lain ditampilkan sebagai referensi, disunting lewat sesi verifikasi bulan pada triwulan itu sendiri{{ $capaian->masterIku->pakaiRasio() ? ' (KECUALI checklist Rincian N — kolom TW I s.d. TW aktif SEMUANYA terbuka &amp; bisa dicentang dari sesi ini, lihat baris Realisasi di bawah)' : '' }}. Baris Alokasi Target selalu terkunci di sini (kedua Jenis Nilai) — diisi lewat Target Tahunan.</div>
         @if ($capaian->masterIku->pakaiRasio())
-            <div class="fhint" style="margin-bottom:8px">⚠️ Dua arti "kumulatif" berbeda di tabel ini — jangan tertukar: <strong>Alokasi X</strong> (baris paling atas) SUDAH kumulatif sejak diisi di Target Tahunan (diketik langsung, tidak dijumlah lagi). <strong>Realisasi X</strong> — checklist-nya terbuka di SETIAP kolom TW s.d. TW aktif; centang item di kolom TW yang sebenarnya (boleh TW berjalan atau TW sebelumnya yang terlewat) — begitu disimpan, TERKUNCI permanen di kolom itu. Baris "↳ ... Kumulatif (%)" paling bawah MURNI hasil hitung otomatis (X÷Y×100), tidak pernah diketik manual.</div>
+            <div class="fhint" style="margin-bottom:8px">⚠️ Dua arti "kumulatif" berbeda di tabel ini — jangan tertukar: <strong>Alokasi X</strong> (baris paling atas) SUDAH kumulatif sejak diisi di Target Tahunan (diketik langsung, tidak dijumlah lagi). <strong>Realisasi X</strong> — checklist-nya terbuka di SETIAP kolom TW s.d. TW aktif; centang item di kolom TW yang sebenarnya (boleh TW berjalan atau TW sebelumnya yang terlewat) — begitu disimpan, TERKUNCI di kolom itu (buka lagi lewat tombol ✏️ Edit Pilihan bila perlu koreksi). Baris "↳ ... Kumulatif (%)" paling bawah MURNI hasil hitung otomatis (X÷Y×100), tidak pernah diketik manual.</div>
         @endif
         <div class="table-scroll">
             <table>
@@ -113,6 +113,16 @@
                             <td>
                                 {{ $label }} — {{ $bagian }}
                                 <span class="muted" style="font-weight:400">({{ $keterangan }})</span>
+                                @if ($prefix === 'x_realisasi' && $bisaDiverifikasi && $this->rincianNList()->isNotEmpty())
+                                    <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+                                        @if ($editRincianN)
+                                            <span style="font-size:11px;color:var(--amber, #b45309)">✏️ Mode edit — centang tersimpan TW I s.d. TW aktif bisa dilepas/dipindah. Klik "Simpan Perubahan" untuk menyimpan.</span>
+                                            <button type="button" class="btn btn-ghost btn-sm" wire:click="batalEditRincianN">✖ Batal Edit</button>
+                                        @else
+                                            <button type="button" class="btn btn-ghost btn-sm" wire:click="mulaiEditRincianN" title="Buka kunci centang yang sudah tersimpan untuk dikoreksi bila ada salah pilih">✏️ Edit Pilihan</button>
+                                        @endif
+                                    </div>
+                                @endif
                             </td>
                             @for ($tw = 1; $tw <= 4; $tw++)
                                 <td style="text-align:center{{ $prefix === 'x_realisasi' && $tw <= $twAktif ? ';min-width:190px;text-align:left' : '' }}">
@@ -129,7 +139,7 @@
                                             @foreach ($this->rincianNBisaDipilih() as $n)
                                                 @php
                                                     $dicentang = (bool) ($rincianNPilih[$n->id] ?? false);
-                                                    $twItem = $n->triwulan_realisasi === $twAktif
+                                                    $twItem = ! $editRincianN && $n->triwulan_realisasi === $twAktif
                                                         ? $twAktif
                                                         : min(max((int) ($rincianNTw[$n->id] ?? $twAktif), 1), $twAktif);
                                                 @endphp
@@ -152,7 +162,7 @@
                                             @endforeach
                                             @foreach ($this->rincianNTerkunci() as $n)
                                                 @continue($n->triwulan_realisasi > $tw)
-                                                <div class="muted" style="font-size:11.5px" title="Direalisasikan TW {{ ['I', 'II', 'III', 'IV'][$n->triwulan_realisasi - 1] }}, sudah tersimpan — tidak bisa diubah lagi dari sesi mana pun{{ $n->triwulan_realisasi !== $tw ? ' -- tetap terhitung kumulatif, ikut tampil di sini' : '' }}">✓ {{ $n->uraian }}{{ $n->triwulan_realisasi !== $tw ? ' (sejak TW '.['I', 'II', 'III', 'IV'][$n->triwulan_realisasi - 1].')' : '' }}</div>
+                                                <div class="muted" style="font-size:11.5px" title="Direalisasikan TW {{ ['I', 'II', 'III', 'IV'][$n->triwulan_realisasi - 1] }}, sudah tersimpan — klik ✏️ Edit Pilihan untuk mengoreksi{{ $n->triwulan_realisasi !== $tw ? ' -- tetap terhitung kumulatif, ikut tampil di sini' : '' }}">✓ {{ $n->uraian }}{{ $n->triwulan_realisasi !== $tw ? ' (sejak TW '.['I', 'II', 'III', 'IV'][$n->triwulan_realisasi - 1].')' : '' }}</div>
                                             @endforeach
                                             @if ($this->rincianNList()->isEmpty() && $tw === $twAktif)
                                                 <span class="muted" style="font-size:11.5px">Belum ada Rincian N — tambahkan di <a wire:navigate href="{{ route('master-iku.index') }}#target">🎯 Target Tahunan</a>.</span>

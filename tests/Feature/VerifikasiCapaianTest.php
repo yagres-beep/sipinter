@@ -1361,6 +1361,34 @@ class VerifikasiCapaianTest extends TestCase
         $this->assertCount(2, $component->instance()->rincianNTerkunci());
     }
 
+    public function test_edit_pilihan_rincian_n_membuka_kunci_item_tw_sebelumnya(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+        $data['iku']->update(['metode_capaian' => 'rasio']);
+
+        // Periode triwulan III -- item salah centang di TW I & TW II dikoreksi dari sini.
+        $salahTw1 = RincianN::create(['iku_id' => $data['iku']->id, 'tahun' => 2026, 'uraian' => 'Salah TW I', 'triwulan_realisasi' => 1]);
+        $pindahTw2 = RincianN::create(['iku_id' => $data['iku']->id, 'tahun' => 2026, 'uraian' => 'Pindah TW II', 'triwulan_realisasi' => 2]);
+
+        $component = Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']->fresh()]);
+        $this->assertCount(2, $component->instance()->rincianNTerkunci());
+
+        $component->call('mulaiEditRincianN')
+            ->assertSet('editRincianN', true)
+            ->assertSet("rincianNPilih.{$salahTw1->id}", true);
+        $this->assertCount(0, $component->instance()->rincianNTerkunci());
+
+        $component->call('toggleRincianN', $salahTw1->id, 1)
+            ->call('toggleRincianN', $pindahTw2->id, 1)
+            ->call('simpanPerubahan')
+            ->assertHasNoErrors()
+            ->assertSet('editRincianN', false);
+
+        $this->assertNull($salahTw1->fresh()->triwulan_realisasi);
+        $this->assertEquals(1, $pindahTw2->fresh()->triwulan_realisasi);
+    }
+
     public function test_toggle_rincian_n_mengklaim_dan_memindah_klaim_antar_kolom_tw(): void
     {
         $this->actingAs($this->buatSakip());
