@@ -1460,6 +1460,15 @@ class VerifikasiCapaian extends Component
             }
         } else {
             $fill["x_realisasi_tw{$tw}"] = $this->angkaAtauNull($this->{"x_realisasi_tw{$tw}"});
+
+            // IKU jenis Poin (non-rasio): Alokasi Target & Realisasi kumulatif SELURUH
+            // TW I-IV boleh dikoreksi dari sesi verifikasi mana pun (bukan cuma TW
+            // aktif) -- properti alokasi_tw1..4/realisasi_tw1..4 dimuat dari nilai
+            // tersimpan di mount(), jadi kolom yang tidak disentuh tetap apa adanya.
+            for ($n = 1; $n <= 4; $n++) {
+                $fill["alokasi_tw{$n}"] = $this->angkaAtauNull($this->{"alokasi_tw{$n}"});
+                $fill["realisasi_tw{$n}"] = $this->angkaAtauNull($this->{"realisasi_tw{$n}"});
+            }
         }
 
         $model->fill($fill);
@@ -1983,6 +1992,7 @@ class VerifikasiCapaian extends Component
             'bisaDiverifikasi' => $this->bisaDiverifikasi(),
             'bisaDibukaKembali' => $this->bisaDibukaKembali(),
             'adaYangDitolak' => $this->adaYangDitolak(),
+            'adaBelumDitandai' => $this->daftarIsianBelumDitandai() !== [],
             'riwayatStatus' => $this->capaian->riwayatStatus()->with('user')->get(),
             'capaianTahunan' => $this->capaianTahunanTerkini(),
         ]);

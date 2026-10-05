@@ -87,7 +87,11 @@
         @endif
 
         @php $twAktif = (int) $capaian->periode->triwulan; @endphp
+        @if (! $capaian->masterIku->pakaiRasio())
+            <div class="fhint" style="margin-bottom:8px">✏️ Alokasi Target &amp; Realisasi kumulatif TW I s.d. TW IV semuanya bisa diubah dari sesi verifikasi ini (tidak hanya TW {{ ['I', 'II', 'III', 'IV'][$twAktif - 1] }}). Klik "Simpan Perubahan" untuk menyimpan.</div>
+        @else
         <div class="fhint" style="margin-bottom:8px">🔒 Hanya kolom TW {{ ['I', 'II', 'III', 'IV'][$twAktif - 1] }} yang bisa diubah dari sesi verifikasi ini (sesuai periode isian ini) — kolom triwulan lain ditampilkan sebagai referensi, disunting lewat sesi verifikasi bulan pada triwulan itu sendiri{{ $capaian->masterIku->pakaiRasio() ? ' (KECUALI checklist Rincian N — kolom TW I s.d. TW aktif SEMUANYA terbuka &amp; bisa dicentang dari sesi ini, lihat baris Realisasi di bawah)' : '' }}. Baris Alokasi Target selalu terkunci di sini (kedua Jenis Nilai) — diisi lewat Target Tahunan.</div>
+        @endif
         @if ($capaian->masterIku->pakaiRasio())
             <div class="fhint" style="margin-bottom:8px">⚠️ Dua arti "kumulatif" berbeda di tabel ini — jangan tertukar: <strong>Alokasi X</strong> (baris paling atas) SUDAH kumulatif sejak diisi di Target Tahunan (diketik langsung, tidak dijumlah lagi). <strong>Realisasi X</strong> — checklist-nya terbuka di SETIAP kolom TW s.d. TW aktif; centang item di kolom TW yang sebenarnya (boleh TW berjalan atau TW sebelumnya yang terlewat) — begitu disimpan, TERKUNCI di kolom itu (buka lagi lewat tombol ✏️ Edit Pilihan bila perlu koreksi). Baris "↳ ... Kumulatif (%)" paling bawah MURNI hasil hitung otomatis (X÷Y×100), tidak pernah diketik manual.</div>
         @endif
@@ -193,10 +197,13 @@
                     </tr>
                 @else
                     <tr>
-                        <td title="Diisi lewat halaman Target Tahunan, bukan di sini">Alokasi Target <span class="muted" style="font-weight:400">(kumulatif, dari Target Tahunan)</span></td>
+                        <td>Alokasi Target <span class="muted" style="font-weight:400">(kumulatif)</span></td>
                         @for ($tw = 1; $tw <= 4; $tw++)
                             <td style="text-align:center">
-                                <span class="muted" title="Diisi lewat halaman Target Tahunan, bukan di sini">🔒 {{ \App\Models\PengaturanCapaian::formatAngka($capaianTahunan->{"alokasi_tw{$tw}"}) }}</span>
+                                <input type="number" step="0.01" class="inp filled" style="width:100px;text-align:center" wire:model.live="alokasi_tw{{ $tw }}" title="Ketik angka KUMULATIF s.d. TW ini">
+                                @error("alokasi_tw{$tw}")
+                                    <div style="color:var(--red);font-size:10.5px">{{ $message }}</div>
+                                @enderror
                             </td>
                         @endfor
                     </tr>
@@ -204,14 +211,10 @@
                         <td>Realisasi <span class="muted" style="font-weight:400">(kumulatif s.d. TW ini)</span></td>
                         @for ($tw = 1; $tw <= 4; $tw++)
                             <td style="text-align:center">
-                                @if ($tw === $twAktif)
-                                    <input type="number" step="0.01" class="inp filled" style="width:100px;text-align:center" wire:model.live="realisasi_tw{{ $tw }}" title="Ketik angka KUMULATIF s.d. TW ini, bukan kontribusi TW ini saja">
-                                    @error("realisasi_tw{$tw}")
-                                        <div style="color:var(--red);font-size:10.5px">{{ $message }}</div>
-                                    @enderror
-                                @else
-                                    <span class="muted" title="Hanya bisa diubah dari sesi verifikasi TW {{ ['I', 'II', 'III', 'IV'][$tw - 1] }}">🔒 {{ \App\Models\PengaturanCapaian::formatAngka($capaianTahunan->{"realisasi_tw{$tw}"}) }}</span>
-                                @endif
+                                <input type="number" step="0.01" class="inp filled" style="width:100px;text-align:center" wire:model.live="realisasi_tw{{ $tw }}" title="Ketik angka KUMULATIF s.d. TW ini, bukan kontribusi TW ini saja">
+                                @error("realisasi_tw{$tw}")
+                                    <div style="color:var(--red);font-size:10.5px">{{ $message }}</div>
+                                @enderror
                             </td>
                         @endfor
                     </tr>
@@ -879,7 +882,7 @@
 
     @if ($bisaDiverifikasi)
         <div class="btn-row" style="margin-top:16px">
-            <button type="button" class="btn btn-teal" wire:click="verifikasiSelesai" wire:loading.attr="disabled" wire:target="verifikasiSelesai,kembalikanKeKetuaTim,simpanSementara" @disabled($adaYangDitolak) title="{{ $adaYangDitolak ? 'Ada isian yang ditandai Tidak Sesuai — gunakan "Kembalikan ke Ketua Tim"' : '' }}">
+            <button type="button" class="btn btn-teal" wire:click="verifikasiSelesai" wire:loading.attr="disabled" wire:target="verifikasiSelesai,kembalikanKeKetuaTim,simpanSementara" @disabled($adaYangDitolak || $adaBelumDitandai) title="{{ $adaYangDitolak ? 'Ada isian yang ditandai Tidak Sesuai — gunakan "Kembalikan ke Ketua Tim"' : ($adaBelumDitandai ? 'Masih ada isian yang belum ditandai Sesuai/Tidak Sesuai — tombol aktif setelah semuanya diverifikasi' : '') }}">
                 <span wire:loading.remove wire:target="verifikasiSelesai">✓ Verifikasi Selesai — Masukkan ke Notula</span>
                 <span wire:loading wire:target="verifikasiSelesai"><i class="spin"></i> Memproses…</span>
             </button>

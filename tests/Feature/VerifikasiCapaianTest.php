@@ -115,6 +115,30 @@ class VerifikasiCapaianTest extends TestCase
         $this->assertEquals(45, $capaianTahunan->realisasi_tw3);
     }
 
+    public function test_iku_poin_alokasi_dan_realisasi_semua_tw_bisa_diedit_dan_tersimpan(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+
+        $komponen = Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']]);
+
+        for ($tw = 1; $tw <= 4; $tw++) {
+            $komponen->assertSeeHtml('wire:model.live="realisasi_tw'.$tw.'"')
+                ->assertSeeHtml('wire:model.live="alokasi_tw'.$tw.'"');
+        }
+
+        $komponen->set('alokasi_tw1', 25)->set('realisasi_tw1', 20)
+            ->set('alokasi_tw4', 101.67)->set('realisasi_tw4', 90)
+            ->call('simpanPerubahan')
+            ->assertHasNoErrors();
+
+        $capaianTahunan = CapaianTahunan::where('iku_id', $data['iku']->id)->where('tahun', 2026)->first();
+        $this->assertEquals(25, $capaianTahunan->alokasi_tw1);
+        $this->assertEquals(20, $capaianTahunan->realisasi_tw1);
+        $this->assertEquals(101.67, $capaianTahunan->alokasi_tw4);
+        $this->assertEquals(90, $capaianTahunan->realisasi_tw4);
+    }
+
     public function test_koreksi_teks_kegiatan_tersimpan_saat_verifikasi_selesai(): void
     {
         $this->actingAs($this->buatSakip());
