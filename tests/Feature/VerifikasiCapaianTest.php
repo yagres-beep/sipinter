@@ -11,12 +11,14 @@ use App\Models\CapaianTahunan;
 use App\Models\Kegiatan;
 use App\Models\KendalaSolusi;
 use App\Models\MasterIku;
+use App\Models\Notula;
 use App\Models\Periode;
 use App\Models\RincianN;
 use App\Models\RincianOutput;
 use App\Models\Role;
 use App\Models\RtlEvaluasi;
 use App\Models\User;
+use App\Services\NotulaService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -1343,25 +1345,61 @@ class VerifikasiCapaianTest extends TestCase
     }
 
     /**
-     * Begitu Capaian "disetujui" (masuk notula final), koreksi teks TETAP terkunci --
-     * satu-satunya gerbang yang boleh tersisa, sesuai docblock kegiatanBisaDikoreksi().
-     * Tim SAKIP harus membuka kembali dulu lewat bukaKembali() sebelum bisa membetulkan
-     * apa pun lagi.
+     * Capaian yang sudah "disetujui" (masuk notula final) tetap bisa direvisi langsung
+     * oleh Tim SAKIP tanpa bukaKembali() — revisinya ikut masuk ke notula: Bagian I
+     * disusun ulang (isi lama dicadangkan) dan notula yang sudah disetujui dibuka
+     * kembali sebagai versi baru untuk disetujui ulang Kepala.
      */
-    public function test_koreksi_uraian_kegiatan_tetap_terkunci_saat_capaian_disetujui(): void
+    public function test_revisi_iku_disetujui_tersimpan_dan_masuk_ke_notula_versi_baru(): void
     {
         $this->actingAs($this->buatSakip());
         $data = $this->siapkanIkuDenganDuaKegiatan();
 
         $data['capaian']->update(['status' => Capaian::STATUS_DISETUJUI]);
-        $uraianAsli = $data['kegiatan1']->uraian_kegiatan;
+        $data['kegiatan1']->update(['status_dokumen' => Kegiatan::STATUS_DISETUJUI]);
+
+        $notula = app(NotulaService::class)->untukTriwulan(2026, 3);
+        $notula->update([
+            'status' => Notula::STATUS_DISETUJUI,
+            'bagian1_html' => '<p>Bagian I lama</p>',
+            'bagian2_html' => '<p>Bagian II</p>',
+            'bagian3_html' => '<p>Bagian III</p>',
+        ]);
 
         Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']->fresh()])
-            ->set("koreksiKegiatan.{$data['kegiatan1']->id}", 'Percobaan koreksi setelah disetujui')
+            ->set("koreksiKegiatan.{$data['kegiatan1']->id}", 'Kegiatan pertama (direvisi setelah disetujui)')
             ->call('simpanPerubahan')
             ->assertHasNoErrors();
 
-        $this->assertSame($uraianAsli, $data['kegiatan1']->fresh()->uraian_kegiatan);
+        $this->assertSame('Kegiatan pertama (direvisi setelah disetujui)', $data['kegiatan1']->fresh()->uraian_kegiatan);
+        $this->assertSame(Capaian::STATUS_DISETUJUI, $data['capaian']->fresh()->status);
+
+        $notula->refresh();
+        $this->assertSame(Notula::STATUS_DRAFT, $notula->status);
+        $this->assertSame(2, $notula->versiSaatIni());
+        $this->assertSame('<p>Bagian I lama</p>', $notula->bagian1_html_cadangan);
+        $this->assertNotSame('<p>Bagian I lama</p>', $notula->bagian1_html);
+    }
+
+    /**
+     * Menyimpan tanpa perubahan apa pun tidak boleh membuka notula yang sudah
+     * disetujui sebagai versi baru.
+     */
+    public function test_simpan_tanpa_perubahan_tidak_membuka_notula_disetujui(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+        $data['capaian']->update(['status' => Capaian::STATUS_DISETUJUI]);
+
+        $notula = app(NotulaService::class)->untukTriwulan(2026, 3);
+        $notula->update(['status' => Notula::STATUS_DISETUJUI, 'bagian1_html' => '<p>Bagian I</p>']);
+
+        Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']->fresh()])
+            ->call('simpanPerubahan')
+            ->assertHasNoErrors();
+
+        $this->assertSame(Notula::STATUS_DISETUJUI, $notula->fresh()->status);
+        $this->assertSame(1, $notula->fresh()->versiSaatIni());
     }
 
     public function test_simpan_perubahan_iku_rasio_menyimpan_kolom_x_y_bukan_alokasi_langsung(): void

@@ -101,6 +101,12 @@
         </div>
     @endif
 
+    @if ($pengajuanBisaDiedit)
+        <div class="info teal" style="margin-bottom:14px">
+            ✏️ <b>Isian ini sudah diajukan dan belum mulai diperiksa Tim SAKIP</b> — Anda masih bisa mengubahnya. Klik "Ajukan ke Tim SAKIP" lagi untuk mengirim perubahan (atau "Simpan Draft" untuk menyimpan tanpa mengajukan ulang). Isian terkunci begitu Tim SAKIP mulai menangani.
+        </div>
+    @endif
+
     @if ($formTerkunciSedangDitangani)
         <div class="info" style="margin-bottom:14px">
             🔒 <b>Isian ini sedang ditangani Tim SAKIP</b> — tidak bisa ditambah/diubah dari sini sampai Tim SAKIP menyelesaikan pemeriksaan (Verifikasi Selesai atau Kembalikan ke Ketua Tim).
@@ -194,14 +200,14 @@
         <div class="info">ℹ️ Isi tiap kolom berurutan dari atas — uraian kegiatan dulu, baru jenis kegiatan bisa dipilih. Nama folder Drive dibuat otomatis dari tahapan dan uraian kegiatan. Bukti capaian wajib diunggah tiap kegiatan.</div>
 
         @foreach ($blocks as $i => $block)
-            @php $terkunci = in_array($block['status_dokumen'], $statusKegiatanTerkunci, true); @endphp
+            @php $terkunci = $this->blokTerkunci($block['status_dokumen']); @endphp
             @if ($terkunci)
                 <div class="keg" wire:key="block-{{ $i }}" style="opacity:.8">
                     <div class="keg-head">
                         <span class="t">Kegiatan {{ $i + 1 }}</span>
                         <x-badge-status :status="$block['status_dokumen']" />
                     </div>
-                    <div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">🔒 Sudah diajukan ke Tim SAKIP — tidak bisa diedit dari sini.</div>
+                    <div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">🔒 Sudah ditangani/diverifikasi Tim SAKIP — tidak bisa diedit dari sini.</div>
 
                     <div class="field">
                         <label>Uraian Kegiatan</label>

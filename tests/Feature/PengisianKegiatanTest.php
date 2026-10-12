@@ -18,6 +18,7 @@ use App\Models\User;
 use App\Models\UserTim;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
@@ -465,6 +466,18 @@ class PengisianKegiatanTest extends TestCase
         $this->assertDatabaseCount('rtl_evaluasi', 1);
         $rtl->refresh();
         $this->assertSame('diajukan', $rtl->status_dokumen);
+
+        // Selagi belum ditangani Tim SAKIP, poin yang sudah diajukan masih bisa disunting.
+        Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 9)
+            ->set('iku_id', $iku->id)
+            ->assertDontSee('Sudah ditetapkan')
+            ->assertSet('rtlBaru.0.id', $rtl->id);
+
+        // Begitu Tim SAKIP mulai menangani, baru terkunci "Sudah ditetapkan".
+        Capaian::firstOrFail()->update(['status' => Capaian::STATUS_SEDANG_DITANGANI]);
+        Cache::flush();
 
         Livewire::test(PengisianKegiatan::class)
             ->set('tahun', 2026)
@@ -1400,12 +1413,14 @@ class PengisianKegiatanTest extends TestCase
             ->assertHasNoErrors();
 
         // Komponen BARU (request "berikutnya") untuk IKU+periode yang sama harus melihat
-        // RTL berikutnya SUDAH ada â€” bukan cache basi dari sebelum submit.
+        // RTL berikutnya yang BARU diajukan — bukan cache basi dari sebelum submit (yang
+        // akan menampilkan satu blok kosong). Selagi belum ditangani Tim SAKIP, poin itu
+        // dimuat sebagai blok yang masih bisa disunting.
         Livewire::test(PengisianKegiatan::class)
             ->set('tahun', 2026)
             ->set('bulan', 9)
             ->set('iku_id', $iku->id)
-            ->assertSee('Sudah ditetapkan');
+            ->assertSet('rtlBaru.0.rtl_teks', 'RTL cache uji');
     }
 
     public function test_iku_id_tidak_valid_tetap_ditolak_tanpa_query_exists(): void
@@ -2085,38 +2100,129 @@ class PengisianKegiatanTest extends TestCase
 
         $this->actingAs($ketua);
 
+        // Selagi Capaian masih "diajukan" (Tim SAKIP belum mulai memeriksa), pasangan
+        // yang sudah diajukan TETAP bisa disunting Ketua Tim — dimuat sebagai blok
+        // editable, bukan $kendalaAktif hanya-baca.
         $component = Livewire::test(PengisianKegiatan::class)
             ->set('tahun', 2026)
             ->set('bulan', 8)
             ->set('iku_id', $iku->id);
 
-        // Pasangan yang sudah diajukan TIDAK dimuat sebagai blok editable (tidak bisa
-        // diam-diam disunting Ketua Tim selagi menunggu Tim SAKIP) — tampil di
-        // $kendalaAktif (terkunci hanya-baca), dan $kendalaBlocks dibiarkan kosong
-        // (bukan satu blok kosong bawaan) supaya blade cukup menampilkan tombol
-        // "+ Tambah Pasangan" saja.
-        $component->assertSet('kendalaBlocks', []);
-        $this->assertSame([$ks->id], $component->viewData('kendalaAktif')->pluck('id')->all());
+        $component->assertSet('kendalaBlocks.0.id', $ks->id);
+        $this->assertSame([], $component->viewData('kendalaAktif')->pluck('id')->all());
 
-        // Ketua Tim tetap bisa menambah pasangan BARU tanpa menunggu Tim SAKIP
-        // memutuskan pasangan lama — sama seperti Kegiatan/Bagian Kustom/RTL berikutnya.
         // blocks.0 diisi seadanya karena simpanDraft() tetap mewajibkan uraian_kegiatan
         // & jenis (lihat validate() di sana), walau tidak relevan dengan kendala.
         $component->set('blocks.0.uraian_kegiatan', 'Kegiatan uji kendala diajukan')
             ->set('blocks.0.jenis', 'bukan_survei_sensus')
+            ->set('kendalaBlocks.0.kendala', 'Kendala sudah diajukan (diperbaiki)')
             ->call('addKendalaBlock')
-            ->set('kendalaBlocks.0.kendala', 'Kendala baru')
-            ->set('kendalaBlocks.0.solusi', 'Solusi baru')
+            ->set('kendalaBlocks.1.kendala', 'Kendala baru')
+            ->set('kendalaBlocks.1.solusi', 'Solusi baru')
             ->call('simpanDraft');
 
         $this->assertDatabaseCount('kendala_solusi', 2);
         $baru = KendalaSolusi::where('kendala', 'Kendala baru')->firstOrFail();
         $this->assertSame(KendalaSolusi::STATUS_DRAFT, $baru->status_dokumen);
 
-        // Pasangan lama tidak ikut tersunting oleh penambahan pasangan baru ini.
+        // Pasangan lama ikut tersunting di tempat, statusnya tetap "diajukan".
         $ks->refresh();
-        $this->assertSame('Kendala sudah diajukan', $ks->kendala);
+        $this->assertSame('Kendala sudah diajukan (diperbaiki)', $ks->kendala);
         $this->assertSame(KendalaSolusi::STATUS_DIAJUKAN, $ks->status_dokumen);
+    }
+
+    public function test_kendala_sudah_diajukan_terkunci_begitu_sedang_ditangani(): void
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $ketua = User::create([
+            'nama' => 'Ketua Uji Kendala Ditangani', 'username' => 'ketua-uji-kendala-ditangani@example.test', 'email' => 'ketua-uji-kendala-ditangani@example.test',
+            'password' => 'password', 'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create(['kode' => 'UJI-KENDALA-4', 'indikator' => 'Indikator uji kendala 4', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji']);
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 8, 'triwulan' => 3, 'bulan_ke' => 2, 'flag_bulan_terlewat' => false]);
+        Capaian::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'status' => Capaian::STATUS_SEDANG_DITANGANI]);
+
+        $ks = KendalaSolusi::create([
+            'iku_id' => $iku->id, 'periode_id' => $periode->id,
+            'kendala' => 'Kendala sedang diperiksa', 'solusi' => 'Solusi',
+            'status_dokumen' => KendalaSolusi::STATUS_DIAJUKAN, 'status_verifikasi' => 'menunggu',
+        ]);
+
+        $this->actingAs($ketua);
+
+        $component = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $iku->id);
+
+        $component->assertSet('kendalaBlocks', []);
+        $this->assertSame([$ks->id], $component->viewData('kendalaAktif')->pluck('id')->all());
+    }
+
+    /**
+     * Kegiatan yang sudah diajukan masih bisa disunting & diajukan ulang Ketua Tim
+     * selagi Tim SAKIP belum mulai menangani — tidak membuat baris duplikat, status
+     * tetap "diajukan".
+     */
+    public function test_kegiatan_diajukan_bisa_disunting_dan_diajukan_ulang_sebelum_ditangani(): void
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $ketua = User::create([
+            'nama' => 'Ketua Uji Edit Pengajuan', 'username' => 'ketua-uji-edit-pengajuan@example.test', 'email' => 'ketua-uji-edit-pengajuan@example.test',
+            'password' => 'password', 'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create(['kode' => 'UJI-EDIT-AJU', 'indikator' => 'Indikator uji edit pengajuan', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji']);
+
+        $this->actingAs($ketua);
+
+        Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $iku->id)
+            ->set('blocks.0.uraian_kegiatan', 'Kegiatan awal')
+            ->set('blocks.0.jenis', 'bukan_survei_sensus')
+            ->set('blocks.0.bukti', [UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf')])
+            ->set('kendalaBlocks.0.kendala', 'Kendala awal')
+            ->call('ajukanIsian')
+            ->assertHasNoErrors();
+
+        $kegiatan = Kegiatan::firstOrFail();
+        $this->assertSame(Kegiatan::STATUS_DIAJUKAN, $kegiatan->status_dokumen);
+
+        $component = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $iku->id);
+
+        $this->assertTrue($component->instance()->pengajuanBisaDiedit());
+        $this->assertFalse($component->instance()->blokTerkunci(Kegiatan::STATUS_DIAJUKAN));
+
+        $component->set('blocks.0.uraian_kegiatan', 'Kegiatan awal (diperbaiki)')
+            ->call('ajukanIsian')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseCount('kegiatan', 1);
+        $kegiatan->refresh();
+        $this->assertSame('Kegiatan awal (diperbaiki)', $kegiatan->uraian_kegiatan);
+        $this->assertSame(Kegiatan::STATUS_DIAJUKAN, $kegiatan->status_dokumen);
+
+        // Begitu Tim SAKIP mulai menangani, kegiatan yang diajukan terkunci lagi.
+        Capaian::firstOrFail()->update(['status' => Capaian::STATUS_SEDANG_DITANGANI]);
+        Cache::flush();
+
+        $terkunci = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $iku->id);
+
+        $this->assertTrue($terkunci->instance()->blokTerkunci(Kegiatan::STATUS_DIAJUKAN));
+
+        $terkunci->set('blocks.0.uraian_kegiatan', 'Tidak boleh tersimpan')
+            ->call('simpanDraft');
+
+        $this->assertSame('Kegiatan awal (diperbaiki)', $kegiatan->fresh()->uraian_kegiatan);
     }
 
     /**

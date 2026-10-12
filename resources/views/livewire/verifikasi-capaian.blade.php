@@ -23,6 +23,9 @@
     @unless ($bisaDiverifikasi)
         <div class="info">🔒 Isian ini berstatus <x-badge-status :status="$capaian->status" /> — verifikasi/pengembalian bukti hanya bisa dilakukan selagi berstatus "diajukan" atau "sedang ditangani", tapi field di atas tetap bisa disunting &amp; disimpan.</div>
     @endunless
+    @if (in_array($capaian->status, [\App\Models\Capaian::STATUS_DIVERIFIKASI, \App\Models\Capaian::STATUS_DISETUJUI], true))
+        <div class="info teal">📝 IKU ini sudah termuat di notula. Bila ada revisi/kesalahan, sunting langsung di halaman ini lalu klik "Simpan Perubahan" — Bagian I notula ikut diperbarui otomatis{{ $capaian->status === \App\Models\Capaian::STATUS_DISETUJUI ? ', dan notula yang sudah disetujui dibuka kembali sebagai versi baru untuk disetujui ulang Kepala' : '' }}. Tidak perlu mengembalikan isian ke Ketua Tim.</div>
+    @endif
 
     @if ($riwayatStatus->isNotEmpty())
         <div class="card">
@@ -117,7 +120,7 @@
                             <td>
                                 {{ $label }} — {{ $bagian }}
                                 <span class="muted" style="font-weight:400">({{ $keterangan }})</span>
-                                @if ($prefix === 'x_realisasi' && $bisaDiverifikasi && $this->rincianNList()->isNotEmpty())
+                                @if ($prefix === 'x_realisasi' && $this->rincianNList()->isNotEmpty())
                                     <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
                                         @if ($editRincianN)
                                             <span style="font-size:11px;color:var(--amber, #b45309)">✏️ Mode edit — centang tersimpan TW I s.d. TW aktif bisa dilepas/dipindah. Klik "Simpan Perubahan" untuk menyimpan.</span>
@@ -960,7 +963,7 @@
     @elseif ($bisaDibukaKembali)
         <div class="card">
             <div class="sec"><span>Buka Kembali Isian</span></div>
-            <div class="info warn">⚠️ Isian ini sudah <b>disetujui</b> dan masuk notula final. Membuka kembali akan mengembalikannya ke Ketua Tim untuk ditambahkan kegiatan baru — kegiatan yang sudah disetujui sebelumnya TIDAK ikut berubah/terhapus.</div>
+            <div class="info warn">⚠️ Isian ini sudah <b>disetujui</b> dan masuk notula final. Membuka kembali akan mengembalikannya ke Ketua Tim untuk ditambahkan kegiatan baru — kegiatan yang sudah disetujui sebelumnya TIDAK ikut berubah/terhapus. Untuk sekadar memperbaiki kesalahan, cukup sunting langsung di atas lalu "Simpan Perubahan" — tidak perlu dibuka kembali.</div>
             <div class="field" style="margin-top:10px">
                 <label style="font-size:11.5px">Alasan membuka kembali (opsional)</label>
                 <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model="catatanBukaKembali" placeholder="mis. Ada kegiatan tambahan yang perlu dilaporkan…"></textarea>

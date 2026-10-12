@@ -14,6 +14,7 @@ use App\Models\MasterIku;
 use App\Models\RincianN;
 use App\Models\RincianOutput;
 use App\Models\RtlEvaluasi;
+use App\Services\NotulaService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -487,10 +488,6 @@ class VerifikasiCapaian extends Component
      */
     public function mulaiEditRincianN(): void
     {
-        if (! $this->bisaDiverifikasi()) {
-            return;
-        }
-
         $this->editRincianN = true;
         $this->muatPilihanRincianN();
         $this->recomputeXRealisasiLive();
@@ -679,10 +676,6 @@ class VerifikasiCapaian extends Component
      */
     public function toggleRincianN(int $id, int $tw): void
     {
-        if (! $this->bisaDiverifikasi()) {
-            return;
-        }
-
         $twAktif = (int) $this->capaian->periode->triwulan;
         $tw = min(max($tw, 1), $twAktif);
 
@@ -1591,13 +1584,13 @@ class VerifikasiCapaian extends Component
      * lewat kembalikanKeKetuaTim() MAUPUN oleh Kepala langsung lewat
      * App\Services\NotulaService::kembalikanIsian()) sehingga Ketua Tim dan Tim
      * SAKIP bisa sama-sama memperbaiki teksnya sebelum diajukan ulang ke Kepala.
-     * Satu-satunya gerbang yang tersisa adalah status BESAR Capaian == "disetujui"
-     * (masuk notula final) — begitu itu terjadi, seluruh isian terkunci total
-     * sampai Tim SAKIP membuka kembali lewat bukaKembali(). BUKAN bisaDiverifikasi()
-     * (yang hanya true untuk diajukan/sedang ditangani) — dulu dipakai di sini
-     * sehingga koreksi teks salah-kunci untuk diverifikasi/dikembalikan, padahal
-     * banner di puncak halaman (lihat verifikasi-capaian.blade.php) sudah lama
-     * menjanjikan teks ini "selalu bisa disunting Tim SAKIP ... kapan pun".
+     * Termasuk status "disetujui" (sudah masuk notula final): Tim SAKIP boleh langsung
+     * merevisi bila ada kesalahan, TANPA harus mengembalikan isian ke Ketua Tim lewat
+     * bukaKembali() — begitu disimpan, revisinya ikut dimasukkan ke notula
+     * (NotulaService::perbaruiSetelahRevisiIku(), dipanggil dari simpanPerubahan()).
+     * BUKAN bisaDiverifikasi() (yang hanya true untuk diajukan/sedang ditangani) —
+     * banner di puncak halaman (lihat verifikasi-capaian.blade.php) menjanjikan teks
+     * ini "selalu bisa disunting Tim SAKIP ... kapan pun".
      *
      * Upload/hapus BERKAS bukti TETAP eksklusif milik Ketua Tim (lihat
      * App\Livewire\PengisianKegiatan) — komponen ini sama sekali tidak
@@ -1606,7 +1599,7 @@ class VerifikasiCapaian extends Component
      */
     public function kegiatanBisaDikoreksi(Kegiatan $kegiatan): bool
     {
-        return $this->capaian->status !== Capaian::STATUS_DISETUJUI;
+        return true;
     }
 
     /**
@@ -1645,6 +1638,9 @@ class VerifikasiCapaian extends Component
 
         if ($baris['id']) {
             RincianOutput::whereKey($baris['id'])->delete();
+            // Sudah terhapus dari DB, tapi notula baru ikut diperbarui saat
+            // "Simpan Perubahan" ditekan (lihat simpanPerubahan()).
+            $this->adaPerubahan = true;
         }
 
         unset($this->rincianOutput[$kunci]);
@@ -1767,10 +1763,16 @@ class VerifikasiCapaian extends Component
      * disetujui), bukan hanya saat "diajukan"/"sedang ditangani" seperti tombol
      * simpanSementara()/verifikasiSelesai()/kembalikanKeKetuaTim() di bawah (ketiga
      * method itu tetap dikhususkan untuk transisi status alur kerja).
+     *
+     * Bila isian ini sudah termuat di notula (diverifikasi/disetujui) dan memang ada
+     * perubahan, revisinya ikut dimasukkan ke notula lewat
+     * NotulaService::perbaruiSetelahRevisiIku().
      */
     public function simpanPerubahan(): void
     {
         $this->validate();
+
+        $adaRevisi = $this->adaPerubahan;
 
         DB::transaction(function () {
             $this->capaian->update(['analisis_capaian' => $this->analisis_capaian, 'catatan' => $this->catatan]);
@@ -1782,8 +1784,14 @@ class VerifikasiCapaian extends Component
         $this->editAlokasi = false;
         $this->tandaiTersimpan();
 
-        session()->flash('status', 'Perubahan disimpan.');
-        $this->dispatch('notify', type: 'success', message: 'Perubahan disimpan.');
+        $pesanNotula = $adaRevisi
+            ? app(NotulaService::class)->perbaruiSetelahRevisiIku($this->capaian, auth()->user())
+            : null;
+
+        $pesan = 'Perubahan disimpan.'.($pesanNotula ? ' '.$pesanNotula : '');
+
+        session()->flash('status', $pesan);
+        $this->dispatch('notify', type: 'success', message: $pesan);
     }
 
     /**

@@ -685,6 +685,59 @@ class NotulaService
     }
 
     /**
+     * Tim SAKIP merevisi isian IKU yang SUDAH termuat di notula (Capaian "diverifikasi"/
+     * "disetujui", lihat kumpulkanDataBagianSatu()) langsung dari halaman Verifikasi —
+     * tanpa harus mengembalikannya dulu ke Ketua Tim. Supaya revisi itu ikut masuk ke
+     * notula: Bagian I yang sudah pernah disusun dibangun ulang dari data terkini (isi
+     * lamanya dicadangkan ke bagian1_html_cadangan, sama seperti "Susun Ulang Otomatis"
+     * di Kompilasi Notula), lalu notula ditandai perlu digabung ulang — notula yang sudah
+     * disetujui dibuka sebagai versi baru (lihat Notula::tandaiPerluDigabungUlang()).
+     *
+     * Bila penyusunan ulang gagal (mis. LibreOffice tidak tersedia), notula tetap
+     * ditandai perlu digabung ulang dan Tim SAKIP diminta menekan "Susun Ulang Otomatis"
+     * sendiri. Mengembalikan pesan ringkas untuk ditampilkan, atau null bila IKU ini
+     * belum termuat di notula mana pun (tidak ada yang perlu diperbarui).
+     */
+    public function perbaruiSetelahRevisiIku(Capaian $capaian, ?User $user = null): ?string
+    {
+        if (! in_array($capaian->status, [Capaian::STATUS_DIVERIFIKASI, Capaian::STATUS_DISETUJUI], true)) {
+            return null;
+        }
+
+        $capaian->loadMissing(['periode', 'masterIku']);
+        $notula = $this->untukTriwulan($capaian->periode->tahun, $capaian->periode->triwulan);
+
+        // Bagian I belum pernah disusun -> akan tersusun otomatis dari data terkini
+        // begitu Kompilasi Notula dibuka (KompilasiNotula::muatBagian1EditText()).
+        if (blank($notula->bagian1_html)) {
+            return null;
+        }
+
+        $indikator = $capaian->masterIku->indikator ?? "IKU #{$capaian->iku_id}";
+        $disusunUlang = true;
+
+        try {
+            $notula->update(['bagian1_html_cadangan' => $notula->bagian1_html]);
+            $this->susunBagianSatu($notula);
+        } catch (\Throwable $e) {
+            Log::warning('Gagal menyusun ulang Bagian I notula setelah revisi IKU: '.$e->getMessage());
+            $disusunUlang = false;
+        }
+
+        $notula->refresh();
+        $sudahDisetujui = $notula->status === Notula::STATUS_DISETUJUI;
+        $notula->tandaiPerluDigabungUlang($user, "Isian IKU \"{$indikator}\" direvisi Tim SAKIP setelah notula disetujui — notula dibuka kembali sebagai versi baru dan perlu digabung serta disetujui ulang.");
+
+        $pesan = $disusunUlang
+            ? 'Bagian I notula ikut diperbarui dari revisi ini (suntingan sebelumnya dicadangkan).'
+            : 'Bagian I notula BELUM berhasil diperbarui otomatis — buka Kompilasi Notula lalu klik "Susun Ulang Otomatis".';
+
+        return $pesan.($sudahDisetujui
+            ? ' Notula yang sudah disetujui dibuka kembali sebagai versi '.$notula->versiSaatIni().' — gabungkan lalu kirim ulang ke Kepala.'
+            : ' Gabungkan ulang notula sebelum dikirim ke Kepala.');
+    }
+
+    /**
      * Ratakan hasil CapaianCalculatorService::rataRataCapaianTriwulanan()/
      * rataRataCapaianSetahun() (float|string) ke float|null untuk paragraf pembuka --
      * TIDAK_DINILAI ("-", seluruh IKU belum ternilai triwulan ini) jadi null, konsisten

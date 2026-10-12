@@ -316,6 +316,52 @@ class PengisianKegiatan extends Component
         Capaian::STATUS_SEDANG_DITANGANI,
     ];
 
+    /**
+     * Pengajuan yang BARU diajukan (Capaian "diajukan") dan belum mulai diperiksa Tim
+     * SAKIP masih boleh disunting kembali oleh Ketua Tim — baru terkunci begitu Tim
+     * SAKIP mulai menangani ("sedang ditangani", lihat VerifikasiCapaian::
+     * tandaiSedangDitangani()) atau sudah "diverifikasi"/"disetujui". Dicek ULANG tanpa
+     * cache (formTerkunciSedangDitanganiFresh()) di setiap aksi yang menyimpan/menghapus,
+     * supaya tidak ada perubahan yang menyelinap setelah Tim SAKIP mulai memeriksa.
+     */
+    public function pengajuanBisaDiedit(): bool
+    {
+        return $this->statusCapaianSaatIni() === Capaian::STATUS_DIAJUKAN;
+    }
+
+    /**
+     * Blok kegiatan berstatus $statusDokumen terkunci hanya-baca? Sama seperti
+     * STATUS_KEGIATAN_TERKUNCI, kecuali kegiatan "diajukan" selagi pengajuannya masih
+     * bisa disunting (pengajuanBisaDiedit()).
+     */
+    public function blokTerkunci(?string $statusDokumen): bool
+    {
+        if ($statusDokumen === Kegiatan::STATUS_DIAJUKAN && $this->pengajuanBisaDiedit()) {
+            return false;
+        }
+
+        return in_array($statusDokumen, self::STATUS_KEGIATAN_TERKUNCI, true);
+    }
+
+    /**
+     * Versi level-Capaian dari blokTerkunci() — dipakai Bagian Kustom & Evaluasi RTL
+     * yang tidak punya status_dokumen sendiri.
+     */
+    protected function capaianTerkunci(): bool
+    {
+        return $this->blokTerkunci($this->statusCapaianSaatIni());
+    }
+
+    /**
+     * Akhiran kunci cache untuk data yang bentuknya bergantung pada pengajuanBisaDiedit()
+     * — supaya hasil yang di-cache saat isian masih bisa disunting tidak terpakai lagi
+     * setelah statusnya berpindah (atau sebaliknya).
+     */
+    protected function akhiranModeEdit(): string
+    {
+        return $this->pengajuanBisaDiedit() ? '-edit' : '';
+    }
+
     protected function emptyKendalaBlock(): array
     {
         return [
@@ -453,7 +499,7 @@ class PengisianKegiatan extends Component
             return;
         }
 
-        if (in_array($block['status_dokumen'], self::STATUS_KEGIATAN_TERKUNCI, true)) {
+        if ($this->blokTerkunci($block['status_dokumen'])) {
             return;
         }
 
@@ -551,7 +597,7 @@ class PengisianKegiatan extends Component
             return;
         }
 
-        if (in_array($block['status_dokumen'], self::STATUS_KEGIATAN_TERKUNCI, true)) {
+        if ($this->blokTerkunci($block['status_dokumen']) || $this->formTerkunciSedangDitanganiFresh()) {
             return;
         }
 
@@ -598,7 +644,7 @@ class PengisianKegiatan extends Component
     {
         $periode = $this->iku_id ? $this->periodeSaatIni() : null;
 
-        if (! $periode || in_array($this->statusCapaianSaatIni(), self::STATUS_KEGIATAN_TERKUNCI, true)) {
+        if (! $periode || $this->capaianTerkunci() || $this->formTerkunciSedangDitanganiFresh()) {
             return;
         }
 
@@ -664,7 +710,7 @@ class PengisianKegiatan extends Component
      */
     public function hapusBuktiLamaEvaluasi(int $rtlId, int $berkasId): void
     {
-        if (in_array($this->statusCapaianSaatIni(), self::STATUS_KEGIATAN_TERKUNCI, true)) {
+        if ($this->capaianTerkunci() || $this->formTerkunciSedangDitanganiFresh()) {
             return;
         }
 
@@ -844,12 +890,13 @@ class PengisianKegiatan extends Component
      */
     protected function lupakanCachePeriodeIku(): void
     {
-        foreach (['riwayat', 'kendala-aktif', 'rtl-berjalan', 'rtl-berikutnya-ada', 'rtl-berikutnya-aktif', 'rtl-berjalan-terpakai', 'capaian-status', 'catatan-penolakan', 'pengembalian-terakhir', 'periode'] as $bagian) {
+        foreach (['riwayat', 'kendala-aktif', 'rtl-berjalan', 'rtl-berikutnya-ada', 'rtl-berikutnya-ada-edit', 'rtl-berikutnya-aktif', 'rtl-berikutnya-aktif-edit', 'rtl-berjalan-terpakai', 'capaian-status', 'catatan-penolakan', 'pengembalian-terakhir', 'periode'] as $bagian) {
             Cache::forget($this->cacheKeyPeriodeIku($bagian));
         }
 
         foreach ($this->bagianKustomAktif() as $bagian) {
             Cache::forget($this->cacheKeyPeriodeIku("riwayat-bagian-{$bagian->id}"));
+            Cache::forget($this->cacheKeyPeriodeIku("riwayat-bagian-{$bagian->id}-edit"));
         }
     }
 
@@ -917,10 +964,10 @@ class PengisianKegiatan extends Component
             return collect();
         }
 
-        $daftar = Cache::remember($this->cacheKeyPeriodeIku("riwayat-bagian-{$bagian->id}"), self::CACHE_TTL_DETIK, function () use ($bagian) {
+        $daftar = Cache::remember($this->cacheKeyPeriodeIku("riwayat-bagian-{$bagian->id}".$this->akhiranModeEdit()), self::CACHE_TTL_DETIK, function () use ($bagian) {
             $triwulanSekarang = $this->triwulanDari($this->bulan);
             $periodeSaatIni = $this->periodeSaatIni();
-            $terkunci = in_array($this->statusCapaianSaatIni(), self::STATUS_KEGIATAN_TERKUNCI, true);
+            $terkunci = $this->capaianTerkunci();
 
             return BagianKustomPoin::with(['periode', 'berkas'])
                 ->where('iku_id', $this->iku_id)
@@ -1391,7 +1438,12 @@ class PengisianKegiatan extends Component
         // Pasangan yang sudah diajukan (status_dokumen=diajukan) dan belum final
         // ditolak Tim SAKIP dikeluarkan dari sini — tampil terkunci lewat
         // kendalaAktif() di blade, bukan sebagai blok editable.
-        $editable = $daftar->reject(fn (KendalaSolusiModel $ks) => $ks->status_dokumen === KendalaSolusiModel::STATUS_DIAJUKAN && ! $this->verifikasiTerlihat());
+        // PENGECUALIAN: selagi pengajuan masih bisa disunting (pengajuanBisaDiedit(),
+        // Tim SAKIP belum mulai memeriksa), pasangan yang sudah diajukan tetap dimuat
+        // sebagai blok editable — kecuali yang sudah diterima pada siklus sebelumnya.
+        $editable = $daftar->reject(fn (KendalaSolusiModel $ks) => $ks->status_dokumen === KendalaSolusiModel::STATUS_DIAJUKAN
+            && ! $this->verifikasiTerlihat()
+            && ! ($this->pengajuanBisaDiedit() && $ks->status_verifikasi !== 'terverifikasi'));
 
         if ($editable->isEmpty()) {
             // Satu blok kosong bawaan HANYA untuk pengisian pertama kali ($daftar
@@ -1438,7 +1490,7 @@ class PengisianKegiatan extends Component
             return $this->cacheKendalaAktif = collect();
         }
 
-        return $this->cacheKendalaAktif = Cache::remember(
+        $aktif = Cache::remember(
             $this->cacheKeyPeriodeIku('kendala-aktif'),
             self::CACHE_TTL_DETIK,
             fn () => KendalaSolusiModel::where('iku_id', $this->iku_id)
@@ -1447,6 +1499,14 @@ class PengisianKegiatan extends Component
                 ->orderBy('id')
                 ->get()
         );
+
+        // Selagi pengajuan masih bisa disunting, pasangan yang belum diterima sudah
+        // tampil sebagai blok editable (lihat muatKendalaBlocks()) — jangan tampil dobel.
+        if ($this->pengajuanBisaDiedit()) {
+            $aktif = $aktif->where('status_verifikasi', 'terverifikasi')->values();
+        }
+
+        return $this->cacheKendalaAktif = $aktif;
     }
 
     /**
@@ -1467,7 +1527,7 @@ class PengisianKegiatan extends Component
     protected function muatBagianKustomBlocks(): void
     {
         $periode = $this->iku_id ? $this->periodeSaatIni() : null;
-        $terkunci = in_array($this->statusCapaianSaatIni(), self::STATUS_KEGIATAN_TERKUNCI, true);
+        $terkunci = $this->capaianTerkunci();
 
         foreach ($this->bagianKustomAktif() as $bagian) {
             if (! $periode || $terkunci) {
@@ -1759,7 +1819,7 @@ class PengisianKegiatan extends Component
         }
 
         return $this->cacheRtlBerikutnyaSudahAda = Cache::remember(
-            $this->cacheKeyPeriodeIku('rtl-berikutnya-ada'),
+            $this->cacheKeyPeriodeIku('rtl-berikutnya-ada'.$this->akhiranModeEdit()),
             self::CACHE_TTL_DETIK,
             function () {
                 $target = $this->targetTriwulanBerikutnya();
@@ -1777,6 +1837,13 @@ class PengisianKegiatan extends Component
 
                 if ($this->verifikasiTerlihat()) {
                     $query->where('status_verifikasi', '!=', 'ditolak');
+                }
+
+                // Selagi pengajuan masih bisa disunting, poin yang belum diterima ikut
+                // dimuat editable (lihat rtlBerikutnyaBisaDisunting()) — hanya yang
+                // sudah diterima yang dianggap "sudah ditetapkan".
+                if ($this->pengajuanBisaDiedit()) {
+                    $query->where('status_verifikasi', 'terverifikasi');
                 }
 
                 return $query->exists();
@@ -1857,19 +1924,46 @@ class PengisianKegiatan extends Component
         }
 
         return $this->cacheRtlBerikutnyaAktif = Cache::remember(
-            $this->cacheKeyPeriodeIku('rtl-berikutnya-aktif'),
+            $this->cacheKeyPeriodeIku('rtl-berikutnya-aktif'.$this->akhiranModeEdit()),
             self::CACHE_TTL_DETIK,
             function () {
                 $target = $this->targetTriwulanBerikutnya();
 
                 return RtlEvaluasiModel::where('iku_id', $this->iku_id)
                     ->where('status_dokumen', RtlEvaluasiModel::STATUS_DIAJUKAN)
-                    ->where('status_verifikasi', '!=', 'ditolak')
+                    ->when(
+                        $this->pengajuanBisaDiedit(),
+                        fn ($q) => $q->where('status_verifikasi', 'terverifikasi'),
+                        fn ($q) => $q->where('status_verifikasi', '!=', 'ditolak'),
+                    )
                     ->whereHas('periode', fn ($q) => $q->where('tahun', $target['tahun'])->where('triwulan', $target['triwulan']))
                     ->orderBy('id')
                     ->get();
             }
         );
+    }
+
+    /**
+     * Poin RTL berikutnya yang sudah diajukan (atau masih draft) tapi BELUM diterima
+     * Tim SAKIP, selagi pengajuannya masih bisa disunting (pengajuanBisaDiedit()) —
+     * dimuat ke $rtlBaru lengkap dengan id-nya supaya bisa diperbaiki di tempat.
+     *
+     * @return Collection<int, RtlEvaluasiModel>
+     */
+    protected function rtlBerikutnyaBisaDisunting()
+    {
+        if (! $this->iku_id || ! $this->pengajuanBisaDiedit()) {
+            return collect();
+        }
+
+        $target = $this->targetTriwulanBerikutnya();
+
+        return RtlEvaluasiModel::where('iku_id', $this->iku_id)
+            ->whereIn('status_dokumen', [RtlEvaluasiModel::STATUS_DIAJUKAN, RtlEvaluasiModel::STATUS_DRAFT])
+            ->where('status_verifikasi', '!=', 'terverifikasi')
+            ->whereHas('periode', fn ($q) => $q->where('tahun', $target['tahun'])->where('triwulan', $target['triwulan']))
+            ->orderBy('id')
+            ->get();
     }
 
     /**
@@ -1897,6 +1991,14 @@ class PengisianKegiatan extends Component
 
         if ($ditolak->isNotEmpty()) {
             $this->rtlBaru = $ditolak->map(fn ($poin) => ['id' => $poin->id, 'rtl_teks' => $poin->rtl_teks])->values()->all();
+
+            return;
+        }
+
+        $bisaDisunting = $this->rtlBerikutnyaBisaDisunting();
+
+        if ($bisaDisunting->isNotEmpty()) {
+            $this->rtlBaru = $bisaDisunting->map(fn ($poin) => ['id' => $poin->id, 'rtl_teks' => $poin->rtl_teks])->values()->all();
 
             return;
         }
@@ -1966,7 +2068,7 @@ class PengisianKegiatan extends Component
         // dari loop simpan (lihat simpanDraft()/ajukanIsian()), jadi aturannya cukup
         // dibuat nullable saja di sini.
         foreach ($this->blocks as $i => $block) {
-            $terkunci = in_array($block['status_dokumen'] ?? null, self::STATUS_KEGIATAN_TERKUNCI, true);
+            $terkunci = $this->blokTerkunci($block['status_dokumen'] ?? null);
             $adaBuktiLama = ! empty($block['existing_bukti']);
 
             $rules["blocks.{$i}.bukti"] = ($terkunci || $adaBuktiLama)
@@ -2382,7 +2484,9 @@ class PengisianKegiatan extends Component
             $this->simpanBagianIsian($periode, $iku, $folderService, $driveGagal, ajukan: false);
         });
 
-        session()->flash('status', 'Draf berhasil disimpan — kegiatan, kendala & solusi, evaluasi RTL, dan RTL berikutnya yang sudah diisi ikut tersimpan. Lengkapi bagian yang belum lengkap lalu ajukan ke Tim SAKIP saat siap.');
+        session()->flash('status', $this->pengajuanBisaDiedit()
+            ? 'Perubahan pada pengajuan berhasil disimpan — isian tetap berstatus diajukan. Kegiatan BARU yang ditambahkan baru terkirim ke Tim SAKIP setelah "Ajukan ke Tim SAKIP" diklik.'
+            : 'Draf berhasil disimpan — kegiatan, kendala & solusi, evaluasi RTL, dan RTL berikutnya yang sudah diisi ikut tersimpan. Lengkapi bagian yang belum lengkap lalu ajukan ke Tim SAKIP saat siap.');
 
         if (! empty($driveGagal)) {
             session()->flash('driveGagal', $driveGagal);
@@ -2438,7 +2542,7 @@ class PengisianKegiatan extends Component
         foreach ($this->blocks as &$block) {
             // Blok yang sudah diajukan/diverifikasi/disetujui ditampilkan hanya-baca
             // di form (lihat muatBlocksKegiatan()) — tidak boleh ikut tertimpa di sini.
-            if (in_array($block['status_dokumen'] ?? null, self::STATUS_KEGIATAN_TERKUNCI, true)) {
+            if ($this->blokTerkunci($block['status_dokumen'] ?? null)) {
                 continue;
             }
 
@@ -2486,8 +2590,11 @@ class PengisianKegiatan extends Component
 
             if ($ajukan) {
                 // draft→diajukan maupun dikembalikan→diajukan, keduanya diizinkan
-                // (lihat Kegiatan::TRANSITIONS) — tidak perlu logic tambahan di sini.
-                $kegiatan->ajukan();
+                // (lihat Kegiatan::TRANSITIONS). Kegiatan yang SUDAH diajukan dan sedang
+                // disunting ulang (pengajuanBisaDiedit()) cukup diperbarui isinya.
+                if ($kegiatan->status_dokumen !== Kegiatan::STATUS_DIAJUKAN) {
+                    $kegiatan->ajukan();
+                }
                 $adaKegiatanDiajukan = true;
             }
 
@@ -2939,7 +3046,8 @@ class PengisianKegiatan extends Component
                 || collect($this->kendalaBlocks)->contains(fn ($b) => ($b['status_verifikasi'] ?? null) === 'ditolak'),
             'formTerkunciDisetujui' => $this->formTerkunciDisetujui(),
             'formTerkunciSedangDitangani' => $this->formTerkunciSedangDitangani(),
-            'evaluasiTerkunci' => in_array($this->statusCapaianSaatIni(), self::STATUS_KEGIATAN_TERKUNCI, true),
+            'evaluasiTerkunci' => $this->capaianTerkunci(),
+            'pengajuanBisaDiedit' => $this->pengajuanBisaDiedit(),
         ]);
     }
 }
