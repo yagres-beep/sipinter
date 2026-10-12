@@ -4,7 +4,7 @@ services:
     runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile
-    healthCheckPath: /login
+    healthCheckPath: /up
     envVars:
       - key: APP_NAME
         value: SIPINTER
@@ -21,9 +21,9 @@ services:
       - key: APP_FALLBACK_LOCALE
         value: en
       - key: LOG_CHANNEL
-        value: stack
+        value: stderr
       - key: LOG_LEVEL
-        value: error
+        value: warning
       - key: DB_CONNECTION
         value: pgsql
       - key: DB_HOST
