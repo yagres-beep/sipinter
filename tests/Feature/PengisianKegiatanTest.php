@@ -1705,6 +1705,53 @@ class PengisianKegiatanTest extends TestCase
         $this->get(route('berkas.show', $data['berkas']))->assertOk();
     }
 
+    public function test_url_pratinjau_berkas_memakai_kode_berpola_bukan_id_urut(): void
+    {
+        Storage::fake('local');
+        $data = $this->siapkanKegiatanDikembalikanDenganBerkasDitolak();
+        Storage::disk('local')->put($data['berkas']->path, 'isi pdf palsu');
+
+        $kode = $data['berkas']->fresh()->kode;
+        $this->assertMatchesRegularExpression('/^[A-Z]{3}-\d{6}-[2-9A-Z]{4}-[2-9A-Z]{4}$/', $kode);
+        $this->assertStringEndsWith("/berkas/{$kode}/buka", route('berkas.show', $data['berkas']));
+
+        $this->actingAs($data['ketua']);
+
+        $this->get("/berkas/{$kode}/buka")->assertOk();
+        $this->get("/berkas/{$data['berkas']->id}/buka")->assertNotFound();
+    }
+
+    public function test_pratinjau_berkas_tanpa_salinan_lokal_dan_drive_menjelaskan_sebabnya(): void
+    {
+        Storage::fake('local');
+        $data = $this->siapkanKegiatanDikembalikanDenganBerkasDitolak();
+        $data['berkas']->update(['drive_file_id' => null]);
+
+        $this->actingAs($data['ketua']);
+
+        $this->get(route('berkas.show', $data['berkas']))
+            ->assertNotFound()
+            ->assertSee('gagal terunggah ke Google Drive');
+    }
+
+    public function test_pratinjau_berkas_dari_drive_disimpan_ulang_ke_lokal(): void
+    {
+        Storage::fake('local');
+        $data = $this->siapkanKegiatanDikembalikanDenganBerkasDitolak();
+        $data['berkas']->update(['drive_file_id' => 'drive-abc']);
+
+        $this->mock(\App\Services\GoogleDriveService::class, function ($mock) {
+            $mock->shouldReceive('downloadFileContent')->once()->andReturn('%PDF-1.4 isi');
+        });
+
+        $this->actingAs($data['ketua']);
+
+        $this->get(route('berkas.show', $data['berkas']))->assertOk();
+        Storage::disk('local')->assertExists($data['berkas']->path);
+        // Pratinjau kedua dilayani dari salinan lokal — downloadFileContent() cuma sekali.
+        $this->get(route('berkas.show', $data['berkas']))->assertOk();
+    }
+
     public function test_banner_dikembalikan_menyebut_kepala_dan_catatannya_saat_kepala_yang_mengembalikan(): void
     {
         $data = $this->siapkanKegiatanDikembalikanDenganBerkasDitolak();

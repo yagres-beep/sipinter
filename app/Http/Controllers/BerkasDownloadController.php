@@ -15,6 +15,10 @@ class BerkasDownloadController extends Controller
      * terhapus tiap kali container di-deploy ulang, walau unggahan ke Drive sudah
      * sukses sebelumnya. Karena itu jatuh ke Drive (sumber yang persisten) lewat
      * drive_file_id bila salinan lokalnya sudah tidak ada, alih-alih langsung 404.
+     *
+     * Hasil unduhan dari Drive disimpan ulang ke disk lokal, supaya pratinjau
+     * berikutnya (mis. tiap modal dibuka ulang, atau tiap klik Sesuai/Tidak Sesuai)
+     * tidak perlu memanggil Drive API lagi sampai container di-deploy ulang.
      */
     public function show(Berkas $berkas): Response
     {
@@ -22,20 +26,43 @@ class BerkasDownloadController extends Controller
             return Storage::disk('local')->response($berkas->path, $berkas->nama_file);
         }
 
-        abort_unless($berkas->drive_file_id, 404);
+        if (! $berkas->drive_file_id) {
+            return $this->tidakDitemukan($berkas, 'Salinan berkas di server sudah terhapus (server di-deploy ulang) dan berkas ini dulu gagal terunggah ke Google Drive, jadi tidak ada cadangannya. Minta Ketua Tim mengunggah ulang bukti ini.');
+        }
 
         try {
-            $konten = app(GoogleDriveService::class)->downloadFileContent($berkas->drive_file_id);
+            $konten = app(GoogleDriveService::class)->downloadFileContent($berkas->drive_file_id, $berkas->storageAccount);
         } catch (\Throwable $e) {
-            Log::warning("Gagal mengambil berkas {$berkas->id} dari Drive: {$e->getMessage()}");
-            abort(404);
+            Log::warning("Gagal mengambil berkas {$berkas->id} ({$berkas->kode}) dari Drive: {$e->getMessage()}");
+
+            return $this->tidakDitemukan($berkas, $e->getMessage());
+        }
+
+        if ($berkas->path) {
+            try {
+                Storage::disk('local')->put($berkas->path, $konten);
+            } catch (\Throwable $e) {
+                Log::info("Tidak bisa menyimpan ulang salinan lokal berkas {$berkas->kode}: {$e->getMessage()}");
+            }
         }
 
         $mime = finfo_buffer(finfo_open(FILEINFO_MIME_TYPE), $konten) ?: 'application/octet-stream';
 
         return response($konten, 200, [
             'Content-Type' => $mime,
-            'Content-Disposition' => 'inline; filename="'.$berkas->nama_file.'"',
+            'Content-Disposition' => 'inline; filename="'.addcslashes($berkas->nama_file, '"\\').'"',
         ]);
+    }
+
+    /**
+     * Halaman 404 yang menjelaskan SEBABNYA (tampil di dalam iframe pratinjau),
+     * bukan cuma "404 NOT FOUND" polos yang membuat pengguna menebak-nebak.
+     */
+    protected function tidakDitemukan(Berkas $berkas, string $sebab): Response
+    {
+        return response()->view('berkas.tidak-ditemukan', [
+            'berkas' => $berkas,
+            'sebab' => $sebab,
+        ], 404);
     }
 }

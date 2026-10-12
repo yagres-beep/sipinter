@@ -123,9 +123,11 @@ class VerifikasiCapaianTest extends TestCase
         $komponen = Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']]);
 
         for ($tw = 1; $tw <= 4; $tw++) {
-            $komponen->assertSeeHtml('wire:model.live="realisasi_tw'.$tw.'"')
-                ->assertSeeHtml('wire:model.live="alokasi_tw'.$tw.'"');
+            $komponen->assertSeeHtml('wire:model.live.debounce.400ms="realisasi_tw'.$tw.'"')
+                ->assertSeeHtml('wire:model.live.debounce.400ms="alokasi_tw'.$tw.'"');
         }
+
+        $komponen->assertSet('editAlokasi', false)->set('editAlokasi', true);
 
         $komponen->set('alokasi_tw1', 25)->set('realisasi_tw1', 20)
             ->set('alokasi_tw4', 101.67)->set('realisasi_tw4', 90)
@@ -137,6 +139,41 @@ class VerifikasiCapaianTest extends TestCase
         $this->assertEquals(20, $capaianTahunan->realisasi_tw1);
         $this->assertEquals(101.67, $capaianTahunan->alokasi_tw4);
         $this->assertEquals(90, $capaianTahunan->realisasi_tw4);
+        $this->assertEquals(101.67, $capaianTahunan->targetTahunan());
+    }
+
+    public function test_iku_poin_realisasi_tw_menyamakan_tw_sesudahnya(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+
+        Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
+            ->set('realisasi_tw1', 10)
+            ->assertSet('realisasi_tw2', 10)->assertSet('realisasi_tw3', 10)->assertSet('realisasi_tw4', 10)
+            ->set('realisasi_tw2', 30)
+            ->assertSet('realisasi_tw1', 10)->assertSet('realisasi_tw3', 30)->assertSet('realisasi_tw4', 30)
+            ->set('realisasi_tw4', 50)
+            // koreksi TW I yang lebih kecil tidak menimpa TW sesudahnya yang sudah lebih besar
+            ->set('realisasi_tw1', 5)
+            ->assertSet('realisasi_tw2', 30)->assertSet('realisasi_tw4', 50)
+            // naikkan TW III melewati TW IV -> TW IV ikut naik
+            ->set('realisasi_tw3', 60)
+            ->assertSet('realisasi_tw4', 60);
+    }
+
+    public function test_batal_edit_alokasi_mengembalikan_nilai_tersimpan(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+
+        $komponen = Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']]);
+        $awal = $komponen->get('alokasi_tw2');
+
+        $komponen->set('editAlokasi', true)
+            ->set('alokasi_tw2', 999)
+            ->call('batalEditAlokasi')
+            ->assertSet('editAlokasi', false)
+            ->assertSet('alokasi_tw2', $awal);
     }
 
     public function test_koreksi_teks_kegiatan_tersimpan_saat_verifikasi_selesai(): void

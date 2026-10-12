@@ -1003,10 +1003,10 @@
                             sama persis — lihat catatan sama di verifikasi-capaian.blade.php. --}}
                         <iframe
                             wire:ignore
-                            x-bind:src="modalBerkas === {{ $file['id'] }} ? @js(route('berkas.show', $file['id'])) : null"
+                            x-bind:src="modalBerkas === {{ $file['id'] }} ? @js(route('berkas.show', $file['kode'])) : null"
                             class="pdf-frame" title="Pratinjau {{ $file['nama_file'] }}"
                         ></iframe>
-                        <a href="{{ route('berkas.show', $file['id']) }}" target="_blank" class="btn btn-ghost btn-sm" style="margin-top:10px;align-self:flex-start">🔗 Buka di tab baru / layar penuh</a>
+                        <a href="{{ route('berkas.show', $file['kode']) }}" target="_blank" class="btn btn-ghost btn-sm" style="margin-top:10px;align-self:flex-start">🔗 Buka di tab baru / layar penuh</a>
                     </div>
                 </div>
             </div>

@@ -236,14 +236,30 @@ class GoogleDriveService
      * BerkasDownloadController sebagai jalur cadangan saat salinan lokalnya
      * sudah tidak ada (disk lokal server TIDAK persisten di Render free plan,
      * terhapus tiap kali container di-deploy ulang; lihat catatan di controller).
-     * Sama seperti getFileLink(), tidak peduli akun mana yang sedang aktif.
+     *
+     * $pemilik = akun storage TEMPAT berkas itu diunggah (Berkas::storage_account_id,
+     * RF-10b). Wajib dicoba lebih dulu: token OAuth memakai scope drive.file, yang
+     * HANYA bisa membaca berkas yang dibuat oleh akun itu sendiri — begitu storage
+     * aktif berpindah ke akun lain, client() (terikat ke akun aktif) mendapat 404
+     * "File not found" untuk berkas lama. Bila akun pemilik tidak bisa dipakai
+     * (belum/tidak lagi terhubung, token dicabut), jatuh ke client() biasa.
      */
-    public function downloadFileContent(string $fileId): string
+    public function downloadFileContent(string $fileId, ?StorageAccount $pemilik = null): string
     {
-        return $this->panggilApi(
-            fn () => $this->drive()->files->get($fileId, ['alt' => 'media'])->getBody()->getContents(),
+        $unduh = fn (Drive $drive) => $this->panggilApi(
+            fn () => $drive->files->get($fileId, ['alt' => 'media'])->getBody()->getContents(),
             'mengunduh berkas'
         );
+
+        if ($pemilik && $pemilik->googleTerhubung() && $pemilik->id !== StorageAccount::aktif()?->id) {
+            try {
+                return $unduh(new Drive($this->clientOAuthUntukAkun($pemilik)));
+            } catch (\Throwable) {
+                // Lanjut ke client() akun aktif / Service Account di bawah.
+            }
+        }
+
+        return $unduh($this->drive());
     }
 
     /**

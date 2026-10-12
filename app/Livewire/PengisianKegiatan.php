@@ -1169,8 +1169,8 @@ class PengisianKegiatan extends Component
      * masih false — dipakai supaya seluruh tempat yang menyusun existing_bukti tidak
      * perlu mengulang pengecekan yang sama.
      *
-     * @param  array{id: int, nama_file: string, diunggah_oleh: ?int, status_verifikasi: string, catatan: ?string}  $berkas
-     * @return array{id: int, nama_file: string, diunggah_oleh: ?int, status_verifikasi: string, catatan: ?string}
+     * @param  array{id: int, kode: ?string, nama_file: string, diunggah_oleh: ?int, status_verifikasi: string, catatan: ?string}  $berkas
+     * @return array{id: int, kode: ?string, nama_file: string, diunggah_oleh: ?int, status_verifikasi: string, catatan: ?string}
      */
     protected function maskBerkas(array $berkas): array
     {
@@ -1297,6 +1297,7 @@ class PengisianKegiatan extends Component
             'bukti' => [],
             'existing_bukti' => $kegiatan->berkas->map(fn (Berkas $b) => $this->maskBerkas([
                 'id' => $b->id,
+                'kode' => $b->kode,
                 'nama_file' => $b->nama_file,
                 'diunggah_oleh' => $b->diunggah_oleh,
                 'status_verifikasi' => $b->status_verifikasi,
@@ -1453,6 +1454,7 @@ class PengisianKegiatan extends Component
                 'bukti' => [],
                 'existing_bukti' => $poin->berkas->map(fn (Berkas $b) => $this->maskBerkas([
                     'id' => $b->id,
+                    'kode' => $b->kode,
                     'nama_file' => $b->nama_file,
                     'diunggah_oleh' => $b->diunggah_oleh,
                     'status_verifikasi' => $b->status_verifikasi,

@@ -145,6 +145,15 @@ class VerifikasiCapaian extends Component
     public $realisasi_tw4 = null;
 
     /**
+     * IKU jenis Poin (non-rasio): baris Alokasi Target dikunci (readonly) secara
+     * default supaya tidak tergeser tak sengaja -- tombol ✏️ Edit di blade membuka
+     * kuncinya. Kolom yang diedit di sini SAMA dengan yang diisi di App\Livewire\
+     * TargetTahunan (alokasi_tw1..4 di CapaianTahunan), jadi Target Tahunan
+     * (= alokasi_tw4, lihat CapaianTahunan::targetTahunan()) ikut berubah.
+     */
+    public bool $editAlokasi = false;
+
+    /**
      * Pembilang (X)/Penyebut (Y) mentah kumulatif per triwulan — HANYA dipakai bila
      * MasterIku::pakaiRasio() (IKU bertipe %), sebagai pengganti alokasi_tw1..4 /
      * realisasi_tw1..4 di atas (lihat CapaianTahunan::alokasiKumulatif()). Untuk IKU
@@ -565,6 +574,47 @@ class VerifikasiCapaian extends Component
         foreach ($hitung as $tw => $jumlah) {
             $this->{"x_realisasi_tw{$tw}"} = $jumlah;
         }
+    }
+
+    /**
+     * Realisasi IKU Poin diisi KUMULATIF, jadi TW sesudahnya minimal sama dengan TW
+     * ini -- begitu realisasi_tw{n} diubah, TW n+1..4 ikut disamakan bila masih
+     * kosong, masih "mengikuti" nilai lama TW ini (mis. koreksi salah ketik), atau
+     * lebih kecil dari nilai baru. TW sesudahnya yang sudah diisi lebih besar
+     * secara terpisah dibiarkan apa adanya.
+     */
+    public function updating(string $property, mixed $value): void
+    {
+        if (! preg_match('/^realisasi_tw([1-4])$/', $property, $m) || $this->capaian->masterIku->pakaiRasio()) {
+            return;
+        }
+
+        $lama = $this->angkaAtauNull($this->{$property});
+        $baru = is_numeric($value) ? (float) $value : null;
+
+        if ($baru === null) {
+            return;
+        }
+
+        for ($n = (int) $m[1] + 1; $n <= 4; $n++) {
+            $sesudah = $this->angkaAtauNull($this->{"realisasi_tw{$n}"});
+
+            if ($sesudah === null || $sesudah === $lama || $sesudah < $baru) {
+                $this->{"realisasi_tw{$n}"} = $value;
+            }
+        }
+    }
+
+    public function batalEditAlokasi(): void
+    {
+        $tersimpan = $this->capaianTahunanTersimpan();
+
+        for ($n = 1; $n <= 4; $n++) {
+            $this->{"alokasi_tw{$n}"} = $tersimpan->getOriginal("alokasi_tw{$n}");
+        }
+
+        $this->resetValidation(['alokasi_tw1', 'alokasi_tw2', 'alokasi_tw3', 'alokasi_tw4']);
+        $this->editAlokasi = false;
     }
 
     public function updatedRincianNPilih(): void
@@ -1687,6 +1737,8 @@ class VerifikasiCapaian extends Component
             $this->capaianTahunanTerkini()->save();
             $this->simpanKoreksiTeks();
         });
+
+        $this->editAlokasi = false;
 
         session()->flash('status', 'Perubahan disimpan.');
         $this->dispatch('notify', type: 'success', message: 'Perubahan disimpan.');

@@ -16,6 +16,7 @@ class Berkas extends Model
     protected $table = 'berkas';
 
     protected $fillable = [
+        'kode',
         'ref_id',
         'ref_type',
         'kategori',
@@ -43,7 +44,52 @@ class Berkas extends Model
     {
         static::creating(function (Berkas $berkas) {
             $berkas->diunggah_oleh ??= auth()->id();
+            $berkas->kode ??= self::buatKode($berkas->kategori);
         });
+    }
+
+    /**
+     * Awalan kode per kategori — supaya dari URL saja sudah kelihatan jenis buktinya.
+     */
+    public const PREFIX_KODE = [
+        'capaian' => 'CPN',
+        'solusi' => 'SLS',
+        'evaluasi_rtl' => 'RTL',
+        'bukti_dukung_sakip' => 'SKP',
+        'notula' => 'NTL',
+        'bagian_kustom' => 'BKS',
+    ];
+
+    /**
+     * Huruf/angka acak tanpa karakter yang mudah tertukar (0/O, 1/I/L, U/V).
+     */
+    protected const ALFABET_KODE = '23456789ABCDEFGHJKMNPQRSTWXYZ';
+
+    /**
+     * Kode publik berkas, dipakai di URL pratinjau (/berkas/{kode}/buka) GANTI id
+     * urut — pola KATEGORI-TAHUNBULAN-ACAK, mis. "CPN-202610-K7QM-2X9A". Id urut
+     * gampang ditebak (cukup ganti angka di URL untuk mengintip bukti IKU lain),
+     * sedangkan 8 karakter acak (29^8 ≈ 500 miliar kombinasi) tidak.
+     */
+    public static function buatKode(?string $kategori, ?\DateTimeInterface $waktu = null): string
+    {
+        $prefix = self::PREFIX_KODE[$kategori] ?? 'BKT';
+        $periode = ($waktu ?? now())->format('Ym');
+
+        do {
+            $acak = '';
+            for ($i = 0; $i < 8; $i++) {
+                $acak .= self::ALFABET_KODE[random_int(0, strlen(self::ALFABET_KODE) - 1)];
+            }
+            $kode = "{$prefix}-{$periode}-".substr($acak, 0, 4).'-'.substr($acak, 4);
+        } while (static::where('kode', $kode)->exists());
+
+        return $kode;
+    }
+
+    public function getRouteKeyName(): string
+    {
+        return 'kode';
     }
 
     public function ref(): MorphTo
