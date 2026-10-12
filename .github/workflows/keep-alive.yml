@@ -1,0 +1,27 @@
+# Menjaga SIPINTER tetap "bangun" di Render free plan.
+#
+# Instance gratis Render tidur setelah 15 menit tanpa trafik dan butuh ±1 menit
+# untuk hidup lagi — terasa sekali saat pegawai membuka SIPINTER pagi hari.
+# Workflow ini mengetuk endpoint /up (health check bawaan Laravel) setiap 10 menit
+# pada jam kerja WITA (Senin–Jumat 07.00–17.00 = 23.00–09.00 UTC), sehingga jatah
+# jam gratis bulanan Render tetap aman.
+#
+# Catatan: jadwal GitHub Actions bisa telat beberapa menit, dan GitHub otomatis
+# menonaktifkan workflow terjadwal bila repo tidak ada commit selama 60 hari
+# (aktifkan lagi lewat tab Actions). Untuk ping yang lebih andal, daftarkan juga
+# https://sipinter-butur.biz.id/up di UptimeRobot / cron-job.org.
+name: Keep alive
+
+on:
+  schedule:
+    - cron: '*/10 23 * * 0-4'
+    - cron: '*/10 0-9 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ping /up
+        run: curl -fsS --retry 3 --retry-delay 20 --max-time 90 -o /dev/null -w "%{http_code}\n" https://sipinter-butur.biz.id/up

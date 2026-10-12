@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -20,6 +21,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Lapisan pengaman tambahan selain trustProxies (bootstrap/app.php): di produksi
+        // semua URL yang di-generate (form, aset, Livewire, tautan email) selalu https,
+        // bahkan bila suatu saat header X-Forwarded-Proto dari proxy tidak terkirim.
+        if ($this->app->environment('production')) {
+            URL::forceScheme('https');
+        }
+
         // Server & database menyimpan waktu dalam UTC (config('app.timezone')),
         // tapi Tim SAKIP berada di zona WITA — dipakai di mana pun waktu jam
         // (bukan cuma tanggal) ditampilkan ke pengguna, mis. riwayat status &
