@@ -26,9 +26,18 @@ class ProfileController extends Controller
             'username' => ['required', 'string', 'max:255', 'alpha_dash', 'unique:users,username,'.$user->id],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email,'.$user->id],
             'nomor_telepon' => ['required', 'string', 'max:20'],
+            'wa_opt_in' => ['nullable', 'boolean'],
         ]);
 
-        $user->update($validated);
+        $setujuWa = $request->boolean('wa_opt_in');
+        unset($validated['wa_opt_in']);
+
+        if ($setujuWa !== (bool) $user->wa_opt_in) {
+            $user->wa_opt_in = $setujuWa;
+            $user->wa_opt_in_at = $setujuWa ? now() : null;
+        }
+
+        $user->fill($validated)->save();
 
         return back()->with('status', 'Profil berhasil diperbarui.');
     }

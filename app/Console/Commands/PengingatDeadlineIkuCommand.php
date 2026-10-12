@@ -8,6 +8,7 @@ use App\Models\PengaturanPengingat;
 use App\Models\PengaturanPenerimaPengingat;
 use App\Models\PengaturanTemplatePengingat;
 use App\Models\Periode;
+use App\Services\WhatsAppPengingatService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 
@@ -28,7 +29,7 @@ class PengingatDeadlineIkuCommand extends Command
 
     protected $description = 'Kirim pengingat WA untuk IKU yang mendekati/melewati tenggat pengajuan bulan berjalan';
 
-    public function handle(): int
+    public function handle(WhatsAppPengingatService $whatsApp): int
     {
         $periode = Periode::where('tahun', now()->year)->where('bulan', now()->month)->first();
 
@@ -74,6 +75,7 @@ class PengingatDeadlineIkuCommand extends Command
 
             foreach ($penerima as $user) {
                 KirimPengingatEmailJob::dispatch($user->email, $subjek, $pesan);
+                $whatsApp->antrekan($user, $jenis, $subjek, $pesan, "capaian{$capaian->id}:{$hariIni->toDateString()}");
             }
         }
 

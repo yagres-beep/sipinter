@@ -7,6 +7,7 @@ use App\Jobs\KirimPengingatEmailJob;
 use App\Models\Notula;
 use App\Models\PengaturanPenerimaPengingat;
 use App\Models\PengaturanTemplatePengingat;
+use App\Services\WhatsAppPengingatService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 
 /**
@@ -20,6 +21,8 @@ use Illuminate\Contracts\Queue\ShouldQueue;
  */
 class KirimPengingatStatusNotula implements ShouldQueue
 {
+    public function __construct(protected WhatsAppPengingatService $whatsApp) {}
+
     public function handle(NotulaStatusDiubah $event): void
     {
         $notula = $event->notula->loadMissing('periode');
@@ -41,6 +44,7 @@ class KirimPengingatStatusNotula implements ShouldQueue
 
         foreach (PengaturanPenerimaPengingat::resolveUsers('notula_menunggu_persetujuan') as $user) {
             KirimPengingatEmailJob::dispatch($user->email, $subjek, $pesan);
+            $this->whatsApp->antrekan($user, 'notula_menunggu_persetujuan', $subjek, $pesan, $this->kunciKejadian($notula));
         }
     }
 
@@ -54,7 +58,14 @@ class KirimPengingatStatusNotula implements ShouldQueue
 
         foreach (PengaturanPenerimaPengingat::resolveUsers('notula_dikembalikan') as $user) {
             KirimPengingatEmailJob::dispatch($user->email, $subjek, $pesan);
+            $this->whatsApp->antrekan($user, 'notula_dikembalikan', $subjek, $pesan, $this->kunciKejadian($notula));
         }
+    }
+
+    // Status + waktu perubahan: pembukaan ulang notula yang sama kelak tetap mengirim pengingat baru.
+    protected function kunciKejadian(Notula $notula): string
+    {
+        return "notula{$notula->id}:{$notula->status}:".($notula->updated_at?->timestamp ?? 0);
     }
 
     protected function labelTriwulan(Notula $notula): string

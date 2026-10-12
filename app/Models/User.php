@@ -53,6 +53,8 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'wa_opt_in' => 'boolean',
+            'wa_opt_in_at' => 'datetime',
         ];
     }
 

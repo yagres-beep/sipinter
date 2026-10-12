@@ -95,10 +95,12 @@
         <div x-show="tab === 'whatsapp'" x-cloak>
             <div class="page-head">
                 <div class="page-title">Pengingat</div>
-                <div class="page-sub">Pengingat otomatis (tenggat IKU, verifikasi, notula, dsb) dikirim lewat email ke alamat email pengguna.</div>
+                <div class="page-sub">Pengingat otomatis (tenggat IKU, verifikasi, notula, dsb) dikirim lewat email, dan juga lewat WhatsApp kantor bagi pengguna yang menyetujuinya.</div>
             </div>
 
             <livewire:pengingat-email />
+
+            <livewire:pengaturan-whats-app />
 
             <livewire:pengaturan-pengingat />
 

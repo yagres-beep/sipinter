@@ -127,4 +127,23 @@ return [
         'pg_dump_path' => env('PG_DUMP_PATH', 'pg_dump'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Gateway WhatsApp (Baileys, tidak resmi) — repo terpisah sipinter-wa-gateway
+    |--------------------------------------------------------------------------
+    |
+    | Laravel tidak pernah memanggil gateway di dalam request pengguna untuk
+    | pengingat otomatis: pesan dicatat dulu di riwayat_pengiriman_wa, lalu
+    | `whatsapp:proses-antrean` (scheduler) yang menyerahkannya ke gateway.
+    |
+    | - pengingat_aktif: saklar utama pengingat otomatis. false = tidak ada
+    |   pesan otomatis yang diantrekan (halaman pengaturan & tes tetap bisa).
+    |
+    */
+    'whatsapp' => [
+        'gateway_url' => env('WHATSAPP_GATEWAY_URL'),
+        'gateway_token' => env('WHATSAPP_GATEWAY_TOKEN'),
+        'pengingat_aktif' => (bool) env('WHATSAPP_PENGINGAT_AKTIF', false),
+    ],
+
 ];

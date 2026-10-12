@@ -8,6 +8,7 @@ use App\Models\PengaturanPenerimaPengingat;
 use App\Models\PengaturanTemplatePengingat;
 use App\Models\Periode;
 use App\Services\NotulaService;
+use App\Services\WhatsAppPengingatService;
 use Illuminate\Console\Command;
 
 /**
@@ -21,7 +22,7 @@ class PengingatIkuLengkapCommand extends Command
 
     protected $description = 'Kirim pengingat WA ke Tim SAKIP saat seluruh IKU triwulan berjalan sudah lengkap dan siap disusun jadi Notula';
 
-    public function handle(NotulaService $notulaService): int
+    public function handle(NotulaService $notulaService, WhatsAppPengingatService $whatsApp): int
     {
         $periode = Periode::where('tahun', now()->year)->where('bulan', now()->month)->first();
 
@@ -47,6 +48,7 @@ class PengingatIkuLengkapCommand extends Command
 
         foreach (PengaturanPenerimaPengingat::resolveUsers('iku_lengkap') as $user) {
             KirimPengingatEmailJob::dispatch($user->email, $subjek, $pesan);
+            $whatsApp->antrekan($user, 'iku_lengkap', $subjek, $pesan, "periode{$periode->id}:".now()->toDateString());
         }
 
         return self::SUCCESS;

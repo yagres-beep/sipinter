@@ -9,7 +9,7 @@
     <div class="card">
         <div class="card-h">📧 Status Pengingat Email</div>
         <div class="info" style="border-color:var(--teal, #0d9488)">
-            ✅ Pengingat otomatis (tenggat IKU, verifikasi, notula, dsb) dikirim lewat <b>email</b> ke alamat email pengguna, menggantikan WhatsApp yang sering tidur/putus di hosting gratis.
+            ✅ Pengingat otomatis (tenggat IKU, verifikasi, notula, dsb) dikirim lewat <b>email</b> ke alamat email pengguna. Email tetap menjadi jalur utama walaupun pengingat WhatsApp diaktifkan.
         </div>
     </div>
 

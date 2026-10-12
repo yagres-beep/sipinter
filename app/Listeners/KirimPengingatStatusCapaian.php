@@ -7,6 +7,7 @@ use App\Jobs\KirimPengingatEmailJob;
 use App\Models\Capaian;
 use App\Models\PengaturanPenerimaPengingat;
 use App\Models\PengaturanTemplatePengingat;
+use App\Services\WhatsAppPengingatService;
 use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 
@@ -17,6 +18,8 @@ use Illuminate\Contracts\Queue\ShouldQueue;
  */
 class KirimPengingatStatusCapaian implements ShouldQueue
 {
+    public function __construct(protected WhatsAppPengingatService $whatsApp) {}
+
     public function handle(CapaianStatusDiubah $event): void
     {
         $riwayat = $event->riwayat;
@@ -26,14 +29,17 @@ class KirimPengingatStatusCapaian implements ShouldQueue
             return;
         }
 
+        // Satu baris riwayat status = satu kejadian; dipakai sebagai kunci anti pesan ganda WA.
+        $kunciKejadian = "riwayat{$riwayat->id}";
+
         match ($riwayat->status) {
-            Capaian::STATUS_DIAJUKAN => $this->kirimKeTimSakip($capaian),
-            Capaian::STATUS_DIKEMBALIKAN => $this->kirimKePenanggungJawab($capaian, $riwayat->catatan),
+            Capaian::STATUS_DIAJUKAN => $this->kirimKeTimSakip($capaian, $kunciKejadian),
+            Capaian::STATUS_DIKEMBALIKAN => $this->kirimKePenanggungJawab($capaian, $riwayat->catatan, $kunciKejadian),
             default => null,
         };
     }
 
-    protected function kirimKeTimSakip(Capaian $capaian): void
+    protected function kirimKeTimSakip(Capaian $capaian, string $kunciKejadian): void
     {
         $pesan = PengaturanTemplatePengingat::render('iku_diajukan', [
             'indikator' => $capaian->masterIku->indikator,
@@ -44,10 +50,11 @@ class KirimPengingatStatusCapaian implements ShouldQueue
 
         foreach (PengaturanPenerimaPengingat::resolveUsers('iku_diajukan') as $user) {
             KirimPengingatEmailJob::dispatch($user->email, $subjek, $pesan);
+            $this->whatsApp->antrekan($user, 'iku_diajukan', $subjek, $pesan, $kunciKejadian);
         }
     }
 
-    protected function kirimKePenanggungJawab(Capaian $capaian, ?string $catatan): void
+    protected function kirimKePenanggungJawab(Capaian $capaian, ?string $catatan, string $kunciKejadian): void
     {
         $pesan = PengaturanTemplatePengingat::render('iku_dikembalikan', [
             'indikator' => $capaian->masterIku->indikator,
@@ -60,6 +67,7 @@ class KirimPengingatStatusCapaian implements ShouldQueue
 
         foreach ($penerima as $user) {
             KirimPengingatEmailJob::dispatch($user->email, $subjek, $pesan);
+            $this->whatsApp->antrekan($user, 'iku_dikembalikan', $subjek, $pesan, $kunciKejadian);
         }
     }
 
