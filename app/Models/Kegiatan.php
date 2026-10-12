@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Exceptions\InvalidStatusTransitionException;
+use App\Services\FolderStructureService;
+use App\Services\GoogleDriveService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -63,6 +65,7 @@ class Kegiatan extends Model
         'jenis',
         'tahapan_survei',
         'nama_folder_auto',
+        'nama_folder_kustom',
         'drive_folder_id',
         'status_dokumen',
     ];
@@ -115,6 +118,47 @@ class Kegiatan extends Model
     public function berkas(): MorphMany
     {
         return $this->morphMany(Berkas::class, 'ref', 'ref_type', 'ref_id');
+    }
+
+    /**
+     * Nama folder Drive yang berlaku: nama pilihan pengguna (nama_folder_kustom)
+     * bila diisi, selain itu rekomendasi sistem (nama_folder_auto, RF-17).
+     */
+    public function namaFolder(): string
+    {
+        return $this->nama_folder_kustom ?: ($this->nama_folder_auto ?: $this->uraian_kegiatan);
+    }
+
+    /**
+     * Ganti nama folder Drive kegiatan ini (Ketua Tim/Tim SAKIP). Nama kosong atau
+     * sama persis dengan rekomendasi sistem berarti kembali ke nama otomatis. Bila
+     * foldernya sudah dibuat di Drive, ikut diganti di sana (ID folder tetap sama,
+     * tautan lama tidak rusak) — gagal di Drive TIDAK membatalkan perubahan di
+     * aplikasi, pesan galatnya dikembalikan sebagai peringatan (pola Berkas::gantiNama()).
+     *
+     * @return array{nama_folder: string, peringatan: ?string}
+     */
+    public function gantiNamaFolder(?string $namaBaru): array
+    {
+        $nama = FolderStructureService::namaOtomatis((string) $namaBaru, 150);
+        $kustom = ($nama === '' || $nama === $this->nama_folder_auto) ? null : $nama;
+
+        $namaLama = $this->namaFolder();
+        $this->nama_folder_kustom = $kustom;
+        $namaBerlaku = $this->namaFolder();
+        $peringatan = null;
+
+        if ($this->drive_folder_id && $namaBerlaku !== $namaLama) {
+            try {
+                app(GoogleDriveService::class)->renameFile($this->drive_folder_id, FolderStructureService::namaOtomatis($namaBerlaku, 150));
+            } catch (\Throwable $e) {
+                $peringatan = 'Nama folder di aplikasi sudah diubah, tapi gagal mengubah nama di Google Drive: '.$e->getMessage();
+            }
+        }
+
+        $this->save();
+
+        return ['nama_folder' => $namaBerlaku, 'peringatan' => $peringatan];
     }
 
     public function canTransitionTo(string $status): bool

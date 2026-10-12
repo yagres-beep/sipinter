@@ -1603,6 +1603,37 @@ class VerifikasiCapaian extends Component
     }
 
     /**
+     * Tim SAKIP mengganti nama folder Drive satu kegiatan (dipanggil <x-nama-folder>)
+     * — langsung tersimpan & ikut diganti di Drive bila foldernya sudah ada, sama
+     * seperti ganti nama berkas (GantiNamaBerkas). Nama kosong = kembali ke
+     * rekomendasi sistem.
+     *
+     * @return array{ok: bool, nama_folder?: string, pesan?: string}
+     */
+    public function gantiNamaFolderKegiatan(int $kegiatanId, string $namaBaru): array
+    {
+        $kegiatan = $this->kegiatanList()->firstWhere('id', $kegiatanId);
+
+        if (! $kegiatan || ! $this->kegiatanBisaDikoreksi($kegiatan)) {
+            return ['ok' => false, 'pesan' => 'Kegiatan tidak ditemukan.'];
+        }
+
+        if (mb_strlen(trim($namaBaru)) > 150) {
+            return ['ok' => false, 'pesan' => 'Nama folder maksimal 150 karakter.'];
+        }
+
+        $hasil = $kegiatan->gantiNamaFolder($namaBaru);
+
+        if ($hasil['peringatan']) {
+            $this->dispatch('notify', type: 'warning', message: $hasil['peringatan']);
+        } else {
+            $this->dispatch('notify', type: 'success', message: "Nama folder diubah menjadi \"{$hasil['nama_folder']}\".");
+        }
+
+        return ['ok' => true, 'nama_folder' => $hasil['nama_folder']];
+    }
+
+    /**
      * Tambah satu baris RO kosong — hanya tersimpan ke DB nanti saat
      * "Simpan"/"Verifikasi Selesai"/dst. ditekan (lihat simpanRincianOutput()), sama
      * seperti pola koreksi teks lain di komponen ini. Kunci sementara "baru-..."

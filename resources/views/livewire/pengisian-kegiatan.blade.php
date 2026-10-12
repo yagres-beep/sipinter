@@ -197,7 +197,7 @@
         <div wire:loading wire:target="iku_id,bulan,tahun" class="info">⏳ Memuat kegiatan yang sudah pernah diisi untuk IKU &amp; periode ini, kalau ada…</div>
 
         <div wire:loading.remove wire:target="iku_id,bulan,tahun">
-        <div class="info">ℹ️ Isi tiap kolom berurutan dari atas — uraian kegiatan dulu, baru jenis kegiatan bisa dipilih. Nama folder Drive dibuat otomatis dari tahapan dan uraian kegiatan. Bukti capaian wajib diunggah tiap kegiatan.</div>
+        <div class="info">ℹ️ Isi tiap kolom berurutan dari atas — uraian kegiatan dulu, baru jenis kegiatan bisa dipilih. Nama folder Drive direkomendasikan otomatis dari tahapan dan uraian kegiatan (bisa diganti lewat ✏️). Bukti capaian wajib diunggah tiap kegiatan; bila lebih dari satu berkas, nama bawaannya diberi nomor urut di belakang dan tetap bisa diganti lewat ✏️.</div>
 
         @foreach ($blocks as $i => $block)
             @php $terkunci = $this->blokTerkunci($block['status_dokumen']); @endphp
@@ -217,6 +217,7 @@
                         <label>Jenis Kegiatan</label>
                         <div class="inp filled" style="background:var(--ro-bg)">{{ $block['jenis'] === 'survei_sensus' ? 'Survei/Sensus' : 'Bukan Survei/Sensus' }}@if ($block['tahapan_survei']) — {{ ucfirst($block['tahapan_survei']) }}@endif</div>
                     </div>
+                    <div class="foldername" style="margin-bottom:10px">📁 {{ $this->namaFolderBerlaku($i) }}</div>
 
                     <div class="field" style="margin-bottom:0">
                         <label>Bukti Capaian (PDF)</label>
@@ -267,6 +268,8 @@
                     jenisTerpilih: '{{ $block['jenis'] }}',
                     tahapanTerisi: {{ filled($block['tahapan_survei'] ?? null) ? 'true' : 'false' }},
                     tahapanNilai: '{{ $block['tahapan_survei'] ?? '' }}',
+                    namaFolder: @js($block['nama_folder'] ?? ''),
+                    ubahFolder: {{ filled($block['nama_folder'] ?? '') ? 'true' : 'false' }},
                     pendingBuktiNames: [],
                     get folderPreview() {
                         if (! this.uraianTeks.trim()) return '';
@@ -300,7 +303,7 @@
                             @change="
                                 if ($event.target.value !== '') {
                                     uraianTerisi = true;
-                                    uraianTeks = $event.target.selectedOptions[0].text.trim();
+                                    uraianTeks = $event.target.selectedOptions[0].dataset.teks;
                                 } else {
                                     uraianTerisi = false;
                                     uraianTeks = '';
@@ -309,11 +312,15 @@
                             ">
                             <option value="">— Ketik bebas (di luar rencana RTL) —</option>
                             @foreach ($rtlBerjalanOptions as $opsi)
-                                @continue($opsi['terpakai'] && (int) $opsi['poin']->id !== (int) ($block['rtl_evaluasi_id'] ?? 0))
-                                <option value="{{ $opsi['poin']->id }}" @selected((int) ($block['rtl_evaluasi_id'] ?? 0) === $opsi['poin']->id)>{{ $opsi['poin']->rtl_teks }}</option>
+                                @php
+                                    $dipilihIni = (int) ($block['rtl_evaluasi_id'] ?? 0) === $opsi['poin']->id;
+                                    // Jumlah pemakaian DI LUAR blok ini sendiri.
+                                    $dipilihLain = $opsi['dipilih'] - ($dipilihIni ? 1 : 0);
+                                @endphp
+                                <option value="{{ $opsi['poin']->id }}" data-teks="{{ $opsi['poin']->rtl_teks }}" @selected($dipilihIni)>{{ $dipilihLain > 0 ? '✓ ' : '' }}{{ $opsi['poin']->rtl_teks }}@if ($dipilihLain > 0) — sudah dipilih {{ $dipilihLain }}×@if ($opsi['tahapan']) ({{ implode(', ', $opsi['tahapan']) }})@endif @endif</option>
                             @endforeach
                         </select>
-                        <div class="fhint">💡 Pilih dari rencana RTL triwulan ini untuk menaut otomatis (RTL yang sudah dipilih di kegiatan lain tidak muncul lagi di sini), atau pilih "Ketik bebas" lalu ketik sendiri uraiannya di kolom di bawah ini.</div>
+                        <div class="fhint">💡 Pilih dari rencana RTL triwulan ini untuk menaut otomatis, atau pilih "Ketik bebas" lalu ketik sendiri uraiannya di kolom di bawah ini. RTL yang sudah dipilih ditandai ✓ dan tetap bisa dipilih lagi — mis. survei/sensus dengan beberapa tahapan dalam triwulan ini (tahapan yang sudah dipilih untuk kegiatan yang sama tidak bisa dipilih lagi).</div>
                     @endif
 
                     <input type="text" class="inp filled" x-ref="uraianInput" wire:model.live.blur="blocks.{{ $i }}.uraian_kegiatan"
@@ -356,17 +363,44 @@
                     <select class="inp filled" wire:model.live="blocks.{{ $i }}.tahapan_survei"
                         @change="tahapanTerisi = ($event.target.value !== ''); tahapanNilai = $event.target.value">
                         <option value="">— Pilih Tahapan —</option>
-                        <option value="persiapan">Persiapan</option>
-                        <option value="pelaksanaan">Pelaksanaan</option>
-                        <option value="pengolahan">Pengolahan</option>
-                        <option value="diseminasi">Diseminasi</option>
+                        {{-- Tahapan yang sudah dipilih untuk kegiatan yang SAMA (poin RTL sama
+                             atau uraian sama) di blok lain/bulan lain triwulan ini tidak bisa
+                             dipilih lagi — lihat PengisianKegiatan::tahapanTerpakai(). --}}
+                        @php $tahapanTerpakai = $this->tahapanTerpakai($i); @endphp
+                        @foreach (['persiapan' => 'Persiapan', 'pelaksanaan' => 'Pelaksanaan', 'pengolahan' => 'Pengolahan', 'diseminasi' => 'Diseminasi'] as $nilaiTahapan => $labelTahapan)
+                            @php $sudahDipakai = in_array($nilaiTahapan, $tahapanTerpakai, true); @endphp
+                            <option value="{{ $nilaiTahapan }}" @disabled($sudahDipakai && ($block['tahapan_survei'] ?? '') !== $nilaiTahapan)>{{ $labelTahapan }}{{ $sudahDipakai ? ' (sudah dipilih untuk kegiatan ini)' : '' }}</option>
+                        @endforeach
                     </select>
+                    @if ($tahapanTerpakai)
+                        <div class="fhint">🔁 Kegiatan ini sudah tercatat pada tahapan {{ collect($tahapanTerpakai)->map(fn ($t) => ucfirst($t))->join(', ', ' dan ') }} di triwulan ini — pilih tahapan lain.</div>
+                    @endif
                     @error("blocks.{$i}.tahapan_survei")
                         <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                     @enderror
                 </div>
 
-                <div x-show="folderPreview !== ''" x-cloak class="foldername">📁 <span x-text="folderPreview"></span></div>
+                {{-- Rekomendasi nama folder dari sistem, bisa diganti Ketua Tim (kosongkan
+                     untuk kembali ke rekomendasi). Disimpan saat Simpan Draft/Ajukan; bila
+                     folder sudah ada di Drive, namanya ikut diganti di sana. --}}
+                <div x-show="folderPreview !== ''" x-cloak class="field">
+                    <div class="foldername" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                        📁 <span x-text="namaFolder.trim() !== '' ? namaFolder.trim() : folderPreview"></span>
+                        <span x-show="namaFolder.trim() === ''" style="color:var(--muted);font-size:11px">(rekomendasi sistem)</span>
+                        <button type="button" class="btn-ubah-nama" title="Ganti nama folder" x-show="!ubahFolder" @click="ubahFolder = true; $nextTick(() => $refs.namaFolderInput.focus())">✏️</button>
+                    </div>
+                    <div x-show="ubahFolder" x-cloak style="margin-top:6px">
+                        <input type="text" class="inp filled" maxlength="150" x-ref="namaFolderInput"
+                            wire:model.live.blur="blocks.{{ $i }}.nama_folder"
+                            @input="namaFolder = $event.target.value"
+                            @keydown.enter.prevent="$event.target.blur(); ubahFolder = false"
+                            :placeholder="folderPreview">
+                        <div class="fhint">Kosongkan untuk memakai rekomendasi sistem. Nama folder tersimpan saat Simpan Draft/Ajukan.</div>
+                    </div>
+                    @error("blocks.{$i}.nama_folder")
+                        <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                    @enderror
+                </div>
 
                 <div class="field" style="margin-bottom:0">
                     <label>Bukti Capaian (PDF) @if (empty($block['existing_bukti']))<span class="req">wajib</span>@endif</label>
@@ -418,7 +452,7 @@
                                          benar-benar ditandai "Sesuai" (lihat existing_bukti di atas). --}}
                                     @php
                                         $kunciBaru = $this->kunciBuktiBaru($file);
-                                        $namaTampil = ($namaBuktiBaru[$kunciBaru] ?? '') ?: trim('Kegiatan '.$block['uraian_kegiatan']);
+                                        $namaTampil = ($namaBuktiBaru[$kunciBaru] ?? '') ?: $this->namaDefaultBuktiBaru('Kegiatan '.$block['uraian_kegiatan'], count($block['existing_bukti']), $loop->index, count($block['bukti']));
                                     @endphp
                                     <div class="filechip" wire:key="bukti-baru-{{ $kunciBaru }}">
                                         <span class="nm">
@@ -649,7 +683,7 @@
                             @foreach ($evaluasi[$poin->id]['bukti'] ?? [] as $fi => $file)
                                 @php
                                     $kunciBaru = $this->kunciBuktiBaru($file);
-                                    $namaTampil = ($namaBuktiBaru[$kunciBaru] ?? '') ?: trim('Evaluasi RTL '.$poin->rtl_teks);
+                                    $namaTampil = ($namaBuktiBaru[$kunciBaru] ?? '') ?: $this->namaDefaultBuktiBaru('Evaluasi RTL '.$poin->rtl_teks, $poin->berkas->count(), $loop->index, count($evaluasi[$poin->id]['bukti']));
                                 @endphp
                                 <div class="filechip" wire:key="bukti-baru-{{ $kunciBaru }}">
                                     <span class="nm">
@@ -932,7 +966,7 @@
                                              atas, belum pernah diperiksa Tim SAKIP sama sekali. --}}
                                         @php
                                             $kunciBaru = $this->kunciBuktiBaru($file);
-                                            $namaTampil = ($namaBuktiBaru[$kunciBaru] ?? '') ?: trim($bagian->nama.' '.($blok['teks'] ?? ''));
+                                            $namaTampil = ($namaBuktiBaru[$kunciBaru] ?? '') ?: $this->namaDefaultBuktiBaru(trim($bagian->nama.' '.($blok['teks'] ?? '')), count($blok['existing_bukti'] ?? []), $loop->index, count($blok['bukti']));
                                         @endphp
                                         <div class="filechip" wire:key="bukti-baru-{{ $kunciBaru }}">
                                             <span class="nm">

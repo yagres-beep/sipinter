@@ -279,6 +279,9 @@
                 @error("koreksiKegiatan.{$kegiatan->id}")
                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                 @enderror
+                <div style="margin-top:6px">
+                    <x-nama-folder :id="$kegiatan->id" :nama="$kegiatan->namaFolder()" :kustom="filled($kegiatan->nama_folder_kustom)" />
+                </div>
 
                 @if ($this->uraianBisaDiverifikasi($kegiatan->id))
                     <div x-data="{ pendingMark: null }" style="margin-top:8px">

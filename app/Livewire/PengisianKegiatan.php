@@ -289,6 +289,9 @@ class PengisianKegiatan extends Component
             'uraian_kegiatan' => '',
             'jenis' => '',
             'tahapan_survei' => '',
+            // Nama folder Drive pilihan Ketua Tim — kosong = pakai rekomendasi sistem
+            // (namaFolderPreview()), lihat Kegiatan::nama_folder_kustom.
+            'nama_folder' => '',
             'bukti' => [],
             'existing_bukti' => [],
             'catatan_bukti_dihapus' => null,
@@ -416,9 +419,47 @@ class PengisianKegiatan extends Component
             return '';
         }
 
+        return $this->namaFolderOtomatis($block);
+    }
+
+    /**
+     * Rekomendasi sistem untuk nama folder Drive satu blok — sama persis dengan
+     * nama_folder_auto yang disimpan simpanBagianIsian().
+     */
+    protected function namaFolderOtomatis(array $block): string
+    {
         $tahapan = $block['jenis'] === 'survei_sensus' ? $block['tahapan_survei'] : null;
 
         return Str::limit(($tahapan ? '['.ucfirst($tahapan).'] ' : '').$block['uraian_kegiatan'], 100, '');
+    }
+
+    /**
+     * Nama folder yang benar-benar dipakai satu blok: nama pilihan Ketua Tim
+     * (blocks.*.nama_folder) bila diisi, selain itu rekomendasi sistem.
+     */
+    public function namaFolderBerlaku(int $index): string
+    {
+        $kustom = trim($this->blocks[$index]['nama_folder'] ?? '');
+
+        return $kustom !== '' ? FolderStructureService::namaOtomatis($kustom, 150) : $this->namaFolderPreview($index);
+    }
+
+    /**
+     * Nama bawaan berkas bukti BARU ke-$urutanBaru (0-based) — bila satu kegiatan/poin
+     * punya lebih dari satu berkas (lama + baru), diberi nomor urut di paling belakang
+     * ("Kegiatan X 1", "Kegiatan X 2", ...) supaya langsung terbedakan. Nomor
+     * melanjutkan jumlah berkas yang sudah tersimpan. Ketua Tim tetap bisa menggantinya
+     * lewat ✏️ (aturNamaBuktiBaru()), dan Tim SAKIP lewat gantiNamaBerkas() setelah tersimpan.
+     */
+    public function namaDefaultBuktiBaru(string $namaDasar, int $jumlahLama, int $urutanBaru, int $jumlahBaru): string
+    {
+        $namaDasar = FolderStructureService::namaOtomatis($namaDasar, 140);
+
+        if ($jumlahLama + $jumlahBaru <= 1) {
+            return $namaDasar;
+        }
+
+        return $namaDasar.' '.($jumlahLama + $urutanBaru + 1);
     }
 
     /**
@@ -534,8 +575,11 @@ class PengisianKegiatan extends Component
      * ikut terisi dari teks RTL-nya sebagai titik awal, tapi Ketua Tim tetap bebas
      * menyunting teksnya sesudahnya; rtl_evaluasi_id TETAP tertaut walau teksnya
      * berubah (baru lepas lagi kalau dropdown dikembalikan ke "Ketik bebas").
-     * RTL yang sudah dipilih di blok lain otomatis hilang dari opsi dropdown blok
-     * ini (lihat rtlIdTerpilihDiBlocks()), jadi satu poin RTL tidak bisa dobel dipakai.
+     * Satu poin RTL BOLEH dipilih berulang di beberapa blok (mis. survei yang
+     * dilaksanakan lewat beberapa tahapan dalam satu triwulan: Persiapan lalu
+     * Pelaksanaan, atau keadaan khusus pada kegiatan bukan survei) — opsi yang sudah
+     * pernah dipilih cukup diberi penanda (lihat rtlBerjalanOptions()). Yang dijaga
+     * tidak dobel hanyalah TAHAPAN survei untuk kegiatan yang sama (lihat tahapanTerpakai()).
      *
      * Mengembalikan dropdown ke "Ketik bebas" SENGAJA mengosongkan uraian kegiatan
      * (bukan cuma melepas tautannya) — kalau teks lama dibiarkan, kolom uraian di
@@ -1382,6 +1426,7 @@ class PengisianKegiatan extends Component
             'uraian_kegiatan' => $kegiatan->uraian_kegiatan,
             'jenis' => $kegiatan->jenis,
             'tahapan_survei' => $kegiatan->tahapan_survei ?? '',
+            'nama_folder' => $kegiatan->nama_folder_kustom ?? '',
             'bukti' => [],
             'existing_bukti' => $kegiatan->berkas->map(fn (Berkas $b) => $this->maskBerkas([
                 'id' => $b->id,
@@ -1670,11 +1715,117 @@ class PengisianKegiatan extends Component
     }
 
     /**
-     * Poin RTL triwulan berjalan (rencana yang ditetapkan triwulan sebelumnya) beserta
-     * status "sudah dipilih di salah satu blok kegiatan?" — dipakai sebagai opsi dropdown
-     * pemilihan RTL di Bagian 2 (lewat pilihRtlUntukBlock()) dan badge di Bagian 4.
+     * Kegiatan IKU ini pada bulan LAIN di triwulan yang sama (bulan ini sendiri sudah
+     * seluruhnya ada di $this->blocks, lihat muatBlocksKegiatan()) — dipakai untuk
+     * penanda "sudah dipilih" di dropdown RTL dan untuk mencegah tahapan survei yang
+     * sama dipilih dua kali untuk kegiatan yang sama dalam satu triwulan.
      *
-     * @return Collection<int, array{poin: RtlEvaluasiModel, terpakai: bool}>
+     * @return Collection<int, array{rtl_evaluasi_id: ?int, uraian_kegiatan: string, jenis: ?string, tahapan_survei: ?string, bulan: int}>
+     */
+    protected function kegiatanBulanLainTriwulanIni(): Collection
+    {
+        if (! $this->iku_id) {
+            return collect();
+        }
+
+        return Cache::remember($this->cacheKeyPeriodeIku('rtl-berjalan-terpakai'), self::CACHE_TTL_DETIK, function () {
+            $triwulan = $this->triwulanDari($this->bulan);
+
+            return Kegiatan::query()
+                ->join('periode', 'periode.id', '=', 'kegiatan.periode_id')
+                ->where('kegiatan.iku_id', $this->iku_id)
+                ->where('periode.tahun', $this->tahun)
+                ->where('periode.triwulan', $triwulan)
+                ->where('periode.bulan', '!=', $this->bulan)
+                ->orderBy('kegiatan.id')
+                ->get(['kegiatan.rtl_evaluasi_id', 'kegiatan.uraian_kegiatan', 'kegiatan.jenis', 'kegiatan.tahapan_survei', 'periode.bulan'])
+                ->map(fn ($k) => [
+                    'rtl_evaluasi_id' => $k->rtl_evaluasi_id,
+                    'uraian_kegiatan' => (string) $k->uraian_kegiatan,
+                    'jenis' => $k->jenis,
+                    'tahapan_survei' => $k->tahapan_survei,
+                    'bulan' => (int) $k->bulan,
+                ])
+                ->values();
+        });
+    }
+
+    /**
+     * Dua blok dianggap kegiatan yang SAMA bila tertaut ke poin RTL yang sama, atau
+     * uraiannya sama persis (abaikan besar/kecil huruf & spasi tepi).
+     */
+    protected function kegiatanSama(array $a, array $b): bool
+    {
+        if (! empty($a['rtl_evaluasi_id']) && (int) $a['rtl_evaluasi_id'] === (int) ($b['rtl_evaluasi_id'] ?? 0)) {
+            return true;
+        }
+
+        $uraianA = trim(mb_strtolower($a['uraian_kegiatan'] ?? ''));
+
+        return $uraianA !== '' && $uraianA === trim(mb_strtolower($b['uraian_kegiatan'] ?? ''));
+    }
+
+    /**
+     * Tahapan survei yang SUDAH dipakai kegiatan yang sama (lihat kegiatanSama()) di
+     * blok lain bulan ini atau di bulan lain triwulan ini — opsi ini dinonaktifkan di
+     * dropdown Tahapan Survei blok $index supaya satu tahapan tidak tercatat dobel.
+     *
+     * $hanyaSebelumnya: untuk validasi, cukup bandingkan dengan blok-blok SEBELUM
+     * $index (blok yang lebih dulu tidak ikut disalahkan atas bentrokan yang sama).
+     *
+     * @return list<string>
+     */
+    public function tahapanTerpakai(int $index, bool $hanyaSebelumnya = false): array
+    {
+        $block = $this->blocks[$index] ?? null;
+
+        if (! $block) {
+            return [];
+        }
+
+        $pembanding = collect($this->blocks)
+            ->filter(fn ($lain, $j) => $hanyaSebelumnya ? $j < $index : $j !== $index)
+            ->concat($this->kegiatanBulanLainTriwulanIni());
+
+        return $pembanding
+            ->filter(fn ($lain) => ($lain['jenis'] ?? null) === 'survei_sensus'
+                && filled($lain['tahapan_survei'] ?? null)
+                && $this->kegiatanSama($block, $lain))
+            ->pluck('tahapan_survei')
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Aturan validasi: tahapan survei blok ini belum dipakai kegiatan yang sama
+     * (lihat tahapanTerpakai()). Blok terkunci dilewati — tidak bisa diperbaiki dari sini.
+     */
+    protected function aturanTahapanTidakGanda(): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail): void {
+            $index = (int) explode('.', $attribute)[1];
+            $block = $this->blocks[$index] ?? null;
+
+            if (! $block || blank($value) || $block['jenis'] !== 'survei_sensus' || $this->blokTerkunci($block['status_dokumen'] ?? null)) {
+                return;
+            }
+
+            if (in_array($value, $this->tahapanTerpakai($index, hanyaSebelumnya: true), true)) {
+                $fail('Tahapan "'.ucfirst($value).'" sudah dipilih untuk kegiatan ini pada triwulan ini — pilih tahapan lain.');
+            }
+        };
+    }
+
+    /**
+     * Poin RTL triwulan berjalan (rencana yang ditetapkan triwulan sebelumnya) beserta
+     * penanda "sudah dipilih" — dipakai sebagai opsi dropdown pemilihan RTL di Bagian 2
+     * (lewat pilihRtlUntukBlock()) dan badge di Bagian 4. Opsi yang sudah dipilih TETAP
+     * bisa dipilih lagi (lihat catatan di pilihRtlUntukBlock()); 'dipilih' = berapa kali
+     * dipilih di blok bulan ini + bulan lain triwulan ini, 'tahapan' = tahapan survei
+     * yang sudah dipakai, untuk keterangan di label opsi.
+     *
+     * @return Collection<int, array{poin: RtlEvaluasiModel, terpakai: bool, dipilih: int, tahapan: list<string>}>
      */
     protected function rtlBerjalanOptions()
     {
@@ -1685,11 +1836,19 @@ class PengisianKegiatan extends Component
         }
 
         $terpilihIds = $this->rtlIdTerpilihDiBlocks();
+        $pemakaian = collect($this->blocks)->concat($this->kegiatanBulanLainTriwulanIni())
+            ->filter(fn ($b) => ! empty($b['rtl_evaluasi_id']));
 
-        return $rtlBerjalan->map(fn ($poin) => [
-            'poin' => $poin,
-            'terpakai' => $terpilihIds->contains($poin->id),
-        ]);
+        return $rtlBerjalan->map(function ($poin) use ($terpilihIds, $pemakaian) {
+            $dipakai = $pemakaian->filter(fn ($b) => (int) $b['rtl_evaluasi_id'] === (int) $poin->id);
+
+            return [
+                'poin' => $poin,
+                'terpakai' => $terpilihIds->contains($poin->id),
+                'dipilih' => $dipakai->count(),
+                'tahapan' => $dipakai->where('jenis', 'survei_sensus')->pluck('tahapan_survei')->filter()->unique()->map(fn ($t) => ucfirst($t))->values()->all(),
+            ];
+        });
     }
 
     /**
@@ -2054,7 +2213,9 @@ class PengisianKegiatan extends Component
                 'nullable',
                 'required_if:blocks.*.jenis,survei_sensus',
                 'in:persiapan,pelaksanaan,pengolahan,diseminasi',
+                $this->aturanTahapanTidakGanda(),
             ],
+            'blocks.*.nama_folder' => ['nullable', 'string', 'max:150'],
 
             'kendalaBlocks.*.kendala' => ['nullable', 'string'],
             'kendalaBlocks.*.solusi' => ['nullable', 'string'],
@@ -2132,6 +2293,7 @@ class PengisianKegiatan extends Component
             'blocks.*.uraian_kegiatan' => 'uraian kegiatan',
             'blocks.*.jenis' => 'jenis kegiatan',
             'blocks.*.tahapan_survei' => 'tahapan survei',
+            'blocks.*.nama_folder' => 'nama folder',
             'blocks.*.bukti' => 'bukti capaian',
             'kendalaBlocks.*.kendala' => 'kendala',
             'kendalaBlocks.*.solusi' => 'solusi',
@@ -2366,7 +2528,9 @@ class PengisianKegiatan extends Component
                 $bagian[2] === 'uraian_kegiatan' && $kosong => "{$label}: uraian kegiatan belum diisi.",
                 $bagian[2] === 'uraian_kegiatan' => "{$label}: uraian kegiatan terlalu panjang (maksimal 1.000 karakter).",
                 $bagian[2] === 'jenis' => "{$label}: jenis kegiatan belum dipilih.",
-                $bagian[2] === 'tahapan_survei' => "{$label}: tahapan survei belum dipilih (wajib untuk kegiatan Survei/Sensus).",
+                $bagian[2] === 'tahapan_survei' && $kosong => "{$label}: tahapan survei belum dipilih (wajib untuk kegiatan Survei/Sensus).",
+                $bagian[2] === 'tahapan_survei' => "{$label}: {$pesanAsli}",
+                $bagian[2] === 'nama_folder' => "{$label}: nama folder terlalu panjang (maksimal 150 karakter).",
                 $bagian[2] === 'bukti' && isset($bagian[3]) => "{$label}: berkas bukti ke-".((int) $bagian[3] + 1).' harus PDF berukuran maksimal 10 MB.',
                 $bagian[2] === 'bukti' => "{$label}: bukti capaian (PDF) belum diunggah.",
                 default => "{$label}: {$pesanAsli}",
@@ -2456,8 +2620,10 @@ class PengisianKegiatan extends Component
                     'nullable',
                     'required_if:blocks.*.jenis,survei_sensus',
                     'in:persiapan,pelaksanaan,pengolahan,diseminasi',
+                    $this->aturanTahapanTidakGanda(),
                 ],
-            ], [], $this->validationAttributes());
+                'blocks.*.nama_folder' => ['nullable', 'string', 'max:150'],
+            ], $this->messages(), $this->validationAttributes());
         } catch (ValidationException $e) {
             $this->dispatch('notify', type: 'error', message: 'Draf gagal disimpan — lengkapi data yang wajib diisi lebih dulu.');
 
@@ -2555,11 +2721,7 @@ class PengisianKegiatan extends Component
 
             $tahapan = $block['jenis'] === 'survei_sensus' ? $block['tahapan_survei'] : null;
 
-            $namaFolderAuto = Str::limit(
-                ($tahapan ? '['.ucfirst($tahapan).'] ' : '').$block['uraian_kegiatan'],
-                100,
-                ''
-            );
+            $namaFolderAuto = $this->namaFolderOtomatis($block);
 
             if ($block['id']) {
                 // UPDATE kegiatan draft/dikembalikan yang sudah ada, bukan create baru —
@@ -2588,6 +2750,13 @@ class PengisianKegiatan extends Component
                 $block['id'] = $kegiatan->id;
             }
 
+            // Nama folder pilihan Ketua Tim (kosong = rekomendasi sistem). Bila folder
+            // kegiatan ini sudah ada di Drive, namanya ikut diganti di sana.
+            $hasilFolder = $kegiatan->gantiNamaFolder($block['nama_folder'] ?? '');
+            if ($hasilFolder['peringatan']) {
+                $this->dispatch('notify', type: 'warning', message: $hasilFolder['peringatan']);
+            }
+
             if ($ajukan) {
                 // draft→diajukan maupun dikembalikan→diajukan, keduanya diizinkan
                 // (lihat Kegiatan::TRANSITIONS). Kegiatan yang SUDAH diajukan dan sedang
@@ -2602,9 +2771,10 @@ class PengisianKegiatan extends Component
             // survei — itu cuma prefix folder, lihat namaFolderAuto di atas), supaya
             // langsung dikenali dari daftar berkas tanpa harus dibuka satu-satu.
             $namaBerkasDasar = 'Kegiatan '.$block['uraian_kegiatan'];
+            $jumlahBuktiLama = count($block['existing_bukti'] ?? []);
 
-            foreach ($block['bukti'] as $file) {
-                $namaBerkas = $this->namaBuktiBaruAtauDefault($file, $namaBerkasDasar);
+            foreach (array_values($block['bukti']) as $fi => $file) {
+                $namaBerkas = $this->namaBuktiBaruAtauDefault($file, $this->namaDefaultBuktiBaru($namaBerkasDasar, $jumlahBuktiLama, $fi, count($block['bukti'])));
                 $path = $file->store('bukti-capaian', 'local');
 
                 $berkas = Berkas::create([
@@ -2702,8 +2872,10 @@ class PengisianKegiatan extends Component
             // SAKIP menandai "Sesuai". Sama seperti bukti Kegiatan (Berkas lama yang
             // "ditolak" juga tidak pernah direset otomatis di sini).
 
-            foreach ($data['bukti'] as $file) {
-                $namaBerkas = $this->namaBuktiBaruAtauDefault($file, $namaBerkasDasar);
+            $jumlahBuktiLama = $poin->berkas()->count();
+
+            foreach (array_values($data['bukti']) as $fi => $file) {
+                $namaBerkas = $this->namaBuktiBaruAtauDefault($file, $this->namaDefaultBuktiBaru($namaBerkasDasar, $jumlahBuktiLama, $fi, count($data['bukti'])));
                 $path = $file->store('bukti-evaluasi-rtl', 'local');
 
                 $berkas = Berkas::create([
@@ -2848,8 +3020,10 @@ class PengisianKegiatan extends Component
                 $adaPerbaikanLainDiajukan = true;
                 $namaBerkasDasar = $bagian->nama.' '.$poin->teks;
 
-                foreach ($blok['bukti'] as $file) {
-                    $namaBerkas = $this->namaBuktiBaruAtauDefault($file, $namaBerkasDasar);
+                $jumlahBuktiLama = count($blok['existing_bukti'] ?? []);
+
+                foreach (array_values($blok['bukti']) as $fi => $file) {
+                    $namaBerkas = $this->namaBuktiBaruAtauDefault($file, $this->namaDefaultBuktiBaru($namaBerkasDasar, $jumlahBuktiLama, $fi, count($blok['bukti'])));
                     $path = $file->store('bukti-bagian-kustom', 'local');
 
                     $berkas = Berkas::create([

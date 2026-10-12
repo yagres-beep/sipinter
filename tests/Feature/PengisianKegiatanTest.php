@@ -1937,6 +1937,7 @@ class PengisianKegiatanTest extends TestCase
             'uraian_kegiatan' => '',
             'jenis' => '',
             'tahapan_survei' => '',
+            'nama_folder' => '',
             'bukti' => [],
             'existing_bukti' => [],
             'catatan_bukti_dihapus' => null,

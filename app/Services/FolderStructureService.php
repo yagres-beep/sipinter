@@ -345,7 +345,9 @@ class FolderStructureService
             return $kegiatan->drive_folder_id;
         }
 
-        $namaDasar = self::namaOtomatis($kegiatan->nama_folder_auto ?: $kegiatan->uraian_kegiatan);
+        // Nama pilihan Ketua Tim/Tim SAKIP (nama_folder_kustom) didahulukan dari
+        // rekomendasi sistem, lihat Kegiatan::namaFolder().
+        $namaDasar = self::namaOtomatis($kegiatan->namaFolder(), 150);
         $namaSudahAda = $this->namesInFolderCached($kategoriFolderId);
         $namaUnik = self::namaUnik($namaDasar, $namaSudahAda);
 
@@ -418,7 +420,10 @@ class FolderStructureService
         // belakang lewat namaUnik() di bawah.
         $kategoriSlug = Str::slug($namaKategori);
         $namaDasar = $namaBerkasOverride !== null && trim($namaBerkasOverride) !== ''
-            ? self::namaOtomatis($namaBerkasOverride, 80)
+            // 150 = batas yang sama dengan ganti nama dari web (Berkas::gantiNama()),
+            // supaya nomor urut di belakang nama default (lihat
+            // PengisianKegiatan::namaDefaultBuktiBaru()) tidak ikut terpotong.
+            ? self::namaOtomatis($namaBerkasOverride, 150)
             : (str_starts_with($kategoriSlug, 'bukti') ? $kategoriSlug : "bukti-{$kategoriSlug}");
 
         $namaSudahAda = $this->namesInFolderCached($tujuanFolderId);
