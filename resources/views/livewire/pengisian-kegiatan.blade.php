@@ -226,6 +226,9 @@
                                 <div class="filechip {{ $file['status_verifikasi'] === 'terverifikasi' ? 'ok' : ($file['status_verifikasi'] === 'ditolak' ? 'no' : '') }}">
                                     <span class="nm">
                                         <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" />
+                                        @if (filled($file['subfolder'] ?? null))
+                                            <span class="sub">📁 {{ $file['subfolder'] }}</span>
+                                        @endif
                                         @if ($file['status_verifikasi'] === 'ditolak' && $file['catatan'])
                                             <span class="sub" style="color:var(--red)">{{ $file['catatan'] }}</span>
                                         @endif
@@ -359,33 +362,65 @@
                 </div>
 
                 <div class="field" x-show="jenisTerpilih === 'survei_sensus'" x-cloak>
-                    <label>Tahapan Survei <span class="req">*</span></label>
-                    <select class="inp filled" wire:model.live="blocks.{{ $i }}.tahapan_survei"
-                        @change="tahapanTerisi = ($event.target.value !== ''); tahapanNilai = $event.target.value">
-                        <option value="">— Pilih Tahapan —</option>
-                        {{-- Tahapan yang sudah dipilih untuk kegiatan yang SAMA (poin RTL sama
-                             atau uraian sama) di blok lain/bulan lain triwulan ini tidak bisa
-                             dipilih lagi — lihat PengisianKegiatan::tahapanTerpakai(). --}}
-                        @php $tahapanTerpakai = $this->tahapanTerpakai($i); @endphp
-                        @foreach (['persiapan' => 'Persiapan', 'pelaksanaan' => 'Pelaksanaan', 'pengolahan' => 'Pengolahan', 'diseminasi' => 'Diseminasi'] as $nilaiTahapan => $labelTahapan)
-                            @php $sudahDipakai = in_array($nilaiTahapan, $tahapanTerpakai, true); @endphp
-                            <option value="{{ $nilaiTahapan }}" @disabled($sudahDipakai && ($block['tahapan_survei'] ?? '') !== $nilaiTahapan)>{{ $labelTahapan }}{{ $sudahDipakai ? ' (sudah dipilih untuk kegiatan ini)' : '' }}</option>
+                    <label>Tahapan Survei <span class="req">*</span> <span style="color:var(--muted);font-weight:500">— boleh pilih lebih dari satu</span></label>
+                    {{-- Tahapan yang sudah dipilih untuk kegiatan yang SAMA (poin RTL sama
+                         atau uraian sama) di blok lain/bulan lain triwulan ini tidak bisa
+                         dipilih lagi — lihat PengisianKegiatan::tahapanTerpakai(). --}}
+                    @php
+                        $tahapanTerpakai = $this->tahapanTerpakai($i);
+                        $tahapanBlok = $this->tahapanDipilih($block);
+                    @endphp
+                    <div class="pills">
+                        @foreach (\App\Livewire\PengisianKegiatan::DAFTAR_TAHAPAN as $nilaiTahapan => $labelTahapan)
+                            @php
+                                $tahapanAktif = in_array($nilaiTahapan, $tahapanBlok, true);
+                                $sudahDipakai = ! $tahapanAktif && in_array($nilaiTahapan, $tahapanTerpakai, true);
+                            @endphp
+                            <span class="pill {{ $tahapanAktif ? 'on' : '' }} {{ $sudahDipakai ? 'locked' : '' }}"
+                                @if ($sudahDipakai) title="Sudah dipilih untuk kegiatan ini pada triwulan ini"
+                                @else wire:click="toggleTahapan({{ $i }}, '{{ $nilaiTahapan }}')" wire:loading.class="btn-busy" wire:target="toggleTahapan({{ $i }}, '{{ $nilaiTahapan }}')" @endif
+                            >{{ $tahapanAktif ? '☑' : '☐' }} {{ $labelTahapan }}</span>
                         @endforeach
-                    </select>
+                    </div>
+                    @if (count($tahapanBlok) > 1)
+                        <div class="fhint">🗂️ {{ count($tahapanBlok) }} tahapan dipilih — saat disimpan, tiap tahapan tercatat sebagai kegiatan sendiri (diverifikasi terpisah oleh Tim SAKIP) dengan folder masing-masing di dalam satu folder kegiatan. Pilih tahapan tujuan pada tiap berkas bukti di bawah.</div>
+                    @endif
                     @if ($tahapanTerpakai)
                         <div class="fhint">🔁 Kegiatan ini sudah tercatat pada tahapan {{ collect($tahapanTerpakai)->map(fn ($t) => ucfirst($t))->join(', ', ' dan ') }} di triwulan ini — pilih tahapan lain.</div>
                     @endif
                     @error("blocks.{$i}.tahapan_survei")
                         <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                     @enderror
+                    @foreach ($errors->getMessages() as $kunciGalat => $pesanGalat)
+                        @if (str_starts_with($kunciGalat, "blocks.{$i}.tahapan_tambahan"))
+                            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $pesanGalat[0] }}</div>
+                        @endif
+                    @endforeach
                 </div>
 
                 {{-- Rekomendasi nama folder dari sistem, bisa diganti Ketua Tim (kosongkan
                      untuk kembali ke rekomendasi). Disimpan saat Simpan Draft/Ajukan; bila
                      folder sudah ada di Drive, namanya ikut diganti di sana. --}}
+                @php $tahapanBlok = $block['jenis'] === 'survei_sensus' ? $this->tahapanDipilih($block) : []; @endphp
+                @if (count($tahapanBlok) > 1)
+                    {{-- Beberapa tahapan: satu folder induk kegiatan, tiap tahapan jadi
+                         subfolder di dalamnya (nama tetap diikuti nama kegiatan). --}}
+                    <div class="field">
+                        <div class="foldername">📁 {{ \App\Services\FolderStructureService::namaOtomatis($block['uraian_kegiatan'], 150) }}</div>
+                        @foreach ($tahapanBlok as $ti => $nilaiTahapan)
+                            <div class="foldername" style="margin-left:18px;margin-top:4px">
+                                ↳ 📁 {{ $ti === 0 && filled($block['nama_folder'] ?? '') ? $this->namaFolderBerlaku($i) : $this->namaFolderOtomatis(array_merge($block, ['tahapan_survei' => $nilaiTahapan])) }}
+                            </div>
+                        @endforeach
+                        <div class="fhint">Nama folder tiap tahapan bisa diganti lewat ✏️ setelah disimpan.</div>
+                    </div>
+                @else
                 <div x-show="folderPreview !== ''" x-cloak class="field">
-                    <div class="foldername" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-                        📁 <span x-text="namaFolder.trim() !== '' ? namaFolder.trim() : folderPreview"></span>
+                    {{-- Kegiatan survei/sensus dikelompokkan dalam folder induk bernama
+                         uraian kegiatan (lihat FolderStructureService::resolveKegiatanFolder()). --}}
+                    <div class="foldername" x-show="jenisTerpilih === 'survei_sensus'">📁 <span x-text="uraianTeks.trim()"></span></div>
+                    <div class="foldername" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap" :style="jenisTerpilih === 'survei_sensus' ? 'margin-left:18px;margin-top:4px' : ''">
+                        <span x-show="jenisTerpilih === 'survei_sensus'">↳</span> 📁 <span x-text="namaFolder.trim() !== '' ? namaFolder.trim() : folderPreview"></span>
                         <span x-show="namaFolder.trim() === ''" style="color:var(--muted);font-size:11px">(rekomendasi sistem)</span>
                         <button type="button" class="btn-ubah-nama" title="Ganti nama folder" x-show="!ubahFolder" @click="ubahFolder = true; $nextTick(() => $refs.namaFolderInput.focus())">✏️</button>
                     </div>
@@ -400,6 +435,39 @@
                     @error("blocks.{$i}.nama_folder")
                         <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                     @enderror
+                </div>
+                @endif
+
+                {{-- Bawaan semua bukti masuk SATU folder kegiatan; bila perlu dipisah,
+                     Ketua Tim menambah subfolder khusus di dalam folder kegiatan dan
+                     memilih subfolder tujuan pada tiap berkas di bawah. --}}
+                @php $pakaiSubfolder = ! empty($block['pakai_subfolder']); @endphp
+                <div class="field" x-show="jenisTerpilih !== ''" x-cloak>
+                    <label>Susunan Folder Bukti</label>
+                    <div class="pills">
+                        <span class="pill {{ $pakaiSubfolder ? '' : 'on' }}" wire:click="$set('blocks.{{ $i }}.pakai_subfolder', false)">1 folder (bawaan)</span>
+                        <span class="pill {{ $pakaiSubfolder ? 'on' : '' }}" wire:click="$set('blocks.{{ $i }}.pakai_subfolder', true)">Pisah ke beberapa subfolder</span>
+                    </div>
+                    @if ($pakaiSubfolder)
+                        <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+                            @foreach ($block['subfolders'] ?? [] as $si => $namaSub)
+                                <span class="pill on" wire:key="subfolder-{{ $i }}-{{ md5($namaSub) }}">📁 {{ $namaSub }}
+                                    <span style="cursor:pointer;margin-left:4px" title="Hapus subfolder" wire:click="hapusSubfolder({{ $i }}, {{ $si }})">✕</span>
+                                </span>
+                            @endforeach
+                            @foreach (\App\Livewire\PengisianKegiatan::SARAN_SUBFOLDER as $saran)
+                                @if (! in_array(mb_strtolower($saran), array_map('mb_strtolower', $block['subfolders'] ?? []), true))
+                                    <span class="pill" style="border-style:dashed" wire:click="tambahSubfolder({{ $i }}, @js($saran))">＋ {{ $saran }}</span>
+                                @endif
+                            @endforeach
+                        </div>
+                        <div x-data="{ namaSub: '' }" style="margin-top:8px;display:flex;gap:6px">
+                            <input type="text" class="inp" maxlength="100" x-model="namaSub" placeholder="Nama subfolder lain…" data-abaikan-perubahan
+                                @keydown.enter.prevent="if (namaSub.trim()) { $wire.tambahSubfolder({{ $i }}, namaSub); namaSub = '' }">
+                            <button type="button" class="btn btn-ghost btn-sm" @click="if (namaSub.trim()) { $wire.tambahSubfolder({{ $i }}, namaSub); namaSub = '' }">＋ Tambah</button>
+                        </div>
+                        <div class="fhint">Subfolder dibuat di dalam folder kegiatan{{ count($tahapanBlok) > 1 ? ' (di setiap folder tahapan)' : '' }}. Pilih subfolder tujuan pada tiap berkas di bawah — berkas tanpa pilihan masuk langsung ke folder kegiatan.</div>
+                    @endif
                 </div>
 
                 <div class="field" style="margin-bottom:0">
@@ -417,6 +485,9 @@
                                 <div class="filechip {{ $file['status_verifikasi'] === 'terverifikasi' ? 'ok' : ($file['status_verifikasi'] === 'ditolak' ? 'no' : '') }}">
                                     <span class="nm">
                                         <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" />
+                                        @if (filled($file['subfolder'] ?? null))
+                                            <span class="sub">📁 {{ $file['subfolder'] }}</span>
+                                        @endif
                                         @if ($file['status_verifikasi'] === 'ditolak' && $file['catatan'])
                                             <span class="sub" style="color:var(--red)">{{ $file['catatan'] }}</span>
                                         @endif
@@ -444,6 +515,7 @@
                                     @change="pendingBuktiNames = Array.from($event.target.files).map(f => f.name)">
                             </label>
                         @else
+                            <x-mode-nama-berkas :mode="$modeNamaBerkas" />
                             <div class="filechip-grid">
                                 @foreach ($block['bukti'] as $fi => $file)
                                     {{-- TANPA kelas "ok" (hijau) — berkas ini baru dipilih, belum
@@ -452,12 +524,35 @@
                                          benar-benar ditandai "Sesuai" (lihat existing_bukti di atas). --}}
                                     @php
                                         $kunciBaru = $this->kunciBuktiBaru($file);
-                                        $namaTampil = ($namaBuktiBaru[$kunciBaru] ?? '') ?: $this->namaDefaultBuktiBaru('Kegiatan '.$block['uraian_kegiatan'], count($block['existing_bukti']), $loop->index, count($block['bukti']));
+                                        $namaTampil = $this->namaBuktiBaruKegiatan($block, $file);
+                                        $tahapanBerkas = $this->tahapanBerkasBaru($block, $file);
+                                        $subfolderBerkas = $this->subfolderBerkasBaru($block, $file);
                                     @endphp
                                     <div class="filechip" wire:key="bukti-baru-{{ $kunciBaru }}">
                                         <span class="nm">
                                             <x-nama-berkas :id="$kunciBaru" :nama="$namaTampil.'.pdf'" aksi="aturNamaBuktiBaru" :bisa-ubah="true" />
                                             <span class="sub">Berkas asli: {{ $file->getClientOriginalName() }}</span>
+                                            @if (count($tahapanBlok) > 1 || ($pakaiSubfolder && ! empty($block['subfolders'])))
+                                                <span style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
+                                                    @if (count($tahapanBlok) > 1)
+                                                        <select class="inp" style="width:auto;padding:3px 6px;font-size:11.5px" title="Tahapan tujuan berkas ini"
+                                                            wire:change="$set('tahapanBuktiBaru.{{ $kunciBaru }}', $event.target.value)">
+                                                            @foreach ($tahapanBlok as $nilaiTahapan)
+                                                                <option value="{{ $nilaiTahapan }}" @selected($tahapanBerkas === $nilaiTahapan)>Tahapan: {{ \App\Livewire\PengisianKegiatan::DAFTAR_TAHAPAN[$nilaiTahapan] }}</option>
+                                                            @endforeach
+                                                        </select>
+                                                    @endif
+                                                    @if ($pakaiSubfolder && ! empty($block['subfolders']))
+                                                        <select class="inp" style="width:auto;padding:3px 6px;font-size:11.5px" title="Subfolder tujuan berkas ini"
+                                                            wire:change="$set('subfolderBuktiBaru.{{ $kunciBaru }}', $event.target.value)">
+                                                            <option value="" @selected($subfolderBerkas === '')>📁 Langsung di folder kegiatan</option>
+                                                            @foreach ($block['subfolders'] as $namaSub)
+                                                                <option value="{{ $namaSub }}" @selected($subfolderBerkas === $namaSub)>📁 {{ $namaSub }}</option>
+                                                            @endforeach
+                                                        </select>
+                                                    @endif
+                                                </span>
+                                            @endif
                                         </span>
                                         <span class="x" style="cursor:pointer" title="Hapus bukti" wire:click="removeBuktiKegiatan({{ $i }}, {{ $fi }})" wire:loading.class="btn-busy" wire:target="removeBuktiKegiatan({{ $i }}, {{ $fi }})">🗑️</span>
                                     </div>
@@ -665,6 +760,10 @@
                             </div>
                         @endif
 
+                        @if (! empty($evaluasi[$poin->id]['bukti'] ?? []))
+                            <x-mode-nama-berkas :mode="$modeNamaBerkas" />
+                        @endif
+
                         <div class="filechip-grid">
                             @foreach ($poin->berkas as $file)
                                 <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}">
@@ -683,7 +782,7 @@
                             @foreach ($evaluasi[$poin->id]['bukti'] ?? [] as $fi => $file)
                                 @php
                                     $kunciBaru = $this->kunciBuktiBaru($file);
-                                    $namaTampil = ($namaBuktiBaru[$kunciBaru] ?? '') ?: $this->namaDefaultBuktiBaru('Evaluasi RTL '.$poin->rtl_teks, $poin->berkas->count(), $loop->index, count($evaluasi[$poin->id]['bukti']));
+                                    $namaTampil = $this->namaBuktiBaruAtauDefault($file, $this->namaDefaultBuktiBaru('Evaluasi RTL '.$poin->rtl_teks, $poin->berkas->count(), $loop->index, count($evaluasi[$poin->id]['bukti'])));
                                 @endphp
                                 <div class="filechip" wire:key="bukti-baru-{{ $kunciBaru }}">
                                     <span class="nm">
@@ -960,13 +1059,14 @@
                                         @change="pendingBuktiBagianNames = Array.from($event.target.files).map(f => f.name)">
                                 </label>
                             @else
+                                <x-mode-nama-berkas :mode="$modeNamaBerkas" />
                                 <div class="filechip-grid">
                                     @foreach ($blok['bukti'] as $fi => $file)
                                         {{-- TANPA kelas "ok" (hijau) — sama seperti bukti Kegiatan di
                                              atas, belum pernah diperiksa Tim SAKIP sama sekali. --}}
                                         @php
                                             $kunciBaru = $this->kunciBuktiBaru($file);
-                                            $namaTampil = ($namaBuktiBaru[$kunciBaru] ?? '') ?: $this->namaDefaultBuktiBaru(trim($bagian->nama.' '.($blok['teks'] ?? '')), count($blok['existing_bukti'] ?? []), $loop->index, count($blok['bukti']));
+                                            $namaTampil = $this->namaBuktiBaruAtauDefault($file, $this->namaDefaultBuktiBaru(trim($bagian->nama.' '.($blok['teks'] ?? '')), count($blok['existing_bukti'] ?? []), $loop->index, count($blok['bukti'])));
                                         @endphp
                                         <div class="filechip" wire:key="bukti-baru-{{ $kunciBaru }}">
                                             <span class="nm">

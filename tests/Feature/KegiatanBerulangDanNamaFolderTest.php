@@ -11,6 +11,7 @@ use App\Models\RtlEvaluasi;
 use App\Models\User;
 use App\Services\GoogleDriveService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -201,5 +202,26 @@ class KegiatanBerulangDanNamaFolderTest extends TestCase
         $this->assertSame('Kegiatan Rapat 2', $komponen->namaDefaultBuktiBaru('Kegiatan Rapat', 0, 1, 2));
         // Melanjutkan nomor setelah berkas yang sudah tersimpan.
         $this->assertSame('Kegiatan Rapat 3', $komponen->namaDefaultBuktiBaru('Kegiatan Rapat', 2, 0, 1));
+    }
+
+    public function test_nama_berkas_bawaan_memakai_nama_asli_dan_bisa_pindah_ke_rekomendasi_sistem(): void
+    {
+        $this->siapkan();
+        $test = Livewire::test(PengisianKegiatan::class);
+        $komponen = $test->instance();
+        $file = UploadedFile::fake()->create('Notulen: Rapat.pdf', 10, 'application/pdf');
+
+        $this->assertSame('asli', $komponen->modeNamaBerkas);
+        $this->assertSame('Notulen Rapat', $komponen->namaBuktiBaruAtauDefault($file, 'Kegiatan Rapat'));
+
+        $komponen->modeNamaBerkas = 'sistem';
+        $this->assertSame('Kegiatan Rapat', $komponen->namaBuktiBaruAtauDefault($file, 'Kegiatan Rapat'));
+
+        // Nama yang diganti lewat ✏️ tetap diutamakan apa pun modenya.
+        $komponen->aturNamaBuktiBaru($komponen->kunciBuktiBaru($file), 'Nama Pilihan');
+        $this->assertSame('Nama Pilihan', $komponen->namaBuktiBaruAtauDefault($file, 'Kegiatan Rapat'));
+
+        // Nilai di luar pilihan dikembalikan ke bawaan.
+        $test->set('modeNamaBerkas', 'aneh')->assertSet('modeNamaBerkas', 'asli');
     }
 }

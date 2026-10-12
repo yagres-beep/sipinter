@@ -68,13 +68,51 @@ class PengisianKegiatan extends Component
     }
 
     /**
-     * Nama akhir berkas baru: nama kustom bila diisi, selain itu nama default.
+     * Cara menamai berkas bukti BARU yang tidak diberi nama kustom lewat ✏️:
+     * 'asli' = nama berkas seperti saat diunggah dari komputer (bawaan), 'sistem' =
+     * rekomendasi sistem (mis. "Kegiatan <uraian> 1"). Berlaku untuk semua unggahan
+     * di form ini (Kegiatan, Evaluasi RTL, Bagian Kustom).
      */
-    protected function namaBuktiBaruAtauDefault($file, string $namaDefault): string
+    public string $modeNamaBerkas = 'asli';
+
+    public function updatedModeNamaBerkas(string $nilai): void
+    {
+        if (! in_array($nilai, ['asli', 'sistem'], true)) {
+            $this->modeNamaBerkas = 'asli';
+        }
+    }
+
+    /**
+     * Nama berkas asli dari komputer pengguna (tanpa .pdf), dibersihkan supaya aman
+     * jadi nama berkas di Drive.
+     */
+    public function namaAsliBuktiBaru($file): string
+    {
+        return FolderStructureService::namaOtomatis(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME), 150);
+    }
+
+    /**
+     * Nama akhir berkas baru: nama kustom (✏️) bila diisi, selain itu nama asli atau
+     * rekomendasi sistem sesuai $modeNamaBerkas. Dipakai juga oleh tampilan chip
+     * berkas supaya nama yang terlihat sama persis dengan yang nanti tersimpan.
+     */
+    public function namaBuktiBaruAtauDefault($file, string $namaDefault): string
     {
         $kustom = trim($this->namaBuktiBaru[$this->kunciBuktiBaru($file)] ?? '');
 
-        return $kustom !== '' ? $kustom : $namaDefault;
+        if ($kustom !== '') {
+            return $kustom;
+        }
+
+        if ($this->modeNamaBerkas === 'asli') {
+            $asli = $this->namaAsliBuktiBaru($file);
+
+            if ($asli !== '') {
+                return $asli;
+            }
+        }
+
+        return $namaDefault;
     }
 
     /**
@@ -99,6 +137,147 @@ class PengisianKegiatan extends Component
         $this->namaBuktiBaru[$kunci] = $nama;
 
         return ['ok' => true, 'nama_file' => $nama.'.pdf'];
+    }
+
+    /**
+     * Tahapan tujuan tiap berkas bukti BARU di blok yang memilih lebih dari satu
+     * tahapan — kunci = kunciBuktiBaru(). Kosong/tidak valid = tahapan pertama.
+     *
+     * @var array<string, string>
+     */
+    public array $tahapanBuktiBaru = [];
+
+    /**
+     * Subfolder khusus tujuan tiap berkas bukti BARU — kunci = kunciBuktiBaru().
+     * Kosong = langsung di folder kegiatan.
+     *
+     * @var array<string, string>
+     */
+    public array $subfolderBuktiBaru = [];
+
+    /** Saran nama subfolder khusus yang bisa langsung diklik. */
+    public const SARAN_SUBFOLDER = ['Undangan', 'Daftar Hadir', 'Notula', 'Dokumentasi', 'Laporan'];
+
+    public const DAFTAR_TAHAPAN = ['persiapan' => 'Persiapan', 'pelaksanaan' => 'Pelaksanaan', 'pengolahan' => 'Pengolahan', 'diseminasi' => 'Diseminasi'];
+
+    /**
+     * Semua tahapan yang dipilih satu blok, berurutan: tahapan utama lalu tambahan.
+     *
+     * @return list<string>
+     */
+    public function tahapanDipilih(array $block): array
+    {
+        return collect([$block['tahapan_survei'] ?? ''])
+            ->concat($block['tahapan_tambahan'] ?? [])
+            ->filter(fn ($t) => is_string($t) && $t !== '')
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Centang/lepas satu tahapan di blok $index. Tahapan pertama yang dipilih jadi
+     * tahapan utama (tahapan_survei, milik baris Kegiatan blok ini); berikutnya
+     * masuk tahapan_tambahan.
+     */
+    public function toggleTahapan(int $index, string $tahapan): void
+    {
+        $block = $this->blocks[$index] ?? null;
+
+        if (! $block || ! array_key_exists($tahapan, self::DAFTAR_TAHAPAN) || $this->blokTerkunci($block['status_dokumen'] ?? null)) {
+            return;
+        }
+
+        $dipilih = $this->tahapanDipilih($block);
+
+        if (in_array($tahapan, $dipilih, true)) {
+            $dipilih = array_values(array_diff($dipilih, [$tahapan]));
+        } elseif (! in_array($tahapan, $this->tahapanTerpakai($index), true)) {
+            $dipilih[] = $tahapan;
+        } else {
+            return;
+        }
+
+        $this->blocks[$index]['tahapan_survei'] = $dipilih[0] ?? '';
+        $this->blocks[$index]['tahapan_tambahan'] = array_slice($dipilih, 1);
+        $this->adaPerubahan = true;
+    }
+
+    /**
+     * Tahapan tujuan satu berkas bukti baru di blok ini.
+     */
+    public function tahapanBerkasBaru(array $block, $file): ?string
+    {
+        $dipilih = $this->tahapanDipilih($block);
+
+        if (($block['jenis'] ?? '') !== 'survei_sensus' || $dipilih === []) {
+            return null;
+        }
+
+        $pilihan = $this->tahapanBuktiBaru[$this->kunciBuktiBaru($file)] ?? '';
+
+        return in_array($pilihan, $dipilih, true) ? $pilihan : $dipilih[0];
+    }
+
+    /**
+     * Subfolder khusus tujuan satu berkas bukti baru di blok ini ('' = folder kegiatan).
+     */
+    public function subfolderBerkasBaru(array $block, $file): string
+    {
+        if (empty($block['pakai_subfolder'])) {
+            return '';
+        }
+
+        $pilihan = $this->subfolderBuktiBaru[$this->kunciBuktiBaru($file)] ?? '';
+
+        return in_array($pilihan, $block['subfolders'] ?? [], true) ? $pilihan : '';
+    }
+
+    public function tambahSubfolder(int $index, string $nama): void
+    {
+        if (! isset($this->blocks[$index])) {
+            return;
+        }
+
+        $nama = FolderStructureService::namaOtomatis($nama, 100);
+        $sudahAda = array_map('mb_strtolower', $this->blocks[$index]['subfolders'] ?? []);
+
+        if ($nama === '' || in_array(mb_strtolower($nama), $sudahAda, true)) {
+            return;
+        }
+
+        $this->blocks[$index]['subfolders'][] = $nama;
+        $this->blocks[$index]['pakai_subfolder'] = true;
+        $this->adaPerubahan = true;
+    }
+
+    public function hapusSubfolder(int $index, int $urutan): void
+    {
+        if (! isset($this->blocks[$index]['subfolders'][$urutan])) {
+            return;
+        }
+
+        unset($this->blocks[$index]['subfolders'][$urutan]);
+        $this->blocks[$index]['subfolders'] = array_values($this->blocks[$index]['subfolders']);
+        $this->adaPerubahan = true;
+    }
+
+    /**
+     * Nama tampil/akhir satu berkas bukti BARU di blok kegiatan — penomoran nama
+     * default dihitung per tahapan tujuannya, sama persis dengan yang disimpan.
+     */
+    public function namaBuktiBaruKegiatan(array $block, $file): string
+    {
+        $tahapan = $this->tahapanBerkasBaru($block, $file);
+        $satuKelompok = array_values(array_filter(
+            $block['bukti'] ?? [],
+            fn ($f) => $this->tahapanBerkasBaru($block, $f) === $tahapan
+        ));
+        $urutan = (int) array_search($this->kunciBuktiBaru($file), array_map(fn ($f) => $this->kunciBuktiBaru($f), $satuKelompok), true);
+        $utama = $tahapan === null || $tahapan === ($this->tahapanDipilih($block)[0] ?? null);
+        $jumlahLama = $utama ? count($block['existing_bukti'] ?? []) : 0;
+
+        return $this->namaBuktiBaruAtauDefault($file, $this->namaDefaultBuktiBaru('Kegiatan '.$block['uraian_kegiatan'], $jumlahLama, $urutan, count($satuKelompok)));
     }
 
     /**
@@ -289,9 +468,17 @@ class PengisianKegiatan extends Component
             'uraian_kegiatan' => '',
             'jenis' => '',
             'tahapan_survei' => '',
+            // Tahapan lain yang dipilih sekaligus di blok ini (survei/sensus) — saat
+            // disimpan tiap tahapan menjadi baris Kegiatan sendiri (lihat
+            // simpanBagianIsian()), foldernya dikelompokkan di bawah folder induk kegiatan.
+            'tahapan_tambahan' => [],
             // Nama folder Drive pilihan Ketua Tim — kosong = pakai rekomendasi sistem
             // (namaFolderPreview()), lihat Kegiatan::nama_folder_kustom.
             'nama_folder' => '',
+            // Bawaan 1 folder; bila true, berkas bisa dimasukkan ke subfolder khusus
+            // ($subfolders) di dalam folder kegiatan.
+            'pakai_subfolder' => false,
+            'subfolders' => [],
             'bukti' => [],
             'existing_bukti' => [],
             'catatan_bukti_dihapus' => null,
@@ -1419,25 +1606,33 @@ class PengisianKegiatan extends Component
             return;
         }
 
-        $this->blocks = $kegiatanList->map(fn (Kegiatan $kegiatan) => [
-            'id' => $kegiatan->id,
-            'status_dokumen' => $kegiatan->status_dokumen,
-            'rtl_evaluasi_id' => $kegiatan->rtl_evaluasi_id,
-            'uraian_kegiatan' => $kegiatan->uraian_kegiatan,
-            'jenis' => $kegiatan->jenis,
-            'tahapan_survei' => $kegiatan->tahapan_survei ?? '',
-            'nama_folder' => $kegiatan->nama_folder_kustom ?? '',
-            'bukti' => [],
-            'existing_bukti' => $kegiatan->berkas->map(fn (Berkas $b) => $this->maskBerkas([
-                'id' => $b->id,
-                'kode' => $b->kode,
-                'nama_file' => $b->nama_file,
-                'diunggah_oleh' => $b->diunggah_oleh,
-                'status_verifikasi' => $b->status_verifikasi,
-                'catatan' => $b->catatan,
-            ]))->all(),
-            'catatan_bukti_dihapus' => $kegiatan->catatan_bukti_dihapus,
-        ])->values()->all();
+        $this->blocks = $kegiatanList->map(function (Kegiatan $kegiatan) {
+            $subfolders = $kegiatan->berkas->pluck('subfolder')->filter()->unique()->values()->all();
+
+            return [
+                'id' => $kegiatan->id,
+                'status_dokumen' => $kegiatan->status_dokumen,
+                'rtl_evaluasi_id' => $kegiatan->rtl_evaluasi_id,
+                'uraian_kegiatan' => $kegiatan->uraian_kegiatan,
+                'jenis' => $kegiatan->jenis,
+                'tahapan_survei' => $kegiatan->tahapan_survei ?? '',
+                'tahapan_tambahan' => [],
+                'nama_folder' => $kegiatan->nama_folder_kustom ?? '',
+                'pakai_subfolder' => $subfolders !== [],
+                'subfolders' => $subfolders,
+                'bukti' => [],
+                'existing_bukti' => $kegiatan->berkas->map(fn (Berkas $b) => $this->maskBerkas([
+                    'id' => $b->id,
+                    'kode' => $b->kode,
+                    'nama_file' => $b->nama_file,
+                    'subfolder' => $b->subfolder,
+                    'diunggah_oleh' => $b->diunggah_oleh,
+                    'status_verifikasi' => $b->status_verifikasi,
+                    'catatan' => $b->catatan,
+                ]))->all(),
+                'catatan_bukti_dihapus' => $kegiatan->catatan_bukti_dihapus,
+            ];
+        })->values()->all();
     }
 
     /**
@@ -1789,12 +1984,55 @@ class PengisianKegiatan extends Component
 
         return $pembanding
             ->filter(fn ($lain) => ($lain['jenis'] ?? null) === 'survei_sensus'
-                && filled($lain['tahapan_survei'] ?? null)
                 && $this->kegiatanSama($block, $lain))
-            ->pluck('tahapan_survei')
+            ->flatMap(fn ($lain) => $this->tahapanDipilih($lain))
             ->unique()
             ->values()
             ->all();
+    }
+
+    /**
+     * Aturan validasi tiap tahapan tambahan (blocks.*.tahapan_tambahan.*): valid, belum
+     * dipakai kegiatan yang sama, dan tidak dobel dengan tahapan lain di blok ini.
+     */
+    protected function aturanTahapanTambahan(): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail): void {
+            [, $index, , $urutan] = explode('.', $attribute);
+            $block = $this->blocks[(int) $index] ?? null;
+
+            if (! $block || ($block['jenis'] ?? '') !== 'survei_sensus' || $this->blokTerkunci($block['status_dokumen'] ?? null)) {
+                return;
+            }
+
+            if (! is_string($value) || ! array_key_exists($value, self::DAFTAR_TAHAPAN)) {
+                $fail('Tahapan survei tidak valid.');
+
+                return;
+            }
+
+            $sebelumnya = array_merge([$block['tahapan_survei'] ?? ''], array_slice($block['tahapan_tambahan'] ?? [], 0, (int) $urutan));
+
+            if (in_array($value, $sebelumnya, true) || in_array($value, $this->tahapanTerpakai((int) $index, hanyaSebelumnya: true), true)) {
+                $fail('Tahapan "'.ucfirst($value).'" sudah dipilih untuk kegiatan ini pada triwulan ini — pilih tahapan lain.');
+            }
+        };
+    }
+
+    /**
+     * Aturan validasi blocks.*.tahapan_tambahan & blocks.*.subfolders — dipakai
+     * simpanDraft() dan rules().
+     *
+     * @return array<string, list<mixed>>
+     */
+    protected function aturanTahapanDanSubfolder(): array
+    {
+        return [
+            'blocks.*.tahapan_tambahan' => ['nullable', 'array', 'max:3'],
+            'blocks.*.tahapan_tambahan.*' => [$this->aturanTahapanTambahan()],
+            'blocks.*.subfolders' => ['nullable', 'array', 'max:20'],
+            'blocks.*.subfolders.*' => ['string', 'max:100'],
+        ];
     }
 
     /**
@@ -2219,7 +2457,7 @@ class PengisianKegiatan extends Component
 
             'kendalaBlocks.*.kendala' => ['nullable', 'string'],
             'kendalaBlocks.*.solusi' => ['nullable', 'string'],
-        ];
+        ] + $this->aturanTahapanDanSubfolder();
 
         // Bukti capaian per blok kegiatan — wajib minimal 1 HANYA bila blok itu belum
         // punya berkas tersimpan sama sekali (existing_bukti, dimuat di
@@ -2350,6 +2588,28 @@ class PengisianKegiatan extends Component
         );
 
         $validator->after(function ($validator) {
+            // Blok dengan lebih dari satu tahapan: tiap tahapan menjadi kegiatan
+            // sendiri, jadi masing-masing wajib punya minimal satu bukti (tahapan
+            // utama boleh memakai bukti lama yang sudah tersimpan).
+            foreach ($this->blocks as $i => $block) {
+                $dipilih = $this->tahapanDipilih($block);
+
+                if (($block['jenis'] ?? '') !== 'survei_sensus' || count($dipilih) < 2 || $this->blokTerkunci($block['status_dokumen'] ?? null)) {
+                    continue;
+                }
+
+                $terisi = collect($block['bukti'] ?? [])->map(fn ($f) => $this->tahapanBerkasBaru($block, $f))->unique()->all();
+
+                foreach ($dipilih as $ti => $tahapan) {
+                    if (! in_array($tahapan, $terisi, true) && ! ($ti === 0 && ! empty($block['existing_bukti']))) {
+                        $validator->errors()->add(
+                            "blocks.{$i}.tahapan_tambahan",
+                            'tahapan '.ucfirst($tahapan).' belum diberi bukti capaian — pilih tahapan tujuan pada berkas yang diunggah.'
+                        );
+                    }
+                }
+            }
+
             // RF-29/31: SEMUA poin RTL triwulan sebelumnya wajib punya bukti realisasi
             // (sudah tersimpan ATAU baru dipilih di form ini) — tapi HANYA digerbang pada
             // bulan TERAKHIR triwulan berjalan, sama seperti aturan bagian kustom di bawah.
@@ -2623,7 +2883,7 @@ class PengisianKegiatan extends Component
                     $this->aturanTahapanTidakGanda(),
                 ],
                 'blocks.*.nama_folder' => ['nullable', 'string', 'max:150'],
-            ], $this->messages(), $this->validationAttributes());
+            ] + $this->aturanTahapanDanSubfolder(), $this->messages(), $this->validationAttributes());
         } catch (ValidationException $e) {
             $this->dispatch('notify', type: 'error', message: 'Draf gagal disimpan — lengkapi data yang wajib diisi lebih dulu.');
 
@@ -2719,87 +2979,109 @@ class PengisianKegiatan extends Component
                 continue;
             }
 
-            $tahapan = $block['jenis'] === 'survei_sensus' ? $block['tahapan_survei'] : null;
+            // Satu blok bisa memilih beberapa tahapan sekaligus — tiap tahapan disimpan
+            // sebagai baris Kegiatan sendiri (Tim SAKIP tetap memverifikasi per tahapan).
+            // Tahapan pertama memakai baris blok ini (block['id']); tahapan berikutnya
+            // dibuat baru. Kegiatan bukan survei cukup satu baris tanpa tahapan.
+            $daftarTahapan = $block['jenis'] === 'survei_sensus' ? ($this->tahapanDipilih($block) ?: [null]) : [null];
 
-            $namaFolderAuto = $this->namaFolderOtomatis($block);
+            // Nama, tahapan & subfolder tiap berkas dihitung dulu dari blok utuh, sama
+            // persis dengan yang tampil di chip berkas (namaBuktiBaruKegiatan()).
+            $rencanaBerkas = collect(array_values($block['bukti']))->map(fn ($file) => [
+                'file' => $file,
+                'tahapan' => $this->tahapanBerkasBaru($block, $file),
+                'nama' => $this->namaBuktiBaruKegiatan($block, $file),
+                'subfolder' => $this->subfolderBerkasBaru($block, $file),
+            ]);
 
-            if ($block['id']) {
-                // UPDATE kegiatan draft/dikembalikan yang sudah ada, bukan create baru —
-                // supaya menyimpan/mengajukan ulang isian yang sudah ada tidak membuat
-                // baris duplikat. drive_folder_id SENGAJA tidak disentuh (dipakai ulang
-                // oleh FolderStructureService, lihat catatan di model Kegiatan).
-                $kegiatan = Kegiatan::findOrFail($block['id']);
-                $kegiatan->update([
-                    'rtl_evaluasi_id' => $this->rtlEvaluasiIdUntukBlock($block),
-                    'uraian_kegiatan' => $block['uraian_kegiatan'],
-                    'jenis' => $block['jenis'],
-                    'tahapan_survei' => $tahapan,
-                    'nama_folder_auto' => $namaFolderAuto,
-                ]);
-            } else {
-                $kegiatan = Kegiatan::create([
-                    'iku_id' => $this->iku_id,
-                    'rtl_evaluasi_id' => $this->rtlEvaluasiIdUntukBlock($block),
-                    'periode_id' => $periode->id,
-                    'uraian_kegiatan' => $block['uraian_kegiatan'],
-                    'jenis' => $block['jenis'],
-                    'tahapan_survei' => $tahapan,
-                    'nama_folder_auto' => $namaFolderAuto,
-                    'status_dokumen' => Kegiatan::STATUS_DRAFT,
-                ]);
-                $block['id'] = $kegiatan->id;
-            }
+            foreach ($daftarTahapan as $ti => $tahapan) {
+                $utama = $ti === 0;
+                $namaFolderAuto = $this->namaFolderOtomatis(array_merge($block, ['tahapan_survei' => $tahapan ?? '']));
 
-            // Nama folder pilihan Ketua Tim (kosong = rekomendasi sistem). Bila folder
-            // kegiatan ini sudah ada di Drive, namanya ikut diganti di sana.
-            $hasilFolder = $kegiatan->gantiNamaFolder($block['nama_folder'] ?? '');
-            if ($hasilFolder['peringatan']) {
-                $this->dispatch('notify', type: 'warning', message: $hasilFolder['peringatan']);
-            }
+                if ($utama && $block['id']) {
+                    // UPDATE kegiatan draft/dikembalikan yang sudah ada, bukan create baru —
+                    // supaya menyimpan/mengajukan ulang isian yang sudah ada tidak membuat
+                    // baris duplikat. drive_folder_id SENGAJA tidak disentuh (dipakai ulang
+                    // oleh FolderStructureService, lihat catatan di model Kegiatan).
+                    $kegiatan = Kegiatan::findOrFail($block['id']);
+                    $kegiatan->update([
+                        'rtl_evaluasi_id' => $this->rtlEvaluasiIdUntukBlock($block),
+                        'uraian_kegiatan' => $block['uraian_kegiatan'],
+                        'jenis' => $block['jenis'],
+                        'tahapan_survei' => $tahapan,
+                        'nama_folder_auto' => $namaFolderAuto,
+                    ]);
+                } else {
+                    $kegiatan = Kegiatan::create([
+                        'iku_id' => $this->iku_id,
+                        'rtl_evaluasi_id' => $this->rtlEvaluasiIdUntukBlock($block),
+                        'periode_id' => $periode->id,
+                        'uraian_kegiatan' => $block['uraian_kegiatan'],
+                        'jenis' => $block['jenis'],
+                        'tahapan_survei' => $tahapan,
+                        'nama_folder_auto' => $namaFolderAuto,
+                        'status_dokumen' => Kegiatan::STATUS_DRAFT,
+                    ]);
 
-            if ($ajukan) {
-                // draft→diajukan maupun dikembalikan→diajukan, keduanya diizinkan
-                // (lihat Kegiatan::TRANSITIONS). Kegiatan yang SUDAH diajukan dan sedang
-                // disunting ulang (pengajuanBisaDiedit()) cukup diperbarui isinya.
-                if ($kegiatan->status_dokumen !== Kegiatan::STATUS_DIAJUKAN) {
-                    $kegiatan->ajukan();
+                    if ($utama) {
+                        $block['id'] = $kegiatan->id;
+                    }
                 }
-                $adaKegiatanDiajukan = true;
-            }
 
-            // RF-17: nama berkas & folder mengikuti uraian kegiatan (bukan tahapan
-            // survei — itu cuma prefix folder, lihat namaFolderAuto di atas), supaya
-            // langsung dikenali dari daftar berkas tanpa harus dibuka satu-satu.
-            $namaBerkasDasar = 'Kegiatan '.$block['uraian_kegiatan'];
-            $jumlahBuktiLama = count($block['existing_bukti'] ?? []);
+                // Nama folder pilihan Ketua Tim (kosong = rekomendasi sistem) hanya untuk
+                // tahapan utama; tahapan tambahan memakai rekomendasi sistem dan bisa
+                // diganti setelah tersimpan. Bila folder kegiatan ini sudah ada di Drive,
+                // namanya ikut diganti di sana.
+                if ($utama) {
+                    $hasilFolder = $kegiatan->gantiNamaFolder($block['nama_folder'] ?? '');
+                    if ($hasilFolder['peringatan']) {
+                        $this->dispatch('notify', type: 'warning', message: $hasilFolder['peringatan']);
+                    }
+                }
 
-            foreach (array_values($block['bukti']) as $fi => $file) {
-                $namaBerkas = $this->namaBuktiBaruAtauDefault($file, $this->namaDefaultBuktiBaru($namaBerkasDasar, $jumlahBuktiLama, $fi, count($block['bukti'])));
-                $path = $file->store('bukti-capaian', 'local');
+                if ($ajukan) {
+                    // draft→diajukan maupun dikembalikan→diajukan, keduanya diizinkan
+                    // (lihat Kegiatan::TRANSITIONS). Kegiatan yang SUDAH diajukan dan sedang
+                    // disunting ulang (pengajuanBisaDiedit()) cukup diperbarui isinya.
+                    if ($kegiatan->status_dokumen !== Kegiatan::STATUS_DIAJUKAN) {
+                        $kegiatan->ajukan();
+                    }
+                    $adaKegiatanDiajukan = true;
+                }
 
-                $berkas = Berkas::create([
-                    'ref_id' => $kegiatan->id,
-                    'ref_type' => Kegiatan::class,
-                    'kategori' => 'capaian',
-                    'nama_file' => $namaBerkas.'.pdf',
-                    'path' => $path,
-                    'status_verifikasi' => 'menunggu',
-                ]);
+                foreach ($rencanaBerkas->where('tahapan', $tahapan) as $rencana) {
+                    $file = $rencana['file'];
+                    $namaBerkas = $rencana['nama'];
+                    $subfolder = $rencana['subfolder'] !== '' ? $rencana['subfolder'] : null;
+                    $path = $file->store('bukti-capaian', 'local');
 
-                // Dibungkus try/catch supaya penyimpanan TETAP berhasil walau Drive
-                // belum terkonfigurasi — berkas tetap aman di disk lokal sebagai cadangan.
-                try {
-                    $this->streamProgresUnggah($file->getClientOriginalName(), 'bukti kegiatan');
-                    $localFullPath = Storage::disk('local')->path($path);
-                    $hasilDrive = $folderService->unggahBerkasKegiatan($kegiatan, 'capaian', $localFullPath, namaBerkasOverride: $namaBerkas);
-                    $berkas->update($hasilDrive);
-                    $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti kegiatan', true);
-                } catch (\Throwable $e) {
-                    Log::warning('Gagal mengunggah berkas ke Google Drive, disimpan lokal saja: '.$e->getMessage());
-                    $driveGagal[] = "{$file->getClientOriginalName()} (bukti kegiatan: {$block['uraian_kegiatan']})";
-                    $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti kegiatan', false, $e->getMessage());
+                    $berkas = Berkas::create([
+                        'ref_id' => $kegiatan->id,
+                        'ref_type' => Kegiatan::class,
+                        'kategori' => 'capaian',
+                        'nama_file' => $namaBerkas.'.pdf',
+                        'subfolder' => $subfolder,
+                        'path' => $path,
+                        'status_verifikasi' => 'menunggu',
+                    ]);
+
+                    // Dibungkus try/catch supaya penyimpanan TETAP berhasil walau Drive
+                    // belum terkonfigurasi — berkas tetap aman di disk lokal sebagai cadangan.
+                    try {
+                        $this->streamProgresUnggah($file->getClientOriginalName(), 'bukti kegiatan');
+                        $localFullPath = Storage::disk('local')->path($path);
+                        $hasilDrive = $folderService->unggahBerkasKegiatan($kegiatan, 'capaian', $localFullPath, namaBerkasOverride: $namaBerkas, subfolder: $subfolder);
+                        $berkas->update($hasilDrive);
+                        $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti kegiatan', true);
+                    } catch (\Throwable $e) {
+                        Log::warning('Gagal mengunggah berkas ke Google Drive, disimpan lokal saja: '.$e->getMessage());
+                        $driveGagal[] = "{$file->getClientOriginalName()} (bukti kegiatan: {$block['uraian_kegiatan']})";
+                        $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti kegiatan', false, $e->getMessage());
+                    }
                 }
             }
+
+            $block['tahapan_tambahan'] = [];
 
             // Berkas yang baru saja tersimpan di atas dipindah ke existing_bukti supaya
             // tidak dicoba diunggah ulang bila simpanBagianIsian() dipanggil lagi dalam

@@ -22,6 +22,9 @@ class Berkas extends Model
         'ref_type',
         'kategori',
         'nama_file',
+        // Subfolder khusus di dalam folder kegiatan (mis. "Undangan"); null = langsung
+        // di folder kegiatan. Lihat FolderStructureService::unggahBerkas().
+        'subfolder',
         'path',
         // drive_file_id  = ID unik berkas ini di Google Drive.
         // storage_account_id = akun Gmail institusi TEMPAT berkas ini fisik tersimpan.

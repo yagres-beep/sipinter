@@ -99,6 +99,9 @@ class GantiNamaBerkasTest extends TestCase
             ->set('blocks.0.uraian_kegiatan', 'Rapat koordinasi')
             ->set('blocks.0.jenis', 'bukan_survei_sensus')
             ->set('blocks.0.bukti', [UploadedFile::fake()->create('scan001.pdf', 100, 'application/pdf')])
+            // Bawaan: nama asli berkas; rekomendasi sistem bisa dipilih.
+            ->assertSee('scan001.pdf')
+            ->set('modeNamaBerkas', 'sistem')
             ->assertSee('Kegiatan Rapat koordinasi.pdf');
 
         $kunci = $komponen->instance()->kunciBuktiBaru($komponen->get('blocks.0.bukti')[0]);

@@ -345,14 +345,29 @@ class FolderStructureService
             return $kegiatan->drive_folder_id;
         }
 
+        // Kegiatan survei/sensus dikelompokkan dalam SATU folder induk bernama uraian
+        // kegiatannya, lalu tiap tahapan jadi subfolder di dalamnya (nama tetap memakai
+        // nama kegiatan, mis. "Sakernas/[Persiapan] Sakernas/", "Sakernas/[Pelaksanaan] Sakernas/"),
+        // supaya beberapa tahapan dari kegiatan yang sama tidak tercecer sejajar.
+        // Folder induk dicari lewat nama (findOrCreate) karena memang dipakai bersama
+        // oleh semua tahapan kegiatan itu; folder tahapannya tetap milik satu baris.
+        $indukFolderId = $kategoriFolderId;
+        if ($kegiatan->jenis === 'survei_sensus' && filled($kegiatan->tahapan_survei)) {
+            $namaInduk = self::namaOtomatis((string) $kegiatan->uraian_kegiatan, 150);
+
+            if ($namaInduk !== '') {
+                $indukFolderId = $this->findOrCreateFolderCached($namaInduk, $kategoriFolderId);
+            }
+        }
+
         // Nama pilihan Ketua Tim/Tim SAKIP (nama_folder_kustom) didahulukan dari
         // rekomendasi sistem, lihat Kegiatan::namaFolder().
         $namaDasar = self::namaOtomatis($kegiatan->namaFolder(), 150);
-        $namaSudahAda = $this->namesInFolderCached($kategoriFolderId);
+        $namaSudahAda = $this->namesInFolderCached($indukFolderId);
         $namaUnik = self::namaUnik($namaDasar, $namaSudahAda);
 
-        $folderId = $this->drive->createFolder($namaUnik, $kategoriFolderId);
-        $this->tandaiNamaDipakai($kategoriFolderId, $namaUnik);
+        $folderId = $this->drive->createFolder($namaUnik, $indukFolderId);
+        $this->tandaiNamaDipakai($indukFolderId, $namaUnik);
 
         $kegiatan->update(['drive_folder_id' => $folderId]);
 
@@ -372,16 +387,16 @@ class FolderStructureService
      *
      * @param  string  $kategoriEnum  salah satu dari App\Models\Berkas::kategori.
      * @param  Kegiatan|null  $kegiatan  isi HANYA bila kategorinya "Capaian" (satu-satunya
-     *              kategori dengan subfolder_per_kegiatan default, RF-13). Kategori lain
-     *              seperti Solusi (RF-27) & Evaluasi-RTL (RF-30) tidak terikat ke satu
-     *              kegiatan tertentu, jadi cukup kirim null di sini.
+     *                                   kategori dengan subfolder_per_kegiatan default, RF-13). Kategori lain
+     *                                   seperti Solusi (RF-27) & Evaluasi-RTL (RF-30) tidak terikat ke satu
+     *                                   kegiatan tertentu, jadi cukup kirim null di sini.
      * @param  string|null  $namaFolderOverride  nama folder Drive tujuan, MENGGANTI hasil
-     *              lookup KATEGORI_KE_FOLDER[$kategoriEnum] — dipakai bagian kustom (RF baru)
-     *              yang namanya dinamis (mis. "Manajemen Risiko"), bukan salah satu dari 4
-     *              kategori baku, tapi berkas.kategori di DB tetap nilai enum tetap ('bagian_kustom').
+     *                                           lookup KATEGORI_KE_FOLDER[$kategoriEnum] — dipakai bagian kustom (RF baru)
+     *                                           yang namanya dinamis (mis. "Manajemen Risiko"), bukan salah satu dari 4
+     *                                           kategori baku, tapi berkas.kategori di DB tetap nilai enum tetap ('bagian_kustom').
      * @return array{drive_file_id: string, storage_account_id: ?int, nama_file: string}
      */
-    public function unggahBerkas(Periode $periode, MasterIku $iku, string $kategoriEnum, string $localPath, ?Kegiatan $kegiatan = null, string $ekstensi = '.pdf', string $mimeType = 'application/pdf', ?string $namaFolderOverride = null, ?string $namaBerkasOverride = null): array
+    public function unggahBerkas(Periode $periode, MasterIku $iku, string $kategoriEnum, string $localPath, ?Kegiatan $kegiatan = null, string $ekstensi = '.pdf', string $mimeType = 'application/pdf', ?string $namaFolderOverride = null, ?string $namaBerkasOverride = null, ?string $subfolder = null): array
     {
         $namaKategori = $namaFolderOverride
             ?? self::KATEGORI_KE_FOLDER[$kategoriEnum]
@@ -402,6 +417,13 @@ class FolderStructureService
             if (in_array($namaKategori, $config->kategoriDenganSubfolderBulan(), true)
                 && $config->kategoriUrutanBulanKegiatan($namaKategori) === 'kegiatan_dulu') {
                 $tujuanFolderId = $this->findOrCreateFolderCached($this->namaBulan($periode), $tujuanFolderId);
+            }
+
+            // Subfolder khusus pilihan Ketua Tim di dalam folder kegiatan (mis.
+            // "Undangan", "Dokumentasi"); kosong = langsung di folder kegiatan.
+            $namaSubfolder = self::namaOtomatis((string) $subfolder, 100);
+            if ($namaSubfolder !== '') {
+                $tujuanFolderId = $this->findOrCreateFolderCached($namaSubfolder, $tujuanFolderId);
             }
         }
 
@@ -446,9 +468,9 @@ class FolderStructureService
      * Alias nyaman untuk unggahan kategori "Capaian" yang SELALU terikat ke satu
      * kegiatan — dipakai oleh PengisianKegiatan.
      */
-    public function unggahBerkasKegiatan(Kegiatan $kegiatan, string $kategoriEnum, string $localPath, string $ekstensi = '.pdf', string $mimeType = 'application/pdf', ?string $namaBerkasOverride = null): array
+    public function unggahBerkasKegiatan(Kegiatan $kegiatan, string $kategoriEnum, string $localPath, string $ekstensi = '.pdf', string $mimeType = 'application/pdf', ?string $namaBerkasOverride = null, ?string $subfolder = null): array
     {
-        return $this->unggahBerkas($kegiatan->periode, $kegiatan->masterIku, $kategoriEnum, $localPath, $kegiatan, $ekstensi, $mimeType, namaBerkasOverride: $namaBerkasOverride);
+        return $this->unggahBerkas($kegiatan->periode, $kegiatan->masterIku, $kategoriEnum, $localPath, $kegiatan, $ekstensi, $mimeType, namaBerkasOverride: $namaBerkasOverride, subfolder: $subfolder);
     }
 
     // ================================================================

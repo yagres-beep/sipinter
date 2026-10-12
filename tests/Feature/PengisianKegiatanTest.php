@@ -7,15 +7,17 @@ use App\Models\BagianKustom;
 use App\Models\BagianKustomPoin;
 use App\Models\Berkas;
 use App\Models\Capaian;
+use App\Models\IkuTim;
 use App\Models\Kegiatan;
 use App\Models\KendalaSolusi;
 use App\Models\MasterIku;
 use App\Models\Periode;
-use App\Models\Role;
 use App\Models\RiwayatStatusCapaian;
+use App\Models\Role;
 use App\Models\RtlEvaluasi;
 use App\Models\User;
 use App\Models\UserTim;
+use App\Services\GoogleDriveService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
@@ -524,14 +526,14 @@ class PengisianKegiatanTest extends TestCase
         $this->assertSame('Tim Baru, Tim Bawaan', $rtl->fresh()->pic); // urut alfabet, lihat MasterIku::timList()
 
         // Tim dihapus dari Penugasan IKU (iku_tim langsung) -> PIC & kolom Master IKU ikut.
-        \App\Models\IkuTim::where('iku_id', $iku->id)->where('tim', 'Tim Bawaan')->delete();
+        IkuTim::where('iku_id', $iku->id)->where('tim', 'Tim Bawaan')->delete();
         MasterIku::sinkronkanTim($iku->id);
         $this->assertSame('Tim Baru', $rtl->fresh()->pic);
         $this->assertSame('Tim Baru', $iku->fresh()->tim);
 
         // Poin yang sudah terverifikasi tidak ikut diubah.
         $rtl->update(['status_verifikasi' => 'terverifikasi']);
-        \App\Models\IkuTim::create(['iku_id' => $iku->id, 'tim' => 'Tim Lain']);
+        IkuTim::create(['iku_id' => $iku->id, 'tim' => 'Tim Lain']);
         MasterIku::sinkronkanTim($iku->id);
         $this->assertSame('Tim Baru', $rtl->fresh()->pic);
 
@@ -1834,7 +1836,7 @@ class PengisianKegiatanTest extends TestCase
         $data = $this->siapkanKegiatanDikembalikanDenganBerkasDitolak();
         $data['berkas']->update(['drive_file_id' => 'drive-abc']);
 
-        $this->mock(\App\Services\GoogleDriveService::class, function ($mock) {
+        $this->mock(GoogleDriveService::class, function ($mock) {
             $mock->shouldReceive('downloadFileContent')->once()->andReturn('%PDF-1.4 isi');
         });
 
@@ -1937,7 +1939,10 @@ class PengisianKegiatanTest extends TestCase
             'uraian_kegiatan' => '',
             'jenis' => '',
             'tahapan_survei' => '',
+            'tahapan_tambahan' => [],
             'nama_folder' => '',
+            'pakai_subfolder' => false,
+            'subfolders' => [],
             'bukti' => [],
             'existing_bukti' => [],
             'catatan_bukti_dihapus' => null,
