@@ -48,13 +48,17 @@ class TemplateNotula extends Component
     {
         $this->validate();
 
+        $docx = app(NotulaBagian1DocxService::class);
+
         try {
-            app(NotulaBagian1DocxService::class)->validasiStrukturTemplate($this->templateFile->getRealPath());
+            $docx->validasiStrukturTemplate($this->templateFile->getRealPath());
         } catch (\RuntimeException $e) {
             $this->addError('templateFile', $e->getMessage());
 
             return;
         }
+
+        $macroAsing = $docx->macroTidakDikenal($this->templateFile->getRealPath());
 
         $config = FolderConfig::current();
 
@@ -95,6 +99,12 @@ class TemplateNotula extends Component
         $config->update($isian);
 
         session()->flash('status', 'Template notula berhasil diunggah.');
+
+        if ($macroAsing !== []) {
+            session()->flash('peringatan', 'Placeholder berikut tidak dikenali sistem dan TIDAK akan terisi (tercetak apa adanya di notula): '
+                .collect($macroAsing)->map(fn ($m) => '{{'.$m.'}}')->implode(', ')
+                .'. Periksa ejaannya, atau hapus dari template bila memang tidak dipakai.');
+        }
 
         $this->reset('templateFile');
     }

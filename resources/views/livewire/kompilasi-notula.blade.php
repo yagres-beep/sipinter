@@ -491,6 +491,10 @@
             </div>
         </div>
 
+        @error('bagian1')
+            <div style="color:var(--red);font-size:11.5px;margin-top:10px">{{ $message }}</div>
+        @enderror
+
         <div class="btn-row" style="margin-top:10px">
             <button type="button" class="btn btn-ghost btn-sm"
                 wire:click="mintaSusunUlangOtomatis"

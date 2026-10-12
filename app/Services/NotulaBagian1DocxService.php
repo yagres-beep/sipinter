@@ -106,12 +106,36 @@ class NotulaBagian1DocxService
         $this->cegahBarisTerpotongAntarHalaman($processor);
 
         $dir = dirname($outputPath);
-        if (! is_dir($dir)) {
-            mkdir($dir, 0755, true);
-        }
 
-        $processor->saveAs($outputPath);
-        $processor->setMacroChars('${', '}');
+        try {
+            if (! is_dir($dir) && ! @mkdir($dir, 0755, true) && ! is_dir($dir)) {
+                throw new RuntimeException("Folder untuk berkas Bagian I tidak bisa dibuat: {$dir}. Periksa izin tulis folder storage di server.");
+            }
+            if (! is_writable($dir)) {
+                throw new RuntimeException("Folder untuk berkas Bagian I tidak bisa ditulisi: {$dir}. Periksa izin tulis folder storage di server.");
+            }
+
+            // TemplateProcessor::saveAs() menghapus tujuan lalu copy() TANPA mengecek
+            // hasilnya -- dicek sendiri di sini: berkas harus ada, tidak kosong, dan
+            // berupa arsip ZIP (.docx) yang utuh.
+            try {
+                $processor->saveAs($outputPath);
+            } catch (Throwable $e) {
+                throw new RuntimeException('Berkas Bagian I (.docx) gagal ditulis: '.$e->getMessage(), 0, $e);
+            }
+
+            clearstatcache(true, $outputPath);
+            $kepala = is_file($outputPath) ? (string) @file_get_contents($outputPath, false, null, 0, 2) : '';
+            if ($kepala !== 'PK' || filesize($outputPath) < 100) {
+                if (file_exists($outputPath)) {
+                    @unlink($outputPath);
+                }
+
+                throw new RuntimeException('Berkas Bagian I (.docx) hasil penyusunan rusak atau kosong.');
+            }
+        } finally {
+            $processor->setMacroChars('${', '}');
+        }
 
         return $outputPath;
     }
@@ -122,6 +146,65 @@ class NotulaBagian1DocxService
     public function formulaUrutanTerakhir(): array
     {
         return $this->formulaUrutan;
+    }
+
+    /**
+     * Ukuran kertas & margin (pt) dari <w:sectPr> TERAKHIR template Bagian I yang
+     * aktif -- dipakai dokumen notula gabungan (pdf.notula-utuh) supaya PDF mengikuti
+     * kertas/orientasi/margin template yang diunggah Tim SAKIP, bukan angka tetap di
+     * kode. Orientasi sudah tercermin di w:w/w:h (lanskap = w:w > w:h).
+     *
+     * Jatuh ke tata halaman template bawaan (A4 tegak, margin
+     * 851/1440/1135/1440 twips) bila template tidak bisa dibaca -- PDF tetap bisa
+     * dibuat walau template sedang bermasalah.
+     *
+     * @return array{lebar: float, tinggi: float, atas: float, kanan: float, bawah: float, kiri: float}
+     */
+    public function tataHalamanTemplate(): array
+    {
+        $bawaan = ['lebar' => 595.3, 'tinggi' => 841.9, 'atas' => 42.55, 'kanan' => 72.0, 'bawah' => 56.75, 'kiri' => 72.0];
+
+        try {
+            $zip = new \ZipArchive;
+            if ($zip->open($this->resolveTemplatePath()) !== true) {
+                return $bawaan;
+            }
+            $xml = (string) $zip->getFromName('word/document.xml');
+            $zip->close();
+        } catch (Throwable $e) {
+            Log::warning("Tata halaman template notula tidak terbaca, memakai bawaan: {$e->getMessage()}");
+
+            return $bawaan;
+        }
+
+        if (! preg_match_all('/<w:sectPr\b.*?<\/w:sectPr>/s', $xml, $m)) {
+            return $bawaan;
+        }
+        $sect = end($m[0]);
+
+        $atribut = function (string $tag, string $nama) use ($sect): ?float {
+            if (preg_match('/<w:'.$tag.'\b[^>]*\bw:'.$nama.'="(-?\d+)"/', $sect, $a)) {
+                return abs((int) $a[1]) / 20;
+            }
+
+            return null;
+        };
+
+        $hasil = [
+            'lebar' => $atribut('pgSz', 'w') ?? $bawaan['lebar'],
+            'tinggi' => $atribut('pgSz', 'h') ?? $bawaan['tinggi'],
+            'atas' => $atribut('pgMar', 'top') ?? $bawaan['atas'],
+            'kanan' => $atribut('pgMar', 'right') ?? $bawaan['kanan'],
+            'bawah' => $atribut('pgMar', 'bottom') ?? $bawaan['bawah'],
+            'kiri' => $atribut('pgMar', 'left') ?? $bawaan['kiri'],
+        ];
+
+        // Nilai tidak masuk akal (mis. margin lebih besar dari kertas) -> bawaan.
+        if ($hasil['lebar'] - $hasil['kiri'] - $hasil['kanan'] < 100 || $hasil['tinggi'] - $hasil['atas'] - $hasil['bawah'] < 100) {
+            return $bawaan;
+        }
+
+        return $hasil;
     }
 
     /**
@@ -861,6 +944,46 @@ class NotulaBagian1DocxService
         if ($masalah !== []) {
             throw new RuntimeException("Template tidak sesuai struktur yang dibutuhkan:\n- ".implode("\n- ", $masalah));
         }
+    }
+
+    /**
+     * Macro yang DIISI generate() (lihat isiHeader()/isiSatuIku()/isiPenutup()/penanda
+     * blok) -- di luar daftar ini, macro di template tidak akan pernah diganti dan
+     * tercetak mentah "{{...}}" di notula.
+     */
+    private const MACRO_DIKENAL = [
+        'tahun', 'triwulan_angka', 'nama_satker', 'agenda_pembahasan', 'hari_tanggal', 'waktu', 'tempat',
+        'pimpinan_rapat', 'capaian_triwulanan_persen', 'capaian_pk_persen', 'lampiran_basis_data',
+        'kotaTtd', 'tanggal', 'namaKepala', 'namaNotulis', 'bagian_2', 'bagian_3',
+        'iku_blok', '/iku_blok', 'blok_sakip', '/blok_sakip', 'blok_berakhlak', '/blok_berakhlak',
+        'blok_ro', '/blok_ro', 'blok_formula', '/blok_formula', 'ro_row', '/ro_row',
+        'kode', 'indikator', 'sasaran', 'target_pk', 'target_tw', 'realisasi_tw', 'capaian_tw', 'capaian_pk',
+        'analisis_capaian', 'target_proksi', 'realisasi_proksi', 'kendala', 'solusi', 'rtl', 'pic_rtl',
+        'batas_waktu_rtl', 'formula_capaian', 'dasar_hitung', 'bukti_realisasi', 'bukti_rtl_sebelumnya',
+        'penjelasan_lainnya', 'ro_uraian', 'ro_vol', 'ro_progres',
+    ];
+
+    /**
+     * Macro {{...}} di template (isi utama, header & footer) yang TIDAK dikenali
+     * generate() -- mis. salah ketik "{{tempat_rapat}}" atau bagian baru yang belum
+     * ada datanya di sistem. Bukan galat (template tetap boleh dipakai), cukup jadi
+     * PERINGATAN saat unggah supaya Tim SAKIP tahu bagian mana yang tidak akan terisi,
+     * alih-alih baru ketahuan dari teks "{{...}}" mentah di notula.
+     *
+     * @return list<string>
+     */
+    public function macroTidakDikenal(string $templatePath): array
+    {
+        try {
+            $processor = $this->newTemplateProcessor($templatePath);
+            $variabel = $processor->getVariables();
+            // Delimiter STATIC dikembalikan ke bawaan PhpWord, sama seperti generate().
+            $processor->setMacroChars('${', '}');
+        } catch (Throwable) {
+            return [];
+        }
+
+        return array_values(array_diff(array_unique(array_map('trim', $variabel)), self::MACRO_DIKENAL));
     }
 
     /**
