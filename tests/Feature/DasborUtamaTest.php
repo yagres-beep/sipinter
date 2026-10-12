@@ -22,6 +22,24 @@ class DasborUtamaTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * Seluruh fixture di kelas ini berada di Triwulan III 2026 — tanggal dibekukan di
+     * sana supaya peringatan "IKU belum ada isian triwulan ini" (yang mengikuti
+     * triwulan BERJALAN) tidak ikut memuat kode IKU fixture begitu tanggal sungguhan
+     * sudah melewati TW III, sehingga assertDontSee() pada tabel tidak salah gagal.
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Carbon::setTestNow('2026-08-15');
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
+    }
+
     protected function siapkanData(): void
     {
         $periode = Periode::create(['tahun' => 2026, 'bulan' => 8, 'triwulan' => 3, 'bulan_ke' => 2, 'flag_bulan_terlewat' => false]);
@@ -102,8 +120,6 @@ class DasborUtamaTest extends TestCase
 
     public function test_peringatan_iku_belum_terisi_triwulan_berjalan(): void
     {
-        Carbon::setTestNow('2026-08-15'); // Triwulan III 2026 — sama seperti fixture siapkanData().
-
         $this->loginSebagai('Tim SAKIP');
         $this->siapkanData();
 
@@ -113,8 +129,6 @@ class DasborUtamaTest extends TestCase
         Livewire::test(DasborUtama::class)
             ->assertSee('1 IKU belum ada isian')
             ->assertSee('GAMMA-3');
-
-        Carbon::setTestNow();
     }
 
     public function test_baris_tim_sakip_tertaut_ke_verifikasi_show(): void
