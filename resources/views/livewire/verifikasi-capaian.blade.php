@@ -892,6 +892,48 @@
     @endif
 
     @if ($bisaDiverifikasi)
+        {{-- Panel status: merinci PERSIS apa yang masih menghalangi "Verifikasi Selesai" /
+             "Kembalikan ke Ketua Tim", supaya Tim SAKIP tidak perlu menyisir ulang halaman. --}}
+        @if ($daftarBelumDitandai !== [] || $daftarDitolak !== [] || $syaratLain !== [])
+            <div class="info warn" style="margin-top:16px;display:block" wire:key="panel-syarat-verifikasi">
+                @if ($daftarBelumDitandai !== [])
+                    <strong>⏳ {{ count($daftarBelumDitandai) }} isian belum ditandai "Sesuai"/"Tidak Sesuai":</strong>
+                    <ul style="margin:6px 0 8px;padding-left:18px">
+                        @foreach ($daftarBelumDitandai as $item)
+                            <li>{{ $item }}</li>
+                        @endforeach
+                    </ul>
+                @endif
+                @if ($daftarDitolak !== [])
+                    <strong>✗ {{ count($daftarDitolak) }} isian ditandai "Tidak Sesuai" — akan dikembalikan ke Ketua Tim untuk diperbaiki:</strong>
+                    <ul style="margin:6px 0 8px;padding-left:18px">
+                        @foreach ($daftarDitolak as $item)
+                            <li>{{ $item['label'] }}@if (filled($item['catatan'])) — <i>{{ $item['catatan'] }}</i>@endif</li>
+                        @endforeach
+                    </ul>
+                @endif
+                @if ($syaratLain !== [])
+                    <strong>⚠️ Perlu dilengkapi sebelum "Verifikasi Selesai":</strong>
+                    <ul style="margin:6px 0 8px;padding-left:18px">
+                        @foreach ($syaratLain as $item)
+                            <li>{{ $item }}</li>
+                        @endforeach
+                    </ul>
+                @endif
+                <div style="opacity:.85">
+                    @if ($daftarBelumDitandai !== [])
+                        Tandai seluruh isian di atas terlebih dahulu.
+                    @endif
+                    @if ($daftarDitolak !== [])
+                        Karena ada isian "Tidak Sesuai", gunakan <b>"Kembalikan ke Ketua Tim"</b>{{ $daftarBelumDitandai !== [] ? ' setelah semua isian ditandai' : '' }} — "Verifikasi Selesai" hanya bisa dipakai bila semua isian "Sesuai".
+                    @elseif ($daftarBelumDitandai === [] && $syaratLain !== [])
+                        Semua isian sudah "Sesuai" — lengkapi poin di atas lalu klik "Verifikasi Selesai".
+                    @endif
+                </div>
+            </div>
+        @else
+            <div class="info teal" style="margin-top:16px">✅ Seluruh isian sudah ditandai "Sesuai" — siap diselesaikan lewat "Verifikasi Selesai".</div>
+        @endif
         <div class="btn-row" style="margin-top:16px">
             <button type="button" class="btn btn-teal" wire:click="verifikasiSelesai" wire:loading.attr="disabled" wire:target="verifikasiSelesai,kembalikanKeKetuaTim,simpanSementara" @disabled($adaYangDitolak || $adaBelumDitandai) title="{{ $adaYangDitolak ? 'Ada isian yang ditandai Tidak Sesuai — gunakan "Kembalikan ke Ketua Tim"' : ($adaBelumDitandai ? 'Masih ada isian yang belum ditandai Sesuai/Tidak Sesuai — tombol aktif setelah semuanya diverifikasi' : '') }}">
                 <span wire:loading.remove wire:target="verifikasiSelesai">✓ Verifikasi Selesai — Masukkan ke Notula</span>

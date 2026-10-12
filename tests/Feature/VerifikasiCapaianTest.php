@@ -790,6 +790,27 @@ class VerifikasiCapaianTest extends TestCase
         $this->assertSame('menunggu', $rtlBerikutnya->fresh()->status_verifikasi);
     }
 
+    public function test_panel_syarat_merinci_isian_belum_ditandai_dan_yang_ditolak(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+
+        $component = Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
+            ->assertSee('isian belum ditandai')
+            ->assertSee($data['berkas1']->nama_file)
+            ->set("catatanBerkas.{$data['berkas1']->id}", 'Bukan dokumen yang diminta')
+            ->call('tandaiTolak', $data['berkas1']->id)
+            ->assertSee('akan dikembalikan ke Ketua Tim')
+            ->assertSee('Bukan dokumen yang diminta');
+
+        $ditolak = $component->instance()->daftarIsianDitolak();
+        $this->assertCount(1, $ditolak);
+        $this->assertSame('Bukan dokumen yang diminta', $ditolak[0]['catatan']);
+
+        $component->set("koreksiKegiatan.{$data['kegiatan1']->id}", '');
+        $this->assertNotEmpty($component->instance()->syaratLainVerifikasiSelesai());
+    }
+
     public function test_rtl_berikutnya_sesuai_meloloskan_verifikasi_selesai(): void
     {
         $this->actingAs($this->buatSakip());

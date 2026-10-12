@@ -2143,17 +2143,143 @@ class PengisianKegiatan extends Component
      */
     protected ?bool $cacheFormLengkap = null;
 
+    /** @var list<string>|null */
+    protected ?array $cacheKekuranganPengajuan = null;
+
     public function formLengkap(): bool
     {
         if ($this->cacheFormLengkap !== null) {
             return $this->cacheFormLengkap;
         }
 
-        if (! $this->iku_id) {
-            return $this->cacheFormLengkap = false;
+        return $this->cacheFormLengkap = $this->kekuranganPengajuan() === [];
+    }
+
+    /**
+     * Daftar ringkas (bahasa Indonesia, per bagian/per nomor blok) hal yang masih
+     * kurang/tidak sesuai sehingga tombol "Ajukan ke Tim SAKIP" belum aktif —
+     * ditampilkan di bawah tombol supaya Ketua Tim tahu PERSIS apa yang harus
+     * dilengkapi, bukan cuma "lengkapi seluruh isian wajib". Dibangun dari validator
+     * yang sama dengan ajukanIsian() (buatValidator()), jadi selalu konsisten dengan
+     * syarat pengajuan sebenarnya. Di-cache per request seperti formLengkap().
+     *
+     * @return list<string>
+     */
+    public function kekuranganPengajuan(): array
+    {
+        if ($this->cacheKekuranganPengajuan !== null) {
+            return $this->cacheKekuranganPengajuan;
         }
 
-        return $this->cacheFormLengkap = $this->buatValidator()->passes();
+        if (! $this->iku_id) {
+            return $this->cacheKekuranganPengajuan = ['Pilih IKU terlebih dahulu.'];
+        }
+
+        $validator = $this->buatValidator();
+
+        if ($validator->passes()) {
+            return $this->cacheKekuranganPengajuan = [];
+        }
+
+        $failed = $validator->failed();
+        $daftar = [];
+
+        foreach ($validator->errors()->messages() as $kunci => $pesan) {
+            $daftar[] = $this->uraikanKekurangan($kunci, array_keys($failed[$kunci] ?? []), $pesan[0] ?? '');
+        }
+
+        return $this->cacheKekuranganPengajuan = array_values(array_unique(array_filter($daftar)));
+    }
+
+    /**
+     * Terjemahkan satu kunci galat validator (mis. "blocks.1.bukti") menjadi kalimat
+     * yang menyebut bagian & nomor blok di form. Galat dari validator->after()
+     * (kunci tanpa aturan gagal, mis. "evaluasi"/"kendalaBlocks") sudah berbahasa
+     * Indonesia, jadi pesannya dipakai apa adanya.
+     *
+     * @param  list<string>  $aturanGagal
+     */
+    protected function uraikanKekurangan(string $kunci, array $aturanGagal, string $pesanAsli): string
+    {
+        $kosong = array_intersect($aturanGagal, ['Required', 'RequiredIf', 'RequiredWith', 'Min']) !== [];
+        $bagian = explode('.', $kunci);
+
+        if ($kunci === 'iku_id') {
+            return $kosong ? 'Pilih IKU terlebih dahulu.' : 'IKU yang dipilih tidak valid — pilih ulang IKU.';
+        }
+
+        if (in_array($kunci, ['tahun', 'bulan'], true)) {
+            return 'Periode (tahun/bulan) tidak valid.';
+        }
+
+        if ($kunci === 'blocks') {
+            return $aturanGagal === [] ? $pesanAsli : 'Isi minimal satu kegiatan.';
+        }
+
+        if ($bagian[0] === 'blocks' && isset($bagian[2])) {
+            $label = $this->labelBlokKegiatan((int) $bagian[1]);
+
+            return match (true) {
+                $bagian[2] === 'uraian_kegiatan' && $kosong => "{$label}: uraian kegiatan belum diisi.",
+                $bagian[2] === 'uraian_kegiatan' => "{$label}: uraian kegiatan terlalu panjang (maksimal 1.000 karakter).",
+                $bagian[2] === 'jenis' => "{$label}: jenis kegiatan belum dipilih.",
+                $bagian[2] === 'tahapan_survei' => "{$label}: tahapan survei belum dipilih (wajib untuk kegiatan Survei/Sensus).",
+                $bagian[2] === 'bukti' && isset($bagian[3]) => "{$label}: berkas bukti ke-".((int) $bagian[3] + 1).' harus PDF berukuran maksimal 10 MB.',
+                $bagian[2] === 'bukti' => "{$label}: bukti capaian (PDF) belum diunggah.",
+                default => "{$label}: {$pesanAsli}",
+            };
+        }
+
+        if ($bagian[0] === 'bagianKustomBlocks') {
+            $nama = $this->bagianKustomAktif()->firstWhere('id', (int) ($bagian[1] ?? 0))?->nama ?? 'Bagian tambahan';
+
+            if (! isset($bagian[2])) {
+                return $pesanAsli;
+            }
+
+            $label = "{$nama} poin #".((int) $bagian[2] + 1);
+
+            return match (true) {
+                ($bagian[3] ?? null) === 'bukti' && isset($bagian[4]) => "{$label}: berkas bukti ke-".((int) $bagian[4] + 1).' harus PDF berukuran maksimal 10 MB.',
+                ($bagian[3] ?? null) === 'bukti' => "{$label}: bukti dukung (PDF) belum diunggah.",
+                default => "{$label}: {$pesanAsli}",
+            };
+        }
+
+        if ($bagian[0] === 'evaluasi') {
+            if (! isset($bagian[1])) {
+                return $pesanAsli;
+            }
+
+            $teks = $this->rtlTriwulanBerjalan()->firstWhere('id', (int) $bagian[1])?->rtl_teks;
+
+            return 'Evaluasi RTL'.($teks ? ' "'.Str::limit($teks, 40).'"' : '').': berkas bukti realisasi harus PDF berukuran maksimal 10 MB.';
+        }
+
+        if ($kunci === 'rtlBaru') {
+            return 'Rencana Tindak Lanjut triwulan berikutnya: minimal satu poin RTL wajib diisi pada bulan terakhir triwulan.';
+        }
+
+        if ($bagian[0] === 'rtlBaru' && isset($bagian[1])) {
+            return 'Rencana Tindak Lanjut poin #'.((int) $bagian[1] + 1).': teks rencana belum diisi (hapus poin bila tidak dipakai).';
+        }
+
+        if ($kunci === 'rtlBaruBatasWaktu') {
+            return 'Rencana Tindak Lanjut: batas waktu belum diisi atau tidak valid.';
+        }
+
+        return $pesanAsli;
+    }
+
+    /**
+     * Label blok kegiatan di daftar kekurangan, mis. 'Kegiatan #2 ("Pencacahan…")'
+     * — nomor sesuai urutan blok di form, cuplikan uraian membantu bila bloknya banyak.
+     */
+    protected function labelBlokKegiatan(int $index): string
+    {
+        $uraian = trim($this->blocks[$index]['uraian_kegiatan'] ?? '');
+
+        return 'Kegiatan #'.($index + 1).($uraian !== '' ? ' ("'.Str::limit($uraian, 40).'")' : '');
     }
 
     /**
@@ -2671,7 +2797,9 @@ class PengisianKegiatan extends Component
         try {
             $this->buatValidator()->validate();
         } catch (ValidationException $e) {
-            $this->dispatch('notify', type: 'error', message: 'Belum bisa diajukan — masih ada data wajib yang belum lengkap.');
+            $kekurangan = $this->kekuranganPengajuan();
+            $this->dispatch('notify', type: 'error', message: 'Belum bisa diajukan — '.($kekurangan[0] ?? 'masih ada data wajib yang belum lengkap.')
+                .(count($kekurangan) > 1 ? ' (+'.(count($kekurangan) - 1).' hal lain, lihat daftar di bawah tombol Ajukan.)' : ''));
 
             throw $e;
         }

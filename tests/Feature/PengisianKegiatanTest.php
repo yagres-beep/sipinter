@@ -616,6 +616,46 @@ class PengisianKegiatanTest extends TestCase
         $this->assertTrue($component->instance()->formLengkap());
     }
 
+    public function test_daftar_kekurangan_pengajuan_menyebut_bagian_yang_belum_diisi(): void
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $ketua = User::create([
+            'nama' => 'Ketua Uji',
+            'username' => 'ketua-uji-kurang@example.test', 'email' => 'ketua-uji-kurang@example.test',
+            'password' => 'password',
+            'role_id' => $peranKetua->id,
+            'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create([
+            'kode' => 'UJI-KRG',
+            'indikator' => 'Indikator uji kekurangan',
+            'tim' => 'Uji',
+            'penanggung_jawab' => 'Ketua Uji',
+        ]);
+
+        $this->actingAs($ketua);
+
+        $component = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 9);
+
+        $this->assertSame(['Pilih IKU terlebih dahulu.'], $component->instance()->kekuranganPengajuan());
+
+        $component->set('iku_id', $iku->id)
+            ->set('blocks.0.uraian_kegiatan', 'Pencacahan lapangan');
+
+        $kekurangan = $component->instance()->kekuranganPengajuan();
+
+        $this->assertContains('Kegiatan #1 ("Pencacahan lapangan"): jenis kegiatan belum dipilih.', $kekurangan);
+        $this->assertContains('Kegiatan #1 ("Pencacahan lapangan"): bukti capaian (PDF) belum diunggah.', $kekurangan);
+        $this->assertContains('Minimal satu pasangan Kendala & Solusi wajib diisi sebelum diajukan pada bulan terakhir triwulan ini.', $kekurangan);
+        $this->assertContains('Rencana Tindak Lanjut poin #1: teks rencana belum diisi (hapus poin bila tidak dipakai).', $kekurangan);
+
+        $component->assertSee('Belum bisa diajukan ke Tim SAKIP')
+            ->assertSee('jenis kegiatan belum dipilih');
+    }
+
     public function test_rtl_baru_hanya_bisa_diisi_pada_bulan_terakhir_triwulan(): void
     {
         $peranKetua = Role::create(['nama' => 'Ketua Tim']);

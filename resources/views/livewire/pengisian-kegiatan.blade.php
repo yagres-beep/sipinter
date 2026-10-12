@@ -972,8 +972,23 @@
             <span wire:loading wire:target="ajukanIsian">Mengirim…</span>
         </button>
     </div>
-    @if (! $this->formLengkap())
-        <div style="color:var(--muted);font-size:11.5px;margin-top:8px">🔒 Lengkapi seluruh isian wajib di atas untuk mengaktifkan tombol "Ajukan ke Tim SAKIP".</div>
+    @if ($formTerkunciDisetujui)
+        <div style="color:var(--muted);font-size:11.5px;margin-top:8px">🔒 Isian ini sudah disetujui dan terkunci — hubungi Tim SAKIP untuk membuka kembali bila perlu revisi.</div>
+    @elseif ($formTerkunciSedangDitangani)
+        <div style="color:var(--muted);font-size:11.5px;margin-top:8px">🔒 Isian ini sedang diperiksa Tim SAKIP — belum bisa diubah/diajukan ulang sampai verifikasi selesai.</div>
+    @elseif (! $this->formLengkap())
+        @php $kekurangan = $this->kekuranganPengajuan(); @endphp
+        <div class="info warn" style="margin-top:10px;display:block" wire:key="kekurangan-pengajuan">
+            <strong>🔒 Belum bisa diajukan ke Tim SAKIP — lengkapi/perbaiki {{ count($kekurangan) }} hal berikut:</strong>
+            <ul style="margin:6px 0 0;padding-left:18px">
+                @foreach ($kekurangan as $item)
+                    <li>{{ $item }}</li>
+                @endforeach
+            </ul>
+            <div style="margin-top:6px;opacity:.85">Daftar ini diperbarui otomatis setiap kali isian berubah; tombol "Ajukan ke Tim SAKIP" aktif begitu daftar ini kosong.</div>
+        </div>
+    @else
+        <div style="color:var(--teal);font-size:11.5px;margin-top:8px">✅ Seluruh isian wajib sudah lengkap — siap diajukan ke Tim SAKIP.</div>
     @endif
 
     {{--

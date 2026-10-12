@@ -1825,6 +1825,81 @@ class VerifikasiCapaian extends Component
     }
 
     /**
+     * Isian yang sudah ditandai "Tidak Sesuai" beserta catatannya — ditampilkan di
+     * panel status di atas tombol aksi supaya Tim SAKIP tahu persis apa saja yang
+     * akan dikembalikan ke Ketua Tim (dan kenapa "Verifikasi Selesai" terkunci).
+     *
+     * @return list<array{label: string, catatan: ?string}>
+     */
+    public function daftarIsianDitolak(): array
+    {
+        $daftar = [];
+
+        foreach ($this->berkasList()->where('status_verifikasi', 'ditolak') as $b) {
+            $daftar[] = ['label' => "Berkas \"{$b->nama_file}\"", 'catatan' => $b->catatan];
+        }
+
+        foreach ($this->kegiatanList()->where('status_verifikasi_uraian', 'ditolak') as $k) {
+            $daftar[] = ['label' => 'Uraian kegiatan "'.Str::limit($k->uraian_kegiatan ?: '(kosong)', 40).'"', 'catatan' => $k->catatan_uraian];
+        }
+
+        foreach ($this->kendalaSolusiList()->where('status_verifikasi', 'ditolak') as $k) {
+            $daftar[] = ['label' => 'Kendala & solusi "'.Str::limit($k->kendala ?: '(kosong)', 40).'"', 'catatan' => $k->catatan];
+        }
+
+        foreach ($this->bagianKustomList()->where('status_verifikasi', 'ditolak') as $p) {
+            $daftar[] = ['label' => 'Bagian Kustom "'.Str::limit($p->teks ?: '(kosong)', 40).'" ('.$p->bagianKustom->nama.')', 'catatan' => $p->catatan];
+        }
+
+        foreach ($this->rtlEvaluasiSebelumnya()->where('status_verifikasi', 'ditolak') as $p) {
+            $daftar[] = ['label' => 'Realisasi RTL "'.Str::limit($p->rtl_teks ?: '(kosong)', 40).'"', 'catatan' => $p->catatan];
+        }
+
+        foreach ($this->rtlBerikutnyaBaruDitetapkan()->where('status_verifikasi', 'ditolak') as $p) {
+            $daftar[] = ['label' => 'Rencana RTL berikutnya "'.Str::limit($p->rtl_teks ?: '(kosong)', 40).'"', 'catatan' => $p->catatan];
+        }
+
+        return $daftar;
+    }
+
+    /**
+     * Syarat "Verifikasi Selesai" di luar penandaan Sesuai/Tidak Sesuai (yang sudah
+     * dirinci lewat daftarIsianBelumDitandai()/daftarIsianDitolak()): PIC rencana
+     * RTL berikutnya dan teks koreksi yang tidak boleh dikosongkan (lihat rules()).
+     * Ditampilkan proaktif di panel status supaya tidak baru ketahuan setelah klik.
+     *
+     * @return list<string>
+     */
+    public function syaratLainVerifikasiSelesai(): array
+    {
+        $daftar = [];
+
+        if ($this->rtlBerikutnyaBaruDitetapkan()->isNotEmpty() && $this->picRtlBerikutnyaTerpilih === []) {
+            $daftar[] = 'PIC Tindak Lanjut untuk rencana RTL triwulan berikutnya belum diisi.';
+        }
+
+        foreach ($this->kegiatanList() as $k) {
+            if (trim((string) ($this->koreksiKegiatan[$k->id] ?? '')) === '') {
+                $daftar[] = 'Teks uraian kegiatan "'.Str::limit($k->uraian_kegiatan ?: '(kosong)', 40).'" tidak boleh dikosongkan.';
+            }
+        }
+
+        foreach ($this->kendalaSolusiList() as $k) {
+            if (trim((string) ($this->koreksiKendala[$k->id]['kendala'] ?? '')) === '') {
+                $daftar[] = 'Teks kendala "'.Str::limit($k->kendala ?: '(kosong)', 40).'" tidak boleh dikosongkan.';
+            }
+        }
+
+        foreach ($this->rtlBerikutnyaBaruDitetapkan() as $p) {
+            if (trim((string) ($this->koreksiRtlBerikutnya[$p->id] ?? '')) === '') {
+                $daftar[] = 'Teks rencana RTL berikutnya "'.Str::limit($p->rtl_teks ?: '(kosong)', 40).'" tidak boleh dikosongkan.';
+            }
+        }
+
+        return $daftar;
+    }
+
+    /**
      * True bila minimal satu isian (berkas, uraian kegiatan, kendala &amp; solusi,
      * Bagian Kustom, realisasi RTL, atau rencana RTL berikutnya) sudah ditandai
      * "Tidak Sesuai" -- dipakai blade untuk menonaktifkan tombol "Verifikasi
@@ -1887,6 +1962,16 @@ class VerifikasiCapaian extends Component
         if ($rtlBerikutnya->isNotEmpty() && $this->picRtlBerikutnyaTerpilih === []) {
             $pesan = 'PIC Tindak Lanjut untuk rencana RTL triwulan berikutnya wajib diisi sebelum verifikasi selesai.';
             $this->addError('picRtlBerikutnyaTerpilih', $pesan);
+            $this->dispatch('notify', type: 'error', message: $pesan);
+
+            return;
+        }
+
+        $syaratLain = $this->syaratLainVerifikasiSelesai();
+
+        if ($syaratLain !== []) {
+            $pesan = 'Belum bisa diselesaikan: '.implode(' ', $syaratLain);
+            $this->addError('berkas', $pesan);
             $this->dispatch('notify', type: 'error', message: $pesan);
 
             return;
@@ -2042,6 +2127,9 @@ class VerifikasiCapaian extends Component
             'bisaDibukaKembali' => $this->bisaDibukaKembali(),
             'adaYangDitolak' => $this->adaYangDitolak(),
             'adaBelumDitandai' => $this->daftarIsianBelumDitandai() !== [],
+            'daftarBelumDitandai' => $this->daftarIsianBelumDitandai(),
+            'daftarDitolak' => $this->daftarIsianDitolak(),
+            'syaratLain' => $this->syaratLainVerifikasiSelesai(),
             'riwayatStatus' => $this->capaian->riwayatStatus()->with('user')->get(),
             'capaianTahunan' => $this->capaianTahunanTerkini(),
         ]);
