@@ -47,7 +47,7 @@
 
         <div class="field">
             <label>Analisis Capaian</label>
-            <textarea class="inp filled" style="height:auto;display:block" rows="3" wire:model="analisis_capaian"
+            <textarea class="inp filled" style="height:auto;display:block" rows="3" wire:model.live.blur="analisis_capaian"
                 placeholder="Narasi analisis capaian..."></textarea>
             @error('analisis_capaian')
                 <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
@@ -56,7 +56,7 @@
 
         <div class="field">
             <label>Penjelasan/Pembahasan Lainnya</label>
-            <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model="catatan"
+            <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model.live.blur="catatan"
                 placeholder="Opsional — tampil di Notula Bagian I pada baris Penjelasan/pembahasan lainnya"></textarea>
             @error('catatan')
                 <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
@@ -272,7 +272,7 @@
                         {{ $kegiatan->jenis === 'survei_sensus' ? 'Survei/Sensus' : 'Bukan Survei/Sensus' }}{{ $kegiatan->tahapan_survei ? ' · '.ucfirst($kegiatan->tahapan_survei) : '' }}
                     </span>
                 </div>
-                <textarea class="inp filled" style="height:auto;display:block;font-style:italic" rows="2" wire:model="koreksiKegiatan.{{ $kegiatan->id }}" @readonly(!$bisaDikoreksi)></textarea>
+                <textarea class="inp filled" style="height:auto;display:block;font-style:italic" rows="2" wire:model.live.blur="koreksiKegiatan.{{ $kegiatan->id }}" @readonly(!$bisaDikoreksi)></textarea>
                 @error("koreksiKegiatan.{$kegiatan->id}")
                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                 @enderror
@@ -300,7 +300,7 @@
                             <label style="font-size:11.5px">Catatan (wajib bila tidak sesuai)</label>
                             <textarea class="inp filled" style="height:auto;display:block;font-size:11.5px" rows="2"
                                 wire:model="catatanUraian.{{ $kegiatan->id }}" placeholder="mis. Uraian belum menjelaskan output yang dihasilkan"
-                                x-on:blur="if (pendingMark === 'no') $wire.tandaiUraianTolak({{ $kegiatan->id }})"></textarea>
+                                x-on:blur="if (pendingMark === 'no' || (pendingMark === null && {{ $kegiatan->status_verifikasi_uraian === 'ditolak' ? 'true' : 'false' }})) $wire.tandaiUraianTolak({{ $kegiatan->id }})"></textarea>
                             @error('catatanUraian.'.$kegiatan->id)
                                 <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                             @enderror
@@ -369,7 +369,7 @@
 
                     <div class="field">
                         <label>Rincian Output (RO)</label>
-                        <input type="text" class="inp filled" wire:model="rincianOutput.{{ $kunciRo }}.uraian" @readonly(!$bisaDikoreksi) placeholder="mis. Publikasi/Laporan Statistik Sumber Daya Mineral dan Konstruksi">
+                        <input type="text" class="inp filled" wire:model.live.blur="rincianOutput.{{ $kunciRo }}.uraian" @readonly(!$bisaDikoreksi) placeholder="mis. Publikasi/Laporan Statistik Sumber Daya Mineral dan Konstruksi">
                         @error("rincianOutput.{$kunciRo}.uraian")
                             <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                         @enderror
@@ -378,14 +378,14 @@
                     <div class="row2" style="margin-top:6px">
                         <div class="field">
                             <label>Realisasi Volume RO</label>
-                            <input type="text" class="inp filled" wire:model="rincianOutput.{{ $kunciRo }}.volume_ro" @readonly(!$bisaDikoreksi) placeholder="mis. 1 publikasi">
+                            <input type="text" class="inp filled" wire:model.live.blur="rincianOutput.{{ $kunciRo }}.volume_ro" @readonly(!$bisaDikoreksi) placeholder="mis. 1 publikasi">
                             @error("rincianOutput.{$kunciRo}.volume_ro")
                                 <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                             @enderror
                         </div>
                         <div class="field">
                             <label>Progres Pelaksanaan Kegiatan (%)</label>
-                            <input type="number" step="0.01" min="0" max="100" class="inp filled" wire:model="rincianOutput.{{ $kunciRo }}.progres_persen" @readonly(!$bisaDikoreksi) placeholder="mis. 100">
+                            <input type="number" step="0.01" min="0" max="100" class="inp filled" wire:model.live.blur="rincianOutput.{{ $kunciRo }}.progres_persen" @readonly(!$bisaDikoreksi) placeholder="mis. 100">
                             @error("rincianOutput.{$kunciRo}.progres_persen")
                                 <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                             @enderror
@@ -412,12 +412,12 @@
 
                     <div class="field" style="margin-bottom:0">
                         <label style="font-size:11.5px">Kendala</label>
-                        <textarea class="inp filled" style="height:auto;display:block;font-style:italic" rows="2" wire:model="koreksiKendala.{{ $ks->id }}.kendala"></textarea>
+                        <textarea class="inp filled" style="height:auto;display:block;font-style:italic" rows="2" wire:model.live.blur="koreksiKendala.{{ $ks->id }}.kendala"></textarea>
                     </div>
                     @if ($ks->solusi)
                         <div class="field" style="margin-bottom:0">
                             <label style="font-size:11.5px">Solusi</label>
-                            <textarea class="inp filled" style="height:auto;display:block;font-style:italic" rows="2" wire:model="koreksiKendala.{{ $ks->id }}.solusi"></textarea>
+                            <textarea class="inp filled" style="height:auto;display:block;font-style:italic" rows="2" wire:model.live.blur="koreksiKendala.{{ $ks->id }}.solusi"></textarea>
                         </div>
                     @endif
 
@@ -453,7 +453,7 @@
                                     sudah merah lewat pendingMark optimistic) padahal belum tersimpan. --}}
                                 <textarea class="inp filled" style="height:auto;display:block;font-size:11.5px" rows="2"
                                     wire:model="catatanKendala.{{ $ks->id }}" placeholder="mis. Solusi belum konkret / tidak relevan dengan kendala"
-                                    x-on:blur="if (pendingMark === 'no') $wire.tandaiKendalaTolak({{ $ks->id }})"></textarea>
+                                    x-on:blur="if (pendingMark === 'no' || (pendingMark === null && {{ $ks->status_verifikasi === 'ditolak' ? 'true' : 'false' }})) $wire.tandaiKendalaTolak({{ $ks->id }})"></textarea>
                                 @error('catatanKendala.'.$ks->id)
                                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                                 @enderror
@@ -517,7 +517,7 @@
                                     <label style="font-size:11.5px">Catatan (wajib bila tidak sesuai)</label>
                                     <textarea class="inp filled" style="height:auto;display:block;font-size:11.5px" rows="2"
                                         wire:model="catatanBagianKustom.{{ $poin->id }}" placeholder="mis. Narasi belum menjelaskan tindak lanjut yang dilakukan"
-                                        x-on:blur="if (pendingMark === 'no') $wire.tandaiBagianKustomTolak({{ $poin->id }})"></textarea>
+                                        x-on:blur="if (pendingMark === 'no' || (pendingMark === null && {{ $poin->status_verifikasi === 'ditolak' ? 'true' : 'false' }})) $wire.tandaiBagianKustomTolak({{ $poin->id }})"></textarea>
                                     @error('catatanBagianKustom.'.$poin->id)
                                         <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                                     @enderror
@@ -638,7 +638,7 @@
                                 <textarea class="inp filled" style="height:auto;display:block;min-height:56px;font-size:11.5px" rows="3"
                                     wire:model="catatanBerkas.{{ $file->id }}" placeholder="mis. Bukti belum menunjukkan tanggal pelaksanaan…"
                                     :style="pendingMark === 'no' && {{ $file->status_verifikasi !== 'ditolak' ? 'true' : 'false' }} ? 'border-color:var(--red)' : ''"
-                                    x-on:blur="if (pendingMark === 'no') $wire.tandaiTolak({{ $file->id }})"></textarea>
+                                    x-on:blur="if (pendingMark === 'no' || (pendingMark === null && {{ $file->status_verifikasi === 'ditolak' ? 'true' : 'false' }})) $wire.tandaiTolak({{ $file->id }})"></textarea>
                                 @error('catatanBerkas.'.$file->id)
                                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                                 @enderror
@@ -742,7 +742,7 @@
 
                     <div class="field" style="margin-bottom:10px">
                         <label>Rencana Kegiatan</label>
-                        <textarea class="inp filled" style="height:auto;display:block;font-style:italic" rows="2" wire:model="koreksiRtlBerikutnya.{{ $poin->id }}">{{ $this->koreksiRtlBerikutnya[$poin->id] ?? $poin->rtl_teks }}</textarea>
+                        <textarea class="inp filled" style="height:auto;display:block;font-style:italic" rows="2" wire:model.live.blur="koreksiRtlBerikutnya.{{ $poin->id }}">{{ $this->koreksiRtlBerikutnya[$poin->id] ?? $poin->rtl_teks }}</textarea>
                         @error("koreksiRtlBerikutnya.{$poin->id}")
                             <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                         @enderror
@@ -774,7 +774,7 @@
                                 <label style="font-size:11.5px">Catatan (wajib bila tidak sesuai)</label>
                                 <textarea class="inp filled" style="height:auto;display:block;font-size:11.5px" rows="2"
                                     wire:model="catatanRtlBerikutnya.{{ $poin->id }}" placeholder="mis. Rencana belum spesifik/tidak jelas PIC-nya"
-                                    x-on:blur="if (pendingMark === 'no') $wire.tandaiRtlBerikutnyaTolak({{ $poin->id }})"></textarea>
+                                    x-on:blur="if (pendingMark === 'no' || (pendingMark === null && {{ $poin->status_verifikasi === 'ditolak' ? 'true' : 'false' }})) $wire.tandaiRtlBerikutnyaTolak({{ $poin->id }})"></textarea>
                                 @error('catatanRtlBerikutnya.'.$poin->id)
                                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                                 @enderror
@@ -816,7 +816,13 @@
                     <div class="match-col">
                         <div class="mc-lbl">Realisasi Dilaporkan</div>
                         <textarea class="inp filled" style="height:auto;display:block;font-style:italic;font-size:12px" rows="2"
-                            wire:model="koreksiRtlRealisasi.{{ $poin->id }}" placeholder="— belum dilaporkan —"></textarea>
+                            wire:model.live.blur="koreksiRtlRealisasi.{{ $poin->id }}" placeholder="{{ $poin->sudahDievaluasi() ? '— tanpa keterangan teks, periksa bukti realisasi di bawah —' : '— belum dilaporkan —' }}"></textarea>
+
+                        @if ($poin->sudahDievaluasi())
+                            <div style="font-size:11.5px;margin-top:6px;color:var(--teal)">📎 {{ $poin->berkas->count() }} bukti realisasi diunggah Ketua Tim{{ $poin->berkas->where('status_verifikasi', 'menunggu')->isNotEmpty() ? ' — '.$poin->berkas->where('status_verifikasi', 'menunggu')->count().' belum diperiksa (klik 🔍 Periksa)' : '' }}</div>
+                        @else
+                            <div style="font-size:11.5px;margin-top:6px;color:var(--muted)">Belum ada bukti realisasi diunggah Ketua Tim — belum bisa diverifikasi.</div>
+                        @endif
 
                         @if ($this->rtlBisaDiverifikasi($poin->id))
                             <div x-data="{ pendingMark: null }" style="margin-top:8px">
@@ -842,7 +848,7 @@
                                     <label style="font-size:11.5px">Catatan (wajib bila tidak sesuai)</label>
                                     <textarea class="inp filled" style="height:auto;display:block;font-size:11.5px" rows="2"
                                         wire:model="catatanRtl.{{ $poin->id }}" placeholder="mis. Realisasi belum sesuai dengan RTL yang direncanakan"
-                                        x-on:blur="if (pendingMark === 'no') $wire.tandaiRtlTolak({{ $poin->id }})"></textarea>
+                                        x-on:blur="if (pendingMark === 'no' || (pendingMark === null && {{ $poin->status_verifikasi === 'ditolak' ? 'true' : 'false' }})) $wire.tandaiRtlTolak({{ $poin->id }})"></textarea>
                                     @error('catatanRtl.'.$poin->id)
                                         <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                                     @enderror
@@ -972,4 +978,7 @@
             <a wire:navigate href="{{ route('verifikasi.index') }}" class="btn btn-ghost">← Kembali ke Daftar</a>
         </div>
     @endif
+
+    <x-status-simpan aksi="simpanPerubahan" label-aksi="💾 Simpan Perubahan"
+        pesan-belum="Ada perubahan analisis/angka/koreksi teks yang belum disimpan ke database. (Tanda Sesuai/Tidak Sesuai sudah tersimpan otomatis.)" />
 </div>

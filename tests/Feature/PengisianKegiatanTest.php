@@ -616,6 +616,45 @@ class PengisianKegiatanTest extends TestCase
         $this->assertTrue($component->instance()->formLengkap());
     }
 
+    public function test_status_perubahan_belum_disimpan_menyala_dan_padam_dengan_benar(): void
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $ketua = User::create([
+            'nama' => 'Ketua Uji',
+            'username' => 'ketua-uji-dirty@example.test', 'email' => 'ketua-uji-dirty@example.test',
+            'password' => 'password',
+            'role_id' => $peranKetua->id,
+            'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create(['kode' => 'UJI-DRT', 'indikator' => 'Indikator dirty', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji']);
+        $ikuLain = MasterIku::create(['kode' => 'UJI-DR2', 'indikator' => 'Indikator dirty 2', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji']);
+
+        $this->actingAs($ketua);
+
+        $component = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $iku->id)
+            // Memilih IKU/periode bukan perubahan isian.
+            ->assertSet('adaPerubahan', false)
+            ->set('kendalaBlocks.0.kendala', 'Kendala baru')
+            ->assertSet('adaPerubahan', true)
+            ->assertSee('Ada perubahan yang belum disimpan');
+
+        // Pindah IKU memuat ulang form dari DB — status kembali bersih.
+        $component->set('iku_id', $ikuLain->id)->assertSet('adaPerubahan', false);
+
+        $component->set('blocks.0.uraian_kegiatan', 'Kegiatan draf')
+            ->set('blocks.0.jenis', 'bukan_survei_sensus')
+            ->assertSet('adaPerubahan', true)
+            ->call('simpanDraft')
+            ->assertHasNoErrors()
+            ->assertSet('adaPerubahan', false);
+
+        $this->assertNotNull(session('terakhirDisimpan'));
+    }
+
     public function test_daftar_kekurangan_pengajuan_menyebut_bagian_yang_belum_diisi(): void
     {
         $peranKetua = Role::create(['nama' => 'Ketua Tim']);

@@ -297,6 +297,46 @@ class VerifikasiCapaian extends Component
     public string $picRtlBerikutnyaBaru = '';
 
     /**
+     * True selama ada isian (analisis, angka triwulanan, koreksi teks, RO, PIC, Rincian
+     * N) yang sudah diubah di layar tapi BELUM tersimpan ke database — dibaca
+     * <x-status-simpan> untuk bilah peringatan + penjaga tutup/pindah halaman. Tanda
+     * Sesuai/Tidak Sesuai beserta catatannya TIDAK dihitung di sini karena langsung
+     * tersimpan sendiri (tandai*()).
+     */
+    public bool $adaPerubahan = false;
+
+    /** Jam (HH:MM) penyimpanan terakhir di sesi ini, untuk keterangan "✓ tersimpan". */
+    public ?string $terakhirDisimpan = null;
+
+    /**
+     * Properti isian yang hanya tersimpan lewat simpanPerubahan()/simpanSementara()/
+     * verifikasiSelesai()/kembalikanKeKetuaTim() — perubahan pada salah satunya
+     * menyalakan $adaPerubahan (lihat updated()).
+     *
+     * @var list<string>
+     */
+    protected const PROPERTI_ISIAN = [
+        'analisis_capaian', 'catatan', 'rincianOutput', 'koreksiKegiatan', 'koreksiKendala',
+        'koreksiRtlRealisasi', 'koreksiRtlBerikutnya', 'picRtlBerikutnyaTerpilih', 'rincianNPilih', 'rincianNTw',
+    ];
+
+    public function updated(string $property): void
+    {
+        $akar = Str::before($property, '.');
+
+        if (in_array($akar, self::PROPERTI_ISIAN, true) || preg_match('/^(x_|y_)?(alokasi|realisasi)_tw[1-4]$/', $akar)) {
+            $this->adaPerubahan = true;
+        }
+    }
+
+    protected function tandaiTersimpan(): void
+    {
+        $this->adaPerubahan = false;
+        $this->terakhirDisimpan = now()->format('H:i');
+        $this->dispatch('perubahan-tersimpan');
+    }
+
+    /**
      * Cache dalam satu siklus request (di-reset otomatis tiap request baru) — DB
      * remote (Supabase, Seoul) makan ~400ms per query, dan tiap koleksi ini dipakai
      * ulang di banyak tempat (mount, render, verifikasiSelesai, kembalikanKeKetuaTim)
@@ -665,6 +705,7 @@ class VerifikasiCapaian extends Component
             }
         }
 
+        $this->adaPerubahan = true;
         $this->recomputeXRealisasiLive();
     }
 
@@ -1345,11 +1386,13 @@ class VerifikasiCapaian extends Component
 
         $this->picRtlBerikutnyaTerpilih[] = $tim;
         $this->picRtlBerikutnyaBaru = '';
+        $this->adaPerubahan = true;
     }
 
     public function hapusPicRtlBerikutnya(string $tim): void
     {
         $this->picRtlBerikutnyaTerpilih = array_values(array_diff($this->picRtlBerikutnyaTerpilih, [$tim]));
+        $this->adaPerubahan = true;
     }
 
     protected function rules(): array
@@ -1584,6 +1627,7 @@ class VerifikasiCapaian extends Component
 
         $kunciBaru = 'baru-'.(string) Str::uuid();
         $this->rincianOutput[$kunciBaru] = ['id' => null, 'kegiatan_id' => $kegiatan->id, 'uraian' => null, 'volume_ro' => null, 'progres_persen' => null];
+        $this->adaPerubahan = true;
     }
 
     /**
@@ -1736,6 +1780,7 @@ class VerifikasiCapaian extends Component
         });
 
         $this->editAlokasi = false;
+        $this->tandaiTersimpan();
 
         session()->flash('status', 'Perubahan disimpan.');
         $this->dispatch('notify', type: 'success', message: 'Perubahan disimpan.');
@@ -1770,6 +1815,8 @@ class VerifikasiCapaian extends Component
                 $this->capaian->catatStatus(Capaian::STATUS_SEDANG_DITANGANI, auth()->user());
             }
         });
+
+        $this->tandaiTersimpan();
 
         session()->flash('status', 'Progres pemeriksaan disimpan sementara — Anda bisa melanjutkan kapan saja.');
         $this->dispatch('notify', type: 'success', message: 'Progres pemeriksaan disimpan sementara.');
@@ -2001,6 +2048,10 @@ class VerifikasiCapaian extends Component
             return;
         }
 
+        // Sudah tersimpan semua — matikan penjaga "belum disimpan" sebelum redirect
+        // supaya browser tidak memunculkan peringatan tinggalkan halaman.
+        $this->tandaiTersimpan();
+
         session()->flash('status', 'Verifikasi selesai. Isian ditandai "diverifikasi".');
         $this->dispatch('notify', type: 'success', message: 'Verifikasi selesai. Isian ditandai "diverifikasi".');
 
@@ -2100,6 +2151,8 @@ class VerifikasiCapaian extends Component
 
             return;
         }
+
+        $this->tandaiTersimpan();
 
         session()->flash('status', 'Isian dikembalikan ke Ketua Tim untuk diperbaiki.');
         $this->dispatch('notify', type: 'success', message: 'Isian dikembalikan ke Ketua Tim untuk diperbaiki.');

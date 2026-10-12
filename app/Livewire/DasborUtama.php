@@ -90,7 +90,7 @@ class DasborUtama extends Component
     {
         $lewatTenggat = RtlEvaluasi::whereNotNull('batas_waktu')
             ->where('batas_waktu', '<', now())
-            ->where(fn ($q) => $q->whereNull('realisasi')->orWhere('realisasi', ''))
+            ->yangBelumDievaluasi()
             ->count();
 
         // Satu query dengan agregat bersyarat (FILTER, sintaks Postgres) alih-alih dua
@@ -281,8 +281,7 @@ class DasborUtama extends Component
         )->unique();
 
         $perPasangan = RtlEvaluasi::whereIn('iku_id', $daftarCapaian->pluck('iku_id'))
-            ->whereNotNull('realisasi')
-            ->where('realisasi', '!=', '')
+            ->yangSudahDievaluasi()
             ->with('periode:id,tahun,triwulan')
             ->get(['id', 'iku_id', 'periode_id', 'realisasi', 'status_verifikasi'])
             ->filter(fn ($r) => $pasanganDicari->contains($kunciPasangan($r->iku_id, $r->periode->tahun, $r->periode->triwulan)))

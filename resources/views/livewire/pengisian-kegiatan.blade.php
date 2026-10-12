@@ -134,14 +134,21 @@
         <div>
             <div class="pb-lbl">Periode Pengisian</div>
             <div class="pb-val">
-                <select wire:model.live="bulan" @change="bisaDiisiTw = (Number($event.target.value) % 3 === 0)" style="border:none;background:transparent;font-weight:700;color:var(--ink);font-size:14px">
+                {{-- Bukan wire:model: ganti periode memuat ulang seluruh form dari database,
+                     jadi bila masih ada perubahan yang belum disimpan, minta konfirmasi dulu
+                     (lihat <x-status-simpan>) — batal = pilihan dikembalikan seperti semula. --}}
+                <select data-abaikan-perubahan
+                    x-on:change="if ($wire.adaPerubahan && ! confirm('Masih ada perubahan yang BELUM disimpan untuk periode ini. Ganti periode dan buang perubahan tersebut?')) { $event.target.value = $wire.bulan; return; } bisaDiisiTw = (Number($event.target.value) % 3 === 0); $wire.set('bulan', Number($event.target.value))"
+                    style="border:none;background:transparent;font-weight:700;color:var(--ink);font-size:14px">
                     @foreach (['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'] as $idx => $namaBulan)
-                        <option value="{{ $idx + 1 }}">{{ $namaBulan }}</option>
+                        <option value="{{ $idx + 1 }}" @selected($bulan === $idx + 1)>{{ $namaBulan }}</option>
                     @endforeach
                 </select>
-                <select wire:model.live="tahun" style="border:none;background:transparent;font-weight:700;color:var(--ink);font-size:14px">
+                <select data-abaikan-perubahan
+                    x-on:change="if ($wire.adaPerubahan && ! confirm('Masih ada perubahan yang BELUM disimpan untuk periode ini. Ganti tahun dan buang perubahan tersebut?')) { $event.target.value = $wire.tahun; return; } $wire.set('tahun', Number($event.target.value))"
+                    style="border:none;background:transparent;font-weight:700;color:var(--ink);font-size:14px">
                     @foreach (range(now()->year - 1, now()->year + 1) as $tahunOpsi)
-                        <option value="{{ $tahunOpsi }}">{{ $tahunOpsi }}</option>
+                        <option value="{{ $tahunOpsi }}" @selected($tahun === $tahunOpsi)>{{ $tahunOpsi }}</option>
                     @endforeach
                 </select>
                 · Triwulan {{ ['I', 'II', 'III', 'IV'][$triwulan - 1] }} · Bulan ke-{{ $bulanKe }}
@@ -158,10 +165,11 @@
         <div class="sec"><span class="n">1</span><span>IKU</span></div>
         <div class="field">
             <label>Indikator Kinerja (IKU) <span class="req">*</span></label>
-            <select class="inp filled" wire:model.live="iku_id" @change="ikuDipilih = ($event.target.value !== '')">
-                <option value="">— Pilih IKU —</option>
+            <select class="inp filled" data-abaikan-perubahan
+                x-on:change="if ($wire.adaPerubahan && ! confirm('Masih ada perubahan yang BELUM disimpan untuk IKU ini. Pindah IKU dan buang perubahan tersebut?')) { $event.target.value = $wire.iku_id ?? ''; return; } ikuDipilih = ($event.target.value !== ''); $wire.set('iku_id', $event.target.value === '' ? null : Number($event.target.value))">
+                <option value="" @selected(! $iku_id)>— Pilih IKU —</option>
                 @foreach ($ikuList as $iku)
-                    <option value="{{ $iku->id }}">{{ $iku->kode }} — {{ $iku->indikator }}</option>
+                    <option value="{{ $iku->id }}" @selected($iku_id === $iku->id)>{{ $iku->kode }} — {{ $iku->indikator }}</option>
                 @endforeach
             </select>
             @error('iku_id')
@@ -540,7 +548,7 @@
 
                 <div class="field" style="margin-bottom:0">
                     <label>Kendala</label>
-                    <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model="kendalaBlocks.{{ $i }}.kendala"
+                    <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model.live.blur="kendalaBlocks.{{ $i }}.kendala"
                         placeholder="mis. Keterlambatan pengumpulan dokumen dari mitra"></textarea>
                     @error("kendalaBlocks.{$i}.kendala")
                         <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
@@ -549,7 +557,7 @@
 
                 <div class="field" style="margin-bottom:0">
                     <label>Solusi</label>
-                    <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model="kendalaBlocks.{{ $i }}.solusi"
+                    <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model.live.blur="kendalaBlocks.{{ $i }}.solusi"
                         placeholder="mis. Percepatan koordinasi dengan mitra terkait"></textarea>
                     @error("kendalaBlocks.{$i}.solusi")
                         <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
@@ -864,7 +872,7 @@
 
                         <div class="field">
                             <label>Uraian <span class="req">*</span></label>
-                            <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model="bagianKustomBlocks.{{ $bagian->id }}.{{ $i }}.teks"
+                            <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model.live.blur="bagianKustomBlocks.{{ $bagian->id }}.{{ $i }}.teks"
                                 placeholder="Uraikan poin {{ $bagian->nama }} ini..."></textarea>
                             @error("bagianKustomBlocks.{$bagian->id}.{$i}.teks")
                                 <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
@@ -1046,4 +1054,8 @@
         </div>
     </div>
 
+    @if ($iku_id && ! $formTerkunciDisetujui && ! $formTerkunciSedangDitangani)
+        <x-status-simpan aksi="simpanDraft" label-aksi="💾 Simpan Draft sekarang"
+            pesan-belum="Ada perubahan yang belum disimpan — klik Simpan Draft (atau Ajukan ke Tim SAKIP) supaya tidak hilang saat halaman ditutup/berpindah." />
+    @endif
 </div>

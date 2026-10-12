@@ -790,6 +790,25 @@ class VerifikasiCapaianTest extends TestCase
         $this->assertSame('menunggu', $rtlBerikutnya->fresh()->status_verifikasi);
     }
 
+    public function test_status_perubahan_belum_disimpan_pada_verifikasi(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+
+        Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
+            ->assertSet('adaPerubahan', false)
+            // Tanda Sesuai langsung tersimpan sendiri — bukan "perubahan belum disimpan".
+            ->call('tandaiSesuai', $data['berkas1']->id)
+            ->assertSet('adaPerubahan', false)
+            ->set('analisis_capaian', 'Analisis baru')
+            ->assertSet('adaPerubahan', true)
+            ->call('simpanPerubahan')
+            ->assertSet('adaPerubahan', false)
+            ->assertNotSet('terakhirDisimpan', null);
+
+        $this->assertSame('Analisis baru', $data['capaian']->fresh()->analisis_capaian);
+    }
+
     public function test_panel_syarat_merinci_isian_belum_ditandai_dan_yang_ditolak(): void
     {
         $this->actingAs($this->buatSakip());

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -88,6 +89,25 @@ class RtlEvaluasi extends Model
     public function sudahDievaluasi(): bool
     {
         return $this->relationLoaded('berkas') ? $this->berkas->isNotEmpty() : $this->berkas()->exists();
+    }
+
+    /**
+     * Padanan query dari sudahDievaluasi() — poin yang sudah punya bukti realisasi.
+     * Teks realisasi lama (sebelum alur diganti jadi unggah bukti saja) tetap ikut
+     * dihitung supaya data lama tidak tiba-tiba hilang dari dasbor/daftar verifikasi.
+     * Sebelumnya dasbor & daftar verifikasi HANYA melihat teks realisasi, jadi poin
+     * yang sudah diberi bukti oleh Ketua Tim tidak pernah muncul untuk Tim SAKIP.
+     */
+    public function scopeYangSudahDievaluasi(Builder $query): Builder
+    {
+        return $query->where(fn ($q) => $q->whereHas('berkas')
+            ->orWhere(fn ($q2) => $q2->whereNotNull('realisasi')->where('realisasi', '!=', '')));
+    }
+
+    public function scopeYangBelumDievaluasi(Builder $query): Builder
+    {
+        return $query->whereDoesntHave('berkas')
+            ->where(fn ($q) => $q->whereNull('realisasi')->orWhere('realisasi', ''));
     }
 
     /**

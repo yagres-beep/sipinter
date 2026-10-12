@@ -144,6 +144,41 @@ class PengisianKegiatan extends Component
     public string $rtlBaruBatasWaktu = '';
 
     /**
+     * True selama ada isian (teks, pilihan, berkas yang baru dipilih) yang sudah
+     * diubah di layar tapi BELUM tersimpan ke database lewat "Simpan Draft"/"Ajukan" —
+     * dibaca <x-status-simpan> untuk bilah peringatan, peringatan tutup tab, dan
+     * konfirmasi pindah menu/IKU/periode, supaya perubahan tidak hilang diam-diam.
+     */
+    public bool $adaPerubahan = false;
+
+    /** Jam (HH:MM) Simpan Draft terakhir di sesi ini, untuk keterangan "✓ tersimpan". */
+    public ?string $terakhirDisimpan = null;
+
+    /**
+     * Properti isian yang baru tersimpan lewat simpanDraft()/ajukanIsian() — lihat updated().
+     *
+     * @var list<string>
+     */
+    protected const PROPERTI_ISIAN = ['blocks', 'kendalaBlocks', 'bagianKustomBlocks', 'evaluasi', 'rtlBaru', 'rtlBaruBatasWaktu'];
+
+    public function updated(string $property): void
+    {
+        if (in_array(Str::before($property, '.'), self::PROPERTI_ISIAN, true)) {
+            $this->adaPerubahan = true;
+        }
+    }
+
+    /**
+     * Form baru saja dimuat ulang dari database (ganti IKU/periode) — tidak ada lagi
+     * perubahan yang tertunda.
+     */
+    protected function resetStatusPerubahan(): void
+    {
+        $this->adaPerubahan = false;
+        $this->terakhirDisimpan = null;
+    }
+
+    /**
      * Cache dalam satu siklus request saja (di-reset otomatis tiap request baru karena
      * properti non-public tidak ikut disinkronkan Livewire) — beberapa query berat
      * (RTL berjalan, IKU terpilih, dst.) dipakai ulang di banyak tempat saat render()
@@ -223,6 +258,7 @@ class PengisianKegiatan extends Component
         $this->kendalaBlocks = [$this->emptyKendalaBlock()];
         $this->rtlBaru = [$this->emptyRtlBlock()];
         $this->rtlBaruBatasWaktu = $this->akhirTriwulanBerikutnya()->toDateString();
+        $this->terakhirDisimpan = session('terakhirDisimpan');
 
         foreach ($this->bagianKustomAktif() as $bagian) {
             $this->bagianKustomBlocks[$bagian->id] = [$this->emptyBagianKustomBlock()];
@@ -471,6 +507,7 @@ class PengisianKegiatan extends Component
         if ($rtlId === null) {
             $this->blocks[$index]['rtl_evaluasi_id'] = null;
             $this->blocks[$index]['uraian_kegiatan'] = '';
+            $this->adaPerubahan = true;
 
             return;
         }
@@ -483,6 +520,7 @@ class PengisianKegiatan extends Component
 
         $this->blocks[$index]['rtl_evaluasi_id'] = $poin->id;
         $this->blocks[$index]['uraian_kegiatan'] = $poin->rtl_teks;
+        $this->adaPerubahan = true;
     }
 
     public function removeBuktiKegiatan(int $blockIndex, int $fileIndex): void
@@ -740,6 +778,7 @@ class PengisianKegiatan extends Component
 
     public function updatedIkuId(): void
     {
+        $this->resetStatusPerubahan();
         $this->muatFormEvaluasi();
         $this->muatBlocksKegiatan();
         $this->muatKendalaBlocks();
@@ -750,6 +789,7 @@ class PengisianKegiatan extends Component
 
     public function updatedBulan(): void
     {
+        $this->resetStatusPerubahan();
         $this->muatFormEvaluasi();
         $this->muatBlocksKegiatan();
         $this->muatKendalaBlocks();
@@ -759,6 +799,7 @@ class PengisianKegiatan extends Component
 
     public function updatedTahun(): void
     {
+        $this->resetStatusPerubahan();
         $this->muatFormEvaluasi();
         $this->muatBlocksKegiatan();
         $this->muatKendalaBlocks();
@@ -2347,6 +2388,13 @@ class PengisianKegiatan extends Component
             session()->flash('driveGagal', $driveGagal);
         }
 
+        // Jam simpan dibawa lewat flash karena halaman dimuat ulang penuh di bawah —
+        // dibaca lagi di mount() untuk keterangan "✓ Semua perubahan tersimpan".
+        // adaPerubahan dimatikan dulu supaya redirect tidak memicu peringatan
+        // "perubahan belum disimpan" di browser.
+        $this->adaPerubahan = false;
+        session()->flash('terakhirDisimpan', now()->format('H:i'));
+
         $this->lupakanCachePeriodeIku();
 
         // Reload halaman penuh — lihat catatan senada di akhir ajukanIsian(). Query
@@ -2849,6 +2897,7 @@ class PengisianKegiatan extends Component
             $this->dispatch('notify', type: 'success', message: 'Berhasil diajukan ke Tim SAKIP. Semua berkas bukti tersalin ke Google Drive.');
         }
 
+        $this->adaPerubahan = false;
         $this->lupakanCachePeriodeIku();
 
         // Muat ulang HALAMAN PENUH (bukan cuma me-reset properti komponen) supaya
