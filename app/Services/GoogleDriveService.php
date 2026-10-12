@@ -238,10 +238,11 @@ class GoogleDriveService
      * terhapus tiap kali container di-deploy ulang; lihat catatan di controller).
      *
      * $pemilik = akun storage TEMPAT berkas itu diunggah (Berkas::storage_account_id,
-     * RF-10b). Wajib dicoba lebih dulu: token OAuth memakai scope drive.file, yang
-     * HANYA bisa membaca berkas yang dibuat oleh akun itu sendiri — begitu storage
-     * aktif berpindah ke akun lain, client() (terikat ke akun aktif) mendapat 404
-     * "File not found" untuk berkas lama. Bila akun pemilik tidak bisa dipakai
+     * RF-10b). Wajib dicoba lebih dulu: berkas lama belum tentu bisa dibaca akun
+     * aktif (mis. token lama sempat terbit dengan scope drive.file, atau folder
+     * akun lama tidak dibagikan ke akun aktif) — begitu storage aktif berpindah ke
+     * akun lain, client() (terikat ke akun aktif) bisa mendapat 404 "File not found"
+     * untuk berkas lama. Bila akun pemilik tidak bisa dipakai
      * (belum/tidak lagi terhubung, token dicabut), jatuh ke client() biasa.
      */
     public function downloadFileContent(string $fileId, ?StorageAccount $pemilik = null): string
@@ -313,8 +314,8 @@ class GoogleDriveService
      * otorisasi (belum tentu = StorageAccount::aktif(), dan belum tentu tersimpan
      * lagi di DB saat method ini dipanggil) — dipakai HANYA oleh GoogleOAuthController
      * tepat setelah sebuah akun berhasil terhubung (lihat callback()), untuk
-     * menyiapkan folder yang DIMILIKI aplikasi (wajib untuk scope drive.file, lihat
-     * catatan di GoogleOAuthController) sebelum drive_folder_id akun itu diisi.
+     * menyiapkan folder root milik akun itu (lihat catatan di GoogleOAuthController)
+     * sebelum drive_folder_id akun itu diisi.
      */
     public function buatFolderRoot(GoogleClient $client, string $namaFolder): string
     {
@@ -402,7 +403,9 @@ class GoogleDriveService
     /**
      * Bangun client dari token OAuth tersimpan milik SATU akun storage, me-refresh
      * (dan menyimpan ulang) access token-nya lebih dulu bila sudah kedaluwarsa —
-     * refresh_token sendiri tidak pernah kedaluwarsa selama belum dicabut manual.
+     * refresh_token sendiri tidak kedaluwarsa selama belum dicabut, KECUALI status
+     * OAuth consent screen masih "Testing" (Google membatasinya 7 hari; lihat
+     * catatan di GoogleOAuthController).
      *
      * Publik (bukan cuma dipakai client() di atas) — GoogleOAuthController::callback()
      * juga memanggilnya langsung untuk membangun client MILIK AKUN MASTER saat
@@ -433,9 +436,14 @@ class GoogleDriveService
         $baru = $client->fetchAccessTokenWithRefreshToken($refreshToken);
 
         if (isset($baru['error'])) {
+            $saran = $baru['error'] === 'invalid_grant'
+                ? ' Bila ini terjadi tiap ±7 hari, ubah status aplikasi di Google Cloud Console '.
+                  '(Google Auth Platform > Audience) dari "Testing" ke "In production", lalu hubungkan ulang sekali.'
+                : '';
+
             throw new RuntimeException(
                 "Sesi Google Drive akun {$akun->email_gmail_institusi} sudah tidak berlaku (".
-                ($baru['error_description'] ?? $baru['error']).'). Hubungkan ulang lewat menu Akun & Storage.'
+                ($baru['error_description'] ?? $baru['error']).'). Hubungkan ulang lewat menu Akun & Storage.'.$saran
             );
         }
 

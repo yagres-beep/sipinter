@@ -20,15 +20,17 @@ use RuntimeException;
  * sekali ke akun Gmail institusi lewat alur ini supaya unggahan berikutnya jalan
  * SEBAGAI akun itu sendiri (pakai kuota pribadinya), bukan sebagai robot tanpa kuota.
  *
- * Scope yang diminta sengaja drive.file + drive.metadata.readonly (BUKAN drive
- * penuh) — keduanya tidak tergolong "restricted scope" Google, jadi cukup status
- * Testing + Test user (lihat Audience di Google Auth Platform), tidak perlu proses
- * verifikasi aplikasi yang panjang. drive.file membatasi tulis/baca isi berkas HANYA
- * ke yang dibuat aplikasi ini sendiri — karena itu begitu berhasil terhubung,
- * langsung dibuatkan folder root baru (lihat callback()). metadata.readonly
- * ditambahkan supaya FolderStructureService boleh MENCARI (files.list) folder yang
- * sudah dibuat sebelumnya — drive.file sendiri menolak operasi pencarian sama
- * sekali (403 ACCESS_TOKEN_SCOPE_INSUFFICIENT), hanya boleh operasi per-berkas.
+ * Scope yang diminta: Drive::DRIVE (akses penuh) — lihat alasannya di redirect().
+ *
+ * MASA BERLAKU SESI: access token hanya ±1 jam, tapi di-refresh otomatis lewat
+ * refresh_token (GoogleDriveService::clientOAuthUntukAkun()). Refresh token itu
+ * sendiri KEDALUWARSA 7 HARI bila status OAuth consent screen masih "Testing"
+ * (aturan Google, tidak bisa diperpanjang dari kode). Supaya akun tidak perlu
+ * dihubungkan ulang tiap minggu, status aplikasi di Google Auth Platform > Audience
+ * harus "In production" (Publish App) — tanpa verifikasi pun tetap jalan, hanya
+ * muncul layar peringatan "Google hasn't verified this app" saat login (klik
+ * Advanced → lanjutkan) & dibatasi 100 pengguna. Token yang terbit saat masih
+ * Testing tetap kedaluwarsa 7 hari, jadi hubungkan ulang sekali setelah publish.
  */
 class GoogleOAuthController extends Controller
 {
@@ -59,9 +61,9 @@ class GoogleOAuthController extends Controller
         // tidak akan pernah bisa menulis ke folder MASTER yang dibagikan (share) kepadanya
         // (lihat GoogleOAuthController::callback() & GoogleDriveService::bagikanFolder(),
         // config('services.google_drive.master_account_email')). Scope ini tergolong
-        // "sensitive" (bukan "restricted") di Google — tetap boleh dipakai akun yang
-        // terdaftar sebagai Test user tanpa proses verifikasi aplikasi yang panjang,
-        // selama status OAuth consent screen masih Testing.
+        // "restricted" di Google; tanpa verifikasi aplikasi tetap bisa dipakai (layar
+        // peringatan "unverified app", maks. 100 pengguna). Status consent screen harus
+        // "In production", bukan Testing — lihat catatan masa berlaku sesi di atas kelas.
         $client->addScope([Drive::DRIVE, 'openid', 'email']);
 
         return redirect()->away($client->createAuthUrl());

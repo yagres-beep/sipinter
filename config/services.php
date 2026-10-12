@@ -52,6 +52,9 @@ return [
     | - oauth_client_id / oauth_client_secret: dari Google Cloud Console > APIs &
     |   Services > Credentials > OAuth client ID (tipe "Web application"). Redirect
     |   URI yang didaftarkan di sana harus persis {APP_URL}/akun-storage/google/callback.
+    |   Status OAuth consent screen (Google Auth Platform > Audience) WAJIB "In
+    |   production" — selama masih "Testing", refresh token kedaluwarsa 7 hari dan
+    |   akun storage harus dihubungkan ulang tiap minggu.
     |
     | Kredensial Service Account (service_account_path) TETAP dipertahankan sebagai
     | fallback — dipakai GoogleDriveService HANYA bila storage aktif belum pernah
