@@ -354,12 +354,12 @@
     @if ($kegiatanList->isNotEmpty())
         <div class="card">
             <div class="sec"><span>Rincian Output (RO)</span></div>
-            <div class="info">ℹ️ Opsional — isi hanya bila IKU ini belum punya realisasi triwulan berjalan, agar tabel Realisasi Volume RO &amp; Progres Pelaksanaan Kegiatan di notula terisi benar. RO dihitung mandiri per IKU (tidak saling terhubung, tidak mengikuti jumlah Kegiatan) — boleh diisi berapa pun, boleh juga tidak sama sekali.</div>
+            <div class="info">ℹ️ Opsional — tidak semua IKU punya RO. Klik "+ Tambah RO" hanya bila IKU ini memang ber-RO dan belum punya realisasi triwulan berjalan, agar tabel Realisasi Volume RO &amp; Progres Pelaksanaan Kegiatan di notula terisi benar. RO yang tidak diisi realisasinya tidak dicetak di notula. RO dihitung mandiri per IKU (tidak mengikuti jumlah Kegiatan).</div>
 
             @php $nomorRo = 0; @endphp
-            @foreach ($rincianOutput as $kunciRo => $baris)
+            @forelse ($rincianOutput as $kunciRo => $baris)
                 @php $bisaDikoreksi = $this->rincianOutputBisaDikoreksi($baris); $nomorRo++; @endphp
-                <div class="keg" style="margin-top:8px" wire:key="ro-{{ $kunciRo }}" @if (!$bisaDikoreksi) style="opacity:.8" @endif>
+                <div class="keg" style="margin-top:8px{{ $bisaDikoreksi ? '' : ';opacity:.8' }}" wire:key="ro-{{ $kunciRo }}">
                     <div class="keg-head">
                         <span class="t">RO {{ $nomorRo }}</span>
                         @if ($bisaDikoreksi)
@@ -392,7 +392,9 @@
                         </div>
                     </div>
                 </div>
-            @endforeach
+            @empty
+                <p style="color:var(--muted);font-size:12.5px;margin-top:8px">IKU ini belum punya RO — bagian RO tidak akan muncul di notula.</p>
+            @endforelse
 
             @if ($this->kegiatanList()->contains(fn ($kegiatan) => $this->kegiatanBisaDikoreksi($kegiatan)))
                 <button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px" wire:click="tambahRo" wire:loading.attr="disabled" wire:target="tambahRo">+ Tambah RO</button>

@@ -383,12 +383,9 @@ class VerifikasiCapaian extends Component
             }
         }
 
-        // Supaya Tim SAKIP tidak harus klik "+ Tambah RO" dulu hanya untuk mulai
-        // mengisi, satu baris kosong disiapkan otomatis, hanya bila belum ada RO
-        // tersimpan sama sekali di seluruh IKU ini.
-        if (! $this->rincianOutput) {
-            $this->tambahRo();
-        }
+        // Sengaja TIDAK menyiapkan baris RO kosong otomatis: tidak semua IKU punya
+        // RO, jadi baris kosong bawaan hanya memberi kesan wajib diisi. Tim SAKIP
+        // menambahkannya sendiri lewat "+ Tambah RO" bila IKU ini memang ber-RO.
 
         foreach ($this->kendalaSolusiList() as $ks) {
             $this->koreksiKendala[$ks->id] = ['kendala' => $ks->kendala, 'solusi' => $ks->solusi];

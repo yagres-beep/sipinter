@@ -1591,8 +1591,10 @@ class VerifikasiCapaianTest extends TestCase
 
         $component = Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']]);
 
-        // mount() sudah menyiapkan satu baris kosong default (lihat komentar di
-        // VerifikasiCapaian::mount()) -- tidak perlu tambahRo() manual di sini.
+        // mount() TIDAK menyiapkan baris RO default (tidak semua IKU punya RO).
+        $this->assertSame([], $component->get('rincianOutput'));
+
+        $component->call('tambahRo');
         $kunciRo = array_key_first($component->get('rincianOutput'));
 
         $component
@@ -1627,12 +1629,11 @@ class VerifikasiCapaianTest extends TestCase
             ->call('tambahRo')
             ->call('tambahRo');
 
-        // 3, bukan 2: mount() sudah menyiapkan satu baris kosong default (lihat
-        // komentar di VerifikasiCapaian::mount()), ditambah 2 baris dari tambahRo()
-        // di atas. RO tidak dikelompokkan per Kegiatan lagi -- daftar datar lintas
-        // IKU (lihat komentar di properti $rincianOutput), tapi kegiatan_id-nya tetap
-        // otomatis terisi Kegiatan pertama yang bisa dikoreksi (kegiatan1 di sini).
-        $this->assertCount(3, $component->get('rincianOutput'));
+        // 2 baris dari tambahRo() di atas -- mount() tidak menyiapkan baris default.
+        // RO tidak dikelompokkan per Kegiatan lagi -- daftar datar lintas IKU (lihat
+        // komentar di properti $rincianOutput), tapi kegiatan_id-nya tetap otomatis
+        // terisi Kegiatan pertama yang bisa dikoreksi (kegiatan1 di sini).
+        $this->assertCount(2, $component->get('rincianOutput'));
 
         $kunci = array_keys($component->get('rincianOutput'));
 
