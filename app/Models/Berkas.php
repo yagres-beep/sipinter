@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Services\FolderStructureService;
 use App\Services\GoogleDriveService;
+use App\Support\KodeAcak;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -61,11 +62,6 @@ class Berkas extends Model
     ];
 
     /**
-     * Huruf/angka acak tanpa karakter yang mudah tertukar (0/O, 1/I/L, U/V).
-     */
-    protected const ALFABET_KODE = '23456789ABCDEFGHJKMNPQRSTWXYZ';
-
-    /**
      * Kode publik berkas, dipakai di URL pratinjau (/berkas/{kode}/buka) GANTI id
      * urut — pola KATEGORI-TAHUNBULAN-ACAK, mis. "CPN-202610-K7QM-2X9A". Id urut
      * gampang ditebak (cukup ganti angka di URL untuk mengintip bukti IKU lain),
@@ -77,10 +73,7 @@ class Berkas extends Model
         $periode = ($waktu ?? now())->format('Ym');
 
         do {
-            $acak = '';
-            for ($i = 0; $i < 8; $i++) {
-                $acak .= self::ALFABET_KODE[random_int(0, strlen(self::ALFABET_KODE) - 1)];
-            }
+            $acak = KodeAcak::buat(8);
             $kode = "{$prefix}-{$periode}-".substr($acak, 0, 4).'-'.substr($acak, 4);
         } while (static::where('kode', $kode)->exists());
 

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Events\CapaianStatusDiubah;
 use App\Services\CapaianCalculatorService;
+use App\Support\KodeAcak;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -57,6 +58,7 @@ class Capaian extends Model
     public const STATUS_DISETUJUI = 'disetujui';
 
     protected $fillable = [
+        'kode',
         'iku_id',
         'periode_id',
         'status',
@@ -67,6 +69,41 @@ class Capaian extends Model
         'realisasi',
         'persentase_capaian',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (Capaian $capaian) {
+            $capaian->kode ??= self::buatKode(
+                MasterIku::find($capaian->iku_id)?->kode,
+                Periode::find($capaian->periode_id),
+            );
+        });
+    }
+
+    /**
+     * Kode publik pengajuan IKU, dipakai di URL verifikasi (/verifikasi/{kode}) GANTI
+     * id urut — pola IKU-KODEIKU-TAHUNBULAN-ACAK, mis. "IKU-1111-202610-K7QM", jadi
+     * dari URL saja sudah kelihatan IKU & periodenya, tapi tetap tidak bisa ditebak
+     * dengan sekadar mengganti angka.
+     */
+    public static function buatKode(?string $kodeIku, ?Periode $periode): string
+    {
+        $iku = strtoupper(preg_replace('/[^A-Za-z0-9]+/', '', (string) $kodeIku)) ?: 'X';
+        $tahunBulan = $periode
+            ? sprintf('%04d%02d', $periode->tahun, $periode->bulan)
+            : now()->format('Ym');
+
+        do {
+            $kode = "IKU-{$iku}-{$tahunBulan}-".KodeAcak::buat(4);
+        } while (static::where('kode', $kode)->exists());
+
+        return $kode;
+    }
+
+    public function getRouteKeyName(): string
+    {
+        return 'kode';
+    }
 
     protected function casts(): array
     {
