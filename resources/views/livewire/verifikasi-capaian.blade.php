@@ -275,6 +275,9 @@
                         {{ $kegiatan->jenis === 'survei_sensus' ? 'Survei/Sensus' : 'Bukan Survei/Sensus' }}{{ $kegiatan->tahapan_survei ? ' · '.ucfirst($kegiatan->tahapan_survei) : '' }}
                     </span>
                 </div>
+                @if ($kegiatan->jenis === 'survei_sensus' && $kegiatan->tahapan_survei)
+                    <div style="font-size:12px;margin-bottom:4px">Capaian: <b>{{ $kegiatan->uraianTampil() }}</b></div>
+                @endif
                 <textarea class="inp filled" style="height:auto;display:block;font-style:italic" rows="2" wire:model.live.blur="koreksiKegiatan.{{ $kegiatan->id }}" @readonly(!$bisaDikoreksi)></textarea>
                 @error("koreksiKegiatan.{$kegiatan->id}")
                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>

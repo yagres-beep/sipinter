@@ -842,7 +842,7 @@ class NotulaBagian1DocxService
 
             return $this->isiBarisRo(
                 $rowTemplate,
-                $ro->uraian ?: $ro->kegiatan->uraian_kegiatan ?: '…',
+                $ro->uraian ?: $ro->kegiatan?->uraianTampil() ?: '…',
                 $ro->volume_ro ?: '…',
                 $progres
             );
