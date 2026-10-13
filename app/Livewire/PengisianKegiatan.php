@@ -263,6 +263,33 @@ class PengisianKegiatan extends Component
     }
 
     /**
+     * Ganti nama satu subfolder khusus; berkas baru yang sudah diarahkan ke
+     * subfolder itu ikut pindah ke nama barunya.
+     */
+    public function gantiNamaSubfolder(int $index, int $urutan, string $nama): void
+    {
+        $lama = $this->blocks[$index]['subfolders'][$urutan] ?? null;
+        $nama = FolderStructureService::namaOtomatis($nama, 100);
+
+        if ($lama === null || $nama === '' || $nama === $lama) {
+            return;
+        }
+
+        $lainnya = array_map('mb_strtolower', array_diff_key($this->blocks[$index]['subfolders'], [$urutan => true]));
+        if (in_array(mb_strtolower($nama), $lainnya, true)) {
+            return;
+        }
+
+        $this->blocks[$index]['subfolders'][$urutan] = $nama;
+        foreach ($this->subfolderBuktiBaru as $kunci => $sub) {
+            if ($sub === $lama) {
+                $this->subfolderBuktiBaru[$kunci] = $nama;
+            }
+        }
+        $this->adaPerubahan = true;
+    }
+
+    /**
      * Penampung sementara unggahan lewat tombol "Unggah" milik SATU folder tujuan —
      * kunci "<blok>.<urutan tahapan>.<urutan folder>" (folder 0 = langsung di folder
      * kegiatan/tahapan, 1.. = subfolder ke-n). Begitu selesai terunggah, berkasnya
@@ -345,16 +372,25 @@ class PengisianKegiatan extends Component
         foreach ($daftarTahapan ?: [null] as $ti => $tahapan) {
             // Tahapan utama (dan kegiatan bukan survei) memakai nama folder pilihan
             // Ketua Tim bila diisi; tahapan tambahan memakai nama tahapannya.
-            $labelInduk = $ti === 0
-                ? $this->namaFolderBerlaku($index)
-                : $this->namaFolderOtomatis(array_merge($block, ['tahapan_survei' => $tahapan]));
+            $kustomTahapan = trim($block['nama_folder_tahapan'][$tahapan] ?? '');
+            $labelInduk = match (true) {
+                $ti === 0 => $this->namaFolderBerlaku($index),
+                $kustomTahapan !== '' => FolderStructureService::namaOtomatis($kustomTahapan, 150),
+                default => $this->namaFolderOtomatis(array_merge($block, ['tahapan_survei' => $tahapan])),
+            };
 
             $folder = [['urutan' => 0, 'subfolder' => '', 'label' => $labelInduk]];
             foreach ($subfolders as $si => $namaSub) {
                 $folder[] = ['urutan' => $si + 1, 'subfolder' => $namaSub, 'label' => $labelInduk.' / '.$namaSub];
             }
 
-            $hasil[] = ['urutan' => $ti, 'tahapan' => $tahapan, 'label' => $labelInduk, 'folder' => $folder];
+            $hasil[] = [
+                'urutan' => $ti,
+                'tahapan' => $tahapan,
+                'label' => $labelInduk,
+                'otomatis' => $this->namaFolderOtomatis(array_merge($block, ['tahapan_survei' => $tahapan ?? ''])),
+                'folder' => $folder,
+            ];
         }
 
         return $hasil;
@@ -577,6 +613,9 @@ class PengisianKegiatan extends Component
             // Nama folder Drive pilihan Ketua Tim — kosong = pakai rekomendasi sistem
             // (namaFolderPreview()), lihat Kegiatan::nama_folder_kustom.
             'nama_folder' => '',
+            // Nama folder pilihan Ketua Tim untuk tahapan TAMBAHAN (kunci = tahapan);
+            // tahapan utama memakai nama_folder di atas.
+            'nama_folder_tahapan' => [],
             // Bawaan 1 folder; bila true, berkas bisa dimasukkan ke subfolder khusus
             // ($subfolders) di dalam folder kegiatan.
             'pakai_subfolder' => false,
@@ -719,14 +758,10 @@ class PengisianKegiatan extends Component
     {
         $tahapan = $block['jenis'] === 'survei_sensus' ? $block['tahapan_survei'] : null;
 
-        // Survei/sensus: folder tahapan berada DI DALAM folder induk bernama uraian
-        // kegiatan (FolderStructureService::resolveKegiatanFolder()), jadi cukup
-        // diberi nama tahapannya saja, mis. "Kegiatan X/Persiapan/".
-        if ($tahapan) {
-            return self::DAFTAR_TAHAPAN[$tahapan] ?? ucfirst($tahapan);
-        }
-
-        return Str::limit($block['uraian_kegiatan'], 100, '');
+        // Survei/sensus: folder tahapan (di dalam folder induk bernama uraian kegiatan,
+        // lihat FolderStructureService::resolveKegiatanFolder()) bernama "<Tahapan>
+        // <uraian>" tanpa kurung siku, mis. "Kegiatan X/Persiapan Kegiatan X/".
+        return Str::limit(self::uraianDenganTahapan($block['uraian_kegiatan'], $tahapan), 100, '');
     }
 
     /**
@@ -1736,6 +1771,7 @@ class PengisianKegiatan extends Component
                 'tahapan_survei' => $kegiatan->tahapan_survei ?? '',
                 'tahapan_tambahan' => [],
                 'nama_folder' => $kegiatan->nama_folder_kustom ?? '',
+                'nama_folder_tahapan' => [],
                 'pakai_subfolder' => $subfolders !== [],
                 'subfolders' => $subfolders,
                 'bukti' => [],
@@ -2150,6 +2186,8 @@ class PengisianKegiatan extends Component
             'blocks.*.tahapan_tambahan.*' => [$this->aturanTahapanTambahan()],
             'blocks.*.subfolders' => ['nullable', 'array', 'max:20'],
             'blocks.*.subfolders.*' => ['string', 'max:100'],
+            'blocks.*.nama_folder_tahapan' => ['nullable', 'array'],
+            'blocks.*.nama_folder_tahapan.*' => ['nullable', 'string', 'max:150'],
         ];
     }
 
@@ -3146,15 +3184,13 @@ class PengisianKegiatan extends Component
                     }
                 }
 
-                // Nama folder pilihan Ketua Tim (kosong = rekomendasi sistem) hanya untuk
-                // tahapan utama; tahapan tambahan memakai rekomendasi sistem dan bisa
-                // diganti setelah tersimpan. Bila folder kegiatan ini sudah ada di Drive,
+                // Nama folder pilihan Ketua Tim (kosong = rekomendasi sistem): tahapan
+                // utama dari nama_folder, tahapan tambahan dari nama_folder_tahapan.
+                // Bila folder kegiatan ini sudah ada di Drive,
                 // namanya ikut diganti di sana.
-                if ($utama) {
-                    $hasilFolder = $kegiatan->gantiNamaFolder($block['nama_folder'] ?? '');
-                    if ($hasilFolder['peringatan']) {
-                        $this->dispatch('notify', type: 'warning', message: $hasilFolder['peringatan']);
-                    }
+                $hasilFolder = $kegiatan->gantiNamaFolder($utama ? ($block['nama_folder'] ?? '') : ($block['nama_folder_tahapan'][$tahapan] ?? ''));
+                if ($hasilFolder['peringatan']) {
+                    $this->dispatch('notify', type: 'warning', message: $hasilFolder['peringatan']);
                 }
 
                 if ($ajukan) {
