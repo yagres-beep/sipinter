@@ -50,9 +50,9 @@ class NotulaBagian1DocxService
     /**
      * Rumus (baris $formulaDicetak, lihat isiSatuIku()) yang disisipkan sebagai
      * OOXML Math di generate() TERAKHIR, urut PERSIS seperti kemunculannya di
-     * dokumen -- dipakai NotulaService::susunBagianSatu() untuk mengganti gambar
-     * rumus hasil rasterisasi LibreOffice (kualitasnya rendah/buram, lihat
-     * NotulaService::gantiGambarRumusDenganHtml()) dengan HTML bersusun yang SAMA
+     * dokumen -- dipakai NotulaService::susunBagianSatu() untuk mengganti penanda
+     * rumus (LibreOffice membuang OOXML Math saat ekspor HTML, lihat
+     * NotulaService::gantiPenandaRumusDenganHtml()) dengan HTML bersusun yang SAMA
      * persis dipakai jalur PDF langsung (RumusMarkup::keHtml()), tanpa
      * bergantung ke LibreOffice sama sekali untuk bagian ini. Di-reset di awal
      * tiap generate() supaya pemanggilan berikutnya tidak membawa sisa data lama.
@@ -60,6 +60,21 @@ class NotulaBagian1DocxService
      * @var list<string>
      */
     private array $formulaUrutan = [];
+
+    /**
+     * true: rumus ditulis sebagai teks penanda (penandaRumus()), bukan OOXML Math --
+     * lihat setFormula() & parameter $rumusSebagaiPenanda di generate().
+     */
+    private bool $rumusSebagaiPenanda = false;
+
+    /**
+     * Teks penanda rumus ke-$i -- TANPA spasi supaya tidak dipatahkan LibreOffice
+     * saat membungkus baris HTML hasil ekspornya.
+     */
+    public static function penandaRumus(int $i): string
+    {
+        return "SIPINTERRUMUS{$i}X";
+    }
 
     /**
      * $data WAJIB hasil NotulaService::kumpulkanDataBagianSatu($notula) milik
@@ -82,10 +97,14 @@ class NotulaBagian1DocxService
      *
      * TERLEPAS dari $sertakanBlokTtdMandiri, tabelnya JUGA selalu dibuang bila notula
      * belum berstatus disetujui (RF-44) -- lihat catatan hapusBlokTtdMandiri().
+     *
+     * $rumusSebagaiPenanda HANYA untuk jalur pratinjau HTML (susunBagianSatu()) --
+     * lihat setFormula(). Unduhan .docx tetap memakai OOXML Math sungguhan.
      */
-    public function generate(Notula $notula, array $data, string $outputPath, bool $sertakanBlokTtdMandiri = true): string
+    public function generate(Notula $notula, array $data, string $outputPath, bool $sertakanBlokTtdMandiri = true, bool $rumusSebagaiPenanda = false): string
     {
         $this->formulaUrutan = [];
+        $this->rumusSebagaiPenanda = $rumusSebagaiPenanda;
 
         $templatePath = $this->resolveTemplatePath();
 
@@ -275,6 +294,16 @@ class NotulaBagian1DocxService
      */
     private function setFormula(TemplateProcessor $p, string $formulaBaris): void
     {
+        // Jalur pratinjau HTML: LibreOffice MEMBUANG <m:oMath> saat ekspor ke HTML
+        // (paragraf rumusnya jadi kosong), jadi yang disisipkan cukup teks penanda
+        // tanpa spasi -- diganti HTML bersusun setelah konversi, lihat
+        // NotulaService::gantiPenandaRumusDenganHtml().
+        if ($this->rumusSebagaiPenanda) {
+            $p->setValue('formula_capaian', self::penandaRumus(count($this->formulaUrutan)), -1);
+
+            return;
+        }
+
         $omml = RumusMarkup::keOmml($formulaBaris);
         $p->setValue('formula_capaian', '</w:t></w:r>'.$omml.'<w:r><w:t xml:space="preserve">', -1);
     }

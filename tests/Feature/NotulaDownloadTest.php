@@ -548,6 +548,43 @@ class NotulaDownloadTest extends TestCase
     }
 
     /**
+     * Jalur pratinjau HTML: LibreOffice membuang <m:oMath> saat ekspor ke HTML, jadi
+     * docx untuk pratinjau memakai teks penanda di posisi rumus (diganti HTML bersusun
+     * setelah konversi, lihat NotulaService::gantiPenandaRumusDenganHtml()).
+     */
+    public function test_docx_bagian1_untuk_pratinjau_memakai_penanda_rumus_bukan_omml(): void
+    {
+        $iku = MasterIku::create([
+            'kode' => '3002', 'indikator' => 'Persentase Uji Penanda', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
+            'sasaran' => 'Sasaran Uji Penanda', 'satuan' => 'Persen', 'metode_capaian' => MasterIku::METODE_RASIO,
+            'deskripsi_x' => 'X', 'deskripsi_y' => 'Y',
+        ]);
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 4, 'triwulan' => 2, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $this->verifikasiCapaian($iku, $periode);
+        CapaianTahunan::create(['iku_id' => $iku->id, 'tahun' => 2026, 'y_alokasi_tw4' => 8, 'x_realisasi_tw2' => 2]);
+
+        $notula = Notula::create(['periode_id' => $periode->id]);
+        $docx = app(\App\Services\NotulaBagian1DocxService::class);
+        $path = tempnam(sys_get_temp_dir(), 'penanda').'.docx';
+
+        try {
+            $docx->generate($notula, app(\App\Services\NotulaService::class)->kumpulkanDataBagianSatu($notula), $path, sertakanBlokTtdMandiri: false, rumusSebagaiPenanda: true);
+
+            $zip = new \ZipArchive;
+            $zip->open($path);
+            $xml = (string) $zip->getFromName('word/document.xml');
+            $zip->close();
+        } finally {
+            @unlink($path);
+        }
+
+        $this->assertCount(1, $docx->formulaUrutanTerakhir());
+        $this->assertStringContainsString(\App\Services\NotulaBagian1DocxService::penandaRumus(0), $xml);
+        $this->assertStringNotContainsString('<m:oMath>', $xml);
+    }
+
+    /**
      * IKU bersatuan Poin (mis. IPP) tidak punya rumus otomatis (formulaBaris() null
      * karena satuan-nya bukan Persen) -- kalau Tim SAKIP menuliskan sintaks
      * RumusMarkup di BARIS PERTAMA kolom "Dasar Hitung", baris itu yang dipakai
