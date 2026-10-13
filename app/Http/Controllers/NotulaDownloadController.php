@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Notula;
-use App\Services\NotulaBagian1DocxService;
 use App\Services\NotulaService;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -108,19 +107,17 @@ class NotulaDownloadController extends Controller
     }
 
     /**
-     * Unduh Bagian I sebagai .docx ASLI (bukan panduan statis) — template resmi
-     * bervariabel {{...}} (template_notula/SIPINTER_Template_Bagian_I_Mesin.docx)
-     * diisi otomatis dari data yang sama dipakai jalur PDF (lihat
-     * NotulaService::kumpulkanDataBagianSatu()), lewat NotulaBagian1DocxService.
+     * Unduh Bagian I sebagai .docx ASLI (bukan panduan statis) — dibangun dari isi
+     * pratinjau yang sudah disunting (bagian1_html), sumber yang SAMA dengan PDF
+     * pratinjau/kiriman ke Kepala/final, lihat NotulaService::renderBagianSatuDocx().
      * Digenerate on-the-fly ke berkas sementara lalu langsung dihapus setelah terkirim.
      */
-    public function unduhBagian1Docx(Notula $notula, NotulaService $notulaService, NotulaBagian1DocxService $docxService): BinaryFileResponse
+    public function unduhBagian1Docx(Notula $notula, NotulaService $notulaService): BinaryFileResponse
     {
         // Nama unik per permintaan -- dua unduhan bersamaan tidak saling menimpa/
         // menghapus berkas sementara milik yang lain (deleteFileAfterSend()).
         $path = storage_path("app/private/notula/{$notula->id}/bagian1-mesin-".Str::random(10).'.docx');
-        $data = $notulaService->kumpulkanDataBagianSatu($notula);
-        $docxService->generate($notula, $data, $path);
+        $notulaService->renderBagianSatuDocx($notula, $path);
 
         return response()->download($path, $notula->namaUnduhan('bagian1', 'docx'))->deleteFileAfterSend();
     }

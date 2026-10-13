@@ -144,14 +144,14 @@
                      jadi bila masih ada perubahan yang belum disimpan, minta konfirmasi dulu
                      (lihat <x-status-simpan>) — batal = pilihan dikembalikan seperti semula. --}}
                 <select data-abaikan-perubahan
-                    x-on:change="if ($wire.adaPerubahan && ! confirm('Masih ada perubahan yang BELUM disimpan untuk periode ini. Ganti periode dan buang perubahan tersebut?')) { $event.target.value = $wire.bulan; return; } bisaDiisiTw = (Number($event.target.value) % 3 === 0); $wire.set('bulan', Number($event.target.value))"
+                    x-on:change="if ($wire.adaPerubahan) { const pilihan = $event.target.value; $event.target.value = $wire.bulan; if (! await sipinterKonfirmasi({ judul: 'Ganti Periode?', pesan: 'Masih ada perubahan yang BELUM disimpan untuk periode ini. Ganti periode dan buang perubahan tersebut?', labelOk: 'Ganti & buang perubahan', bahaya: true })) return; $event.target.value = pilihan; } bisaDiisiTw = (Number($event.target.value) % 3 === 0); $wire.set('bulan', Number($event.target.value))"
                     style="border:none;background:transparent;font-weight:700;color:var(--ink);font-size:14px">
                     @foreach (['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'] as $idx => $namaBulan)
                         <option value="{{ $idx + 1 }}" @selected($bulan === $idx + 1)>{{ $namaBulan }}</option>
                     @endforeach
                 </select>
                 <select data-abaikan-perubahan
-                    x-on:change="if ($wire.adaPerubahan && ! confirm('Masih ada perubahan yang BELUM disimpan untuk periode ini. Ganti tahun dan buang perubahan tersebut?')) { $event.target.value = $wire.tahun; return; } $wire.set('tahun', Number($event.target.value))"
+                    x-on:change="if ($wire.adaPerubahan) { const pilihan = $event.target.value; $event.target.value = $wire.tahun; if (! await sipinterKonfirmasi({ judul: 'Ganti Tahun?', pesan: 'Masih ada perubahan yang BELUM disimpan untuk periode ini. Ganti tahun dan buang perubahan tersebut?', labelOk: 'Ganti & buang perubahan', bahaya: true })) return; $event.target.value = pilihan; } $wire.set('tahun', Number($event.target.value))"
                     style="border:none;background:transparent;font-weight:700;color:var(--ink);font-size:14px">
                     @foreach (range(now()->year - 1, now()->year + 1) as $tahunOpsi)
                         <option value="{{ $tahunOpsi }}" @selected($tahun === $tahunOpsi)>{{ $tahunOpsi }}</option>
@@ -172,7 +172,7 @@
         <div class="field">
             <label>Indikator Kinerja (IKU) <span class="req">*</span></label>
             <select class="inp filled" data-abaikan-perubahan
-                x-on:change="if ($wire.adaPerubahan && ! confirm('Masih ada perubahan yang BELUM disimpan untuk IKU ini. Pindah IKU dan buang perubahan tersebut?')) { $event.target.value = $wire.iku_id ?? ''; return; } ikuDipilih = ($event.target.value !== ''); $wire.set('iku_id', $event.target.value === '' ? null : Number($event.target.value))">
+                x-on:change="if ($wire.adaPerubahan) { const pilihan = $event.target.value; $event.target.value = $wire.iku_id ?? ''; if (! await sipinterKonfirmasi({ judul: 'Pindah IKU?', pesan: 'Masih ada perubahan yang BELUM disimpan untuk IKU ini. Pindah IKU dan buang perubahan tersebut?', labelOk: 'Pindah & buang perubahan', bahaya: true })) return; $event.target.value = pilihan; } ikuDipilih = ($event.target.value !== ''); $wire.set('iku_id', $event.target.value === '' ? null : Number($event.target.value))">
                 <option value="" @selected(! $iku_id)>— Pilih IKU —</option>
                 @foreach ($ikuList as $iku)
                     <option value="{{ $iku->id }}" @selected($iku_id === $iku->id)>{{ $iku->kode }} — {{ $iku->indikator }}</option>
@@ -276,10 +276,12 @@
                     pendingBuktiNames: [],
                     get folderPreview() {
                         if (! this.uraianTeks.trim()) return '';
-                        const prefix = (this.jenisTerpilih === 'survei_sensus' && this.tahapanNilai)
-                            ? '[' + this.tahapanNilai.charAt(0).toUpperCase() + this.tahapanNilai.slice(1) + '] '
-                            : '';
-                        const full = prefix + this.uraianTeks;
+                        // Survei/sensus: folder tahapan cukup bernama tahapannya (mis.
+                        // "Persiapan") di dalam folder induk bernama uraian kegiatan.
+                        if (this.jenisTerpilih === 'survei_sensus' && this.tahapanNilai) {
+                            return this.tahapanNilai.charAt(0).toUpperCase() + this.tahapanNilai.slice(1);
+                        }
+                        const full = this.uraianTeks;
                         return full.length > 100 ? full.slice(0, 100) : full;
                     }
                 }">
@@ -383,7 +385,7 @@
                         @endforeach
                     </div>
                     @if (count($tahapanBlok) > 1)
-                        <div class="fhint">🗂️ {{ count($tahapanBlok) }} tahapan dipilih — saat disimpan, tiap tahapan tercatat sebagai kegiatan sendiri (diverifikasi terpisah oleh Tim SAKIP) dengan folder masing-masing di dalam satu folder kegiatan. Pilih tahapan tujuan pada tiap berkas bukti di bawah.</div>
+                        <div class="fhint">🗂️ {{ count($tahapanBlok) }} tahapan dipilih — saat disimpan, tiap tahapan tercatat sebagai kegiatan sendiri (diverifikasi terpisah oleh Tim SAKIP) dengan folder masing-masing di dalam folder kegiatan. Unggah bukti lewat tombol di folder tiap tahapan di bawah.</div>
                     @endif
                     @if ($tahapanTerpakai)
                         <div class="fhint">🔁 Kegiatan ini sudah tercatat pada tahapan {{ collect($tahapanTerpakai)->map(fn ($t) => ucfirst($t))->join(', ', ' dan ') }} di triwulan ini — pilih tahapan lain.</div>
@@ -401,72 +403,47 @@
                 {{-- Rekomendasi nama folder dari sistem, bisa diganti Ketua Tim (kosongkan
                      untuk kembali ke rekomendasi). Disimpan saat Simpan Draft/Ajukan; bila
                      folder sudah ada di Drive, namanya ikut diganti di sana. --}}
+                {{-- Pohon folder (folder kegiatan → folder tahapan → subfolder) beserta
+                     tombol unggah tiap folder ditampilkan di bagian Bukti Capaian di bawah. --}}
                 @php $tahapanBlok = $block['jenis'] === 'survei_sensus' ? $this->tahapanDipilih($block) : []; @endphp
-                @if (count($tahapanBlok) > 1)
-                    {{-- Beberapa tahapan: satu folder induk kegiatan, tiap tahapan jadi
-                         subfolder di dalamnya (nama tetap diikuti nama kegiatan). --}}
-                    <div class="field">
-                        <div class="foldername">📁 {{ \App\Services\FolderStructureService::namaOtomatis($block['uraian_kegiatan'], 150) }}</div>
-                        @foreach ($tahapanBlok as $ti => $nilaiTahapan)
-                            <div class="foldername" style="margin-left:18px;margin-top:4px">
-                                ↳ 📁 {{ $ti === 0 && filled($block['nama_folder'] ?? '') ? $this->namaFolderBerlaku($i) : $this->namaFolderOtomatis(array_merge($block, ['tahapan_survei' => $nilaiTahapan])) }}
-                            </div>
-                        @endforeach
-                        <div class="fhint">Nama folder tiap tahapan bisa diganti lewat ✏️ setelah disimpan.</div>
-                    </div>
-                @else
-                <div x-show="folderPreview !== ''" x-cloak class="field">
-                    {{-- Kegiatan survei/sensus dikelompokkan dalam folder induk bernama
-                         uraian kegiatan (lihat FolderStructureService::resolveKegiatanFolder()). --}}
-                    <div class="foldername" x-show="jenisTerpilih === 'survei_sensus'">📁 <span x-text="uraianTeks.trim()"></span></div>
-                    <div class="foldername" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap" :style="jenisTerpilih === 'survei_sensus' ? 'margin-left:18px;margin-top:4px' : ''">
-                        <span x-show="jenisTerpilih === 'survei_sensus'">↳</span> 📁 <span x-text="namaFolder.trim() !== '' ? namaFolder.trim() : folderPreview"></span>
-                        <span x-show="namaFolder.trim() === ''" style="color:var(--muted);font-size:11px">(rekomendasi sistem)</span>
-                        <button type="button" class="btn-ubah-nama" title="Ganti nama folder" x-show="!ubahFolder" @click="ubahFolder = true; $nextTick(() => $refs.namaFolderInput.focus())">✏️</button>
-                    </div>
-                    <div x-show="ubahFolder" x-cloak style="margin-top:6px">
-                        <input type="text" class="inp filled" maxlength="150" x-ref="namaFolderInput"
-                            wire:model.live.blur="blocks.{{ $i }}.nama_folder"
-                            @input="namaFolder = $event.target.value"
-                            @keydown.enter.prevent="$event.target.blur(); ubahFolder = false"
-                            :placeholder="folderPreview">
-                        <div class="fhint">Kosongkan untuk memakai rekomendasi sistem. Nama folder tersimpan saat Simpan Draft/Ajukan.</div>
-                    </div>
-                    @error("blocks.{$i}.nama_folder")
-                        <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-                    @enderror
-                </div>
-                @endif
 
                 {{-- Bawaan semua bukti masuk SATU folder kegiatan; bila perlu dipisah,
                      Ketua Tim menambah subfolder khusus di dalam folder kegiatan dan
                      memilih subfolder tujuan pada tiap berkas di bawah. --}}
                 @php $pakaiSubfolder = ! empty($block['pakai_subfolder']); @endphp
-                <div class="field" x-show="jenisTerpilih !== ''" x-cloak>
+                <div class="field" x-show="jenisTerpilih !== '' && (jenisTerpilih !== 'survei_sensus' || tahapanTerisi)" x-cloak>
                     <label>Susunan Folder Bukti</label>
                     <div class="pills">
                         <span class="pill {{ $pakaiSubfolder ? '' : 'on' }}" wire:click="$set('blocks.{{ $i }}.pakai_subfolder', false)">1 folder (bawaan)</span>
                         <span class="pill {{ $pakaiSubfolder ? 'on' : '' }}" wire:click="$set('blocks.{{ $i }}.pakai_subfolder', true)">Pisah ke beberapa subfolder</span>
                     </div>
                     @if ($pakaiSubfolder)
+                        {{-- Nama folder bebas diketik sendiri; daftar "Saran" hanya pintasan. --}}
+                        <div x-data="{ namaSub: '' }" style="margin-top:8px;display:flex;gap:6px">
+                            <input type="text" class="inp" maxlength="100" x-model="namaSub" placeholder="Ketik nama folder sendiri, mis. Surat Tugas, Bahan Paparan…" data-abaikan-perubahan
+                                @keydown.enter.prevent="if (namaSub.trim()) { $wire.tambahSubfolder({{ $i }}, namaSub); namaSub = '' }">
+                            <button type="button" class="btn btn-ghost btn-sm" style="white-space:nowrap" @click="if (namaSub.trim()) { $wire.tambahSubfolder({{ $i }}, namaSub); namaSub = '' }">＋ Tambah Folder</button>
+                        </div>
+                        @if (! empty($block['subfolders']))
+                            <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+                                @foreach ($block['subfolders'] as $si => $namaSub)
+                                    <span class="pill on" wire:key="subfolder-{{ $i }}-{{ md5($namaSub) }}">📁 {{ $namaSub }}
+                                        <span style="cursor:pointer;margin-left:4px" title="Hapus folder" wire:click="hapusSubfolder({{ $i }}, {{ $si }})">✕</span>
+                                    </span>
+                                @endforeach
+                            </div>
+                        @endif
                         <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-                            @foreach ($block['subfolders'] ?? [] as $si => $namaSub)
-                                <span class="pill on" wire:key="subfolder-{{ $i }}-{{ md5($namaSub) }}">📁 {{ $namaSub }}
-                                    <span style="cursor:pointer;margin-left:4px" title="Hapus subfolder" wire:click="hapusSubfolder({{ $i }}, {{ $si }})">✕</span>
-                                </span>
-                            @endforeach
+                            <span style="color:var(--muted);font-size:11.5px">Saran:</span>
                             @foreach (\App\Livewire\PengisianKegiatan::SARAN_SUBFOLDER as $saran)
                                 @if (! in_array(mb_strtolower($saran), array_map('mb_strtolower', $block['subfolders'] ?? []), true))
                                     <span class="pill" style="border-style:dashed" wire:click="tambahSubfolder({{ $i }}, @js($saran))">＋ {{ $saran }}</span>
                                 @endif
                             @endforeach
                         </div>
-                        <div x-data="{ namaSub: '' }" style="margin-top:8px;display:flex;gap:6px">
-                            <input type="text" class="inp" maxlength="100" x-model="namaSub" placeholder="Nama subfolder lain…" data-abaikan-perubahan
-                                @keydown.enter.prevent="if (namaSub.trim()) { $wire.tambahSubfolder({{ $i }}, namaSub); namaSub = '' }">
-                            <button type="button" class="btn btn-ghost btn-sm" @click="if (namaSub.trim()) { $wire.tambahSubfolder({{ $i }}, namaSub); namaSub = '' }">＋ Tambah</button>
-                        </div>
-                        <div class="fhint">Subfolder dibuat di dalam folder kegiatan{{ count($tahapanBlok) > 1 ? ' (di setiap folder tahapan)' : '' }}. Pilih subfolder tujuan pada tiap berkas di bawah — berkas tanpa pilihan masuk langsung ke folder kegiatan.</div>
+                        <div class="fhint">Folder dibuat di dalam folder {{ $tahapanBlok ? 'tiap tahapan' : 'kegiatan' }}. Tiap folder punya tombol unggah sendiri di bawah.</div>
+                    @else
+                        <div class="fhint">Semua bukti masuk langsung ke folder {{ $tahapanBlok ? 'tahapan' : 'kegiatan' }}. Pilih "Pisah ke beberapa subfolder" untuk membuat folder sendiri (mis. Undangan, Dokumentasi).</div>
                     @endif
                 </div>
 
@@ -506,70 +483,98 @@
                         🔒 Lengkapi jenis kegiatan<span x-show="jenisTerpilih === 'survei_sensus'"> dan tahapan survei</span> terlebih dahulu untuk mengunggah bukti.
                     </div>
 
+                    {{-- Satu kotak unggah per folder tujuan: tiap tahapan survei terpilih
+                         (atau satu folder kegiatan bila bukan survei), dan di dalamnya satu
+                         tombol per subfolder khusus — berkas langsung masuk ke folder sesuai
+                         tombol yang diklik (lihat PengisianKegiatan::updatedUnggahFolder()). --}}
                     <div x-show="jenisTerpilih !== '' && (jenisTerpilih !== 'survei_sensus' || tahapanTerisi)" x-cloak>
-                        @if (empty($block['bukti']))
-                            <label class="upload need" style="cursor:pointer;display:block">
-                                <div class="big">📤</div>
-                                Klik untuk unggah bukti capaian (PDF) — boleh lebih dari satu berkas
-                                <input type="file" wire:model="blocks.{{ $i }}.bukti" multiple accept="application/pdf" style="display:none"
-                                    @change="pendingBuktiNames = Array.from($event.target.files).map(f => f.name)">
-                            </label>
-                        @else
+                        @if (! empty($block['bukti']))
                             <x-mode-nama-berkas :mode="$modeNamaBerkas" />
-                            <div class="filechip-grid">
-                                @foreach ($block['bukti'] as $fi => $file)
-                                    {{-- TANPA kelas "ok" (hijau) — berkas ini baru dipilih, belum
-                                         pernah diperiksa Tim SAKIP sama sekali, jadi belum punya
-                                         status apa-apa (bukan "Sesuai"). Hijau baru muncul begitu
-                                         benar-benar ditandai "Sesuai" (lihat existing_bukti di atas). --}}
-                                    @php
-                                        $kunciBaru = $this->kunciBuktiBaru($file);
-                                        $namaTampil = $this->namaBuktiBaruKegiatan($block, $file);
-                                        $tahapanBerkas = $this->tahapanBerkasBaru($block, $file);
-                                        $subfolderBerkas = $this->subfolderBerkasBaru($block, $file);
-                                    @endphp
-                                    <div class="filechip" wire:key="bukti-baru-{{ $kunciBaru }}">
-                                        <span class="nm">
-                                            <x-nama-berkas :id="$kunciBaru" :nama="$namaTampil.'.pdf'" aksi="aturNamaBuktiBaru" :bisa-ubah="true" />
-                                            <span class="sub">Berkas asli: {{ $file->getClientOriginalName() }}</span>
-                                            @if (count($tahapanBlok) > 1 || ($pakaiSubfolder && ! empty($block['subfolders'])))
-                                                <span style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
-                                                    @if (count($tahapanBlok) > 1)
-                                                        <select class="inp" style="width:auto;padding:3px 6px;font-size:11.5px" title="Tahapan tujuan berkas ini"
-                                                            wire:change="$set('tahapanBuktiBaru.{{ $kunciBaru }}', $event.target.value)">
-                                                            @foreach ($tahapanBlok as $nilaiTahapan)
-                                                                <option value="{{ $nilaiTahapan }}" @selected($tahapanBerkas === $nilaiTahapan)>Tahapan: {{ \App\Livewire\PengisianKegiatan::DAFTAR_TAHAPAN[$nilaiTahapan] }}</option>
-                                                            @endforeach
-                                                        </select>
-                                                    @endif
-                                                    @if ($pakaiSubfolder && ! empty($block['subfolders']))
-                                                        <select class="inp" style="width:auto;padding:3px 6px;font-size:11.5px" title="Subfolder tujuan berkas ini"
-                                                            wire:change="$set('subfolderBuktiBaru.{{ $kunciBaru }}', $event.target.value)">
-                                                            <option value="" @selected($subfolderBerkas === '')>📁 Langsung di folder kegiatan</option>
-                                                            @foreach ($block['subfolders'] as $namaSub)
-                                                                <option value="{{ $namaSub }}" @selected($subfolderBerkas === $namaSub)>📁 {{ $namaSub }}</option>
-                                                            @endforeach
-                                                        </select>
+                        @endif
+
+                        @php $survei = $tahapanBlok !== []; @endphp
+                        <div style="border:1.5px dashed var(--line);border-radius:10px;padding:10px 12px;margin-top:6px">
+                            @if ($survei)
+                                {{-- Folder induk kegiatan survei/sensus (FolderStructureService::resolveKegiatanFolder()). --}}
+                                <div class="foldername">📁 {{ \App\Services\FolderStructureService::namaOtomatis($block['uraian_kegiatan'], 150) }}</div>
+                            @endif
+
+                            @foreach ($this->folderUnggahBlok($i) as $grup)
+                                <div wire:key="grup-unggah-{{ $i }}-{{ $grup['tahapan'] ?? 'kegiatan' }}" style="{{ $survei ? 'margin-left:18px;' : '' }}margin-top:8px">
+                                    @foreach ($grup['folder'] as $folder)
+                                        @php
+                                            $berkasFolder = collect($block['bukti'] ?? [])->filter(fn ($f) => $this->tahapanBerkasBaru($block, $f) === $grup['tahapan'] && $this->subfolderBerkasBaru($block, $f) === $folder['subfolder']);
+                                            $folderInduk = $folder['urutan'] === 0;
+                                        @endphp
+                                        <div wire:key="folder-unggah-{{ $i }}-{{ $grup['urutan'] }}-{{ $folder['urutan'] }}" style="{{ $folderInduk ? '' : 'margin-left:18px;' }}margin-top:6px">
+                                            <div class="foldername" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                                                <span>{{ $survei || ! $folderInduk ? '↳ ' : '' }}📁
+                                                    @if ($folderInduk && $grup['urutan'] === 0)
+                                                        {{-- Folder utama bisa diganti namanya (blocks.*.nama_folder). --}}
+                                                        <span x-text="namaFolder.trim() !== '' ? namaFolder.trim() : folderPreview">{{ $grup['label'] }}</span>
+                                                    @else
+                                                        {{ $folderInduk ? $grup['label'] : $folder['subfolder'] }}
                                                     @endif
                                                 </span>
+                                                @if ($folderInduk && $grup['urutan'] === 0)
+                                                    <button type="button" class="btn-ubah-nama" title="Ganti nama folder" x-show="!ubahFolder" @click="ubahFolder = true; $nextTick(() => $refs.namaFolderInput.focus())">✏️</button>
+                                                @endif
+                                                <label class="btn btn-ghost btn-sm" style="cursor:pointer;margin-left:auto">
+                                                    📤 Unggah ke folder ini
+                                                    <input type="file" wire:model="unggahFolder.{{ $i }}.{{ $grup['urutan'] }}.{{ $folder['urutan'] }}" multiple accept="application/pdf" style="display:none"
+                                                        @change="pendingBuktiNames = Array.from($event.target.files).map(f => f.name)">
+                                                </label>
+                                            </div>
+                                            @if ($folderInduk && $grup['tahapan'])
+                                                <div class="fhint" style="margin-top:2px">Capaian: <b>{{ \App\Livewire\PengisianKegiatan::uraianDenganTahapan($block['uraian_kegiatan'], $grup['tahapan']) }}</b></div>
                                             @endif
-                                        </span>
-                                        <span class="x" style="cursor:pointer" title="Hapus bukti" wire:click="removeBuktiKegiatan({{ $i }}, {{ $fi }})" wire:loading.class="btn-busy" wire:target="removeBuktiKegiatan({{ $i }}, {{ $fi }})">🗑️</span>
-                                    </div>
-                                @endforeach
-                            </div>
-                            <label class="btn btn-ghost btn-sm" style="margin-top:8px;cursor:pointer">
-                                ＋ Tambah Bukti
-                                <input type="file" wire:model="blocks.{{ $i }}.bukti" multiple accept="application/pdf" style="display:none"
-                                    @change="pendingBuktiNames = Array.from($event.target.files).map(f => f.name)">
-                            </label>
-                        @endif
+                                            @if ($folderInduk && $grup['urutan'] === 0)
+                                                <div x-show="ubahFolder" x-cloak style="margin-top:6px">
+                                                    <input type="text" class="inp filled" maxlength="150" x-ref="namaFolderInput"
+                                                        wire:model.live.blur="blocks.{{ $i }}.nama_folder"
+                                                        @input="namaFolder = $event.target.value"
+                                                        @keydown.enter.prevent="$event.target.blur(); ubahFolder = false"
+                                                        :placeholder="folderPreview">
+                                                    <div class="fhint">Kosongkan untuk memakai rekomendasi sistem. Nama folder tersimpan saat Simpan Draft/Ajukan.</div>
+                                                </div>
+                                                @error("blocks.{$i}.nama_folder")
+                                                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                                                @enderror
+                                            @endif
+
+                                            @if ($berkasFolder->isNotEmpty())
+                                                <div class="filechip-grid" style="margin-top:6px;margin-left:18px">
+                                                    @foreach ($berkasFolder as $fi => $file)
+                                                        {{-- TANPA kelas "ok" (hijau) — berkas ini baru dipilih, belum
+                                                             pernah diperiksa Tim SAKIP sama sekali, jadi belum punya
+                                                             status apa-apa (bukan "Sesuai"). Hijau baru muncul begitu
+                                                             benar-benar ditandai "Sesuai" (lihat existing_bukti di atas). --}}
+                                                        @php
+                                                            $kunciBaru = $this->kunciBuktiBaru($file);
+                                                            $namaTampil = $this->namaBuktiBaruKegiatan($block, $file);
+                                                        @endphp
+                                                        <div class="filechip" wire:key="bukti-baru-{{ $kunciBaru }}">
+                                                            <span class="nm">
+                                                                <x-nama-berkas :id="$kunciBaru" :nama="$namaTampil.'.pdf'" aksi="aturNamaBuktiBaru" :bisa-ubah="true" />
+                                                                <span class="sub">Berkas asli: {{ $file->getClientOriginalName() }}</span>
+                                                            </span>
+                                                            <span class="x" style="cursor:pointer" title="Hapus bukti" wire:click="removeBuktiKegiatan({{ $i }}, {{ $fi }})" wire:loading.class="btn-busy" wire:target="removeBuktiKegiatan({{ $i }}, {{ $fi }})">🗑️</span>
+                                                        </div>
+                                                    @endforeach
+                                                </div>
+                                            @endif
+                                        </div>
+                                    @endforeach
+                                </div>
+                            @endforeach
+                        </div>
+                        <div class="fhint">Klik "📤 Unggah ke folder ini" pada folder tujuan — PDF, boleh lebih dari satu berkas per folder.</div>
                     </div>
 
                     {{-- Nama berkas dipilih langsung tampil di sisi klien (dari File API
                          browser) begitu dipilih — tidak menunggu unggahan ke server
                          selesai dulu baru terlihat namanya. --}}
-                    <div wire:loading wire:target="blocks.{{ $i }}.bukti" style="font-size:11.5px;color:var(--muted);margin-top:6px">
+                    <div wire:loading wire:target="unggahFolder" style="font-size:11.5px;color:var(--muted);margin-top:6px">
                         <template x-for="nama in pendingBuktiNames" :key="nama">
                             <div>📄 <span x-text="nama"></span> — mengunggah…</div>
                         </template>

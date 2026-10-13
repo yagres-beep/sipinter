@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Capaian;
 use App\Models\CapaianTahunan;
 use App\Models\FolderConfig;
+use App\Models\IndikatorProksi;
 use App\Models\Kegiatan;
 use App\Models\KendalaSolusi;
 use App\Models\MasterIku;
@@ -14,6 +15,10 @@ use App\Models\RincianN;
 use App\Models\Role;
 use App\Models\RtlEvaluasi;
 use App\Models\User;
+use App\Services\LibreOfficeConversionService;
+use App\Services\NotulaBagian1DocxService;
+use App\Services\NotulaService;
+use App\Support\RumusMarkup;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -464,11 +469,11 @@ class NotulaDownloadTest extends TestCase
     }
 
     /**
-     * Indikator SAKIP/BerAKHLAK pada .docx harus memakai format khusus (tabel Indikator
-     * Proksi / narasi tanpa tabel RO), sama seperti jalur pratinjau PDF -- dideteksi dari
-     * teks indikator, bukan kode (yang bisa berbeda tiap satker & berubah kapan pun).
+     * Indikator BerAKHLAK tetap memakai narasi khususnya (dideteksi dari teks indikator),
+     * sedangkan tabel Indikator Proksi TIDAK lagi muncul hanya karena indikatornya
+     * berteks "SAKIP" -- proksi kini isian Tim SAKIP sendiri (lihat uji di bawah).
      */
-    public function test_docx_bagian1_indikator_sakip_dan_berakhlak_memakai_format_khusus(): void
+    public function test_docx_bagian1_berakhlak_format_khusus_dan_sakip_tanpa_proksi_tidak_mencetak_tabel_proksi(): void
     {
         $this->loginSebagai('Tim SAKIP');
 
@@ -482,10 +487,42 @@ class NotulaDownloadTest extends TestCase
 
         $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
 
-        $this->assertStringContainsString('Jelaskan mengenai persentase monitoring capaian kinerja triwulanan yang terlaksana tepat waktu', $xml);
-        $this->assertStringContainsString('Indikator Proksi', $xml);
+        $this->assertStringNotContainsString('Indikator Proksi', $xml);
+        $this->assertDoesNotMatchRegularExpression('/\{\{\/?(blok_proksi|blok_sakip|proksi_|target_proksi|realisasi_proksi)/', $xml);
         $this->assertStringContainsString('Jelaskan mengenai Persentase kegiatan untuk mengoptimalkan implementasi BerAKHLAK yang terlaksana sesuai rencana', $xml);
         $this->assertStringNotContainsString('Realisasi Volume RO dan Progress Pelaksanaan Kegiatan', $xml);
+    }
+
+    /**
+     * Indikator Proksi isian Tim SAKIP dicetak untuk IKU APA PUN (bukan hanya SAKIP):
+     * satu baris tabel per proksi, hanya pada IKU pemiliknya & triwulan yang sama.
+     */
+    public function test_docx_bagian1_mencetak_baris_proksi_per_indikator_proksi_untuk_iku_apa_pun(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $ikuProksi = MasterIku::create(['kode' => '9010', 'indikator' => 'Persentase Publikasi Berkualitas', 'sasaran' => 'Sasaran Uji Proksi', 'tim' => 'Uji', 'penanggung_jawab' => 'A']);
+        $ikuLain = MasterIku::create(['kode' => '9011', 'indikator' => 'Indikator Tanpa Proksi', 'sasaran' => 'Sasaran Uji Proksi', 'tim' => 'Uji', 'penanggung_jawab' => 'A']);
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $this->verifikasiCapaian($ikuProksi, $periode);
+        $this->verifikasiCapaian($ikuLain, $periode);
+        IndikatorProksi::create(['iku_id' => $ikuProksi->id, 'tahun' => 2026, 'triwulan' => 3, 'uraian' => 'Proksi Satu & Dua', 'target' => '100%', 'realisasi' => '75%']);
+        IndikatorProksi::create(['iku_id' => $ikuProksi->id, 'tahun' => 2026, 'triwulan' => 3, 'uraian' => 'Proksi Kedua', 'target' => '4 laporan', 'realisasi' => null]);
+        // Triwulan lain -- tidak boleh ikut tercetak.
+        IndikatorProksi::create(['iku_id' => $ikuProksi->id, 'tahun' => 2026, 'triwulan' => 2, 'uraian' => 'Proksi TW Lalu', 'target' => '1', 'realisasi' => '1']);
+        $notula = Notula::create(['periode_id' => $periode->id]);
+
+        $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
+
+        $this->assertSame(1, substr_count($xml, 'Capaian IKU ini dijelaskan melalui indikator proksi berikut'));
+        $this->assertStringContainsString('Proksi Satu &amp; Dua', $xml);
+        $this->assertStringContainsString('75%', $xml);
+        $this->assertStringContainsString('Proksi Kedua', $xml);
+        $this->assertStringContainsString('4 laporan', $xml);
+        $this->assertStringNotContainsString('Proksi TW Lalu', $xml);
+        $this->assertDoesNotMatchRegularExpression('/\{\{\/?(blok_proksi|blok_sakip|proksi_|target_proksi|realisasi_proksi)/', $xml);
+        $this->assertNotFalse(simplexml_load_string($xml), 'document.xml hasil harus XML yang sah');
     }
 
     /**
@@ -529,10 +566,11 @@ class NotulaDownloadTest extends TestCase
 
         // Rumus dirakit jadi pecahan bersusun SUNGGUHAN (OOXML Math <m:f>, lihat
         // App\Support\RumusMarkup::keOmml()) -- pembilang/penyebutnya elemen XML
-        // terpisah, BUKAN notasi teks "2.00/8.00" lagi.
-        $this->assertStringContainsString('<m:t xml:space="preserve">2.00</m:t>', $xml);
-        $this->assertStringContainsString('<m:t xml:space="preserve">8.00</m:t>', $xml);
-        $this->assertStringNotContainsString('<m:t xml:space="preserve">7.00</m:t>', $xml);
+        // terpisah, BUKAN notasi teks "2/8" lagi. Angkanya bilangan bulat, bukan "2.00".
+        $this->assertStringContainsString('<m:t xml:space="preserve">2</m:t>', $xml);
+        $this->assertStringContainsString('<m:t xml:space="preserve">8</m:t>', $xml);
+        $this->assertStringNotContainsString('<m:t xml:space="preserve">7</m:t>', $xml);
+        $this->assertStringNotContainsString('2.00', $xml);
         $this->assertStringContainsString('Jumlah Publikasi Berkualitas', $xml);
         $this->assertStringContainsString('Jumlah Seluruh Publikasi', $xml);
         $this->assertStringContainsString('Target 2026: N = 8 mencakup: Laporan A, Laporan B.', $xml);
@@ -565,13 +603,13 @@ class NotulaDownloadTest extends TestCase
         CapaianTahunan::create(['iku_id' => $iku->id, 'tahun' => 2026, 'y_alokasi_tw4' => 8, 'x_realisasi_tw2' => 2]);
 
         $notula = Notula::create(['periode_id' => $periode->id]);
-        $docx = app(\App\Services\NotulaBagian1DocxService::class);
+        $docx = app(NotulaBagian1DocxService::class);
         $path = tempnam(sys_get_temp_dir(), 'penanda').'.docx';
 
         try {
-            $docx->generate($notula, app(\App\Services\NotulaService::class)->kumpulkanDataBagianSatu($notula), $path, sertakanBlokTtdMandiri: false, rumusSebagaiPenanda: true);
+            $docx->generate($notula, app(NotulaService::class)->kumpulkanDataBagianSatu($notula), $path, sertakanBlokTtdMandiri: false, untukPratinjauHtml: true);
 
-            $zip = new \ZipArchive;
+            $zip = new ZipArchive;
             $zip->open($path);
             $xml = (string) $zip->getFromName('word/document.xml');
             $zip->close();
@@ -580,8 +618,64 @@ class NotulaDownloadTest extends TestCase
         }
 
         $this->assertCount(1, $docx->formulaUrutanTerakhir());
-        $this->assertStringContainsString(\App\Services\NotulaBagian1DocxService::penandaRumus(0), $xml);
+        $this->assertStringContainsString(NotulaBagian1DocxService::penandaRumus(0), $xml);
         $this->assertStringNotContainsString('<m:oMath>', $xml);
+        $this->assertStringContainsString(NotulaBagian1DocxService::penandaBlok('iku-'.$iku->id), $xml);
+        $this->assertStringContainsString(NotulaBagian1DocxService::penandaBlok('ekor'), $xml);
+    }
+
+    /**
+     * Bagian I yang sudah disusun & disunting di pratinjau: unduhan .docx dibangun dari
+     * bagian1_html tersimpan (sumber yang sama dengan PDF), BUKAN disusun ulang dari
+     * data -- teks & angka rumus hasil suntingan ikut, rumusnya tetap OOXML Math.
+     * LibreOffice dipalsukan: HTML yang dikirim ke konversi diperiksa, lalu dibalas
+     * .docx minimal berisi teks yang sama supaya pasca-proses rumusnya teruji.
+     */
+    public function test_docx_bagian1_mengikuti_suntingan_pratinjau(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 4, 'triwulan' => 2, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $rumusHtml = str_replace('>2<', '>5<', RumusMarkup::keHtml('y = [[n|N]] × 100% = [[2|8]] × 100%'));
+        $notula = Notula::create([
+            'periode_id' => $periode->id,
+            'bagian1_html' => '<style>.notula-inline-ABC p.western { font-family: "Arial" }</style><div class="notula-inline notula-inline-ABC">'
+                .'<p class="western">Analisis hasil suntingan Tim SAKIP</p>'
+                .'<p class="western" style="text-align:center"><span class="rumus">'.$rumusHtml.'</span></p>'
+                .'<p><i>{{bagian_2}}</i></p></div>',
+        ]);
+
+        $this->mock(LibreOfficeConversionService::class, function ($mock) {
+            $mock->shouldReceive('convertHtmlToDocx')->once()->andReturnUsing(function (string $htmlPath, string $dir) {
+                $html = file_get_contents($htmlPath);
+                $this->assertStringContainsString('Analisis hasil suntingan Tim SAKIP', $html);
+                $this->assertStringContainsString('font-family: "Arial"', $html);
+                $this->assertStringNotContainsString('{{bagian_2}}', $html);
+
+                $penanda = NotulaBagian1DocxService::penandaRumus(0);
+                $docx = $dir.'/palsu-'.uniqid().'.docx';
+                $zip = new ZipArchive;
+                $zip->open($docx, ZipArchive::CREATE);
+                $zip->addFromString('word/document.xml', '<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'
+                    .'<w:p><w:r><w:t>Analisis hasil suntingan Tim SAKIP</w:t></w:r></w:p>'
+                    .'<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>'.$penanda.'</w:t></w:r></w:p>'
+                    .'<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"/></w:sectPr></w:body></w:document>');
+                $zip->close();
+
+                return $docx;
+            });
+        });
+
+        $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
+
+        libxml_use_internal_errors(true);
+        $this->assertTrue((new \DOMDocument)->loadXML($xml), 'document.xml harus tetap well-formed setelah rumus disisipkan.');
+        $this->assertStringContainsString('Analisis hasil suntingan Tim SAKIP', $xml);
+        $this->assertStringContainsString('<m:oMath>', $xml);
+        $this->assertStringContainsString('<m:t xml:space="preserve">5</m:t>', $xml);
+        $this->assertStringContainsString('<m:t xml:space="preserve">8</m:t>', $xml);
+        $this->assertStringNotContainsString('SIPINTERRUMUS', $xml);
+        $this->assertStringContainsString('<w:pgSz w:w="11906" w:h="16838"/>', $xml);
     }
 
     /**

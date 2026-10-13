@@ -70,10 +70,19 @@ class KompilasiNotula extends Component
      */
     protected ?Notula $cacheNotula = null;
 
+    /**
+     * Kunci session triwulan/tahun yang terakhir dibuka, supaya saat halaman dibuka
+     * lagi yang tampil notula (beserta Detail Rapat tersimpannya) yang sama -- bukan
+     * selalu kembali ke triwulan berjalan yang mungkin belum diisi.
+     */
+    protected const SESSION_PERIODE = 'kompilasi_notula.periode';
+
     public function mount(): void
     {
-        $this->tahun = (int) now()->year;
-        $this->triwulan = (int) ceil(((int) now()->month) / 3);
+        $terakhir = session(self::SESSION_PERIODE);
+
+        $this->tahun = (int) ($terakhir['tahun'] ?? now()->year);
+        $this->triwulan = (int) ($terakhir['triwulan'] ?? ceil(((int) now()->month) / 3));
 
         $this->muatBagian1EditText();
         $this->muatDetailRapat();
@@ -81,13 +90,18 @@ class KompilasiNotula extends Component
 
     public function updatedTahun(): void
     {
-        $this->muatBagian1EditText();
-        $this->muatDetailRapat();
-        $this->dispatchKontenBagian1();
+        $this->gantiPeriode();
     }
 
     public function updatedTriwulan(): void
     {
+        $this->gantiPeriode();
+    }
+
+    protected function gantiPeriode(): void
+    {
+        session([self::SESSION_PERIODE => ['tahun' => $this->tahun, 'triwulan' => $this->triwulan]]);
+
         $this->muatBagian1EditText();
         $this->muatDetailRapat();
         $this->dispatchKontenBagian1();
@@ -179,30 +193,60 @@ class KompilasiNotula extends Component
         $this->linkLampiranBasisData = $notula->link_lampiran_basis_data ?? '';
     }
 
+    /**
+     * Properti formulir Detail Rapat => kolom tabel notulas beserta aturan validasinya.
+     */
+    protected const KOLOM_DETAIL_RAPAT = [
+        'hariTanggal' => ['hari_tanggal', 255],
+        'waktu' => ['waktu', 255],
+        'tempat' => ['tempat', 255],
+        'pimpinanRapat' => ['pimpinan_rapat', 255],
+        'notulis' => ['notulis', 255],
+        'kepalaSatker' => ['kepala_satker', 255],
+        'kotaTtd' => ['kota_ttd', 255],
+        'linkLampiranBasisData' => ['link_lampiran_basis_data', 2048],
+    ];
+
+    /**
+     * Simpan otomatis tiap kolom Detail Rapat begitu selesai diubah (wire:model.blur),
+     * supaya isian triwulan ini tetap diingat walau Tim SAKIP lupa menekan "Simpan
+     * Detail Rapat", berpindah triwulan, atau memuat ulang halaman.
+     */
+    public function updated(string $property): void
+    {
+        if (! array_key_exists($property, self::KOLOM_DETAIL_RAPAT)) {
+            return;
+        }
+
+        [$kolom, $maks] = self::KOLOM_DETAIL_RAPAT[$property];
+        $nilai = $this->validateOnly($property, [$property => ['nullable', 'string', 'max:'.$maks]])[$property];
+
+        $this->simpanKolomDetailRapat([$kolom => $nilai]);
+    }
+
     public function simpanDetailRapat(): void
     {
-        $data = $this->validate([
-            'hariTanggal' => ['nullable', 'string', 'max:255'],
-            'waktu' => ['nullable', 'string', 'max:255'],
-            'tempat' => ['nullable', 'string', 'max:255'],
-            'pimpinanRapat' => ['nullable', 'string', 'max:255'],
-            'notulis' => ['nullable', 'string', 'max:255'],
-            'kepalaSatker' => ['nullable', 'string', 'max:255'],
-            'kotaTtd' => ['nullable', 'string', 'max:255'],
-            'linkLampiranBasisData' => ['nullable', 'string', 'max:2048'],
-        ]);
+        $aturan = [];
+        foreach (self::KOLOM_DETAIL_RAPAT as $properti => [, $maks]) {
+            $aturan[$properti] = ['nullable', 'string', 'max:'.$maks];
+        }
+        $data = $this->validate($aturan);
 
+        $kolom = [];
+        foreach (self::KOLOM_DETAIL_RAPAT as $properti => [$namaKolom]) {
+            $kolom[$namaKolom] = $data[$properti];
+        }
+
+        $this->simpanKolomDetailRapat($kolom, 'Detail rapat berhasil disimpan.');
+    }
+
+    /**
+     * @param  array<string, string|null>  $kolom
+     */
+    protected function simpanKolomDetailRapat(array $kolom, ?string $pesan = null): void
+    {
         $notula = $this->notula();
-        $notula->update([
-            'hari_tanggal' => $data['hariTanggal'],
-            'waktu' => $data['waktu'],
-            'tempat' => $data['tempat'],
-            'pimpinan_rapat' => $data['pimpinanRapat'],
-            'notulis' => $data['notulis'],
-            'kepala_satker' => $data['kepalaSatker'],
-            'kota_ttd' => $data['kotaTtd'],
-            'link_lampiran_basis_data' => $data['linkLampiranBasisData'],
-        ]);
+        $notula->update($kolom);
 
         // Hari/tanggal, waktu, tempat, pimpinan rapat & link lampiran TERCETAK di
         // dalam bagian1_html (diisi saat Bagian I disusun) -- tidak diperbarui
@@ -210,12 +254,13 @@ class KompilasiNotula extends Component
         // tahu bahwa Bagian I masih memuat nilai lama. Notulis/Kota/tanggal TTD tidak
         // perlu, karena blok TTD akhir selalu dibaca langsung dari data terbaru.
         $tercetakDiBagian1 = ['hari_tanggal', 'waktu', 'tempat', 'pimpinan_rapat', 'link_lampiran_basis_data'];
-        $pesan = 'Detail rapat berhasil disimpan.';
         if (filled($notula->bagian1_html) && $notula->wasChanged($tercetakDiBagian1)) {
-            $pesan .= ' Bagian I masih memuat detail rapat sebelumnya -- tekan "Susun Ulang Otomatis" supaya ikut diperbarui (suntingan manual dicadangkan dan bisa dipulihkan).';
+            $pesan = ($pesan ?? 'Detail rapat tersimpan otomatis.').' Bagian I masih memuat detail rapat sebelumnya -- tekan "Susun Ulang Otomatis" supaya ikut diperbarui (bagian lain yang sudah Anda sunting tetap dipertahankan).';
         }
 
-        session()->flash('status', $pesan);
+        if ($pesan !== null) {
+            session()->flash('status', $pesan);
+        }
     }
 
     /**
@@ -233,10 +278,9 @@ class KompilasiNotula extends Component
     }
 
     /**
-     * "Susun Ulang Otomatis" SENGAJA menimpa suntingan manual Tim SAKIP di pratinjau
-     * (lihat NotulaService::susunBagianSatu()) -- itu memang tujuannya: bangun ulang
-     * dari data terverifikasi terkini. Isi LAMANYA disalin dulu ke bagian1_html_cadangan
-     * SEBELUM ditimpa (bukan mencegah penimpaan itu sendiri) supaya kalau tombolnya
+     * "Susun Ulang Otomatis" memperbarui pratinjau dari data terverifikasi terkini
+     * sambil mempertahankan bagian yang sudah disunting (lihat susunUlangOtomatis()).
+     * Isi LAMANYA tetap disalin dulu ke bagian1_html_cadangan supaya kalau tombolnya
      * kepencet tidak sengaja / hasil susun ulangnya ternyata tidak diinginkan, Tim
      * SAKIP masih bisa memulihkannya lewat pulihkanSuntinganBagian1() -- lihat tombol
      * "Pulihkan Suntingan Sebelumnya" di Blade (cuma tampil bila cadangan ini terisi).
@@ -253,17 +297,25 @@ class KompilasiNotula extends Component
         $this->konfirmasiSusunUlang = false;
     }
 
-    public function susunUlangOtomatis(): void
+    /**
+     * Default-nya MENGGABUNGKAN: isi baru dari data (IKU baru, angka/kendala/RTL yang
+     * berubah) masuk, tapi bagian yang sudah disunting di pratinjau dipertahankan --
+     * lihat NotulaService::susunUlangBagianSatu(). $timpaSemua = susun penuh dari nol
+     * (tombol "Timpa Semua Suntingan" di modal konfirmasi).
+     */
+    public function susunUlangOtomatis(bool $timpaSemua = false): void
     {
         $this->konfirmasiSusunUlang = false;
 
         $notula = $this->notula();
         $isiLama = $notula->bagian1_html;
+        $suntinganSaatIni = filled($this->bagian1EditText) ? $this->bagian1EditText : $isiLama;
 
         // Cadangan baru ditulis SETELAH penyusunan berhasil -- bila gagal, isi Bagian I
         // maupun cadangan sebelumnya tetap utuh (tidak tertimpa diam-diam).
         try {
-            $html = app(NotulaService::class)->susunBagianSatu($notula);
+            $hasil = app(NotulaService::class)->susunUlangBagianSatu($notula, $suntinganSaatIni, $timpaSemua);
+            $html = $hasil['html'];
         } catch (\Throwable $e) {
             report($e);
             $this->addError('bagian1', 'Susun ulang gagal, Bagian I tidak diubah: '.$e->getMessage());
@@ -284,7 +336,18 @@ class KompilasiNotula extends Component
         $this->bagian1EditText = $html;
         $this->dispatchKontenBagian1();
 
-        session()->flash('status', 'Bagian I berhasil disusun ulang otomatis dari data terverifikasi. Suntingan sebelumnya dicadangkan -- tombol "Pulihkan Suntingan Sebelumnya" tersedia bila diperlukan.'.$this->imbuhanVersiBaru($notula));
+        if ($hasil['digabung']) {
+            $pesan = 'Bagian I diperbarui dari data terverifikasi terbaru. '
+                .($hasil['dipertahankan'] > 0
+                    ? $hasil['dipertahankan'].' bagian yang sudah Anda sunting tetap dipertahankan.'
+                    : 'Belum ada bagian yang disunting, jadi seluruhnya mengikuti data terbaru.');
+        } elseif ($timpaSemua || blank($isiLama)) {
+            $pesan = 'Bagian I berhasil disusun ulang penuh dari data terverifikasi.';
+        } else {
+            $pesan = 'Bagian I disusun ulang penuh dari data terverifikasi -- isi sebelumnya disusun dengan versi lama sehingga suntingannya belum bisa dipertahankan otomatis. Mulai sekarang suntingan Anda akan dipertahankan saat Susun Ulang.';
+        }
+
+        session()->flash('status', $pesan.' Isi sebelumnya dicadangkan -- tombol "Pulihkan Suntingan Sebelumnya" tersedia bila diperlukan.'.$this->imbuhanVersiBaru($notula));
     }
 
     /**
@@ -363,16 +426,54 @@ class KompilasiNotula extends Component
     {
         $notula = $this->notula();
 
-        return app(NotulaService::class)->sisipkanBagianDuaTiga($this->bagian1EditText, $notula->bagian2_html, $notula->bagian3_html);
+        return app(NotulaService::class)->sisipkanBagianDuaTiga($this->bagian1EditText, $notula->bagian2_html, $notula->bagian3_html, untukEditor: true);
+    }
+
+    /**
+     * Isi editor dikirim balik lengkap dengan Bagian II/III yang tersisip untuk
+     * pratinjau -- dikembalikan jadi penanda {{bagian_2}}/{{bagian_3}} supaya isi
+     * unggahan tidak ikut tersimpan permanen di bagian1_html.
+     */
+    public function updatedBagian1EditText(string $nilai): void
+    {
+        $this->bagian1EditText = app(NotulaService::class)->kembalikanPenandaBagianDuaTiga($nilai);
     }
 
     public function simpanSuntinganBagian1(): void
     {
+        $this->simpanSuntinganJikaBerubah(paksa: true);
+
+        session()->flash('status', 'Pratinjau Bagian I berhasil disimpan.'.$this->imbuhanVersiBaru($this->notula()));
+    }
+
+    /**
+     * Simpan isi editor ke bagian1_html bila berbeda dari yang tersimpan -- dipanggil
+     * sebelum mengirim ke Kepala & sebelum mengunduh, supaya suntingan yang belum
+     * di-"Simpan" tetap ikut dan PDF/.docx/kiriman Kepala selalu sama dengan pratinjau.
+     */
+    private function simpanSuntinganJikaBerubah(bool $paksa = false): void
+    {
+        $this->bagian1EditText = app(NotulaService::class)->kembalikanPenandaBagianDuaTiga($this->bagian1EditText);
         $notula = $this->notula();
+
+        if (! $paksa && ($this->bagian1EditText === (string) $notula->bagian1_html || blank($this->bagian1EditText))) {
+            return;
+        }
+
         $notula->update(['bagian1_html' => $this->bagian1EditText]);
         $notula->tandaiPerluDigabungUlang(Auth::user(), 'Bagian I disunting setelah notula disetujui — notula dibuka kembali sebagai versi baru dan perlu digabung serta disetujui ulang.');
+    }
 
-        session()->flash('status', 'Pratinjau Bagian I berhasil disimpan.'.$this->imbuhanVersiBaru($notula));
+    public function unduhBagian1Docx(): void
+    {
+        $this->simpanSuntinganJikaBerubah();
+        $this->redirect(route('notula.unduh-bagian1-docx', $this->notula()));
+    }
+
+    public function unduhPratinjauPdf(): void
+    {
+        $this->simpanSuntinganJikaBerubah();
+        $this->redirect(route('notula.pratinjau-cepat-pdf', $this->notula()));
     }
 
     /**
@@ -407,6 +508,7 @@ class KompilasiNotula extends Component
     public function gabungkan(): void
     {
         try {
+            $this->simpanSuntinganJikaBerubah();
             app(NotulaService::class)->gabungkan($this->notula(), Auth::user());
             session()->flash('status', 'Ketiga bagian berhasil digabungkan. Notula menunggu persetujuan Kepala.');
         } catch (RuntimeException $e) {

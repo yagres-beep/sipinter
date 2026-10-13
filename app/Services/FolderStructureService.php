@@ -322,6 +322,20 @@ class FolderStructureService
         }
     }
 
+    /**
+     * Tautan Drive ke folder KATEGORI (mis. "Evaluasi-RTL") milik IKU ini untuk periode
+     * tsb -- folder yang sama dengan tujuan unggahBerkas() untuk kategori itu. Null bila
+     * Drive gagal (tidak menggagalkan penyusunan notula).
+     */
+    public function linkKategoriIku(Periode $periode, MasterIku $iku, string $kategoriEnum): ?string
+    {
+        try {
+            return $this->drive->folderLink($this->resolveKategoriFolder($periode, $iku, self::KATEGORI_KE_FOLDER[$kategoriEnum]));
+        } catch (RuntimeException $e) {
+            return null;
+        }
+    }
+
     // ================================================================
     // RF-13 & RF-14 — subfolder per kegiatan (khusus kategori Capaian)
     // ================================================================

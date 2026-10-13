@@ -33,8 +33,9 @@ use Throwable;
  * menulis ulang template-nya; satu-satunya alasan template perlu disunting lagi adalah bila
  * STRUKTUR dokumen resmi sendiri berubah dari pusat. Blok RO ({{ro_row}}...{{/ro_row}}) di dalamnya
  * ikut digandakan per Kegiatan pada IKU tsb (Kegiatan::rincian_output/volume_ro/progres_persen),
- * dan salah satu dari tiga varian {{blok_sakip}}/{{blok_berakhlak}}/{{blok_ro}} dipilih sesuai teks
- * indikator (lihat isiSatuIku() di bawah untuk deteksinya).
+ * {{blok_berakhlak}}/{{blok_ro}} ditampilkan sesuai teks indikator/realisasi, dan {{blok_proksi}}
+ * (baris tabel proksi digandakan per App\Models\IndikatorProksi) untuk IKU mana pun yang punya
+ * proksi isian Tim SAKIP (lihat isiSatuIku() di bawah).
  *
  * Template SUMBER diutamakan dari berkas yang diunggah Tim SAKIP lewat menu
  * Pengaturan > Template Notula (App\Livewire\TemplateNotula, disimpan di
@@ -62,10 +63,12 @@ class NotulaBagian1DocxService
     private array $formulaUrutan = [];
 
     /**
-     * true: rumus ditulis sebagai teks penanda (penandaRumus()), bukan OOXML Math --
-     * lihat setFormula() & parameter $rumusSebagaiPenanda di generate().
+     * true: docx dibuat untuk dikonversi jadi HTML pratinjau -- rumus ditulis sebagai
+     * teks penanda (penandaRumus(), lihat setFormula()) dan tiap bagian dokumen diawali
+     * paragraf penanda blok (penandaBlok(), lihat isiPerIkuDinamis()). Lihat parameter
+     * $untukPratinjauHtml di generate().
      */
-    private bool $rumusSebagaiPenanda = false;
+    private bool $untukPratinjauHtml = false;
 
     /**
      * Teks penanda rumus ke-$i -- TANPA spasi supaya tidak dipatahkan LibreOffice
@@ -74,6 +77,23 @@ class NotulaBagian1DocxService
     public static function penandaRumus(int $i): string
     {
         return "SIPINTERRUMUS{$i}X";
+    }
+
+    /**
+     * Teks penanda awal blok $kunci (mis. "iku-12", "kustom", "ekor") -- diubah jadi
+     * <div data-blok="..."> oleh App\Support\BlokBagianSatu::bungkus() supaya
+     * "Susun Ulang Otomatis" bisa memperbarui blok yang belum disunting saja.
+     */
+    public static function penandaBlok(string $kunci): string
+    {
+        return 'SIPINTERBLOK_'.$kunci;
+    }
+
+    private function paragrafPenandaBlok(string $kunci): string
+    {
+        return $this->untukPratinjauHtml
+            ? '<w:p><w:r><w:t>'.self::penandaBlok($kunci).'</w:t></w:r></w:p>'
+            : '';
     }
 
     /**
@@ -98,13 +118,14 @@ class NotulaBagian1DocxService
      * TERLEPAS dari $sertakanBlokTtdMandiri, tabelnya JUGA selalu dibuang bila notula
      * belum berstatus disetujui (RF-44) -- lihat catatan hapusBlokTtdMandiri().
      *
-     * $rumusSebagaiPenanda HANYA untuk jalur pratinjau HTML (susunBagianSatu()) --
-     * lihat setFormula(). Unduhan .docx tetap memakai OOXML Math sungguhan.
+     * $untukPratinjauHtml HANYA untuk jalur pratinjau HTML (susunBagianSatu()) --
+     * lihat $this->untukPratinjauHtml. Unduhan .docx tetap memakai OOXML Math
+     * sungguhan dan tidak memuat penanda apa pun.
      */
-    public function generate(Notula $notula, array $data, string $outputPath, bool $sertakanBlokTtdMandiri = true, bool $rumusSebagaiPenanda = false): string
+    public function generate(Notula $notula, array $data, string $outputPath, bool $sertakanBlokTtdMandiri = true, bool $untukPratinjauHtml = false): string
     {
         $this->formulaUrutan = [];
-        $this->rumusSebagaiPenanda = $rumusSebagaiPenanda;
+        $this->untukPratinjauHtml = $untukPratinjauHtml;
 
         $templatePath = $this->resolveTemplatePath();
 
@@ -298,7 +319,7 @@ class NotulaBagian1DocxService
         // (paragraf rumusnya jadi kosong), jadi yang disisipkan cukup teks penanda
         // tanpa spasi -- diganti HTML bersusun setelah konversi, lihat
         // NotulaService::gantiPenandaRumusDenganHtml().
-        if ($this->rumusSebagaiPenanda) {
+        if ($this->untukPratinjauHtml) {
             $p->setValue('formula_capaian', self::penandaRumus(count($this->formulaUrutan)), -1);
 
             return;
@@ -353,6 +374,10 @@ class NotulaBagian1DocxService
 
         $this->set($p, 'tahun', (string) $periode->tahun);
         $this->set($p, 'triwulan_angka', (string) $data['labelTriwulan']);
+        // Romawi triwulan sebelumnya (mis. "II" untuk notula TW III) -- template tidak
+        // bisa menghitung "{{triwulan_angka-1}}" sendiri. TW I tidak punya triwulan
+        // sebelumnya di tahun yang sama, jadi "…".
+        $this->set($p, 'triwulan_sebelumnya', $periode->triwulan > 1 ? ['I', 'II', 'III'][$periode->triwulan - 2] : null);
         $this->set($p, 'nama_satker', 'BPS KABUPATEN BUTON UTARA');
         $this->set($p, 'agenda_pembahasan', "Monitoring Kinerja Triwulan {$data['labelTriwulan']} Tahun {$periode->tahun}");
         $this->set($p, 'hari_tanggal', $notula->hari_tanggal);
@@ -389,10 +414,12 @@ class NotulaBagian1DocxService
         $sub->setMacroChars('{{', '}}');
 
         $potongan = $daftarIku->map(function ($iku) use ($data, $ikuBlokTemplate, $sub) {
-            return $this->isiSatuIku($sub, $ikuBlokTemplate, $iku, $data);
+            return $this->paragrafPenandaBlok('iku-'.$iku->id).$this->isiSatuIku($sub, $ikuBlokTemplate, $iku, $data);
         });
 
-        $isiBaru = $potongan->implode('<w:p/>').$this->bagianKustomXml($data['bagianKustomPerBagian']);
+        $isiBaru = $potongan->implode('<w:p/>')
+            .$this->paragrafPenandaBlok('kustom').$this->bagianKustomXml($data['bagianKustomPerBagian'])
+            .$this->paragrafPenandaBlok('ekor');
 
         $this->setMainPart($processor, $before.$isiBaru.$after);
     }
@@ -443,11 +470,13 @@ class NotulaBagian1DocxService
         $linkFolder = $data['linkFolderPerIku'][$iku->id] ?? null;
         $linkFolderTwSebelumnya = $data['linkFolderTwSebelumnyaPerIku'][$iku->id] ?? null;
 
-        // Deteksi SAKIP/BerAKHLAK dari TEKS indikator (bukan kode -- penomoran kode IKU
-        // beda tiap instansi & bisa berubah).
-        $indikatorLower = mb_strtolower($iku->indikator);
-        $isSakip = str_contains($indikatorLower, 'sakip');
-        $isBerakhlak = str_contains($indikatorLower, 'berakhlak');
+        // Deteksi BerAKHLAK dari TEKS indikator (bukan kode -- penomoran kode IKU
+        // beda tiap instansi & bisa berubah). Proksi TIDAK lagi dideteksi dari teks
+        // "SAKIP": blok_proksi tampil untuk IKU mana pun yang punya Indikator Proksi
+        // isian Tim SAKIP (App\Models\IndikatorProksi).
+        $isBerakhlak = str_contains(mb_strtolower($iku->indikator), 'berakhlak');
+        $proksiIku = ($data['proksiPerIku'] ?? collect())->get($iku->id, collect());
+        $tampilkanProksi = $proksiIku->isNotEmpty();
         // Tabel RO hanya tampil bila BENAR-BENAR ada RO yang SUDAH direalisasikan
         // (volume_ro atau progres_persen terisi) -- sebelumnya cukup RO-nya ADA
         // (baris Kegiatan/RincianOutput sudah dibuat) walau belum satu pun diisi
@@ -457,10 +486,10 @@ class NotulaBagian1DocxService
         // ada/tidaknya -- supaya tabel betul-betul dilewati bila TIDAK ADA satu pun
         // RO yang punya realisasi, langsung lanjut ke bagian berikutnya.
         $roIkuTerisi = $roIku->filter(fn ($ro) => filled($ro->volume_ro) || $ro->progres_persen !== null);
-        $tampilkanRo = ! $isSakip && ! $isBerakhlak && empty($rekap['realisasi'] ?? null) && $roIkuTerisi->isNotEmpty();
+        $tampilkanRo = ! $isBerakhlak && empty($rekap['realisasi'] ?? null) && $roIkuTerisi->isNotEmpty();
         // Baris rumus "y = n/N x 100%" (paragraf TERSENDIRI rata tengah, lihat
         // formulaBaris()) hanya tampil untuk IKU % yang datanya lengkap -- sama seperti
-        // blok_sakip/blok_ro, dibuang total (bukan dikosongkan jadi "…") bila tidak berlaku
+        // blok_proksi/blok_ro, dibuang total (bukan dikosongkan jadi "…") bila tidak berlaku
         // supaya tidak menyisakan paragraf rata-tengah kosong. IKU bersatuan Poin (rumus
         // unik per indikator, mis. IPP/TPSS) TIDAK punya rumus otomatis -- kalau Tim SAKIP
         // menuliskan sintaks RumusMarkup di baris pertama "Dasar Hitung"-nya sendiri, itu
@@ -472,13 +501,24 @@ class NotulaBagian1DocxService
         $tampilkanFormula = $formulaDicetak !== null;
 
         $xml = $blokTemplate;
-        $xml = $this->resolveBlokKondisional($xml, 'blok_sakip', $isSakip);
+        // Template lama masih bisa memuat blok_sakip (tabel proksi tetap khusus SAKIP) --
+        // selalu dibuang, digantikan blok_proksi.
+        if (str_contains($xml, '{{blok_sakip}}')) {
+            $xml = $this->resolveBlokKondisional($xml, 'blok_sakip', false, $this->unitPenanda($xml, '{{blok_sakip}}'));
+        }
+        if (str_contains($xml, '{{blok_proksi}}')) {
+            $xml = $this->resolveBlokKondisional($xml, 'blok_proksi', $tampilkanProksi, $this->unitPenanda($xml, '{{blok_proksi}}'));
+            if ($tampilkanProksi) {
+                $xml = $this->gandakanBarisProksi($xml, $proksiIku);
+            }
+        }
         $xml = $this->resolveBlokKondisional($xml, 'blok_berakhlak', $isBerakhlak);
         $xml = $this->resolveBlokKondisional($xml, 'blok_ro', $tampilkanRo);
         $xml = $this->resolveBlokKondisional($xml, 'blok_formula', $tampilkanFormula, 'p');
         if ($tampilkanRo) {
             $xml = $this->gandakanBarisRo($xml, $roIkuTerisi);
         }
+        $xml = $this->rapikanSelTabel($xml);
 
         $sub->setMacroChars('{{', '}}');
         $this->setMainPart($sub, $xml);
@@ -495,9 +535,9 @@ class NotulaBagian1DocxService
         // Analisis Capaian Kinerja: narasi bebas dari Tim SAKIP, DIIKUTI daftar
         // bernomor kegiatan pendukung IKU ini pada triwulan berjalan (RF-37) --
         // sama seperti pola "...disamping itu, terdapat beberapa kegiatan..." yang
-        // sudah dipakai Tim SAKIP di jalur PDF. Ditampilkan untuk SEMUA varian
-        // (termasuk SAKIP/BerAKHLAK) -- kotak "Analisis Capaian Kinerja" tidak lagi
-        // dirangkap jadi pertanyaan proksi seperti versi template lama.
+        // sudah dipakai Tim SAKIP di jalur PDF. Ditampilkan untuk SEMUA IKU
+        // (termasuk BerAKHLAK & yang punya proksi) -- kotak "Analisis Capaian Kinerja"
+        // tidak lagi dirangkap jadi pertanyaan proksi seperti versi template lama.
         $analisis = trim((string) $capaian?->analisis_capaian);
         $daftarKegiatan = $this->daftarBernomor($kegiatanIku->pluck('uraian_kegiatan')->filter());
         // $daftarKegiatan SUDAH diawali "\n" sendiri (lihat daftarBernomor()) -- pemisahnya
@@ -507,11 +547,6 @@ class NotulaBagian1DocxService
             ? $analisis."\n".$daftarKegiatan
             : ($analisis !== '' ? $analisis : $daftarKegiatan);
         $this->set($sub, 'analisis_capaian', $analisisLengkap);
-
-        if ($isSakip) {
-            $this->set($sub, 'target_proksi', null);
-            $this->set($sub, 'realisasi_proksi', null);
-        }
 
         // Kendala & Solusi sebagai DUA variabel terpisah (mengikuti dua baris terpisah
         // pada dokumen resmi), KUMULATIF TW1..TW berjalan (RF-28), disusun sebagai
@@ -564,6 +599,17 @@ class NotulaBagian1DocxService
         $dasarHitung = trim(($dasarHitungTeks ?: '').($iku->basis_data ? ' Basis Data: '.$iku->basis_data : ''));
         $this->set($sub, 'dasar_hitung', $dasarHitung !== '' ? $dasarHitung : null);
         $this->set($sub, 'bukti_realisasi', $linkFolder);
+        // Bagian 4 Isian Kegiatan (Evaluasi RTL): poin RTL yang DIRENCANAKAN untuk
+        // triwulan notula ini -- isinya sama dengan {{rtl}}, nama terpisah supaya jelas
+        // di template. Bagian 5 (RTL triwulan berikutnya, TW IV -> TW I tahun depan):
+        // {{rtl_berikutnya}} + batas waktunya (akhir triwulan berikutnya).
+        $rtlBerikutnyaIku = ($data['rtlBerikutnyaPerIku'] ?? collect())->get($iku->id, collect());
+        $this->set($sub, 'rtl_evaluasi', $rtlTeks);
+        $this->set($sub, 'bukti_rtl_evaluasi', ($data['linkFolderEvaluasiRtlPerIku'] ?? collect())->get($iku->id));
+        $this->set($sub, 'rtl_berikutnya', $this->daftarBernomor($rtlBerikutnyaIku->pluck('rtl_teks')->filter()));
+        $this->set($sub, 'batas_waktu_rtl_berikutnya', $rtlBerikutnyaIku->isNotEmpty()
+            ? $this->akhirTriwulan($data['tahunTwBerikutnya'], $data['twBerikutnya'])->translatedFormat('F Y')
+            : null);
         $this->set($sub, 'bukti_rtl_sebelumnya', $rtlSebelumnyaIku->isNotEmpty() ? $linkFolderTwSebelumnya : null);
         $this->set($sub, 'penjelasan_lainnya', $capaian?->catatan);
 
@@ -611,8 +657,10 @@ class NotulaBagian1DocxService
             return null;
         }
 
-        $nTeks = PengaturanCapaian::formatAngka($n);
-        $besarNTeks = PengaturanCapaian::formatAngka($besarN);
+        // n & N di rumus selalu bilangan bulat (jumlah item), bukan "3.00" dari
+        // kolom desimal database.
+        $nTeks = PengaturanCapaian::formatAngka((int) round((float) $n));
+        $besarNTeks = PengaturanCapaian::formatAngka((int) round((float) $besarN));
 
         return "y = [[n|N]] × 100% = [[{$nTeks}|{$besarNTeks}]] × 100%";
     }
@@ -764,9 +812,10 @@ class NotulaBagian1DocxService
     /**
      * {{blok_x}}...{{/blok_x}} -- kalau $tampilkan true, baris/paragraf marker-nya dibuang tapi
      * ISINYA dipertahankan; kalau false, marker DAN isinya sekaligus dibuang (tidak ada blok lain
-     * yang dipilih untuk IKU ini, mis. sudah ada realisasi & bukan SAKIP/BerAKHLAK). $unit 'tr'
-     * untuk blok SATU BARIS TABEL (blok_sakip/blok_berakhlak/blok_ro), 'p' untuk blok SATU
-     * PARAGRAF di dalam sel yang sama (blok_formula, lihat isiSatuIku()).
+     * yang dipilih untuk IKU ini, mis. sudah ada realisasi & bukan BerAKHLAK). $unit 'tr'
+     * untuk penanda berupa BARIS TABEL tersendiri (blok_berakhlak/blok_ro), 'p' untuk penanda
+     * berupa PARAGRAF di dalam sel (blok_formula); blok_proksi dideteksi otomatis lewat
+     * unitPenanda().
      */
     private function resolveBlokKondisional(string $xml, string $namaBlok, bool $tampilkan, string $unit = 'tr'): string
     {
@@ -793,7 +842,7 @@ class NotulaBagian1DocxService
 
             return $this->isiBarisRo(
                 $rowTemplate,
-                $ro->uraian ?: $ro->kegiatan->uraian_kegiatan ?: '…',
+                $ro->uraian ?: $ro->kegiatan?->uraianTampil() ?: '…',
                 $ro->volume_ro ?: '…',
                 $progres
             );
@@ -809,6 +858,89 @@ class NotulaBagian1DocxService
             [htmlspecialchars($uraian, ENT_QUOTES), htmlspecialchars($vol, ENT_QUOTES), htmlspecialchars($progres, ENT_QUOTES)],
             $rowXml
         );
+    }
+
+    /** Macro kolom pada baris isi tabel proksi -- baris (<w:tr>) yang memuatnya digandakan. */
+    private const MACRO_BARIS_PROKSI = ['{{proksi_uraian}}', '{{proksi_target}}', '{{proksi_realisasi}}'];
+
+    /**
+     * Gandakan baris isi tabel proksi (baris <w:tr> yang memuat {{proksi_uraian}}/
+     * {{proksi_target}}/{{proksi_realisasi}}) sekali per IndikatorProksi -- TANPA baris
+     * penanda tersendiri seperti {{ro_row}}, supaya cukup menulis ketiga macro di satu
+     * baris tabel biasa. Tidak melakukan apa-apa bila template tidak memuat macro tsb.
+     */
+    private function gandakanBarisProksi(string $xml, Collection $proksiIku): string
+    {
+        $posisi = collect(self::MACRO_BARIS_PROKSI)->map(fn ($m) => strpos($xml, $m))->filter(fn ($p) => $p !== false);
+        if ($posisi->isEmpty()) {
+            return $xml;
+        }
+
+        [$awal, $akhir] = $this->elementBounds($xml, $posisi->min(), 'tr');
+        $rowTemplate = substr($xml, $awal, $akhir - $awal);
+
+        $baris = $proksiIku->map(fn ($proksi) => str_replace(
+            self::MACRO_BARIS_PROKSI,
+            array_map(fn ($v) => htmlspecialchars(filled($v) ? $v : '…', ENT_QUOTES | ENT_XML1), [$proksi->uraian, $proksi->target, $proksi->realisasi]),
+            $rowTemplate
+        ))->implode('');
+
+        return substr($xml, 0, $awal).$baris.substr($xml, $akhir);
+    }
+
+    /**
+     * Unit penanda blok: 'tr' bila paragraf penanda berdiri sendiri sebagai SATU-SATUNYA
+     * isi baris tabel (gaya template bawaan: satu baris = satu penanda), 'p' bila
+     * penanda hanyalah paragraf di dalam sel yang juga berisi konten lain (mis. tulisan
+     * {{blok_proksi}} di tengah sel besar, di atas tabel proksi bersarang).
+     */
+    private function unitPenanda(string $xml, string $needle): string
+    {
+        $pos = strpos($xml, $needle);
+        if ($pos === false) {
+            return 'tr';
+        }
+
+        [$pAwal, $pAkhir] = $this->elementBounds($xml, $pos, 'p');
+        $sebelum = substr($xml, 0, $pAwal);
+
+        $tcAwal = $this->posisiTagTerakhir($sebelum, 'w:tc');
+        $trAwal = $this->posisiTagTerakhir($sebelum, 'w:tr');
+        if ($tcAwal === null || $trAwal === null || $trAwal > $tcAwal) {
+            return 'p';
+        }
+
+        // Tidak ada paragraf/tabel lain sebelum penanda di sel ini, dan sel ini sel pertama barisnya.
+        $isiSelSebelum = substr($sebelum, $tcAwal);
+        $isiBarisSebelum = substr($sebelum, $trAwal, $tcAwal - $trAwal);
+        $selKosongSebelum = $this->posisiTagTerakhir($isiSelSebelum, 'w:p') === null && ! str_contains($isiSelSebelum, '<w:tbl');
+        $selPertama = $this->posisiTagTerakhir($isiBarisSebelum, 'w:tc') === null;
+
+        // Sesudah paragraf penanda langsung tutup sel lalu tutup baris (satu sel saja).
+        $sesudahLangsungTutup = (bool) preg_match('#^\s*</w:tc>\s*</w:tr>#', substr($xml, $pAkhir, 64));
+
+        return $selKosongSebelum && $selPertama && $sesudahLangsungTutup ? 'tr' : 'p';
+    }
+
+    /**
+     * Posisi kemunculan TERAKHIR tag pembuka <$tag> / <$tag ...> (bukan <w:pPr>, <w:trPr>,
+     * <w:tcPr>, <w:proofErr>, dst. yang kebetulan berawalan sama).
+     */
+    private function posisiTagTerakhir(string $xml, string $tag): ?int
+    {
+        $kandidat = array_filter([strrpos($xml, "<{$tag}>"), strrpos($xml, "<{$tag} ")], fn ($p) => $p !== false);
+
+        return $kandidat === [] ? null : max($kandidat);
+    }
+
+    /**
+     * Sel tabel WAJIB diakhiri paragraf -- setelah blok bergaya 'p' dibuang/disisakan,
+     * sel bisa berakhir dengan tabel bersarang atau kosong sama sekali, yang membuat
+     * Word menolak/memulihkan dokumen. Sisipkan <w:p/> kosong di kasus tsb.
+     */
+    private function rapikanSelTabel(string $xml): string
+    {
+        return preg_replace(['#</w:tbl>(\s*)</w:tc>#', '#</w:tcPr>(\s*)</w:tc>#', '#<w:tc>(\s*)</w:tc>#'], ['</w:tbl><w:p/></w:tc>', '</w:tcPr><w:p/></w:tc>', '<w:tc><w:p/></w:tc>'], $xml) ?? $xml;
     }
 
     /**
@@ -960,7 +1092,14 @@ class NotulaBagian1DocxService
         // Blok kondisional & ro_row ada DI DALAM iku_blok -- hanya diperiksa kalau iku_blok sendiri
         // berhasil ditemukan (kalau tidak, isinya tidak diketahui, laporan di atas sudah cukup).
         if ($ikuBlok !== null) {
-            $this->cariBlokAman($ikuBlok, '{{blok_sakip}}', '{{/blok_sakip}}', 'tr', $masalah);
+            // blok_proksi OPSIONAL (template tanpa bagian proksi tetap sah), tapi bila ada
+            // pasangan penandanya harus lengkap & baris isinya ada di dalamnya.
+            if (str_contains($ikuBlok, '{{blok_proksi}}') || str_contains($ikuBlok, '{{/blok_proksi}}')) {
+                $blokProksi = $this->cariBlokAman($ikuBlok, '{{blok_proksi}}', '{{/blok_proksi}}', $this->unitPenanda($ikuBlok, '{{blok_proksi}}'), $masalah);
+                if ($blokProksi !== null && ! str_contains($blokProksi, '{{proksi_uraian}}')) {
+                    $masalah[] = 'Baris isi tabel proksi ({{proksi_uraian}} | {{proksi_target}} | {{proksi_realisasi}}) tidak ditemukan di antara {{blok_proksi}} dan {{/blok_proksi}}.';
+                }
+            }
             $this->cariBlokAman($ikuBlok, '{{blok_berakhlak}}', '{{/blok_berakhlak}}', 'tr', $masalah);
             $blokRo = $this->cariBlokAman($ikuBlok, '{{blok_ro}}', '{{/blok_ro}}', 'tr', $masalah);
             $this->cariBlokAman($ikuBlok, '{{blok_formula}}', '{{/blok_formula}}', 'p', $masalah);
@@ -981,15 +1120,16 @@ class NotulaBagian1DocxService
      * tercetak mentah "{{...}}" di notula.
      */
     private const MACRO_DIKENAL = [
-        'tahun', 'triwulan_angka', 'nama_satker', 'agenda_pembahasan', 'hari_tanggal', 'waktu', 'tempat',
+        'tahun', 'triwulan_angka', 'triwulan_sebelumnya', 'nama_satker', 'agenda_pembahasan', 'hari_tanggal', 'waktu', 'tempat',
         'pimpinan_rapat', 'capaian_triwulanan_persen', 'capaian_pk_persen', 'lampiran_basis_data',
         'kotaTtd', 'tanggal', 'namaKepala', 'namaNotulis', 'bagian_2', 'bagian_3',
-        'iku_blok', '/iku_blok', 'blok_sakip', '/blok_sakip', 'blok_berakhlak', '/blok_berakhlak',
+        'iku_blok', '/iku_blok', 'blok_proksi', '/blok_proksi', 'blok_berakhlak', '/blok_berakhlak',
         'blok_ro', '/blok_ro', 'blok_formula', '/blok_formula', 'ro_row', '/ro_row',
+        'proksi_uraian', 'proksi_target', 'proksi_realisasi',
         'kode', 'indikator', 'sasaran', 'target_pk', 'target_tw', 'realisasi_tw', 'capaian_tw', 'capaian_pk',
-        'analisis_capaian', 'target_proksi', 'realisasi_proksi', 'kendala', 'solusi', 'rtl', 'pic_rtl',
+        'analisis_capaian', 'kendala', 'solusi', 'rtl', 'pic_rtl',
         'batas_waktu_rtl', 'formula_capaian', 'dasar_hitung', 'bukti_realisasi', 'bukti_rtl_sebelumnya',
-        'penjelasan_lainnya', 'ro_uraian', 'ro_vol', 'ro_progres',
+        'rtl_evaluasi', 'bukti_rtl_evaluasi', 'rtl_berikutnya', 'batas_waktu_rtl_berikutnya', 'penjelasan_lainnya', 'ro_uraian', 'ro_vol', 'ro_progres',
     ];
 
     /**
@@ -1039,12 +1179,14 @@ class NotulaBagian1DocxService
      */
     private function elementBounds(string $xml, int $pos, string $unit): array
     {
-        $openTag = $unit === 'p' ? '<w:p' : '<w:tr';
-        $closeTag = $unit === 'p' ? '</w:p>' : '</w:tr>';
-        $start = strrpos(substr($xml, 0, $pos), $openTag);
+        $tag = $unit === 'p' ? 'w:p' : 'w:tr';
+        $closeTag = "</{$tag}>";
+        // Tag pembuka dicari persis (<w:p> / <w:p ...>), BUKAN awalan "<w:p" yang juga
+        // cocok dengan <w:pPr>/<w:proofErr>/<w:trPr> milik elemen yang sama.
+        $start = $this->posisiTagTerakhir(substr($xml, 0, $pos), $tag);
         $endTagPos = strpos($xml, $closeTag, $pos);
 
-        if ($start === false || $endTagPos === false) {
+        if ($start === null || $endTagPos === false) {
             throw new RuntimeException("Elemen ({$unit}) tidak ditemukan di sekitar posisi {$pos} -- template Bagian I (mesin) mungkin rusak/berubah strukturnya.");
         }
 

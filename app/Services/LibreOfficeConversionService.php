@@ -84,7 +84,20 @@ class LibreOfficeConversionService
         }
     }
 
-    private function jalankanSoffice(string $inputPath, string $outputDir, string $format): string
+    /**
+     * Konversi berkas .html menjadi .docx -- dipakai unduhan Bagian I .docx supaya
+     * isinya SAMA dengan pratinjau yang sudah disunting (bagian1_html), lihat
+     * NotulaService::renderBagianSatuDocx(). --infilter wajib: tanpanya LibreOffice
+     * membuka .html sebagai dokumen Writer/Web yang tidak punya filter ekspor .docx.
+     *
+     * @return string path lengkap ke .docx hasil konversi.
+     */
+    public function convertHtmlToDocx(string $inputPath, string $outputDir): string
+    {
+        return $this->jalankanSoffice($inputPath, $outputDir, 'docx:MS Word 2007 XML', 'docx', 'HTML (StarWriter)');
+    }
+
+    private function jalankanSoffice(string $inputPath, string $outputDir, string $format, ?string $ekstensiHasil = null, ?string $infilter = null): string
     {
         if (! is_file($inputPath)) {
             throw new RuntimeException("Berkas sumber tidak ditemukan: {$inputPath}");
@@ -134,15 +147,20 @@ class LibreOfficeConversionService
         //                 dialog yang menggantung tanpa GUI).
         // --convert-to  : format tujuan konversi.
         // --outdir      : folder tempat berkas hasil konversi disimpan.
-        $process = new Process([
-            $binary,
-            '--headless',
-            '--norestore',
-            '-env:UserInstallation='.$profileUri,
-            '--convert-to', $format,
-            '--outdir', $outputDir,
-            $inputPath,
-        ]);
+        $process = new Process(array_merge(
+            [
+                $binary,
+                '--headless',
+                '--norestore',
+                '-env:UserInstallation='.$profileUri,
+            ],
+            $infilter !== null ? ['--infilter='.$infilter] : [],
+            [
+                '--convert-to', $format,
+                '--outdir', $outputDir,
+                $inputPath,
+            ],
+        ));
 
         // Konversi dokumen besar (mis. xlsx banyak sheet, gambar resolusi tinggi)
         // bisa agak lama — beri waktu lebih longgar dari request HTTP biasa.
@@ -169,7 +187,7 @@ class LibreOfficeConversionService
             );
         }
 
-        $namaHasil = pathinfo($inputPath, PATHINFO_FILENAME).'.'.$format;
+        $namaHasil = pathinfo($inputPath, PATHINFO_FILENAME).'.'.($ekstensiHasil ?? $format);
         $outputPath = rtrim($outputDir, '/\\').DIRECTORY_SEPARATOR.$namaHasil;
 
         if (! is_file($outputPath)) {

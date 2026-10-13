@@ -106,8 +106,9 @@ class TahapanGandaDanSubfolderTest extends TestCase
         $pelaksanaan = Kegiatan::where('tahapan_survei', 'pelaksanaan')->firstOrFail();
 
         $this->assertSame(2, Kegiatan::count());
-        $this->assertSame('[Persiapan] Survei Sakernas', $persiapan->nama_folder_auto);
-        $this->assertSame('[Pelaksanaan] Survei Sakernas', $pelaksanaan->nama_folder_auto);
+        $this->assertSame('Persiapan', $persiapan->nama_folder_auto);
+        $this->assertSame('Pelaksanaan', $pelaksanaan->nama_folder_auto);
+        $this->assertSame('Persiapan Survei Sakernas', $persiapan->uraianTampil());
 
         $berkasPersiapan = Berkas::where('ref_id', $persiapan->id)->sole();
         $this->assertSame('undangan.pdf', $berkasPersiapan->nama_file);
@@ -121,6 +122,30 @@ class TahapanGandaDanSubfolderTest extends TestCase
             ['persiapan', 'undangan', 'Undangan'],
             ['pelaksanaan', 'laporan lapangan', null],
         ], $unggahan);
+    }
+
+    public function test_tombol_unggah_per_folder_langsung_menentukan_tahapan_dan_subfolder(): void
+    {
+        $iku = $this->siapkan();
+
+        $test = $this->formSurvei($iku)
+            ->call('toggleTahapan', 0, 'persiapan')
+            ->call('toggleTahapan', 0, 'pelaksanaan')
+            ->call('tambahSubfolder', 0, 'Surat Tugas')
+            // Tahapan ke-2 (Pelaksanaan), folder ke-1 (subfolder "Surat Tugas").
+            ->set('unggahFolder.0.1.1', [UploadedFile::fake()->create('st.pdf', 10, 'application/pdf')])
+            // Tahapan ke-1 (Persiapan), langsung di folder tahapan.
+            ->set('unggahFolder.0.0.0', [UploadedFile::fake()->create('rapat.pdf', 10, 'application/pdf')]);
+
+        $komponen = $test->instance();
+        [$st, $rapat] = $test->get('blocks.0.bukti');
+        $block = $komponen->blocks[0];
+
+        $this->assertSame('pelaksanaan', $komponen->tahapanBerkasBaru($block, $st));
+        $this->assertSame('Surat Tugas', $komponen->subfolderBerkasBaru($block, $st));
+        $this->assertSame('persiapan', $komponen->tahapanBerkasBaru($block, $rapat));
+        $this->assertSame('', $komponen->subfolderBerkasBaru($block, $rapat));
+        $this->assertSame([], $test->get('unggahFolder'));
     }
 
     public function test_tiap_tahapan_wajib_punya_bukti_sebelum_diajukan(): void
@@ -146,13 +171,13 @@ class TahapanGandaDanSubfolderTest extends TestCase
         $kegiatan = Kegiatan::create([
             'iku_id' => $iku->id, 'periode_id' => $periode->id,
             'uraian_kegiatan' => 'Survei Sakernas', 'jenis' => 'survei_sensus', 'tahapan_survei' => 'persiapan',
-            'nama_folder_auto' => '[Persiapan] Survei Sakernas', 'status_dokumen' => Kegiatan::STATUS_DRAFT,
+            'nama_folder_auto' => 'Persiapan', 'status_dokumen' => Kegiatan::STATUS_DRAFT,
         ]);
 
         $drive = $this->mock(GoogleDriveService::class);
         $drive->shouldReceive('findOrCreateFolder')->once()->with('Survei Sakernas', 'folder-capaian')->andReturn('folder-induk');
         $drive->shouldReceive('namesInFolder')->once()->with('folder-induk')->andReturn([]);
-        $drive->shouldReceive('createFolder')->once()->with('[Persiapan] Survei Sakernas', 'folder-induk')->andReturn('folder-persiapan');
+        $drive->shouldReceive('createFolder')->once()->with('Persiapan', 'folder-induk')->andReturn('folder-persiapan');
 
         $hasil = app(FolderStructureService::class)->resolveKegiatanFolder($kegiatan, 'folder-capaian');
 

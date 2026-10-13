@@ -121,6 +121,17 @@ class Kegiatan extends Model
     }
 
     /**
+     * Nama capaian kegiatan untuk ditampilkan: kegiatan survei/sensus diberi awalan
+     * tahapannya, mis. "Persiapan Survei Sakernas" (satu baris kegiatan per tahapan).
+     */
+    public function uraianTampil(): string
+    {
+        $tahapan = $this->jenis === 'survei_sensus' ? $this->tahapan_survei : null;
+
+        return \App\Livewire\PengisianKegiatan::uraianDenganTahapan((string) $this->uraian_kegiatan, $tahapan);
+    }
+
+    /**
      * Nama folder Drive yang berlaku: nama pilihan pengguna (nama_folder_kustom)
      * bila diisi, selain itu rekomendasi sistem (nama_folder_auto, RF-17).
      */

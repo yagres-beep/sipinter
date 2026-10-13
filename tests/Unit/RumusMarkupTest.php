@@ -18,6 +18,38 @@ class RumusMarkupTest extends TestCase
         $this->assertStringContainsString('x 100%', $html);
     }
 
+    private function spanRumus(string $html): \DOMElement
+    {
+        $dom = new \DOMDocument;
+        $dom->loadHTML('<?xml encoding="utf-8" ?><span class="rumus">'.$html.'</span>', LIBXML_NOERROR | LIBXML_NOWARNING);
+
+        return $dom->getElementsByTagName('span')->item(0);
+    }
+
+    public function test_dariHtml_kebalikan_keHtml_untuk_pecahan_dan_sigma(): void
+    {
+        foreach (['y = [[n|N]] × 100% = [[2|8]] × 100%', 'IPP = (w1 x [[SUM:i=1,n|xi]]) + (w2 x [[SUM:i=1,m|yj]])'] as $rumus) {
+            $this->assertSame($rumus, RumusMarkup::dariHtml($this->spanRumus(RumusMarkup::keHtml($rumus))));
+        }
+    }
+
+    public function test_dariHtml_membaca_angka_yang_disunting_di_pratinjau(): void
+    {
+        $html = str_replace('>2<', '>5<', RumusMarkup::keHtml('y = [[n|N]] × 100% = [[2|8]] × 100%'));
+
+        $this->assertSame('y = [[n|N]] × 100% = [[5|8]] × 100%', RumusMarkup::dariHtml($this->spanRumus($html)));
+    }
+
+    public function test_rapikanHtmlTersimpan_membuka_kunci_dan_membulatkan_angka(): void
+    {
+        $lama = '<span contenteditable="false">'.RumusMarkup::keHtml('y = [[n|N]] × 100% = [[1.00|3.00]] × 100%').'</span>';
+        $baru = RumusMarkup::rapikanHtmlTersimpan($lama);
+
+        $this->assertStringNotContainsString('contenteditable', $baru);
+        $this->assertStringContainsString('<span class="rumus">', $baru);
+        $this->assertSame('y = [[n|N]] × 100% = [[1|3]] × 100%', RumusMarkup::dariHtml($this->spanRumus(substr($baru, strlen('<span class="rumus">'), -7))));
+    }
+
     public function test_keHtml_mengescape_html_di_luar_pecahan(): void
     {
         $html = RumusMarkup::keHtml('<script>alert(1)</script> [[a|b]]');

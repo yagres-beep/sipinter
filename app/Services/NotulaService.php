@@ -7,6 +7,7 @@ use App\Models\BagianKustom;
 use App\Models\Berkas;
 use App\Models\Capaian;
 use App\Models\CapaianTahunan;
+use App\Models\IndikatorProksi;
 use App\Models\Kegiatan;
 use App\Models\KendalaSolusi;
 use App\Models\MasterIku;
@@ -14,6 +15,7 @@ use App\Models\Notula;
 use App\Models\Periode;
 use App\Models\RtlEvaluasi;
 use App\Models\User;
+use App\Support\BlokBagianSatu;
 use App\Support\HtmlNotulaDompdf;
 use App\Support\PenggantiBerkasAman;
 use App\Support\RumusMarkup;
@@ -76,6 +78,39 @@ class NotulaService
      */
     public function susunBagianSatu(Notula $notula): string
     {
+        $html = $this->bangunHtmlBagianSatu($notula);
+
+        $notula->update(['bagian1_html' => $html]);
+
+        return $html;
+    }
+
+    /**
+     * "Susun Ulang Otomatis" yang MEMPERTAHANKAN suntingan manual: isi dari data
+     * terbaru (IKU baru, angka/kendala/RTL yang berubah) masuk, tapi blok & baris
+     * yang sudah disunting Tim SAKIP di pratinjau tidak ditimpa -- lihat
+     * App\Support\BlokBagianSatu::gabungkan(). $suntingan = isi editor saat ini.
+     *
+     * $timpaSemua, atau $suntingan yang belum punya pembungkus blok (disusun sebelum
+     * fitur ini ada), jatuh ke penyusunan penuh seperti susunBagianSatu().
+     *
+     * @return array{html: string, dipertahankan: int, digabung: bool}
+     */
+    public function susunUlangBagianSatu(Notula $notula, ?string $suntingan, bool $timpaSemua = false): array
+    {
+        $baru = $this->bangunHtmlBagianSatu($notula);
+        $suntingan = $suntingan !== null ? $this->kembalikanPenandaBagianDuaTiga($suntingan) : null;
+        $digabung = ! $timpaSemua && BlokBagianSatu::punyaBlok($suntingan) && BlokBagianSatu::punyaBlok($baru);
+
+        $hasil = $digabung ? BlokBagianSatu::gabungkan($suntingan, $baru) : ['html' => $baru, 'dipertahankan' => 0];
+
+        $notula->update(['bagian1_html' => $hasil['html']]);
+
+        return $hasil + ['digabung' => $digabung];
+    }
+
+    private function bangunHtmlBagianSatu(Notula $notula): string
+    {
         $data = $this->kumpulkanDataBagianSatu($notula);
 
         $dir = storage_path("app/private/notula/{$notula->id}/bagian1-sementara");
@@ -89,7 +124,7 @@ class NotulaService
         // gabungan Bagian I+II+III, yang sudah punya blok TTD akhirnya sendiri di
         // paling bawah (lihat pdf.notula-utuh, .ttd-blok) -- lihat catatan parameter
         // itu di NotulaBagian1DocxService::generate().
-        $this->docx->generate($notula, $data, $docxPath, sertakanBlokTtdMandiri: false, rumusSebagaiPenanda: true);
+        $this->docx->generate($notula, $data, $docxPath, sertakanBlokTtdMandiri: false, untukPratinjauHtml: true);
         $formulaUrutan = $this->docx->formulaUrutanTerakhir();
 
         try {
@@ -100,11 +135,7 @@ class NotulaService
             }
         }
 
-        $html = $this->gantiPenandaRumusDenganHtml($html, $formulaUrutan);
-
-        $notula->update(['bagian1_html' => $html]);
-
-        return $html;
+        return BlokBagianSatu::bungkus($this->gantiPenandaRumusDenganHtml($html, $formulaUrutan));
     }
 
     /**
@@ -114,11 +145,9 @@ class NotulaService
      * PENANDA (NotulaBagian1DocxService::penandaRumus()) di posisi rumus, lalu di sini
      * tiap penanda diganti HTML bersusun yang SAMA PERSIS dipakai jalur unduhan PDF
      * langsung (RumusMarkup::keHtml()) -- tetap di paragraf rata-tengahnya sendiri,
-     * persis seperti posisinya di Word. `contenteditable="false"` membuatnya jadi
-     * blok UTUH/atomik di dalam area WYSIWYG: bisa dipilih & dihapus sebagai SATU
-     * kesatuan (lalu dipulihkan lewat "Pulihkan Suntingan Sebelumnya"), tapi tidak
-     * bisa disunting SEBAGIAN (mis. kursor nyasar ke tengah pecahan lalu merusak
-     * strukturnya).
+     * persis seperti posisinya di Word. Dibungkus span.rumus (TANPA
+     * contenteditable="false") supaya pembilang/penyebut & teks di sekitarnya bisa
+     * disunting langsung di pratinjau; garis putus-putusnya cuma penanda visual.
      *
      * Penggantian STRING mentah (bukan reparse DOMDocument) SENGAJA -- $html di sini
      * sudah lolos perbaikan struktur tabel LibreOffice (gabungkanTbodyBersebelahan()/
@@ -137,10 +166,200 @@ class NotulaService
                 continue;
             }
 
-            $html = str_replace($penanda, '<span contenteditable="false">'.RumusMarkup::keHtml($formula).'</span>', $html);
+            $html = str_replace($penanda, '<span class="rumus">'.RumusMarkup::keHtml($formula).'</span>', $html);
         }
 
         return $html;
+    }
+
+    /**
+     * Unduhan Bagian I .docx -- dibangun dari bagian1_html TERSIMPAN (isi pratinjau
+     * yang sudah disunting, sumber yang SAMA dengan PDF pratinjau, PDF yang dikirim
+     * ke Kepala, dan PDF final), BUKAN disusun ulang dari data mentah, supaya ketiga
+     * bentuk dokumen selalu sama isinya. Rumus bersusun (span.rumus) dibaca balik
+     * jadi sintaks RumusMarkup (lihat RumusMarkup::dariHtml()) lalu disisipkan sebagai
+     * OOXML Math sungguhan -- termasuk angka yang sudah disunting di pratinjau.
+     *
+     * Notula yang Bagian I-nya belum pernah disusun jatuh ke template + data mentah
+     * (NotulaBagian1DocxService::generate()) seperti sebelumnya.
+     */
+    public function renderBagianSatuDocx(Notula $notula, string $outputPath): string
+    {
+        if (blank($notula->bagian1_html)) {
+            return $this->docx->generate($notula, $this->kumpulkanDataBagianSatu($notula), $outputPath);
+        }
+
+        $dir = dirname($outputPath);
+        $this->pastikanFolder($dir);
+        $htmlPath = $dir.'/bagian1-unduh-'.Str::lower(Str::random(10)).'.html';
+        $formula = [];
+
+        try {
+            file_put_contents($htmlPath, $this->htmlUntukDocx($notula, $formula));
+            $hasil = $this->konversi->convertHtmlToDocx($htmlPath, $dir);
+            $this->sisipkanRumusDanTataHalamanDocx($hasil, $formula);
+
+            if ($hasil !== $outputPath && ! @rename($hasil, $outputPath)) {
+                throw new RuntimeException('Berkas Bagian I (.docx) gagal dipindahkan ke lokasi unduhan.');
+            }
+        } finally {
+            if (file_exists($htmlPath)) {
+                @unlink($htmlPath);
+            }
+        }
+
+        return $outputPath;
+    }
+
+    /**
+     * Dokumen HTML utuh untuk dikonversi LibreOffice jadi .docx: penanda Bagian II/III
+     * dibuang (unduhan ini khusus Bagian I), CSS dilepas dari lingkup .notula-inline-*
+     * (pemilih turunan tidak dipahami impor HTML LibreOffice) & dipindah ke <head>,
+     * tiap rumus diganti teks penanda (isi rumusnya dikumpulkan ke $formula), dan blok
+     * TTD ditambahkan bila notula sudah disetujui -- sama seperti PDF final.
+     *
+     * @param  list<string>  $formula
+     */
+    private function htmlUntukDocx(Notula $notula, array &$formula): string
+    {
+        $html = $this->sisipkanBagianDuaTiga((string) $notula->bagian1_html, null, null);
+
+        $dom = new \DOMDocument;
+        libxml_use_internal_errors(true);
+        $dom->loadHTML('<?xml encoding="utf-8" ?><html><body>'.$html.'</body></html>', LIBXML_NOWARNING | LIBXML_NOERROR);
+        libxml_clear_errors();
+
+        $xpath = new \DOMXPath($dom);
+        $daftarRumus = $xpath->query('//span[contains(concat(" ", normalize-space(@class), " "), " rumus ") or @contenteditable="false"]');
+        foreach (iterator_to_array($daftarRumus) as $span) {
+            $penanda = NotulaBagian1DocxService::penandaRumus(count($formula));
+            $formula[] = RumusMarkup::dariHtml($span);
+            $span->parentNode->replaceChild($dom->createTextNode($penanda), $span);
+        }
+
+        $css = '';
+        foreach (iterator_to_array($dom->getElementsByTagName('style')) as $style) {
+            $css .= $style->textContent."\n";
+            $style->parentNode->removeChild($style);
+        }
+        $css = preg_replace('/\.notula-inline-[A-Za-z0-9]+\s+/', '', $css) ?? $css;
+        $this->tempelkanCssSederhana($xpath, $css);
+
+        $body = '';
+        foreach ($dom->getElementsByTagName('body')->item(0)?->childNodes ?? [] as $anak) {
+            $body .= $dom->saveHTML($anak);
+        }
+
+        if ($notula->status === Notula::STATUS_DISETUJUI) {
+            $body .= $this->blokTtdDocx($notula);
+        }
+
+        return '<!DOCTYPE html><html><head><meta charset="utf-8"><style>'.$css.'</style></head><body>'.$body.'</body></html>';
+    }
+
+    /**
+     * Impor HTML LibreOffice mengabaikan aturan kelas (mis. "p.western { font-family:
+     * Arial }") untuk paragraf DI DALAM sel tabel -- teks tabel jatuh ke font serif
+     * bawaannya. Aturan berpemilih sederhana ("p", "p.western", ".P1") ditempelkan
+     * sebagai style inline; deklarasi inline yang sudah ada tetap menang (ditaruh
+     * di belakang).
+     */
+    private function tempelkanCssSederhana(\DOMXPath $xpath, string $css): void
+    {
+        preg_match_all('/([^{}]+)\{([^{}]*)\}/', $css, $aturan, PREG_SET_ORDER);
+
+        foreach ($aturan as [, $pemilihGabungan, $deklarasi]) {
+            $deklarasi = trim($deklarasi);
+            if ($deklarasi === '') {
+                continue;
+            }
+
+            foreach (explode(',', $pemilihGabungan) as $pemilih) {
+                if (! preg_match('/^\s*([a-z][a-z0-9]*)?(?:\.([A-Za-z0-9_-]+))?\s*$/i', $pemilih, $m) || ($m[1] ?? '') === '' && ($m[2] ?? '') === '') {
+                    continue;
+                }
+
+                $query = '//'.(($m[1] ?? '') !== '' ? strtolower($m[1]) : '*')
+                    .(($m[2] ?? '') !== '' ? '[contains(concat(" ", normalize-space(@class), " "), " '.$m[2].' ")]' : '');
+
+                foreach ($xpath->query($query) as $el) {
+                    $lama = trim($el->getAttribute('style'));
+                    $el->setAttribute('style', rtrim($deklarasi, '; ').'; '.$lama);
+                }
+            }
+        }
+    }
+
+    /**
+     * Padanan .ttd-blok pdf.notula-utuh dalam bentuk tabel tanpa garis -- float
+     * CSS tidak dipahami impor HTML LibreOffice.
+     */
+    private function blokTtdDocx(Notula $notula): string
+    {
+        $d = $this->dataNotulaUtuh($notula, true);
+        $tempatTanggal = trim(($d['kotaTtd'] ?: '').($d['kotaTtd'] && $d['tanggal'] ? ', ' : '').($d['tanggal'] ?: ''));
+        $titik = '.......................................';
+        $sel = 'width="50%" valign="top" style="border:none; text-align:center; font-family:Arial; font-size:11pt"';
+
+        return '<p><br></p><table width="100%" cellpadding="0" cellspacing="0" style="border:none"><tr>'
+            .'<td '.$sel.'>Mengetahui,<br>Kepala Badan Pusat Statistik Kabupaten Buton Utara<br><br><br><br><b>'.e($d['namaKepala'] ?: $titik).'</b></td>'
+            .'<td '.$sel.'>'.e($tempatTanggal).'<br><br>Notulis,<br><br><br><br><b>'.e($d['namaNotulis'] ?: $titik).'</b></td>'
+            .'</tr></table>';
+    }
+
+    /**
+     * Pasca-proses .docx hasil LibreOffice: tiap teks penanda rumus diganti OOXML
+     * Math (RumusMarkup::keOmml(), sama seperti unduhan berbasis template), dan
+     * ukuran kertas/margin disamakan dengan template Bagian I aktif (impor HTML
+     * LibreOffice memakai kertas bawaannya sendiri).
+     *
+     * @param  list<string>  $formula
+     */
+    private function sisipkanRumusDanTataHalamanDocx(string $docxPath, array $formula): void
+    {
+        $zip = new \ZipArchive;
+        if ($zip->open($docxPath) !== true) {
+            throw new RuntimeException('Berkas Bagian I (.docx) hasil konversi tidak bisa dibuka.');
+        }
+
+        try {
+            $xml = $zip->getFromName('word/document.xml');
+            if ($xml === false) {
+                throw new RuntimeException('Berkas Bagian I (.docx) hasil konversi rusak (document.xml tidak ada).');
+            }
+
+            foreach ($formula as $i => $rumus) {
+                $penanda = preg_quote(NotulaBagian1DocxService::penandaRumus($i), '/');
+                $pola = '/<w:r>((?:(?!<\/w:r>).)*?)<w:t(?:\s[^>]*)?>([^<]*?)'.$penanda.'([^<]*)<\/w:t>((?:(?!<\/w:r>).)*?)<\/w:r>/s';
+
+                $xml = preg_replace_callback($pola, function (array $m) use ($rumus) {
+                    $rPr = preg_match('/<w:rPr>.*?<\/w:rPr>/s', $m[1], $r) ? $r[0] : '';
+                    $run = fn (string $t) => $t === '' ? '' : '<w:r>'.$rPr.'<w:t xml:space="preserve">'.$t.'</w:t></w:r>';
+
+                    return $run($m[2]).RumusMarkup::keOmml($rumus).$run($m[3]);
+                }, $xml, 1) ?? $xml;
+            }
+
+            if (! str_contains($xml, 'xmlns:m=')) {
+                $xml = preg_replace('/<w:document\b/', '<w:document xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"', $xml, 1) ?? $xml;
+            }
+
+            $h = $this->docx->tataHalamanTemplate();
+            $twip = fn (string $k) => (int) round($h[$k] * 20);
+            $xml = preg_replace('/<w:pgSz\b[^>]*\/>/', '<w:pgSz w:w="'.$twip('lebar').'" w:h="'.$twip('tinggi').'"'.($h['lebar'] > $h['tinggi'] ? ' w:orient="landscape"' : '').'/>', $xml) ?? $xml;
+            $xml = preg_replace_callback('/<w:pgMar\b([^>]*)\/>/', function (array $m) use ($twip) {
+                $atr = $m[1];
+                foreach (['top' => 'atas', 'right' => 'kanan', 'bottom' => 'bawah', 'left' => 'kiri'] as $w => $k) {
+                    $atr = preg_replace('/\bw:'.$w.'="[^"]*"/', 'w:'.$w.'="'.$twip($k).'"', $atr) ?? $atr;
+                }
+
+                return '<w:pgMar'.$atr.'/>';
+            }, $xml) ?? $xml;
+
+            $zip->addFromString('word/document.xml', $xml);
+        } finally {
+            $zip->close();
+        }
     }
 
     /**
@@ -215,6 +434,14 @@ class NotulaService
             });
         });
 
+        // Indikator Proksi yang ditambahkan Tim SAKIP di Detail Verifikasi (per IKU per
+        // triwulan) — hanya baris yang benar-benar terisi yang dicetak di notula.
+        $proksiPerIku = IndikatorProksi::where('tahun', $periode->tahun)->where('triwulan', $tw)
+            ->orderBy('id')
+            ->get()
+            ->filter(fn (IndikatorProksi $p) => filled($p->uraian) || filled($p->target) || filled($p->realisasi))
+            ->groupBy('iku_id');
+
         // Target PK/Target TW/Realisasi/Capaian % — sumber tunggalnya CapaianTahunan
         // (diisi Tim SAKIP sekali per tahun, lihat App\Livewire\VerifikasiCapaian),
         // BUKAN kolom target_pk/target_tw lama di Capaian — sama seperti yang dipakai
@@ -266,6 +493,16 @@ class NotulaService
                 ->groupBy('iku_id')
             : collect();
 
+        // RTL triwulan BERIKUTNYA (Bagian 5 Isian Kegiatan) — disimpan pada periode
+        // triwulan target-nya (lihat PengisianKegiatan::targetTriwulanBerikutnya()),
+        // jadi TW IV menyambung ke TW I tahun berikutnya. Draft yang belum diajukan
+        // Ketua Tim tidak ikut dicetak.
+        [$tahunBerikutnya, $twBerikutnya] = (int) $tw === 4 ? [$periode->tahun + 1, 1] : [$periode->tahun, $tw + 1];
+        $rtlBerikutnyaPerIku = RtlEvaluasi::whereHas('periode', fn ($q) => $q->where('tahun', $tahunBerikutnya)->where('triwulan', $twBerikutnya))
+            ->where('status_dokumen', '!=', RtlEvaluasi::STATUS_DRAFT)
+            ->get()
+            ->groupBy('iku_id');
+
         // Bagian kustom (mis. Manajemen Risiko) — SEMUA bagian yang punya poin di
         // triwulan ini ikut ditampilkan, termasuk yang sudah dinonaktifkan Tim SAKIP
         // setelahnya, supaya data historis notula tidak pernah hilang dari catatan.
@@ -305,6 +542,15 @@ class NotulaService
             })
             : collect();
 
+        // Tautan folder bukti Evaluasi RTL (Bagian 4 Isian Kegiatan) — bukti diunggah ke
+        // folder "Evaluasi-RTL" pada periode poin RTL itu sendiri (= triwulan notula ini,
+        // lihat PengisianKegiatan), hanya untuk IKU yang memang punya poin RTL triwulan ini.
+        $linkFolderEvaluasiRtlPerIku = $rtlPerIku->mapWithKeys(function ($daftarRtl, $ikuId) {
+            $rtl = $daftarRtl->first();
+
+            return [$ikuId => $rtl->masterIku ? $this->folder->linkKategoriIku($rtl->periode, $rtl->masterIku, 'evaluasi_rtl') : null];
+        });
+
         // Ringkasan capaian pada paragraf pembuka (RF-42): rata-rata Capaian Kinerja
         // (Rumus 2.3/2.4) SELURUH CapaianTahunan tahun ini -- BUKAN $rekapPerIku (yang
         // dibatasi ke IKU terverifikasi TRIWULAN INI saja, lihat $ikuTerverifikasiIds di
@@ -339,12 +585,17 @@ class NotulaService
             'capaianPerIku' => $capaianPerIku,
             'kegiatanPerIku' => $kegiatanPerIku,
             'roPerIku' => $roPerIku,
+            'proksiPerIku' => $proksiPerIku,
             'kendalaSolusiPerIku' => $kendalaSolusiPerIku,
             'rtlPerIku' => $rtlPerIku,
             'rtlSebelumnyaPerIku' => $rtlSebelumnyaPerIku,
+            'rtlBerikutnyaPerIku' => $rtlBerikutnyaPerIku,
+            'tahunTwBerikutnya' => $tahunBerikutnya,
+            'twBerikutnya' => $twBerikutnya,
             'bagianKustomPerBagian' => $bagianKustomPerBagian,
             'linkFolderPerIku' => $linkFolderPerIku,
             'linkFolderTwSebelumnyaPerIku' => $linkFolderTwSebelumnyaPerIku,
+            'linkFolderEvaluasiRtlPerIku' => $linkFolderEvaluasiRtlPerIku,
             'rataCapaianTw' => $rataCapaianTw,
             'rataCapaianPk' => $rataCapaianPk,
         ];
@@ -378,22 +629,49 @@ class NotulaService
      * Fallback: bila $bagian1Html TIDAK memuat penanda (mis. template lama/kustom
      * tanpa {{bagian_2}}/{{bagian_3}}), Bagian II/III tetap ditempel di akhir
      * (perilaku lama) alih-alih hilang begitu saja.
+     *
+     * Paragraf yang memuat penanda diganti UTUH (bukan cuma teks penandanya) --
+     * penandanya ada di dalam <p><font><i>, dan isi Bagian II/III (berisi <div>/
+     * tabel) yang ditaruh di dalamnya akan dipecah browser keluar dari <p> sambil
+     * membawa format miringnya ke seluruh isi Bagian II/III.
+     *
+     * $untukEditor: isi sisipan dibuat tidak bisa disunting dan diapit komentar
+     * penanda, supaya saat pratinjau disimpan isi Bagian II/III bisa dikembalikan
+     * jadi penanda {{bagian_2}}/{{bagian_3}} (kembalikanPenandaBagianDuaTiga()) dan
+     * tidak ikut terbakar permanen ke dalam bagian1_html.
      */
-    public function sisipkanBagianDuaTiga(string $bagian1Html, ?string $bagian2Html, ?string $bagian3Html): string
+    public function sisipkanBagianDuaTiga(string $bagian1Html, ?string $bagian2Html, ?string $bagian3Html, bool $untukEditor = false): string
     {
-        $bagian2Html = trim((string) $bagian2Html);
-        $bagian3Html = trim((string) $bagian3Html);
+        $hasil = $bagian1Html;
 
-        $hasil = str_replace(['{{bagian_2}}', '{{bagian_3}}'], [$bagian2Html, $bagian3Html], $bagian1Html);
+        foreach (['bagian_2' => trim((string) $bagian2Html), 'bagian_3' => trim((string) $bagian3Html)] as $nama => $isi) {
+            if ($untukEditor && $isi !== '') {
+                $isi = "<!--sipinter:{$nama}--><div data-sisipan=\"{$nama}\" contenteditable=\"false\">{$isi}</div><!--/sipinter:{$nama}-->";
+            }
 
-        if (! str_contains($bagian1Html, '{{bagian_2}}')) {
-            $hasil .= $bagian2Html;
-        }
-        if (! str_contains($bagian1Html, '{{bagian_3}}')) {
-            $hasil .= $bagian3Html;
+            $penanda = '{{'.$nama.'}}';
+            if (! str_contains($hasil, $penanda)) {
+                $hasil .= $isi;
+
+                continue;
+            }
+
+            $pola = '/<p\b[^>]*>(?:(?!<\/p>).)*?'.preg_quote($penanda, '/').'(?:(?!<\/p>).)*?<\/p>/s';
+            $diganti = preg_replace_callback($pola, fn () => $isi, $hasil, 1, $jumlah);
+            $hasil = $jumlah > 0 && $diganti !== null ? $diganti : str_replace($penanda, $isi, $hasil);
         }
 
         return $hasil;
+    }
+
+    /**
+     * Kebalikan sisipkanBagianDuaTiga(untukEditor: true) untuk HTML yang dikirim
+     * balik dari editor pratinjau: isi Bagian II/III diganti lagi jadi paragraf
+     * penanda {{bagian_2}}/{{bagian_3}}.
+     */
+    public function kembalikanPenandaBagianDuaTiga(string $html): string
+    {
+        return preg_replace('/<!--sipinter:(bagian_[23])-->.*?<!--\/sipinter:\1-->/s', '<p>{{$1}}</p>', $html) ?? $html;
     }
 
     /**

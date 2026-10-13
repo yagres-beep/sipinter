@@ -83,6 +83,27 @@ class KompilasiNotulaTest extends TestCase
     }
 
     /**
+     * Suntingan yang belum di-"Simpan" tetap ikut ke unduhan -- tombol unduh
+     * menyimpan isi editor dulu, supaya .docx/PDF selalu sama dengan pratinjau.
+     */
+    public function test_unduh_docx_menyimpan_suntingan_yang_belum_disimpan(): void
+    {
+        $this->fakeKonversiBagian1KeXmlMentah();
+        $this->loginSebagaiTimSakip();
+
+        $notula = $this->notulaUji(2026, 3);
+
+        Livewire::test(KompilasiNotula::class)
+            ->set('tahun', 2026)
+            ->set('triwulan', 3)
+            ->set('bagian1EditText', '<p>Angka rumus disunting tanpa disimpan.</p>')
+            ->call('unduhBagian1Docx')
+            ->assertRedirect(route('notula.unduh-bagian1-docx', $notula));
+
+        $this->assertStringContainsString('Angka rumus disunting tanpa disimpan.', $notula->fresh()->bagian1_html);
+    }
+
+    /**
      * susunUlangOtomatis() SENGAJA tetap menimpa bagian1_html (itu tujuannya) --
      * tapi isi LAMANYA harus tersalin dulu ke bagian1_html_cadangan supaya suntingan
      * manual Tim SAKIP tidak hilang tanpa jejak, lihat KompilasiNotula::susunUlangOtomatis().
@@ -213,6 +234,50 @@ class KompilasiNotulaTest extends TestCase
         $html = $this->notulaUji(2026, 3)->bagian1_html;
         $this->assertStringContainsString('Senin, 12 Oktober 2026', $html);
         $this->assertStringContainsString('Kepala BPS', $html);
+    }
+
+    public function test_detail_rapat_tersimpan_otomatis_dan_diingat_saat_ganti_triwulan(): void
+    {
+        $this->fakeKonversiBagian1KeXmlMentah();
+        $this->loginSebagaiTimSakip();
+
+        Livewire::test(KompilasiNotula::class)
+            ->set('tahun', 2026)
+            ->set('triwulan', 2)
+            ->set('waktu', '09.00 - 11.00 WITA')
+            ->set('tempat', 'Ruang Rapat BPS')
+            ->assertHasNoErrors()
+            ->set('triwulan', 3)
+            ->assertSet('waktu', '')
+            ->assertSet('tempat', '')
+            ->set('triwulan', 2)
+            ->assertSet('waktu', '09.00 - 11.00 WITA')
+            ->assertSet('tempat', 'Ruang Rapat BPS');
+
+        $this->assertSame('09.00 - 11.00 WITA', $this->notulaUji(2026, 2)->waktu);
+    }
+
+    public function test_detail_rapat_tersimpan_tampil_lagi_saat_halaman_dibuka_ulang(): void
+    {
+        $this->fakeKonversiBagian1KeXmlMentah();
+        $this->loginSebagaiTimSakip();
+
+        Livewire::test(KompilasiNotula::class)
+            ->set('tahun', 2026)
+            ->set('triwulan', 2)
+            ->set('hariTanggal', 'Senin, 6 Juli 2026')
+            ->set('waktu', '09.00 - 11.00 WITA')
+            ->set('kotaTtd', 'Kulisusu')
+            ->call('simpanDetailRapat')
+            ->assertHasNoErrors();
+
+        // Halaman dibuka lagi: triwulan terakhir yang dibuka beserta isiannya muncul kembali.
+        Livewire::test(KompilasiNotula::class)
+            ->assertSet('tahun', 2026)
+            ->assertSet('triwulan', 2)
+            ->assertSet('hariTanggal', 'Senin, 6 Juli 2026')
+            ->assertSet('waktu', '09.00 - 11.00 WITA')
+            ->assertSet('kotaTtd', 'Kulisusu');
     }
 
     /**

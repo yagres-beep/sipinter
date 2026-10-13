@@ -263,6 +263,104 @@ class PengisianKegiatan extends Component
     }
 
     /**
+     * Penampung sementara unggahan lewat tombol "Unggah" milik SATU folder tujuan —
+     * kunci "<blok>.<urutan tahapan>.<urutan folder>" (folder 0 = langsung di folder
+     * kegiatan/tahapan, 1.. = subfolder ke-n). Begitu selesai terunggah, berkasnya
+     * dipindah ke blocks.*.bukti beserta tahapan & subfolder tujuannya (lihat
+     * updatedUnggahFolder()), jadi pengguna tidak perlu memilih tujuan per berkas.
+     *
+     * @var array<int|string, mixed>
+     */
+    public array $unggahFolder = [];
+
+    public function updatedUnggahFolder($nilai, ?string $kunci = null): void
+    {
+        $bagian = explode('.', (string) $kunci);
+
+        if (count($bagian) < 3) {
+            return;
+        }
+
+        [$index, $urutanTahapan, $urutanFolder] = array_map('intval', array_slice($bagian, 0, 3));
+        unset($this->unggahFolder[$index]);
+
+        $block = $this->blocks[$index] ?? null;
+
+        if (! $block || $this->blokTerkunci($block['status_dokumen'] ?? null)) {
+            return;
+        }
+
+        $daftarBerkas = array_values(array_filter(is_array($nilai) ? $nilai : [$nilai]));
+
+        $validator = \Illuminate\Support\Facades\Validator::make(
+            ['bukti' => $daftarBerkas],
+            ['bukti.*' => ['file', 'mimes:pdf', 'max:10240']],
+            ['bukti.*.mimes' => 'Bukti capaian harus berupa PDF.', 'bukti.*.max' => 'Ukuran tiap bukti capaian maksimal 10 MB.']
+        );
+
+        if ($validator->fails()) {
+            $this->addError("blocks.{$index}.bukti", $validator->errors()->first());
+
+            return;
+        }
+
+        $tahapan = ($block['jenis'] ?? '') === 'survei_sensus' ? ($this->tahapanDipilih($block)[$urutanTahapan] ?? null) : null;
+        $subfolder = $urutanFolder > 0 && ! empty($block['pakai_subfolder']) ? ($block['subfolders'][$urutanFolder - 1] ?? '') : '';
+
+        foreach ($daftarBerkas as $berkas) {
+            $this->blocks[$index]['bukti'][] = $berkas;
+            $kunciBerkas = $this->kunciBuktiBaru($berkas);
+
+            if ($tahapan) {
+                $this->tahapanBuktiBaru[$kunciBerkas] = $tahapan;
+            }
+            if ($subfolder !== '') {
+                $this->subfolderBuktiBaru[$kunciBerkas] = $subfolder;
+            }
+        }
+
+        $this->resetErrorBag("blocks.{$index}.bukti");
+        $this->adaPerubahan = true;
+    }
+
+    /**
+     * Folder tujuan unggahan satu blok untuk tombol "Unggah" per folder: tiap tahapan
+     * survei terpilih (atau satu folder kegiatan bila bukan survei), masing-masing
+     * berisi folder langsung + subfolder khusus pilihan pengguna.
+     *
+     * @return list<array{urutan: int, tahapan: ?string, label: string, folder: list<array{urutan: int, subfolder: string, label: string}>}>
+     */
+    public function folderUnggahBlok(int $index): array
+    {
+        $block = $this->blocks[$index] ?? null;
+
+        if (! $block) {
+            return [];
+        }
+
+        $daftarTahapan = ($block['jenis'] ?? '') === 'survei_sensus' ? $this->tahapanDipilih($block) : [];
+        $subfolders = ! empty($block['pakai_subfolder']) ? array_values($block['subfolders'] ?? []) : [];
+        $hasil = [];
+
+        foreach ($daftarTahapan ?: [null] as $ti => $tahapan) {
+            // Tahapan utama (dan kegiatan bukan survei) memakai nama folder pilihan
+            // Ketua Tim bila diisi; tahapan tambahan memakai nama tahapannya.
+            $labelInduk = $ti === 0
+                ? $this->namaFolderBerlaku($index)
+                : $this->namaFolderOtomatis(array_merge($block, ['tahapan_survei' => $tahapan]));
+
+            $folder = [['urutan' => 0, 'subfolder' => '', 'label' => $labelInduk]];
+            foreach ($subfolders as $si => $namaSub) {
+                $folder[] = ['urutan' => $si + 1, 'subfolder' => $namaSub, 'label' => $labelInduk.' / '.$namaSub];
+            }
+
+            $hasil[] = ['urutan' => $ti, 'tahapan' => $tahapan, 'label' => $labelInduk, 'folder' => $folder];
+        }
+
+        return $hasil;
+    }
+
+    /**
      * Nama tampil/akhir satu berkas bukti BARU di blok kegiatan — penomoran nama
      * default dihitung per tahapan tujuannya, sama persis dengan yang disimpan.
      */
@@ -277,7 +375,11 @@ class PengisianKegiatan extends Component
         $utama = $tahapan === null || $tahapan === ($this->tahapanDipilih($block)[0] ?? null);
         $jumlahLama = $utama ? count($block['existing_bukti'] ?? []) : 0;
 
-        return $this->namaBuktiBaruAtauDefault($file, $this->namaDefaultBuktiBaru('Kegiatan '.$block['uraian_kegiatan'], $jumlahLama, $urutan, count($satuKelompok)));
+        $namaDasar = $tahapan !== null
+            ? self::uraianDenganTahapan($block['uraian_kegiatan'], $tahapan)
+            : 'Kegiatan '.$block['uraian_kegiatan'];
+
+        return $this->namaBuktiBaruAtauDefault($file, $this->namaDefaultBuktiBaru($namaDasar, $jumlahLama, $urutan, count($satuKelompok)));
     }
 
     /**
@@ -617,7 +719,23 @@ class PengisianKegiatan extends Component
     {
         $tahapan = $block['jenis'] === 'survei_sensus' ? $block['tahapan_survei'] : null;
 
-        return Str::limit(($tahapan ? '['.ucfirst($tahapan).'] ' : '').$block['uraian_kegiatan'], 100, '');
+        // Survei/sensus: folder tahapan berada DI DALAM folder induk bernama uraian
+        // kegiatan (FolderStructureService::resolveKegiatanFolder()), jadi cukup
+        // diberi nama tahapannya saja, mis. "Kegiatan X/Persiapan/".
+        if ($tahapan) {
+            return self::DAFTAR_TAHAPAN[$tahapan] ?? ucfirst($tahapan);
+        }
+
+        return Str::limit($block['uraian_kegiatan'], 100, '');
+    }
+
+    /**
+     * Nama capaian satu tahapan survei/sensus: "<Tahapan> <uraian>", mis.
+     * "Persiapan Survei Sakernas". Bukan survei/tanpa tahapan = uraian apa adanya.
+     */
+    public static function uraianDenganTahapan(string $uraian, ?string $tahapan): string
+    {
+        return filled($tahapan) ? (self::DAFTAR_TAHAPAN[$tahapan] ?? ucfirst($tahapan)).' '.$uraian : $uraian;
     }
 
     /**
