@@ -89,7 +89,7 @@ class NotulaService
         // gabungan Bagian I+II+III, yang sudah punya blok TTD akhirnya sendiri di
         // paling bawah (lihat pdf.notula-utuh, .ttd-blok) -- lihat catatan parameter
         // itu di NotulaBagian1DocxService::generate().
-        $this->docx->generate($notula, $data, $docxPath, sertakanBlokTtdMandiri: false);
+        $this->docx->generate($notula, $data, $docxPath, sertakanBlokTtdMandiri: false, rumusSebagaiPenanda: true);
         $formulaUrutan = $this->docx->formulaUrutanTerakhir();
 
         try {
@@ -100,7 +100,7 @@ class NotulaService
             }
         }
 
-        $html = $this->gantiGambarRumusDenganHtml($html, $formulaUrutan);
+        $html = $this->gantiPenandaRumusDenganHtml($html, $formulaUrutan);
 
         $notula->update(['bagian1_html' => $html]);
 
@@ -108,54 +108,39 @@ class NotulaService
     }
 
     /**
-     * Rumus OOXML Math (<m:oMath>, lihat NotulaBagian1DocxService::setFormula())
-     * diekspor LibreOffice sebagai gambar .gif HASIL RASTERISASI -- resolusinya
-     * rendah/buram (beda jauh dari rumus aslinya yang vektor tajam di Word), dan
-     * gambarnya jadi elemen <img> UTUH yang gampang KETERHAPUS tanpa sengaja saat
-     * Tim SAKIP mengetik langsung di editor WYSIWYG Kompilasi Notula (RF terkait
-     * "Pratinjau & Sunting Notula"). Diganti di sini dengan HTML bersusun TAJAM
-     * yang SAMA PERSIS dipakai jalur unduhan PDF langsung (RumusMarkup::keHtml(),
-     * BUKAN rasterisasi LibreOffice) -- `contenteditable="false"` membuatnya jadi
+     * LibreOffice MEMBUANG rumus OOXML Math (<m:oMath>) saat mengekspor .docx ke
+     * HTML -- paragraf rumusnya jadi kosong di pratinjau padahal di .docx/PDF unduhan
+     * tampil. Karena itu susunBagianSatu() meminta docx-nya ditulis dengan TEKS
+     * PENANDA (NotulaBagian1DocxService::penandaRumus()) di posisi rumus, lalu di sini
+     * tiap penanda diganti HTML bersusun yang SAMA PERSIS dipakai jalur unduhan PDF
+     * langsung (RumusMarkup::keHtml()) -- tetap di paragraf rata-tengahnya sendiri,
+     * persis seperti posisinya di Word. `contenteditable="false"` membuatnya jadi
      * blok UTUH/atomik di dalam area WYSIWYG: bisa dipilih & dihapus sebagai SATU
      * kesatuan (lalu dipulihkan lewat "Pulihkan Suntingan Sebelumnya"), tapi tidak
      * bisa disunting SEBAGIAN (mis. kursor nyasar ke tengah pecahan lalu merusak
-     * strukturnya) seperti risiko <img> biasa yang justru TIDAK terlindung sama
-     * sekali dari ketikan di sekitarnya.
+     * strukturnya).
      *
-     * $formulaUrutan HARUS sejumlah & SEURUT <img> yang ditemukan (satu <img> per
-     * IKU yang formulanya tampil, document-order sama seperti NotulaBagian1DocxService::
-     * isiPerIkuDinamis() menggandakan blok per-IKU) -- kalau jumlahnya TIDAK cocok
-     * (mis. template kustom Tim SAKIP kebetulan menyisipkan gambar lain selain
-     * rumus), tidak ada yang diganti sama sekali supaya tidak salah pasang rumus
-     * IKU A ke gambar milik IKU B; dicatat ke log untuk investigasi lanjutan.
+     * Penggantian STRING mentah (bukan reparse DOMDocument) SENGAJA -- $html di sini
+     * sudah lolos perbaikan struktur tabel LibreOffice (gabungkanTbodyBersebelahan()/
+     * satukanColgroup(), lihat LibreOfficeConversionService::ekstrakKontenInline())
+     * yang KHUSUS ditulis karena reparse lewat libxml bisa mengacak ulang
+     * <tbody>/<colgroup>.
      */
-    private function gantiGambarRumusDenganHtml(string $html, array $formulaUrutan): string
+    private function gantiPenandaRumusDenganHtml(string $html, array $formulaUrutan): string
     {
-        if ($formulaUrutan === [] || ! str_contains($html, '<img')) {
-            return $html;
+        foreach ($formulaUrutan as $i => $formula) {
+            $penanda = NotulaBagian1DocxService::penandaRumus($i);
+
+            if (! str_contains($html, $penanda)) {
+                Log::warning("Penanda rumus ke-{$i} tidak ditemukan di HTML hasil konversi LibreOffice -- rumusnya tidak tampil di pratinjau.");
+
+                continue;
+            }
+
+            $html = str_replace($penanda, '<span contenteditable="false">'.RumusMarkup::keHtml($formula).'</span>', $html);
         }
 
-        // Penggantian STRING/REGEX mentah (bukan reparse DOMDocument) SENGAJA --
-        // $html di sini sudah lolos sanitasi & perbaikan struktur tabel LibreOffice
-        // (gabungkanTbodyBersebelahan()/satukanColgroup(), lihat
-        // LibreOfficeConversionService::ekstrakKontenInline()) yang KHUSUS ditulis
-        // karena reparse HTML lewat libxml/DOMDocument bisa mengacak ulang
-        // <tbody>/<colgroup> & memindahkan <style> keluar urutan aslinya -- reparse
-        // KEDUA di sini akan berisiko sama persis, jadi <img> dicari & diganti
-        // langsung di string HTML-nya saja.
-        $jumlahGambar = preg_match_all('/<img\b[^>]*>/i', $html);
-
-        if ($jumlahGambar !== count($formulaUrutan)) {
-            Log::warning('Jumlah gambar rumus hasil konversi LibreOffice ('.$jumlahGambar.') tidak cocok dengan jumlah rumus IKU ('.count($formulaUrutan).') -- dilewati, gambar rumus apa adanya tetap dipakai.');
-
-            return $html;
-        }
-
-        $i = 0;
-
-        return preg_replace_callback('/<img\b[^>]*>/i', function () use (&$i, $formulaUrutan): string {
-            return '<span contenteditable="false">'.RumusMarkup::keHtml($formulaUrutan[$i++]).'</span>';
-        }, $html) ?? $html;
+        return $html;
     }
 
     /**
