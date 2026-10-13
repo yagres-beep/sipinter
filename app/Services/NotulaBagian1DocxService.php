@@ -373,6 +373,10 @@ class NotulaBagian1DocxService
 
         $this->set($p, 'tahun', (string) $periode->tahun);
         $this->set($p, 'triwulan_angka', (string) $data['labelTriwulan']);
+        // Romawi triwulan sebelumnya (mis. "II" untuk notula TW III) -- template tidak
+        // bisa menghitung "{{triwulan_angka-1}}" sendiri. TW I tidak punya triwulan
+        // sebelumnya di tahun yang sama, jadi "…".
+        $this->set($p, 'triwulan_sebelumnya', $periode->triwulan > 1 ? ['I', 'II', 'III'][$periode->triwulan - 2] : null);
         $this->set($p, 'nama_satker', 'BPS KABUPATEN BUTON UTARA');
         $this->set($p, 'agenda_pembahasan', "Monitoring Kinerja Triwulan {$data['labelTriwulan']} Tahun {$periode->tahun}");
         $this->set($p, 'hari_tanggal', $notula->hari_tanggal);
@@ -586,6 +590,17 @@ class NotulaBagian1DocxService
         $dasarHitung = trim(($dasarHitungTeks ?: '').($iku->basis_data ? ' Basis Data: '.$iku->basis_data : ''));
         $this->set($sub, 'dasar_hitung', $dasarHitung !== '' ? $dasarHitung : null);
         $this->set($sub, 'bukti_realisasi', $linkFolder);
+        // Bagian 4 Isian Kegiatan (Evaluasi RTL): poin RTL yang DIRENCANAKAN untuk
+        // triwulan notula ini -- isinya sama dengan {{rtl}}, nama terpisah supaya jelas
+        // di template. Bagian 5 (RTL triwulan berikutnya, TW IV -> TW I tahun depan):
+        // {{rtl_berikutnya}} + batas waktunya (akhir triwulan berikutnya).
+        $rtlBerikutnyaIku = ($data['rtlBerikutnyaPerIku'] ?? collect())->get($iku->id, collect());
+        $this->set($sub, 'rtl_evaluasi', $rtlTeks);
+        $this->set($sub, 'bukti_rtl_evaluasi', ($data['linkFolderEvaluasiRtlPerIku'] ?? collect())->get($iku->id));
+        $this->set($sub, 'rtl_berikutnya', $this->daftarBernomor($rtlBerikutnyaIku->pluck('rtl_teks')->filter()));
+        $this->set($sub, 'batas_waktu_rtl_berikutnya', $rtlBerikutnyaIku->isNotEmpty()
+            ? $this->akhirTriwulan($data['tahunTwBerikutnya'], $data['twBerikutnya'])->translatedFormat('F Y')
+            : null);
         $this->set($sub, 'bukti_rtl_sebelumnya', $rtlSebelumnyaIku->isNotEmpty() ? $linkFolderTwSebelumnya : null);
         $this->set($sub, 'penjelasan_lainnya', $capaian?->catatan);
 
@@ -1003,7 +1018,7 @@ class NotulaBagian1DocxService
      * tercetak mentah "{{...}}" di notula.
      */
     private const MACRO_DIKENAL = [
-        'tahun', 'triwulan_angka', 'nama_satker', 'agenda_pembahasan', 'hari_tanggal', 'waktu', 'tempat',
+        'tahun', 'triwulan_angka', 'triwulan_sebelumnya', 'nama_satker', 'agenda_pembahasan', 'hari_tanggal', 'waktu', 'tempat',
         'pimpinan_rapat', 'capaian_triwulanan_persen', 'capaian_pk_persen', 'lampiran_basis_data',
         'kotaTtd', 'tanggal', 'namaKepala', 'namaNotulis', 'bagian_2', 'bagian_3',
         'iku_blok', '/iku_blok', 'blok_sakip', '/blok_sakip', 'blok_berakhlak', '/blok_berakhlak',
@@ -1011,7 +1026,7 @@ class NotulaBagian1DocxService
         'kode', 'indikator', 'sasaran', 'target_pk', 'target_tw', 'realisasi_tw', 'capaian_tw', 'capaian_pk',
         'analisis_capaian', 'target_proksi', 'realisasi_proksi', 'kendala', 'solusi', 'rtl', 'pic_rtl',
         'batas_waktu_rtl', 'formula_capaian', 'dasar_hitung', 'bukti_realisasi', 'bukti_rtl_sebelumnya',
-        'penjelasan_lainnya', 'ro_uraian', 'ro_vol', 'ro_progres',
+        'rtl_evaluasi', 'bukti_rtl_evaluasi', 'rtl_berikutnya', 'batas_waktu_rtl_berikutnya', 'penjelasan_lainnya', 'ro_uraian', 'ro_vol', 'ro_progres',
     ];
 
     /**

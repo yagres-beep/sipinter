@@ -38,7 +38,9 @@ Delimiter macro-nya `{{...}}` (bukan `${...}` bawaan PhpWord — lihat
 
 ### Macro global (diisi sekali, dari data Notula/Periode — lihat `isiHeader()`/`isiPenutup()`)
 
-`{{tahun}}`, `{{triwulan_angka}}`, `{{nama_satker}}`, `{{agenda_pembahasan}}`,
+`{{tahun}}`, `{{triwulan_angka}}`, `{{triwulan_sebelumnya}}` (romawi triwulan
+sebelumnya, mis. "II" untuk TW III; "…" di TW I — boleh dipakai juga di dalam blok IKU),
+`{{nama_satker}}`, `{{agenda_pembahasan}}`,
 `{{hari_tanggal}}`, `{{waktu}}`, `{{tempat}}`, `{{pimpinan_rapat}}`,
 `{{capaian_triwulanan_persen}}`, `{{capaian_pk_persen}}`, `{{lampiran_basis_data}}`,
 `{{kotaTtd}}`, `{{tanggal}}`, `{{namaKepala}}`, `{{namaNotulis}}`, `{{bagian_2}}`,
@@ -67,7 +69,15 @@ sekali-pakai yang terpisah: `{{kode}}`, `{{indikator}}`, `{{sasaran}}`, `{{targe
 `{{target_tw}}`, `{{realisasi_tw}}`, `{{capaian_tw}}`, `{{capaian_pk}}`,
 `{{analisis_capaian}}`, `{{kendala}}`, `{{solusi}}`, `{{rtl}}`, `{{pic_rtl}}`,
 `{{batas_waktu_rtl}}`, `{{dasar_hitung}}`, `{{bukti_realisasi}}`,
-`{{bukti_rtl_sebelumnya}}`, `{{penjelasan_lainnya}}`.
+`{{bukti_rtl_sebelumnya}}`, `{{penjelasan_lainnya}}`, serta:
+
+- `{{rtl_evaluasi}}` — Bagian 4 Isian Kegiatan: poin RTL yang direncanakan untuk
+  triwulan notula ini (isinya sama dengan `{{rtl}}`).
+- `{{bukti_rtl_evaluasi}}` — tautan folder Drive "Evaluasi-RTL" triwulan notula ini
+  (tempat bukti realisasi Bagian 4 diunggah); "…" bila IKU tidak punya poin RTL.
+- `{{rtl_berikutnya}}` — Bagian 5 Isian Kegiatan: poin RTL untuk triwulan berikutnya
+  (TW IV → TW I tahun depan; draft yang belum diajukan tidak ikut).
+- `{{batas_waktu_rtl_berikutnya}}` — akhir triwulan berikutnya, mis. "Desember 2026".
 
 ### Tiga varian setelah kotak "Analisis Capaian Kinerja" (persis satu yang tampil)
 

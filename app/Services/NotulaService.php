@@ -296,6 +296,16 @@ class NotulaService
                 ->groupBy('iku_id')
             : collect();
 
+        // RTL triwulan BERIKUTNYA (Bagian 5 Isian Kegiatan) — disimpan pada periode
+        // triwulan target-nya (lihat PengisianKegiatan::targetTriwulanBerikutnya()),
+        // jadi TW IV menyambung ke TW I tahun berikutnya. Draft yang belum diajukan
+        // Ketua Tim tidak ikut dicetak.
+        [$tahunBerikutnya, $twBerikutnya] = (int) $tw === 4 ?[$periode->tahun + 1, 1] : [$periode->tahun, $tw + 1];
+        $rtlBerikutnyaPerIku = RtlEvaluasi::whereHas('periode', fn ($q) => $q->where('tahun', $tahunBerikutnya)->where('triwulan', $twBerikutnya))
+            ->where('status_dokumen', '!=', RtlEvaluasi::STATUS_DRAFT)
+            ->get()
+            ->groupBy('iku_id');
+
         // Bagian kustom (mis. Manajemen Risiko) — SEMUA bagian yang punya poin di
         // triwulan ini ikut ditampilkan, termasuk yang sudah dinonaktifkan Tim SAKIP
         // setelahnya, supaya data historis notula tidak pernah hilang dari catatan.
@@ -335,6 +345,15 @@ class NotulaService
             })
             : collect();
 
+        // Tautan folder bukti Evaluasi RTL (Bagian 4 Isian Kegiatan) — bukti diunggah ke
+        // folder "Evaluasi-RTL" pada periode poin RTL itu sendiri (= triwulan notula ini,
+        // lihat PengisianKegiatan), hanya untuk IKU yang memang punya poin RTL triwulan ini.
+        $linkFolderEvaluasiRtlPerIku = $rtlPerIku->mapWithKeys(function ($daftarRtl, $ikuId) {
+            $rtl = $daftarRtl->first();
+
+            return [$ikuId => $rtl->masterIku ? $this->folder->linkKategoriIku($rtl->periode, $rtl->masterIku, 'evaluasi_rtl') : null];
+        });
+
         // Ringkasan capaian pada paragraf pembuka (RF-42): rata-rata Capaian Kinerja
         // (Rumus 2.3/2.4) SELURUH CapaianTahunan tahun ini -- BUKAN $rekapPerIku (yang
         // dibatasi ke IKU terverifikasi TRIWULAN INI saja, lihat $ikuTerverifikasiIds di
@@ -372,9 +391,13 @@ class NotulaService
             'kendalaSolusiPerIku' => $kendalaSolusiPerIku,
             'rtlPerIku' => $rtlPerIku,
             'rtlSebelumnyaPerIku' => $rtlSebelumnyaPerIku,
+            'rtlBerikutnyaPerIku' => $rtlBerikutnyaPerIku,
+            'tahunTwBerikutnya' => $tahunBerikutnya,
+            'twBerikutnya' => $twBerikutnya,
             'bagianKustomPerBagian' => $bagianKustomPerBagian,
             'linkFolderPerIku' => $linkFolderPerIku,
             'linkFolderTwSebelumnyaPerIku' => $linkFolderTwSebelumnyaPerIku,
+            'linkFolderEvaluasiRtlPerIku' => $linkFolderEvaluasiRtlPerIku,
             'rataCapaianTw' => $rataCapaianTw,
             'rataCapaianPk' => $rataCapaianPk,
         ];
