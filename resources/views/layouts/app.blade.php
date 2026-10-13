@@ -142,6 +142,7 @@
     </button>
 
     <x-toast-stack />
+    <x-dialog-konfirmasi />
 
     @livewireScripts
 </body>

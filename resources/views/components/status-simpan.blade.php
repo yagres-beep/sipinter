@@ -8,8 +8,9 @@
                             berkas dipilih) tapi BELUM disimpan ke database.
     - mengetik (Alpine)   : sedang mengetik di sebuah kolom, belum ditinggalkan — belum
                             sampai ke server sama sekali.
-    Selama salah satunya aktif: bilah bawah tampil, menutup/memuat ulang tab memunculkan
-    peringatan browser, dan pindah menu (wire:navigate) meminta konfirmasi dulu.
+    Selama salah satunya aktif: bilah bawah tampil dan elemen ini diberi atribut
+    data-kotor, yang dibaca penjaga global di resources/js/app.js — pindah menu, tautan,
+    Keluar, maupun F5/Ctrl+R meminta konfirmasi lewat dialog bertema SIPINTER dulu.
     Elemen ber-atribut data-abaikan-perubahan (mis. pilihan IKU/periode, filter) tidak
     dihitung sebagai perubahan isian.
 --}}
@@ -31,8 +32,7 @@
             akar.addEventListener('focusout', () => { this.mengetik = false; });
         },
     }"
-    x-on:beforeunload.window="if (kotor) { $event.preventDefault(); $event.returnValue = ''; }"
-    x-on:livewire:navigate.document="if (kotor && ! confirm('Ada perubahan yang belum disimpan. Tetap tinggalkan halaman ini? Perubahan tersebut akan hilang.')) $event.preventDefault()"
+    x-bind:data-kotor="kotor ? 'ya' : false"
     x-on:perubahan-tersimpan.window="mengetik = false"
     class="status-simpan"
     style="position:sticky;bottom:10px;z-index:30;margin-top:14px"
