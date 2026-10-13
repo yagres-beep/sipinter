@@ -144,11 +144,9 @@ class NotulaService
      * PENANDA (NotulaBagian1DocxService::penandaRumus()) di posisi rumus, lalu di sini
      * tiap penanda diganti HTML bersusun yang SAMA PERSIS dipakai jalur unduhan PDF
      * langsung (RumusMarkup::keHtml()) -- tetap di paragraf rata-tengahnya sendiri,
-     * persis seperti posisinya di Word. `contenteditable="false"` membuatnya jadi
-     * blok UTUH/atomik di dalam area WYSIWYG: bisa dipilih & dihapus sebagai SATU
-     * kesatuan (lalu dipulihkan lewat "Pulihkan Suntingan Sebelumnya"), tapi tidak
-     * bisa disunting SEBAGIAN (mis. kursor nyasar ke tengah pecahan lalu merusak
-     * strukturnya).
+     * persis seperti posisinya di Word. Dibungkus span.rumus (TANPA
+     * contenteditable="false") supaya pembilang/penyebut & teks di sekitarnya bisa
+     * disunting langsung di pratinjau; garis putus-putusnya cuma penanda visual.
      *
      * Penggantian STRING mentah (bukan reparse DOMDocument) SENGAJA -- $html di sini
      * sudah lolos perbaikan struktur tabel LibreOffice (gabungkanTbodyBersebelahan()/
@@ -167,7 +165,7 @@ class NotulaService
                 continue;
             }
 
-            $html = str_replace($penanda, '<span contenteditable="false">'.RumusMarkup::keHtml($formula).'</span>', $html);
+            $html = str_replace($penanda, '<span class="rumus">'.RumusMarkup::keHtml($formula).'</span>', $html);
         }
 
         return $html;

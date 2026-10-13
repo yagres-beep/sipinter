@@ -529,10 +529,11 @@ class NotulaDownloadTest extends TestCase
 
         // Rumus dirakit jadi pecahan bersusun SUNGGUHAN (OOXML Math <m:f>, lihat
         // App\Support\RumusMarkup::keOmml()) -- pembilang/penyebutnya elemen XML
-        // terpisah, BUKAN notasi teks "2.00/8.00" lagi.
-        $this->assertStringContainsString('<m:t xml:space="preserve">2.00</m:t>', $xml);
-        $this->assertStringContainsString('<m:t xml:space="preserve">8.00</m:t>', $xml);
-        $this->assertStringNotContainsString('<m:t xml:space="preserve">7.00</m:t>', $xml);
+        // terpisah, BUKAN notasi teks "2/8" lagi. Angkanya bilangan bulat, bukan "2.00".
+        $this->assertStringContainsString('<m:t xml:space="preserve">2</m:t>', $xml);
+        $this->assertStringContainsString('<m:t xml:space="preserve">8</m:t>', $xml);
+        $this->assertStringNotContainsString('<m:t xml:space="preserve">7</m:t>', $xml);
+        $this->assertStringNotContainsString('2.00', $xml);
         $this->assertStringContainsString('Jumlah Publikasi Berkualitas', $xml);
         $this->assertStringContainsString('Jumlah Seluruh Publikasi', $xml);
         $this->assertStringContainsString('Target 2026: N = 8 mencakup: Laporan A, Laporan B.', $xml);

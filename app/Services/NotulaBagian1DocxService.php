@@ -648,8 +648,10 @@ class NotulaBagian1DocxService
             return null;
         }
 
-        $nTeks = PengaturanCapaian::formatAngka($n);
-        $besarNTeks = PengaturanCapaian::formatAngka($besarN);
+        // n & N di rumus selalu bilangan bulat (jumlah item), bukan "3.00" dari
+        // kolom desimal database.
+        $nTeks = PengaturanCapaian::formatAngka((int) round((float) $n));
+        $besarNTeks = PengaturanCapaian::formatAngka((int) round((float) $besarN));
 
         return "y = [[n|N]] × 100% = [[{$nTeks}|{$besarNTeks}]] × 100%";
     }

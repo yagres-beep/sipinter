@@ -318,7 +318,7 @@
         </div>
         <p class="fhint" style="margin-bottom:10px">Klik lalu ketik langsung di dalam Bagian I pada pratinjau di bawah untuk menyunting — Bagian II &amp; III ikut tampil di bawahnya persis dari berkas yang diunggah.</p>
         <p class="fhint" style="margin-bottom:10px">✏️ Baris yang Anda sunting diberi garis kuning tipis di kirinya. "↻ Susun Ulang Otomatis" hanya menambahkan/memperbarui isi dari data terbaru — baris bertanda kuning tidak diubah.</p>
-        <p class="fhint" style="margin-bottom:10px">🔒 Rumus (mis. pecahan/sigma pada baris "Dasar Hitung dan Basis Data Realisasi IKU") tercetak otomatis pada tiap indikator yang mengisinya dan DIKUNCI di sini agar strukturnya tidak rusak saat mengetik — untuk mengubah rumusnya sendiri, sunting field "Dasar Hitung" di Data Master &amp; Konfigurasi &gt; Master IKU, lalu tekan "↻ Susun Ulang Otomatis" di bawah supaya pratinjau ini mengikuti.</p>
+        <p class="fhint" style="margin-bottom:10px">🧮 Rumus (mis. pecahan/sigma pada baris "Dasar Hitung dan Basis Data Realisasi IKU", bergaris putus-putus) bisa disunting langsung di sini — klik angka/teks pembilang atau penyebutnya lalu ketik. Untuk mengubah rumus bawaannya, sunting field "Dasar Hitung" di Data Master &amp; Konfigurasi &gt; Master IKU, lalu tekan "↻ Susun Ulang Otomatis".</p>
 
         <div x-data="{
             aktifBold: false, aktifItalic: false, aktifUnderline: false,

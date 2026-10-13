@@ -426,7 +426,13 @@ class KompilasiNotula extends Component
     {
         $notula = $this->notula();
 
-        return app(NotulaService::class)->sisipkanBagianDuaTiga($this->bagian1EditText, $notula->bagian2_html, $notula->bagian3_html, untukEditor: true);
+        // Rumus pada bagian1_html lama masih dikunci (<span contenteditable="false">) --
+        // dibuka di sini supaya bisa disunting tanpa harus Susun Ulang dulu. Hanya
+        // <span> yang diganti; sisipan Bagian II/III (<div contenteditable="false">)
+        // tetap terkunci.
+        $html = str_replace('<span contenteditable="false">', '<span class="rumus">', (string) $this->bagian1EditText);
+
+        return app(NotulaService::class)->sisipkanBagianDuaTiga($html, $notula->bagian2_html, $notula->bagian3_html, untukEditor: true);
     }
 
     /**
