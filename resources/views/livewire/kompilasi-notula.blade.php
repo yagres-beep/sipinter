@@ -88,21 +88,39 @@
     <div class="card" x-data="{
         namaHari: ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'],
         namaBulan: ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'],
-        isiDariTanggal(iso, ref) {
+        tanggalIso: '',
+        waktuMulai: '', waktuSelesai: '', waktuZona: 'WITA',
+        {{-- Pemilih tanggal/jam diisi ulang dari teks yang sudah tersimpan (saat halaman
+             dibuka maupun saat triwulan diganti), supaya tidak tampil kosong padahal
+             Detail Rapat triwulan ini sudah pernah diisi. --}}
+        init() {
+            this.sinkronTanggal(this.$wire.hariTanggal);
+            this.sinkronWaktu(this.$wire.waktu);
+            this.$wire.$watch('hariTanggal', (v) => this.sinkronTanggal(v));
+            this.$wire.$watch('waktu', (v) => this.sinkronWaktu(v));
+        },
+        sinkronTanggal(teks) {
+            const m = (teks || '').match(/(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/);
+            const bulan = m ? this.namaBulan.findIndex((b) => b.toLowerCase() === m[2].toLowerCase()) : -1;
+            this.tanggalIso = bulan < 0 ? '' : `${m[3]}-${String(bulan + 1).padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+        },
+        sinkronWaktu(teks) {
+            const jam = [...(teks || '').matchAll(/(\d{1,2})[.:](\d{2})/g)].map((m) => `${m[1].padStart(2, '0')}:${m[2]}`);
+            this.waktuMulai = jam[0] || '';
+            this.waktuSelesai = jam[1] || '';
+            const zona = (teks || '').match(/\b(WITA|WIB|WIT)\b/);
+            if (zona) this.waktuZona = zona[1];
+        },
+        isiDariTanggal(iso) {
             if (! iso) return;
             const d = new Date(iso + 'T00:00:00');
-            const teks = `${this.namaHari[d.getDay()]}, ${d.getDate()} ${this.namaBulan[d.getMonth()]} ${d.getFullYear()}`;
-            this.$refs[ref].value = teks;
-            this.$refs[ref].dispatchEvent(new Event('input'));
+            this.$wire.set('hariTanggal', `${this.namaHari[d.getDay()]}, ${d.getDate()} ${this.namaBulan[d.getMonth()]} ${d.getFullYear()}`);
         },
-        waktuMulai: '', waktuSelesai: '', waktuZona: 'WITA',
-        isiDariWaktuRentang(ref) {
+        isiDariWaktuRentang() {
             if (! this.waktuMulai) return;
             const mulai = this.waktuMulai.replace(':', '.');
             const selesai = this.waktuSelesai ? this.waktuSelesai.replace(':', '.') : '';
-            const teks = selesai ? `${mulai} - ${selesai} ${this.waktuZona}` : `${mulai} ${this.waktuZona} - selesai`;
-            this.$refs[ref].value = teks;
-            this.$refs[ref].dispatchEvent(new Event('input'));
+            this.$wire.set('waktu', selesai ? `${mulai} - ${selesai} ${this.waktuZona}` : `${mulai} ${this.waktuZona} - selesai`);
         },
     }">
         <div class="sec"><span>Detail Rapat</span></div>
@@ -117,8 +135,8 @@
             <div class="field" style="flex:1;min-width:200px">
                 <label>Hari/Tanggal</label>
                 <input type="date" class="inp filled" style="width:100%;margin-bottom:6px"
-                    @change="isiDariTanggal($event.target.value, 'hariTanggal')">
-                <input type="text" class="inp filled" style="width:100%" wire:model="hariTanggal" x-ref="hariTanggal" placeholder="Contoh: Senin, 12 Oktober 2026">
+                    x-model="tanggalIso" @change="isiDariTanggal(tanggalIso)">
+                <input type="text" class="inp filled" style="width:100%" wire:model.blur="hariTanggal" placeholder="Contoh: Senin, 12 Oktober 2026">
                 @error('hariTanggal')
                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                 @enderror
@@ -126,23 +144,23 @@
             <div class="field" style="flex:1;min-width:260px">
                 <label>Waktu</label>
                 <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
-                    <input type="time" class="inp filled" style="flex:1;min-width:0" x-model="waktuMulai" @change="isiDariWaktuRentang('waktu')">
+                    <input type="time" class="inp filled" style="flex:1;min-width:0" x-model="waktuMulai" @change="isiDariWaktuRentang()">
                     <span>-</span>
-                    <input type="time" class="inp filled" style="flex:1;min-width:0" x-model="waktuSelesai" @change="isiDariWaktuRentang('waktu')">
-                    <select class="inp filled" style="width:88px" x-model="waktuZona" @change="isiDariWaktuRentang('waktu')">
+                    <input type="time" class="inp filled" style="flex:1;min-width:0" x-model="waktuSelesai" @change="isiDariWaktuRentang()">
+                    <select class="inp filled" style="width:88px" x-model="waktuZona" @change="isiDariWaktuRentang()">
                         <option value="WIB">WIB</option>
                         <option value="WITA">WITA</option>
                         <option value="WIT">WIT</option>
                     </select>
                 </div>
-                <input type="text" class="inp filled" style="width:100%" wire:model="waktu" x-ref="waktu" placeholder="Contoh: 09.00 - 11.00 WITA atau 13.30 WITA - selesai">
+                <input type="text" class="inp filled" style="width:100%" wire:model.blur="waktu" placeholder="Contoh: 09.00 - 11.00 WITA atau 13.30 WITA - selesai">
                 @error('waktu')
                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                 @enderror
             </div>
             <div class="field" style="flex:1;min-width:200px">
                 <label>Tempat</label>
-                <input type="text" class="inp filled" style="width:100%" wire:model="tempat">
+                <input type="text" class="inp filled" style="width:100%" wire:model.blur="tempat">
                 @error('tempat')
                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                 @enderror
@@ -152,7 +170,7 @@
         <div class="fl-row" style="gap:16px;flex-wrap:wrap;margin-top:16px">
             <div class="field" style="flex:1;min-width:220px">
                 <label>Pimpinan Rapat</label>
-                <input type="text" class="inp filled" style="width:100%" wire:model="pimpinanRapat"
+                <input type="text" class="inp filled" style="width:100%" wire:model.blur="pimpinanRapat"
                     list="daftar-pegawai-nama" placeholder="Pilih dari daftar pengguna atau ketik manual">
                 @error('pimpinanRapat')
                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
@@ -160,7 +178,7 @@
             </div>
             <div class="field" style="flex:1;min-width:220px">
                 <label>Notulis</label>
-                <input type="text" class="inp filled" style="width:100%" wire:model="notulis"
+                <input type="text" class="inp filled" style="width:100%" wire:model.blur="notulis"
                     list="daftar-pegawai-nama" placeholder="Pilih dari daftar pengguna atau ketik manual">
                 @error('notulis')
                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
@@ -168,7 +186,7 @@
             </div>
             <div class="field" style="flex:1;min-width:220px">
                 <label>Kepala Satker</label>
-                <input type="text" class="inp filled" style="width:100%" wire:model="kepalaSatker"
+                <input type="text" class="inp filled" style="width:100%" wire:model.blur="kepalaSatker"
                     list="daftar-pegawai-nama" placeholder="Pilih dari daftar pengguna atau ketik manual">
                 @error('kepalaSatker')
                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
@@ -179,7 +197,7 @@
         <div class="fl-row" style="gap:16px;flex-wrap:wrap;margin-top:16px">
             <div class="field" style="flex:1;min-width:200px">
                 <label>Kota (untuk TTD)</label>
-                <input type="text" class="inp filled" style="width:100%" wire:model="kotaTtd" placeholder="mis. Kulisusu">
+                <input type="text" class="inp filled" style="width:100%" wire:model.blur="kotaTtd" placeholder="mis. Kulisusu">
                 <div class="fhint">Dicetak di blok tanda tangan notula final: "Kota, tanggal" — bisa berbeda dari Tempat rapat.</div>
                 @error('kotaTtd')
                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
@@ -187,7 +205,7 @@
             </div>
             <div class="field" style="flex:2;min-width:260px">
                 <label>Link Lampiran Basis Data IKU</label>
-                <input type="text" class="inp filled" style="width:100%" wire:model="linkLampiranBasisData" placeholder="mis. http://s.bps.go.id/7409_LampiranBasisDataIKU2026">
+                <input type="text" class="inp filled" style="width:100%" wire:model.blur="linkLampiranBasisData" placeholder="mis. http://s.bps.go.id/7409_LampiranBasisDataIKU2026">
                 <div class="fhint">Dicetak di Bagian I pada tiap indikator, di bawah "Dasar Hitung dan Basis Data Realisasi IKU".</div>
                 @error('linkLampiranBasisData')
                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>

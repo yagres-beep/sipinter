@@ -215,6 +215,50 @@ class KompilasiNotulaTest extends TestCase
         $this->assertStringContainsString('Kepala BPS', $html);
     }
 
+    public function test_detail_rapat_tersimpan_otomatis_dan_diingat_saat_ganti_triwulan(): void
+    {
+        $this->fakeKonversiBagian1KeXmlMentah();
+        $this->loginSebagaiTimSakip();
+
+        Livewire::test(KompilasiNotula::class)
+            ->set('tahun', 2026)
+            ->set('triwulan', 2)
+            ->set('waktu', '09.00 - 11.00 WITA')
+            ->set('tempat', 'Ruang Rapat BPS')
+            ->assertHasNoErrors()
+            ->set('triwulan', 3)
+            ->assertSet('waktu', '')
+            ->assertSet('tempat', '')
+            ->set('triwulan', 2)
+            ->assertSet('waktu', '09.00 - 11.00 WITA')
+            ->assertSet('tempat', 'Ruang Rapat BPS');
+
+        $this->assertSame('09.00 - 11.00 WITA', $this->notulaUji(2026, 2)->waktu);
+    }
+
+    public function test_detail_rapat_tersimpan_tampil_lagi_saat_halaman_dibuka_ulang(): void
+    {
+        $this->fakeKonversiBagian1KeXmlMentah();
+        $this->loginSebagaiTimSakip();
+
+        Livewire::test(KompilasiNotula::class)
+            ->set('tahun', 2026)
+            ->set('triwulan', 2)
+            ->set('hariTanggal', 'Senin, 6 Juli 2026')
+            ->set('waktu', '09.00 - 11.00 WITA')
+            ->set('kotaTtd', 'Kulisusu')
+            ->call('simpanDetailRapat')
+            ->assertHasNoErrors();
+
+        // Halaman dibuka lagi: triwulan terakhir yang dibuka beserta isiannya muncul kembali.
+        Livewire::test(KompilasiNotula::class)
+            ->assertSet('tahun', 2026)
+            ->assertSet('triwulan', 2)
+            ->assertSet('hariTanggal', 'Senin, 6 Juli 2026')
+            ->assertSet('waktu', '09.00 - 11.00 WITA')
+            ->assertSet('kotaTtd', 'Kulisusu');
+    }
+
     /**
      * Rekap capaian triwulanan/PK (dipakai narasi pembuka Bagian I) murni perhitungan
      * data -- diuji langsung lewat kumpulkanDataBagianSatu(), TIDAK perlu lewat
