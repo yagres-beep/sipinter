@@ -6,6 +6,7 @@ use App\Models\Notula;
 use App\Services\NotulaBagian1DocxService;
 use App\Services\NotulaService;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -115,7 +116,9 @@ class NotulaDownloadController extends Controller
      */
     public function unduhBagian1Docx(Notula $notula, NotulaService $notulaService, NotulaBagian1DocxService $docxService): BinaryFileResponse
     {
-        $path = storage_path("app/private/notula/{$notula->id}/bagian1-mesin.docx");
+        // Nama unik per permintaan -- dua unduhan bersamaan tidak saling menimpa/
+        // menghapus berkas sementara milik yang lain (deleteFileAfterSend()).
+        $path = storage_path("app/private/notula/{$notula->id}/bagian1-mesin-".Str::random(10).'.docx');
         $data = $notulaService->kumpulkanDataBagianSatu($notula);
         $docxService->generate($notula, $data, $path);
 
@@ -131,7 +134,7 @@ class NotulaDownloadController extends Controller
      */
     public function pratinjauCepatPdf(Notula $notula, NotulaService $notulaService): BinaryFileResponse
     {
-        $path = storage_path("app/private/notula/{$notula->id}/pratinjau-cepat.pdf");
+        $path = storage_path("app/private/notula/{$notula->id}/pratinjau-cepat-".Str::random(10).'.pdf');
         $notulaService->renderPratinjauPdf($notula, $path);
 
         return response()->download($path, $notula->namaUnduhan('pratinjau'))->deleteFileAfterSend();

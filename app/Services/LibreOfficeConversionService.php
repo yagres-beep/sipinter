@@ -6,9 +6,10 @@ use DOMDocument;
 use DOMElement;
 use DOMNode;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
-use Symfony\Component\Process\Exception\ProcessFailedException;
+use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Process;
 
 /**
@@ -40,6 +41,8 @@ use Symfony\Component\Process\Process;
  */
 class LibreOfficeConversionService
 {
+    private const BATAS_WAKTU_DETIK = 120;
+
     /**
      * Konversi satu berkas (docx/xlsx/dll.) menjadi PDF, disimpan di $outputDir.
      * Nama berkas hasil SAMA dengan nama asli, hanya ekstensinya berubah jadi .pdf.
@@ -61,18 +64,24 @@ class LibreOfficeConversionService
     public function convertToHtml(string $inputPath, string $outputDir): string
     {
         $htmlPath = $this->jalankanSoffice($inputPath, $outputDir, 'html');
-
-        $html = file_get_contents($htmlPath);
-        $kontenInline = $this->ekstrakKontenInline($html === false ? '' : $html, $outputDir);
-
         $basename = pathinfo($htmlPath, PATHINFO_FILENAME);
-        foreach (glob(rtrim($outputDir, '/\\').DIRECTORY_SEPARATOR.$basename.'*') ?: [] as $sisa) {
-            if (is_file($sisa)) {
-                @unlink($sisa);
+
+        try {
+            // Gagal baca TIDAK boleh diam-diam jadi HTML kosong -- isi kosong itu bisa
+            // tersimpan menggantikan Bagian II/III yang sebelumnya valid.
+            $html = @file_get_contents($htmlPath);
+            if ($html === false || trim($html) === '') {
+                throw new RuntimeException('Hasil konversi HTML LibreOffice kosong atau tidak terbaca: '.basename($htmlPath));
+            }
+
+            return $this->ekstrakKontenInline($html, $outputDir);
+        } finally {
+            foreach (glob(rtrim($outputDir, '/\\').DIRECTORY_SEPARATOR.$basename.'*') ?: [] as $sisa) {
+                if (is_file($sisa) && ! @unlink($sisa)) {
+                    Log::warning('Berkas sementara konversi LibreOffice tidak bisa dihapus: '.basename($sisa), ['path' => $sisa]);
+                }
             }
         }
-
-        return $kontenInline;
     }
 
     private function jalankanSoffice(string $inputPath, string $outputDir, string $format): string
@@ -90,8 +99,11 @@ class LibreOfficeConversionService
             );
         }
 
-        if (! is_dir($outputDir)) {
-            mkdir($outputDir, 0755, true);
+        if (! is_dir($outputDir) && ! @mkdir($outputDir, 0755, true) && ! is_dir($outputDir)) {
+            throw new RuntimeException("Folder kerja konversi tidak bisa dibuat: {$outputDir}. Periksa izin tulis folder storage di server.");
+        }
+        if (! is_writable($outputDir)) {
+            throw new RuntimeException("Folder kerja konversi tidak bisa ditulisi: {$outputDir}. Periksa izin tulis folder storage di server.");
         }
 
         // LibreOffice headless WAJIB punya direktori profil pengguna yang bisa ditulis
@@ -134,13 +146,27 @@ class LibreOfficeConversionService
 
         // Konversi dokumen besar (mis. xlsx banyak sheet, gambar resolusi tinggi)
         // bisa agak lama — beri waktu lebih longgar dari request HTTP biasa.
-        $process->setTimeout(120);
-        $process->run();
+        $process->setTimeout(self::BATAS_WAKTU_DETIK);
 
-        File::deleteDirectory($profileDir);
+        // Pesan ProcessFailedException bawaan Symfony memuat perintah lengkap + seluruh
+        // output mentah -- tidak bisa dibaca Tim SAKIP saat ditampilkan di layar.
+        // Diganti RuntimeException berpesan singkat (penyebab teknisnya tetap ikut,
+        // dipangkas), dan profil sementara SELALU dibersihkan walau proses gagal/timeout.
+        try {
+            $process->run();
+        } catch (ProcessTimedOutException) {
+            throw new RuntimeException('Konversi dokumen lewat LibreOffice melebihi batas waktu '.self::BATAS_WAKTU_DETIK.' detik. Coba lagi beberapa saat lagi, atau periksa apakah berkasnya terlalu besar/rusak.');
+        } finally {
+            File::deleteDirectory($profileDir);
+        }
 
         if (! $process->isSuccessful()) {
-            throw new ProcessFailedException($process);
+            $rincian = trim($process->getErrorOutput()) ?: trim($process->getOutput());
+
+            throw new RuntimeException(
+                'Konversi dokumen lewat LibreOffice gagal (kode keluar '.$process->getExitCode().').'
+                .($rincian !== '' ? ' Rincian: '.Str::limit($rincian, 300) : '')
+            );
         }
 
         $namaHasil = pathinfo($inputPath, PATHINFO_FILENAME).'.'.$format;

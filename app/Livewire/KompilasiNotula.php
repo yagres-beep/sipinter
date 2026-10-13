@@ -142,15 +142,23 @@ class KompilasiNotula extends Component
      */
     protected function muatBagian1EditText(): void
     {
+        $this->resetErrorBag();
         $notula = $this->notula();
 
+        // Kegagalan penyusunan otomatis (mis. LibreOffice tidak terpasang/timeout,
+        // template rusak) TIDAK boleh meruntuhkan seluruh halaman -- tampilkan pesannya
+        // di atas editor, Tim SAKIP tetap bisa mengisi Detail Rapat/unggah Bagian II-III.
         if (blank($notula->bagian1_html)) {
-            app(NotulaService::class)->susunBagianSatu($notula);
-            $notula->refresh();
+            try {
+                app(NotulaService::class)->susunBagianSatu($notula);
+                $notula->refresh();
+            } catch (\Throwable $e) {
+                report($e);
+                $this->addError('bagian1', 'Bagian I belum bisa disusun otomatis: '.$e->getMessage());
+            }
         }
 
         $this->bagian1EditText = $notula->bagian1_html ?? '';
-        $this->resetErrorBag();
     }
 
     /**
@@ -184,7 +192,8 @@ class KompilasiNotula extends Component
             'linkLampiranBasisData' => ['nullable', 'string', 'max:2048'],
         ]);
 
-        $this->notula()->update([
+        $notula = $this->notula();
+        $notula->update([
             'hari_tanggal' => $data['hariTanggal'],
             'waktu' => $data['waktu'],
             'tempat' => $data['tempat'],
@@ -195,7 +204,18 @@ class KompilasiNotula extends Component
             'link_lampiran_basis_data' => $data['linkLampiranBasisData'],
         ]);
 
-        session()->flash('status', 'Detail rapat berhasil disimpan.');
+        // Hari/tanggal, waktu, tempat, pimpinan rapat & link lampiran TERCETAK di
+        // dalam bagian1_html (diisi saat Bagian I disusun) -- tidak diperbarui
+        // diam-diam di HTML yang mungkin sudah disunting manual, jadi Tim SAKIP diberi
+        // tahu bahwa Bagian I masih memuat nilai lama. Notulis/Kota/tanggal TTD tidak
+        // perlu, karena blok TTD akhir selalu dibaca langsung dari data terbaru.
+        $tercetakDiBagian1 = ['hari_tanggal', 'waktu', 'tempat', 'pimpinan_rapat', 'link_lampiran_basis_data'];
+        $pesan = 'Detail rapat berhasil disimpan.';
+        if (filled($notula->bagian1_html) && $notula->wasChanged($tercetakDiBagian1)) {
+            $pesan .= ' Bagian I masih memuat detail rapat sebelumnya -- tekan "Susun Ulang Otomatis" supaya ikut diperbarui (suntingan manual dicadangkan dan bisa dipulihkan).';
+        }
+
+        session()->flash('status', $pesan);
     }
 
     /**
@@ -238,12 +258,22 @@ class KompilasiNotula extends Component
         $this->konfirmasiSusunUlang = false;
 
         $notula = $this->notula();
+        $isiLama = $notula->bagian1_html;
 
-        if (filled($notula->bagian1_html)) {
-            $notula->update(['bagian1_html_cadangan' => $notula->bagian1_html]);
+        // Cadangan baru ditulis SETELAH penyusunan berhasil -- bila gagal, isi Bagian I
+        // maupun cadangan sebelumnya tetap utuh (tidak tertimpa diam-diam).
+        try {
+            $html = app(NotulaService::class)->susunBagianSatu($notula);
+        } catch (\Throwable $e) {
+            report($e);
+            $this->addError('bagian1', 'Susun ulang gagal, Bagian I tidak diubah: '.$e->getMessage());
+
+            return;
         }
 
-        $html = app(NotulaService::class)->susunBagianSatu($notula);
+        if (filled($isiLama)) {
+            $notula->update(['bagian1_html_cadangan' => $isiLama]);
+        }
 
         // Isi notula berubah -> hasil gabungan lama tidak valid lagi, dan kalau notula
         // triwulan ini sudah terlanjur ber-TTD, ia dibuka kembali sebagai versi baru
@@ -381,6 +411,9 @@ class KompilasiNotula extends Component
             session()->flash('status', 'Ketiga bagian berhasil digabungkan. Notula menunggu persetujuan Kepala.');
         } catch (RuntimeException $e) {
             $this->addError('gabung', $e->getMessage());
+        } catch (\Throwable $e) {
+            report($e);
+            $this->addError('gabung', 'Notula gagal digabungkan: '.$e->getMessage());
         }
     }
 

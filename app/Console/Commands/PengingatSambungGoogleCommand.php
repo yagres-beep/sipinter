@@ -6,6 +6,7 @@ use App\Jobs\KirimPengingatEmailJob;
 use App\Models\PengaturanPenerimaPengingat;
 use App\Models\PengaturanTemplatePengingat;
 use App\Models\StorageAccount;
+use App\Services\WhatsAppPengingatService;
 use Illuminate\Console\Command;
 
 /**
@@ -19,7 +20,7 @@ class PengingatSambungGoogleCommand extends Command
 
     protected $description = 'Kirim pengingat WA ke Tim SAKIP untuk akun Google yang perlu disambungkan ulang';
 
-    public function handle(): int
+    public function handle(WhatsAppPengingatService $whatsApp): int
     {
         $akunPerluHubungUlang = StorageAccount::all()->filter->googlePerluHubungUlang();
 
@@ -37,6 +38,7 @@ class PengingatSambungGoogleCommand extends Command
 
             foreach ($penerima as $user) {
                 KirimPengingatEmailJob::dispatch($user->email, $subjek, $pesan);
+                $whatsApp->antrekan($user, 'google_reconnect', $subjek, $pesan, "akun{$akun->id}:".now()->toDateString());
             }
         }
 

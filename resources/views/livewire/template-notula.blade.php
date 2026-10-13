@@ -8,6 +8,10 @@
         <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>
     @endif
 
+    @if (session('peringatan'))
+        <div class="badge b-tunggu" style="display:block;margin-bottom:14px;white-space:normal">⚠ {{ session('peringatan') }}</div>
+    @endif
+
     @if (session('error'))
         <div class="badge b-tolak" style="display:block;margin-bottom:14px">{{ session('error') }}</div>
     @endif

@@ -46,6 +46,13 @@
                     <input class="inp filled" type="text" name="nomor_telepon" value="{{ old('nomor_telepon', $user->nomor_telepon) }}" placeholder="untuk pengingat tindakan" required>
                 </div>
                 <div class="field">
+                    <label style="display:flex;gap:8px;align-items:flex-start;font-weight:400;cursor:pointer">
+                        <input type="hidden" name="wa_opt_in" value="0">
+                        <input type="checkbox" name="wa_opt_in" value="1" style="margin-top:3px" @checked(old('wa_opt_in', $user->wa_opt_in))>
+                        <span>Saya bersedia menerima pengingat tugas SIPINTER lewat WhatsApp ke nomor di atas. Bisa dibatalkan kapan saja dengan menghapus centang ini.</span>
+                    </label>
+                </div>
+                <div class="field">
                     <label>Peran</label>
                     <div class="inp ro">{{ $user->role->nama }}</div>
                 </div>

@@ -14,12 +14,15 @@ use App\Models\Notula;
 use App\Models\Periode;
 use App\Models\RtlEvaluasi;
 use App\Models\User;
+use App\Support\HtmlNotulaDompdf;
+use App\Support\PenggantiBerkasAman;
 use App\Support\RumusMarkup;
 use Barryvdh\DomPDF\Facade\Pdf as PdfFacade;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use RuntimeException;
 
 /**
@@ -37,6 +40,7 @@ class NotulaService
         protected LibreOfficeConversionService $konversi,
         protected FolderStructureService $folder,
         protected NotulaBagian1DocxService $docx,
+        protected PenggantiBerkasAman $berkas,
     ) {}
 
     /**
@@ -76,7 +80,10 @@ class NotulaService
 
         $dir = storage_path("app/private/notula/{$notula->id}/bagian1-sementara");
         $this->pastikanFolder($dir);
-        $docxPath = $dir.'/bagian1.docx';
+        // Nama unik per pemanggilan: dua penyusunan bersamaan atas notula yang sama tidak
+        // saling menimpa docx-nya, dan convertToHtml() (yang membersihkan semua berkas
+        // sebasename di $dir) tidak menghapus berkas milik penyusunan lain.
+        $docxPath = $dir.'/bagian1-'.Str::lower(Str::random(10)).'.docx';
 
         // sertakanBlokTtdMandiri: false -- HTML ini disisipkan ke tengah dokumen
         // gabungan Bagian I+II+III, yang sudah punya blok TTD akhirnya sendiri di
@@ -88,7 +95,9 @@ class NotulaService
         try {
             $html = $this->konversi->convertToHtml($docxPath, $dir);
         } finally {
-            @unlink($docxPath);
+            if (file_exists($docxPath) && ! @unlink($docxPath)) {
+                Log::warning('Berkas docx sementara Bagian I tidak bisa dihapus: '.basename($docxPath), ['path' => $docxPath]);
+            }
         }
 
         $html = $this->gantiGambarRumusDenganHtml($html, $formulaUrutan);
@@ -408,9 +417,16 @@ class NotulaService
     private function dataNotulaUtuh(Notula $notula, bool $sertakanTtd): array
     {
         $periode = $notula->periode;
+        $halaman = $this->docx->tataHalamanTemplate();
+
+        // HtmlNotulaDompdf hanya menyesuaikan salinan untuk dompdf (baris tabel
+        // panjang dipecah supaya tidak terpotong, font dipetakan) -- bagian*_html
+        // tersimpan & pratinjau WYSIWYG tidak berubah.
+        $isi = $this->sisipkanBagianDuaTiga($notula->bagian1_html ?? '', $notula->bagian2_html, $notula->bagian3_html);
 
         return [
-            'bagian1Html' => $this->sisipkanBagianDuaTiga($notula->bagian1_html ?? '', $notula->bagian2_html, $notula->bagian3_html),
+            'bagian1Html' => HtmlNotulaDompdf::siapkan($isi, $halaman),
+            'halaman' => $halaman,
             'labelTriwulan' => ['I', 'II', 'III', 'IV'][$periode->triwulan - 1] ?? $periode->triwulan,
             'tahun' => $periode->tahun,
             'sertakanTtd' => $sertakanTtd,
@@ -426,14 +442,69 @@ class NotulaService
         ];
     }
 
-    private function renderNotulaUtuhPdf(Notula $notula, bool $sertakanTtd, string $outputPath): string
+    /**
+     * Render ke berkas sementara di folder tujuan, validasi (tidak kosong, berkepala
+     * %PDF-), lalu pasang lewat PenggantiBerkasAman: berkas lama di $outputPath (mis.
+     * draf versi yang sama dari penggabungan sebelumnya) baru benar-benar diganti
+     * setelah berkas baru terpasang DAN $lanjutan (pembaruan DB) berhasil -- bila
+     * $lanjutan gagal, berkas lama dipulihkan sehingga PDF di disk selalu cocok dengan
+     * status/kolom di DB.
+     *
+     * Kegagalan dompdf (Dompdf\Exception BUKAN turunan RuntimeException) dibungkus jadi
+     * RuntimeException "PDF notula gagal dibuat: ..." supaya ditangkap & ditampilkan
+     * pemanggil (KompilasiNotula, PersetujuanNotula). Exception dari $lanjutan
+     * diteruskan apa adanya.
+     */
+    private function renderNotulaUtuhPdf(Notula $notula, bool $sertakanTtd, string $outputPath, ?callable $lanjutan = null, array $opsi = []): string
     {
-        $pdf = PdfFacade::loadView('pdf.notula-utuh', $this->dataNotulaUtuh($notula, $sertakanTtd));
+        $data = $this->dataNotulaUtuh($notula, $sertakanTtd);
+        $sementara = $outputPath.'.'.Str::random(8).'.tmp';
 
-        $this->pastikanFolder(dirname($outputPath));
-        $pdf->save($outputPath);
+        try {
+            $this->berkas->pastikanFolder(dirname($outputPath));
+
+            PdfFacade::loadView('pdf.notula-utuh', $data)
+                ->setPaper([0, 0, $data['halaman']['lebar'], $data['halaman']['tinggi']])
+                ->save($sementara);
+
+            $kepala = is_file($sementara) ? (string) @file_get_contents($sementara, false, null, 0, 5) : '';
+            if ($kepala !== '%PDF-') {
+                throw new RuntimeException('hasil render bukan PDF yang valid.');
+            }
+        } catch (\Throwable $e) {
+            if (file_exists($sementara) && ! @unlink($sementara)) {
+                Log::warning('Berkas sementara render PDF tidak bisa dihapus: '.basename($sementara), ['path' => $sementara]);
+            }
+            Log::error('Gagal membuat PDF notula: '.$e->getMessage(), ['notula_id' => $notula->id]);
+
+            throw new RuntimeException('PDF notula gagal dibuat: '.$e->getMessage(), 0, $e);
+        }
+
+        $this->berkas->pasang($sementara, $outputPath, $lanjutan, $opsi + self::OPSI_PDF);
 
         return $outputPath;
+    }
+
+    /** Validasi format PDF hasil render/konversi sebelum menggantikan berkas lama. */
+    private const OPSI_PDF = ['awalan' => '%PDF-', 'akhiran_memuat' => '%%EOF'];
+
+    /** Kolom notula berisi teks panjang -- dicatat di jurnal sebagai hash, bukan isinya. */
+    private const KOLOM_HASH = ['bagian1_html', 'bagian2_html', 'bagian3_html'];
+
+    /**
+     * Kondisi DB sebelum & sesudah lanjutan untuk jurnal PenggantiBerkasAman -- dipakai
+     * perintah notula:penggantian-berkas untuk membuktikan apakah transaksi sempat
+     * ter-commit bila proses mati di tengah jalan (lihat PemulihPenggantianBerkas).
+     */
+    private function verifikasiNotula(Notula $notula, array $sesudah): array
+    {
+        $sebelum = [];
+        foreach (array_keys($sesudah) as $kolom) {
+            $nilai = $notula->getRawOriginal($kolom);
+            $sebelum[$kolom] = in_array($kolom, self::KOLOM_HASH, true) && $nilai !== null ? 'sha256:'.hash('sha256', (string) $nilai) : $nilai;
+        }
+
+        return ['model' => Notula::class, 'id' => $notula->getKey(), 'sebelum' => $sebelum, 'sesudah' => $sesudah];
     }
 
     /**
@@ -455,28 +526,65 @@ class NotulaService
         }
 
         $pathAsli = $file->store('notula-sementara', 'local');
+        if (! is_string($pathAsli) || $pathAsli === '') {
+            throw new RuntimeException('Berkas unggahan gagal disimpan sementara di server. Periksa izin tulis folder storage.');
+        }
         $fullPathAsli = Storage::disk('local')->path($pathAsli);
         $dirKerja = dirname($fullPathAsli);
-
-        $fullPathPdf = $this->konversi->convertToPdf($fullPathAsli, $dirKerja);
+        $fullPathPdf = null;
+        $pdfSementaraTujuan = null;
 
         $relatifTujuanPdf = "notula/{$notula->id}/bagian{$bagianKe}.pdf";
         $fullPathTujuanPdf = Storage::disk('local')->path($relatifTujuanPdf);
-        $this->pastikanFolder(dirname($fullPathTujuanPdf));
-        copy($fullPathPdf, $fullPathTujuanPdf);
-
-        // Konten inline dibaca SEBELUM berkas sementara dihapus di bawah.
-        $kontenInline = $this->konversi->convertToHtml($fullPathAsli, $dirKerja);
-
-        @unlink($fullPathPdf);
-        @unlink($fullPathAsli);
-
         $kolomPdf = $bagianKe === 2 ? 'bagian2_pdf' : 'bagian3_pdf';
         $kolomHtml = $bagianKe === 2 ? 'bagian2_html' : 'bagian3_html';
-        $notula->update([$kolomPdf => $relatifTujuanPdf, $kolomHtml => $kontenInline]);
-
         $romawi = $bagianKe === 2 ? 'II' : 'III';
-        $notula->tandaiPerluDigabungUlang($pelaku, "Berkas Bagian {$romawi} diganti setelah notula disetujui — notula dibuka kembali sebagai versi baru dan perlu digabung serta disetujui ulang.");
+
+        // Urutan: konversi PDF -> salin ke berkas sementara di folder tujuan (WAJIB
+        // sebelum convertToHtml(), yang membersihkan semua berkas sebasename di
+        // $dirKerja termasuk PDF ini) -> konversi HTML -> pasang PDF lewat
+        // PenggantiBerkasAman dengan pembaruan DB sebagai lanjutannya. Jadi bagian{2,3}.pdf
+        // lama baru benar-benar diganti bila DB juga berhasil diperbarui -- PDF baru tidak
+        // pernah berpasangan dengan HTML lama (atau sebaliknya). Berkas sementara selalu
+        // dibersihkan (finally; sumber yang sudah terpasang sudah tidak ada lagi).
+        try {
+            $fullPathPdf = $this->konversi->convertToPdf($fullPathAsli, $dirKerja);
+
+            $this->berkas->pastikanFolder(dirname($fullPathTujuanPdf));
+            $pdfSementaraTujuan = $fullPathTujuanPdf.'.'.Str::random(8).'.tmp';
+            if (! @copy($fullPathPdf, $pdfSementaraTujuan) || filesize($pdfSementaraTujuan) !== filesize($fullPathPdf)) {
+                throw new RuntimeException("PDF Bagian {$romawi} gagal disalin ke folder penyimpanan (izin ditolak atau disk penuh) -- berkas lama tidak diubah.");
+            }
+
+            $kontenInline = $this->konversi->convertToHtml($fullPathAsli, $dirKerja);
+
+            $sumber = $pdfSementaraTujuan;
+            $pdfSementaraTujuan = null; // sejak sini tanggung jawab PenggantiBerkasAman
+
+            $this->berkas->pasang($sumber, $fullPathTujuanPdf, function () use ($notula, $kolomPdf, $kolomHtml, $relatifTujuanPdf, $kontenInline, $pelaku, $romawi) {
+                DB::transaction(function () use ($notula, $kolomPdf, $kolomHtml, $relatifTujuanPdf, $kontenInline, $pelaku, $romawi) {
+                    $notula->update([$kolomPdf => $relatifTujuanPdf, $kolomHtml => $kontenInline]);
+                    $notula->tandaiPerluDigabungUlang($pelaku, "Berkas Bagian {$romawi} diganti setelah notula disetujui — notula dibuka kembali sebagai versi baru dan perlu digabung serta disetujui ulang.");
+                });
+            }, self::OPSI_PDF + [
+                'label' => "unggah Bagian {$romawi} notula #{$notula->id}",
+                'verifikasi' => $this->verifikasiNotula($notula, [$kolomPdf => $relatifTujuanPdf, $kolomHtml => 'sha256:'.hash('sha256', $kontenInline)]),
+            ]);
+        } catch (\Throwable $e) {
+            // Atribut model yang terlanjur diubah di memori (transaksi di-rollback)
+            // dikembalikan ke isi DB supaya pemanggil tidak memakai data setengah jadi.
+            if ($notula->exists) {
+                $notula->refresh();
+            }
+
+            throw $e;
+        } finally {
+            foreach ([$fullPathPdf, $pdfSementaraTujuan, $fullPathAsli] as $sisa) {
+                if ($sisa !== null && file_exists($sisa) && ! @unlink($sisa)) {
+                    Log::warning('Berkas sementara unggahan notula tidak bisa dihapus: '.basename($sisa), ['path' => $sisa]);
+                }
+            }
+        }
     }
 
     /**
@@ -519,8 +627,11 @@ class NotulaService
     public function renderPratinjauBagianPdf(Notula $notula, int $bagianKe): string
     {
         $html = $bagianKe === 2 ? $notula->bagian2_html : $notula->bagian3_html;
+        $halaman = $this->docx->tataHalamanTemplate();
 
-        return PdfFacade::loadHTML($html ?? '')->output();
+        return PdfFacade::loadHTML(HtmlNotulaDompdf::siapkan($html ?? '', $halaman))
+            ->setPaper([0, 0, $halaman['lebar'], $halaman['tinggi']])
+            ->output();
     }
 
     /**
@@ -543,12 +654,31 @@ class NotulaService
         $namaBerkas = $notula->namaUnduhan('draf');
         $dir = storage_path("app/private/notula/{$notula->id}");
         $gabunganPath = $dir.'/'.$namaBerkas;
-        $this->renderNotulaUtuhPdf($notula, sertakanTtd: false, outputPath: $gabunganPath);
 
-        $notula->update(['pdf_gabungan' => "notula/{$notula->id}/{$namaBerkas}"]);
+        // Penggabungan ulang versi yang SAMA menimpa berkas draf bernama sama -- DB
+        // diperbarui sebagai lanjutan pemasangan berkas (PenggantiBerkasAman), jadi bila
+        // pembaruan status gagal, berkas draf lama (yang mungkin sedang ditinjau Kepala)
+        // dipulihkan, tidak diam-diam berisi data yang belum terkirim.
+        $akanDikirim = in_array($notula->status, [Notula::STATUS_DRAFT, Notula::STATUS_DIKEMBALIKAN], true);
+        $verifikasi = $this->verifikasiNotula($notula, [
+            'pdf_gabungan' => "notula/{$notula->id}/{$namaBerkas}",
+            'status' => $akanDikirim ? Notula::STATUS_MENUNGGU_PERSETUJUAN : $notula->getRawOriginal('status'),
+        ]);
 
-        if (in_array($notula->status, [Notula::STATUS_DRAFT, Notula::STATUS_DIKEMBALIKAN], true)) {
-            $notula->kirimKePersetujuan($user);
+        try {
+            $this->renderNotulaUtuhPdf($notula, sertakanTtd: false, outputPath: $gabunganPath, lanjutan: function () use ($notula, $namaBerkas, $user) {
+                DB::transaction(function () use ($notula, $namaBerkas, $user) {
+                    $notula->update(['pdf_gabungan' => "notula/{$notula->id}/{$namaBerkas}"]);
+
+                    if (in_array($notula->status, [Notula::STATUS_DRAFT, Notula::STATUS_DIKEMBALIKAN], true)) {
+                        $notula->kirimKePersetujuan($user);
+                    }
+                });
+            }, opsi: ['label' => "gabungkan notula #{$notula->id}", 'verifikasi' => $verifikasi]);
+        } catch (\Throwable $e) {
+            $notula->refresh();
+
+            throw $e;
         }
     }
 
@@ -561,21 +691,45 @@ class NotulaService
      */
     public function setujui(Notula $notula, User $kepala): void
     {
-        DB::transaction(function () use ($notula, $kepala) {
-            $notula->setujui($kepala);
-            $this->setujuiKegiatanTriwulan($notula->periode, $kepala);
-        });
-
         // Nama berkas final bernomor versi (lihat Notula::namaUnduhan()) — versi lama
         // yang pernah ditandatangani Kepala TETAP utuh di disk maupun di arsip Drive,
         // tidak ditimpa oleh versi berikutnya.
         $namaBerkas = $notula->namaUnduhan('final');
         $dir = storage_path("app/private/notula/{$notula->id}");
         $gabunganFinalPath = $dir.'/'.$namaBerkas;
-        $this->renderNotulaUtuhPdf($notula, sertakanTtd: true, outputPath: $gabunganFinalPath);
-
         $relatifFinal = "notula/{$notula->id}/{$namaBerkas}";
-        $notula->update(['pdf_final' => $relatifFinal]);
+
+        if (! $notula->canTransitionTo(Notula::STATUS_DISETUJUI)) {
+            throw new InvalidStatusTransitionException($notula->status, Notula::STATUS_DISETUJUI);
+        }
+
+        // PDF final dirender DULU, SEBELUM status apa pun diubah -- bila render gagal,
+        // notula tetap "menunggu persetujuan" dan tidak ada notifikasi status yang
+        // terlanjur terkirim (antrean "sync" di produksi mengirim email langsung saat
+        // status Capaian berubah). Sebelumnya notula bisa tercatat disetujui tanpa PDF
+        // final sama sekali. Nama Kepala untuk blok TTD dipasang di memori saja
+        // (setRelation), baru disimpan lewat Notula::setujui() di lanjutan.
+        //
+        // Transaksi persetujuan dijalankan sebagai lanjutan pemasangan berkas
+        // (PenggantiBerkasAman): bila gagal, berkas di path final dikembalikan ke isi
+        // sebelumnya (atau dihapus bila memang belum ada) -- BUKAN dihapus begitu saja.
+        $notula->setRelation('disetujuiOleh', $kepala);
+        $verifikasi = $this->verifikasiNotula($notula, ['status' => Notula::STATUS_DISETUJUI, 'pdf_final' => $relatifFinal]);
+
+        try {
+            $this->renderNotulaUtuhPdf($notula, sertakanTtd: true, outputPath: $gabunganFinalPath, lanjutan: function () use ($notula, $kepala, $relatifFinal) {
+                DB::transaction(function () use ($notula, $kepala, $relatifFinal) {
+                    $notula->setujui($kepala);
+                    $this->setujuiKegiatanTriwulan($notula->periode, $kepala);
+                    $notula->update(['pdf_final' => $relatifFinal]);
+                });
+            }, opsi: ['label' => "setujui notula #{$notula->id}", 'verifikasi' => $verifikasi]);
+        } catch (\Throwable $e) {
+            $notula->unsetRelation('disetujuiOleh');
+            $notula->refresh();
+
+            throw $e;
+        }
 
         try {
             $hasil = $this->folder->unggahArsipNotula($notula->periode, $gabunganFinalPath, $namaBerkas);
@@ -750,8 +904,6 @@ class NotulaService
 
     protected function pastikanFolder(string $dir): void
     {
-        if (! is_dir($dir)) {
-            mkdir($dir, 0755, true);
-        }
+        $this->berkas->pastikanFolder($dir);
     }
 }

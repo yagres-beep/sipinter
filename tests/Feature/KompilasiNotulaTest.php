@@ -341,8 +341,8 @@ class KompilasiNotulaTest extends TestCase
         $notula = app(NotulaService::class)->untukTriwulan(2026, 2);
         app(NotulaService::class)->susunBagianSatu($notula);
 
-        $docxPath = storage_path("app/private/notula/{$notula->id}/bagian1-sementara/bagian1.docx");
-        $this->assertFileDoesNotExist($docxPath);
+        // Nama docx sementara unik per pemanggilan -- yang diuji: tidak ada SATU PUN tersisa.
+        $this->assertSame([], glob(storage_path("app/private/notula/{$notula->id}/bagian1-sementara/*.docx")) ?: []);
     }
 
     public function test_bagian1_menampilkan_volume_ro_dasar_hitung_dan_catatan_bila_terisi(): void

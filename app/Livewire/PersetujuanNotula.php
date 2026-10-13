@@ -153,6 +153,10 @@ class PersetujuanNotula extends Component
             $this->cacheNotulaDihitung = false;
         } catch (InvalidStatusTransitionException $e) {
             $this->addError('aksi', $e->getMessage());
+        } catch (\RuntimeException $e) {
+            // Render PDF final gagal -> persetujuan dibatalkan (lihat NotulaService::setujui()).
+            $this->addError('aksi', 'Notula BELUM disetujui karena '.lcfirst($e->getMessage()).' Coba lagi, atau hubungi admin bila terus berulang.');
+            $this->cacheNotulaDihitung = false;
         }
     }
 

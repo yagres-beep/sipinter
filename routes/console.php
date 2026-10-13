@@ -32,3 +32,7 @@ try {
 Schedule::command('pengingat:deadline-iku')->dailyAt($jamPengingat)->timezone('Asia/Makassar');
 Schedule::command('pengingat:iku-lengkap')->dailyAt($jamPengingat)->timezone('Asia/Makassar');
 Schedule::command('pengingat:google-reconnect')->dailyAt($jamPengingat)->timezone('Asia/Makassar');
+
+// Antrean WhatsApp: berjalan di latar belakang karena satu panggilan bisa
+// menunggu ±1 menit saat gateway Render Free sedang bangun dari tidur.
+Schedule::command('whatsapp:proses-antrean')->everyMinute()->withoutOverlapping(10)->runInBackground();
