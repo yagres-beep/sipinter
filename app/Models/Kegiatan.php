@@ -121,14 +121,14 @@ class Kegiatan extends Model
     }
 
     /**
-     * Nama capaian kegiatan untuk ditampilkan: kegiatan survei/sensus diberi awalan
-     * tahapannya, mis. "Persiapan Survei Sakernas" (satu baris kegiatan per tahapan).
+     * Nama capaian kegiatan untuk ditampilkan = nama folder kegiatannya: survei/sensus
+     * "<Tahapan> <uraian>" (mis. "Persiapan Survei Sakernas", satu baris per tahapan),
+     * selain itu nama folder kegiatan. Keduanya mengikuti nama yang diganti pengguna.
+     * Nama otomatis lama berformat "[Persiapan] ..." ikut dirapikan tanpa kurung siku.
      */
     public function uraianTampil(): string
     {
-        $tahapan = $this->jenis === 'survei_sensus' ? $this->tahapan_survei : null;
-
-        return \App\Livewire\PengisianKegiatan::uraianDenganTahapan((string) $this->uraian_kegiatan, $tahapan);
+        return (string) preg_replace('/^\[([^\]]+)\]\s*/u', '$1 ', $this->namaFolder());
     }
 
     /**

@@ -272,16 +272,14 @@
                     tahapanTerisi: {{ filled($block['tahapan_survei'] ?? null) ? 'true' : 'false' }},
                     tahapanNilai: '{{ $block['tahapan_survei'] ?? '' }}',
                     namaFolder: @js($block['nama_folder'] ?? ''),
-                    ubahFolder: {{ filled($block['nama_folder'] ?? '') ? 'true' : 'false' }},
+                    ubahFolder: false,
                     pendingBuktiNames: [],
                     get folderPreview() {
                         if (! this.uraianTeks.trim()) return '';
-                        // Survei/sensus: folder tahapan cukup bernama tahapannya (mis.
-                        // "Persiapan") di dalam folder induk bernama uraian kegiatan.
-                        if (this.jenisTerpilih === 'survei_sensus' && this.tahapanNilai) {
-                            return this.tahapanNilai.charAt(0).toUpperCase() + this.tahapanNilai.slice(1);
-                        }
-                        const full = this.uraianTeks;
+                        const prefix = (this.jenisTerpilih === 'survei_sensus' && this.tahapanNilai)
+                            ? this.tahapanNilai.charAt(0).toUpperCase() + this.tahapanNilai.slice(1) + ' '
+                            : '';
+                        const full = prefix + this.uraianTeks;
                         return full.length > 100 ? full.slice(0, 100) : full;
                     }
                 }">
@@ -507,40 +505,72 @@
                                             $folderInduk = $folder['urutan'] === 0;
                                         @endphp
                                         <div wire:key="folder-unggah-{{ $i }}-{{ $grup['urutan'] }}-{{ $folder['urutan'] }}" style="{{ $folderInduk ? '' : 'margin-left:18px;' }}margin-top:6px">
-                                            <div class="foldername" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                                                <span>{{ $survei || ! $folderInduk ? '↳ ' : '' }}📁
-                                                    @if ($folderInduk && $grup['urutan'] === 0)
-                                                        {{-- Folder utama bisa diganti namanya (blocks.*.nama_folder). --}}
-                                                        <span x-text="namaFolder.trim() !== '' ? namaFolder.trim() : folderPreview">{{ $grup['label'] }}</span>
+                                            @php $folderUtama = $folderInduk && $grup['urutan'] === 0; @endphp
+                                            {{-- Semua nama folder bisa diganti lewat ✏️: folder utama →
+                                                 blocks.*.nama_folder, folder tahapan tambahan →
+                                                 blocks.*.nama_folder_tahapan.<tahapan>, subfolder →
+                                                 gantiNamaSubfolder(). Nama folder tahapan/kegiatan = capaian. --}}
+                                            <div x-data="{ ubahIni: false }">
+                                                <div class="foldername" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                                                    <span>{{ $survei || ! $folderInduk ? '↳ ' : '' }}📁
+                                                        @if ($folderUtama)
+                                                            <span x-text="namaFolder.trim() !== '' ? namaFolder.trim() : folderPreview">{{ $grup['label'] }}</span>
+                                                        @else
+                                                            {{ $folderInduk ? $grup['label'] : $folder['subfolder'] }}
+                                                        @endif
+                                                    </span>
+                                                    @if ($folderUtama)
+                                                        <button type="button" class="btn-ubah-nama" title="Ganti nama folder" x-show="!ubahFolder" @click="ubahFolder = true; $nextTick(() => $refs.namaFolderInput.focus())">✏️</button>
                                                     @else
-                                                        {{ $folderInduk ? $grup['label'] : $folder['subfolder'] }}
+                                                        <button type="button" class="btn-ubah-nama" title="Ganti nama folder" x-show="!ubahIni" @click="ubahIni = true; $nextTick(() => $refs.inputNamaIni.focus())">✏️</button>
                                                     @endif
-                                                </span>
-                                                @if ($folderInduk && $grup['urutan'] === 0)
-                                                    <button type="button" class="btn-ubah-nama" title="Ganti nama folder" x-show="!ubahFolder" @click="ubahFolder = true; $nextTick(() => $refs.namaFolderInput.focus())">✏️</button>
-                                                @endif
-                                                <label class="btn btn-ghost btn-sm" style="cursor:pointer;margin-left:auto">
-                                                    📤 Unggah ke folder ini
-                                                    <input type="file" wire:model="unggahFolder.{{ $i }}.{{ $grup['urutan'] }}.{{ $folder['urutan'] }}" multiple accept="application/pdf" style="display:none"
-                                                        @change="pendingBuktiNames = Array.from($event.target.files).map(f => f.name)">
-                                                </label>
-                                            </div>
-                                            @if ($folderInduk && $grup['tahapan'])
-                                                <div class="fhint" style="margin-top:2px">Capaian: <b>{{ \App\Livewire\PengisianKegiatan::uraianDenganTahapan($block['uraian_kegiatan'], $grup['tahapan']) }}</b></div>
-                                            @endif
-                                            @if ($folderInduk && $grup['urutan'] === 0)
-                                                <div x-show="ubahFolder" x-cloak style="margin-top:6px">
-                                                    <input type="text" class="inp filled" maxlength="150" x-ref="namaFolderInput"
-                                                        wire:model.live.blur="blocks.{{ $i }}.nama_folder"
-                                                        @input="namaFolder = $event.target.value"
-                                                        @keydown.enter.prevent="$event.target.blur(); ubahFolder = false"
-                                                        :placeholder="folderPreview">
-                                                    <div class="fhint">Kosongkan untuk memakai rekomendasi sistem. Nama folder tersimpan saat Simpan Draft/Ajukan.</div>
+                                                    <label class="btn btn-ghost btn-sm" style="cursor:pointer;margin-left:auto">
+                                                        📤 Unggah ke folder ini
+                                                        <input type="file" wire:model="unggahFolder.{{ $i }}.{{ $grup['urutan'] }}.{{ $folder['urutan'] }}" multiple accept="application/pdf" style="display:none"
+                                                            @change="pendingBuktiNames = Array.from($event.target.files).map(f => f.name)">
+                                                    </label>
                                                 </div>
-                                                @error("blocks.{$i}.nama_folder")
-                                                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-                                                @enderror
-                                            @endif
+
+                                                @if ($folderUtama)
+                                                    <div x-show="ubahFolder" x-cloak style="margin-top:6px">
+                                                        <input type="text" class="inp filled" maxlength="150" x-ref="namaFolderInput"
+                                                            wire:model.live.blur="blocks.{{ $i }}.nama_folder"
+                                                            @input="namaFolder = $event.target.value"
+                                                            @blur="ubahFolder = false"
+                                                            @keydown.enter.prevent="$event.target.blur()"
+                                                            :placeholder="folderPreview">
+                                                        <div class="fhint">Kosongkan untuk memakai nama rekomendasi sistem.</div>
+                                                    </div>
+                                                    @error("blocks.{$i}.nama_folder")
+                                                        <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                                                    @enderror
+                                                @elseif ($folderInduk)
+                                                    <div x-show="ubahIni" x-cloak style="margin-top:6px">
+                                                        <input type="text" class="inp filled" maxlength="150" x-ref="inputNamaIni"
+                                                            wire:model.live.blur="blocks.{{ $i }}.nama_folder_tahapan.{{ $grup['tahapan'] }}"
+                                                            @blur="ubahIni = false"
+                                                            @keydown.enter.prevent="$event.target.blur()"
+                                                            placeholder="{{ $grup['otomatis'] }}">
+                                                        <div class="fhint">Kosongkan untuk memakai nama rekomendasi sistem.</div>
+                                                    </div>
+                                                @else
+                                                    <div x-show="ubahIni" x-cloak style="margin-top:6px">
+                                                        <input type="text" class="inp filled" maxlength="100" x-ref="inputNamaIni" value="{{ $folder['subfolder'] }}" data-abaikan-perubahan
+                                                            @blur="ubahIni = false; if ($event.target.value.trim()) $wire.gantiNamaSubfolder({{ $i }}, {{ $folder['urutan'] - 1 }}, $event.target.value)"
+                                                            @keydown.enter.prevent="$event.target.blur()">
+                                                    </div>
+                                                @endif
+
+                                                @if ($folderInduk)
+                                                    <div class="fhint" style="margin-top:2px">Capaian:
+                                                        @if ($folderUtama)
+                                                            <b x-text="namaFolder.trim() !== '' ? namaFolder.trim() : folderPreview">{{ $grup['label'] }}</b>
+                                                        @else
+                                                            <b>{{ $grup['label'] }}</b>
+                                                        @endif
+                                                    </div>
+                                                @endif
+                                            </div>
 
                                             @if ($berkasFolder->isNotEmpty())
                                                 <div class="filechip-grid" style="margin-top:6px;margin-left:18px">

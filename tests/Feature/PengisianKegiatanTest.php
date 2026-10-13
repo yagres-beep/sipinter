@@ -564,8 +564,8 @@ class PengisianKegiatanTest extends TestCase
             ->set('blocks.0.tahapan_survei', 'pelaksanaan');
 
         // Folder tahapan berada di dalam folder induk "pencacahan Sakernas", jadi
-        // cukup bernama tahapannya saja.
-        $this->assertSame('Pelaksanaan', $component->instance()->namaFolderPreview(0));
+        // bernama tahapan diikuti uraian, tanpa kurung siku.
+        $this->assertSame('Pelaksanaan pencacahan Sakernas', $component->instance()->namaFolderPreview(0));
     }
 
     public function test_jenis_kegiatan_terkunci_sampai_uraian_kegiatan_diisi(): void
@@ -1943,6 +1943,7 @@ class PengisianKegiatanTest extends TestCase
             'tahapan_survei' => '',
             'tahapan_tambahan' => [],
             'nama_folder' => '',
+            'nama_folder_tahapan' => [],
             'pakai_subfolder' => false,
             'subfolders' => [],
             'bukti' => [],
