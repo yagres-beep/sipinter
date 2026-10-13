@@ -426,13 +426,7 @@ class KompilasiNotula extends Component
     {
         $notula = $this->notula();
 
-        // Rumus pada bagian1_html lama masih dikunci (<span contenteditable="false">) --
-        // dibuka di sini supaya bisa disunting tanpa harus Susun Ulang dulu. Hanya
-        // <span> yang diganti; sisipan Bagian II/III (<div contenteditable="false">)
-        // tetap terkunci.
-        $html = str_replace('<span contenteditable="false">', '<span class="rumus">', (string) $this->bagian1EditText);
-
-        return app(NotulaService::class)->sisipkanBagianDuaTiga($html, $notula->bagian2_html, $notula->bagian3_html, untukEditor: true);
+        return app(NotulaService::class)->sisipkanBagianDuaTiga($this->bagian1EditText, $notula->bagian2_html, $notula->bagian3_html, untukEditor: true);
     }
 
     /**
@@ -447,12 +441,39 @@ class KompilasiNotula extends Component
 
     public function simpanSuntinganBagian1(): void
     {
+        $this->simpanSuntinganJikaBerubah(paksa: true);
+
+        session()->flash('status', 'Pratinjau Bagian I berhasil disimpan.'.$this->imbuhanVersiBaru($this->notula()));
+    }
+
+    /**
+     * Simpan isi editor ke bagian1_html bila berbeda dari yang tersimpan -- dipanggil
+     * sebelum mengirim ke Kepala & sebelum mengunduh, supaya suntingan yang belum
+     * di-"Simpan" tetap ikut dan PDF/.docx/kiriman Kepala selalu sama dengan pratinjau.
+     */
+    private function simpanSuntinganJikaBerubah(bool $paksa = false): void
+    {
         $this->bagian1EditText = app(NotulaService::class)->kembalikanPenandaBagianDuaTiga($this->bagian1EditText);
         $notula = $this->notula();
+
+        if (! $paksa && ($this->bagian1EditText === (string) $notula->bagian1_html || blank($this->bagian1EditText))) {
+            return;
+        }
+
         $notula->update(['bagian1_html' => $this->bagian1EditText]);
         $notula->tandaiPerluDigabungUlang(Auth::user(), 'Bagian I disunting setelah notula disetujui — notula dibuka kembali sebagai versi baru dan perlu digabung serta disetujui ulang.');
+    }
 
-        session()->flash('status', 'Pratinjau Bagian I berhasil disimpan.'.$this->imbuhanVersiBaru($notula));
+    public function unduhBagian1Docx(): void
+    {
+        $this->simpanSuntinganJikaBerubah();
+        $this->redirect(route('notula.unduh-bagian1-docx', $this->notula()));
+    }
+
+    public function unduhPratinjauPdf(): void
+    {
+        $this->simpanSuntinganJikaBerubah();
+        $this->redirect(route('notula.pratinjau-cepat-pdf', $this->notula()));
     }
 
     /**
@@ -487,6 +508,7 @@ class KompilasiNotula extends Component
     public function gabungkan(): void
     {
         try {
+            $this->simpanSuntinganJikaBerubah();
             app(NotulaService::class)->gabungkan($this->notula(), Auth::user());
             session()->flash('status', 'Ketiga bagian berhasil digabungkan. Notula menunggu persetujuan Kepala.');
         } catch (RuntimeException $e) {

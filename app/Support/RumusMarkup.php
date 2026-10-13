@@ -145,6 +145,92 @@ class RumusMarkup
         return '<m:oMath>'.$xml.'</m:oMath>';
     }
 
+    /**
+     * Kebalikan keHtml(): baca rumus bersusun di pratinjau (span.rumus, yang
+     * pembilang/penyebut/batasnya mungkin sudah DISUNTING Tim SAKIP) kembali jadi
+     * sintaks [[a|b]] / [[SUM:bawah,atas|suku]] -- dipakai unduhan .docx supaya
+     * angka hasil suntingan ikut tercetak sebagai rumus Word sungguhan (keOmml()).
+     * Pecahan dikenali dari span inline-block berisi dua span, sigma dari span
+     * inline-flex berisi tiga span (lihat keHtml()); suku sigma = huruf/angka yang
+     * langsung menempel sesudahnya, persis seperti keHtml() menempelkannya.
+     */
+    public static function dariHtml(\DOMElement $rumus): string
+    {
+        $hasil = '';
+        $sukuSigmaTertunda = false;
+
+        foreach ($rumus->childNodes as $anak) {
+            $teks = '';
+
+            if ($anak instanceof \DOMElement) {
+                $bagian = array_values(array_filter(
+                    iterator_to_array($anak->childNodes),
+                    fn ($n) => $n instanceof \DOMElement && strtolower($n->tagName) === 'span'
+                ));
+                $gaya = strtolower($anak->getAttribute('style'));
+                // Bagian yang dikosongkan tetap diberi spasi -- POLA butuh isi minimal satu karakter.
+                $isi = fn (int $i) => self::teksBersih($bagian[$i]->textContent) ?: ' ';
+
+                if (str_contains($gaya, 'inline-flex') && count($bagian) === 3) {
+                    $hasil .= '[[SUM:'.$isi(2).','.$isi(0).'|';
+                    $sukuSigmaTertunda = true;
+
+                    continue;
+                }
+
+                if (str_contains($gaya, 'inline-block') && count($bagian) === 2) {
+                    $hasil .= '[['.$isi(0).'|'.$isi(1).']]';
+
+                    continue;
+                }
+
+                $teks = $anak->textContent;
+            } else {
+                $teks = $anak->textContent;
+            }
+
+            $teks = preg_replace('/\s+/u', ' ', $teks) ?? $teks;
+
+            if ($sukuSigmaTertunda) {
+                preg_match('/^([\p{L}\p{N}_]*)(.*)$/su', $teks, $m);
+                $hasil .= ($m[1] !== '' ? $m[1] : ' ').']]'.$m[2];
+                $sukuSigmaTertunda = false;
+
+                continue;
+            }
+
+            $hasil .= $teks;
+        }
+
+        if ($sukuSigmaTertunda) {
+            $hasil .= ' ]]';
+        }
+
+        return trim($hasil);
+    }
+
+    /**
+     * Rapikan rumus di bagian1_html yang tersimpan SEBELUM rumus boleh disunting &
+     * berangka bulat: kunci <span contenteditable="false"> diganti span.rumus, dan
+     * pembilang/penyebut yang murni angka ("3.00") dibulatkan ("3"). Sengaja lewat
+     * regex, bukan reparse DOM -- lihat catatan NotulaService::gantiPenandaRumusDenganHtml().
+     */
+    public static function rapikanHtmlTersimpan(string $html): string
+    {
+        $html = str_replace('<span contenteditable="false">', '<span class="rumus">', $html);
+
+        return preg_replace_callback(
+            '/(<span style="display:block;[^"]*line-height:1\.3">)\s*(-?\d+(?:\.\d+)?)\s*(<\/span>)/',
+            fn (array $m) => $m[1].(string) (int) round((float) $m[2]).$m[3],
+            $html
+        ) ?? $html;
+    }
+
+    private static function teksBersih(string $teks): string
+    {
+        return trim(preg_replace('/\s+/u', ' ', $teks) ?? $teks);
+    }
+
     private static function amanXml(string $teks): string
     {
         return htmlspecialchars($teks, ENT_QUOTES | ENT_XML1);

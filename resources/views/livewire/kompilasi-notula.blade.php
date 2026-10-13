@@ -310,15 +310,17 @@
             <span class="st {{ $bagian1Siap ? 'ok' : 'no' }}" style="margin-left:auto">{{ $bagian1Siap ? '✓ Bagian I siap' : '✕ Bagian I belum disusun' }}</span>
         </div>
         <div style="margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap">
-            <a href="{{ route('notula.pratinjau-cepat-pdf', $notula) }}" class="btn btn-teal btn-sm" style="text-decoration:none;display:inline-block">⬇ Unduh Pratinjau Lengkap (.pdf, apa adanya)</a>
+            {{-- Tombol (bukan tautan langsung) supaya suntingan yang belum disimpan ikut
+                 tersimpan dulu -- isi unduhan selalu sama dengan pratinjau di bawah. --}}
+            <button type="button" class="btn btn-teal btn-sm" wire:click="unduhPratinjauPdf" wire:loading.attr="disabled" wire:target="unduhPratinjauPdf">⬇ Unduh Pratinjau Lengkap (.pdf)</button>
             @if ($bagian1Siap)
-                <a href="{{ route('notula.unduh-bagian1-docx', $notula) }}" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-block">⬇ Unduh Bagian I (.docx, sesuai Template Notula)</a>
+                <button type="button" class="btn btn-ghost btn-sm" wire:click="unduhBagian1Docx" wire:loading.attr="disabled" wire:target="unduhBagian1Docx">⬇ Unduh Bagian I (.docx, sama dengan pratinjau)</button>
             @endif
             <a href="{{ route('notula.template-bagian1') }}" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-block">⬇ Unduh Panduan Bagian I (referensi, tidak perlu diunggah balik)</a>
         </div>
         <p class="fhint" style="margin-bottom:10px">Klik lalu ketik langsung di dalam Bagian I pada pratinjau di bawah untuk menyunting — Bagian II &amp; III ikut tampil di bawahnya persis dari berkas yang diunggah.</p>
         <p class="fhint" style="margin-bottom:10px">✏️ Baris yang Anda sunting diberi garis kuning tipis di kirinya. "↻ Susun Ulang Otomatis" hanya menambahkan/memperbarui isi dari data terbaru — baris bertanda kuning tidak diubah.</p>
-        <p class="fhint" style="margin-bottom:10px">🧮 Rumus (mis. pecahan/sigma pada baris "Dasar Hitung dan Basis Data Realisasi IKU", bergaris putus-putus) bisa disunting langsung di sini — klik angka/teks pembilang atau penyebutnya lalu ketik. Untuk mengubah rumus bawaannya, sunting field "Dasar Hitung" di Data Master &amp; Konfigurasi &gt; Master IKU, lalu tekan "↻ Susun Ulang Otomatis".</p>
+        <p class="fhint" style="margin-bottom:10px">🧮 Rumus (mis. pecahan/sigma pada baris "Dasar Hitung dan Basis Data Realisasi IKU", bergaris putus-putus) bisa disunting langsung di sini — klik angka/teks pembilang atau penyebutnya lalu ketik. Hasil suntingan ikut ke PDF, .docx, dan kiriman ke Kepala. Untuk mengubah rumus bawaannya, sunting field "Dasar Hitung" di Data Master &amp; Konfigurasi &gt; Master IKU, lalu tekan "↻ Susun Ulang Otomatis".</p>
 
         <div x-data="{
             aktifBold: false, aktifItalic: false, aktifUnderline: false,

@@ -15,8 +15,8 @@ use App\Models\Periode;
 use App\Models\RtlEvaluasi;
 use App\Models\User;
 use App\Support\HtmlNotulaDompdf;
-use App\Support\PenggantiBerkasAman;
 use App\Support\BlokBagianSatu;
+use App\Support\PenggantiBerkasAman;
 use App\Support\RumusMarkup;
 use Barryvdh\DomPDF\Facade\Pdf as PdfFacade;
 use Illuminate\Http\UploadedFile;
@@ -172,6 +172,196 @@ class NotulaService
     }
 
     /**
+    /**
+     * Unduhan Bagian I .docx -- dibangun dari bagian1_html TERSIMPAN (isi pratinjau
+     * yang sudah disunting, sumber yang SAMA dengan PDF pratinjau, PDF yang dikirim
+     * ke Kepala, dan PDF final), BUKAN disusun ulang dari data mentah, supaya ketiga
+     * bentuk dokumen selalu sama isinya. Rumus bersusun (span.rumus) dibaca balik
+     * jadi sintaks RumusMarkup (lihat RumusMarkup::dariHtml()) lalu disisipkan sebagai
+     * OOXML Math sungguhan -- termasuk angka yang sudah disunting di pratinjau.
+     *
+     * Notula yang Bagian I-nya belum pernah disusun jatuh ke template + data mentah
+     * (NotulaBagian1DocxService::generate()) seperti sebelumnya.
+     */
+    public function renderBagianSatuDocx(Notula $notula, string $outputPath): string
+    {
+        if (blank($notula->bagian1_html)) {
+            return $this->docx->generate($notula, $this->kumpulkanDataBagianSatu($notula), $outputPath);
+        }
+
+        $dir = dirname($outputPath);
+        $this->pastikanFolder($dir);
+        $htmlPath = $dir.'/bagian1-unduh-'.Str::lower(Str::random(10)).'.html';
+        $formula = [];
+
+        try {
+            file_put_contents($htmlPath, $this->htmlUntukDocx($notula, $formula));
+            $hasil = $this->konversi->convertHtmlToDocx($htmlPath, $dir);
+            $this->sisipkanRumusDanTataHalamanDocx($hasil, $formula);
+
+            if ($hasil !== $outputPath && ! @rename($hasil, $outputPath)) {
+                throw new RuntimeException('Berkas Bagian I (.docx) gagal dipindahkan ke lokasi unduhan.');
+            }
+        } finally {
+            if (file_exists($htmlPath)) {
+                @unlink($htmlPath);
+            }
+        }
+
+        return $outputPath;
+    }
+
+    /**
+     * Dokumen HTML utuh untuk dikonversi LibreOffice jadi .docx: penanda Bagian II/III
+     * dibuang (unduhan ini khusus Bagian I), CSS dilepas dari lingkup .notula-inline-*
+     * (pemilih turunan tidak dipahami impor HTML LibreOffice) & dipindah ke <head>,
+     * tiap rumus diganti teks penanda (isi rumusnya dikumpulkan ke $formula), dan blok
+     * TTD ditambahkan bila notula sudah disetujui -- sama seperti PDF final.
+     *
+     * @param  list<string>  $formula
+     */
+    private function htmlUntukDocx(Notula $notula, array &$formula): string
+    {
+        $html = $this->sisipkanBagianDuaTiga((string) $notula->bagian1_html, null, null);
+
+        $dom = new \DOMDocument;
+        libxml_use_internal_errors(true);
+        $dom->loadHTML('<?xml encoding="utf-8" ?><html><body>'.$html.'</body></html>', LIBXML_NOWARNING | LIBXML_NOERROR);
+        libxml_clear_errors();
+
+        $xpath = new \DOMXPath($dom);
+        $daftarRumus = $xpath->query('//span[contains(concat(" ", normalize-space(@class), " "), " rumus ") or @contenteditable="false"]');
+        foreach (iterator_to_array($daftarRumus) as $span) {
+            $penanda = NotulaBagian1DocxService::penandaRumus(count($formula));
+            $formula[] = RumusMarkup::dariHtml($span);
+            $span->parentNode->replaceChild($dom->createTextNode($penanda), $span);
+        }
+
+        $css = '';
+        foreach (iterator_to_array($dom->getElementsByTagName('style')) as $style) {
+            $css .= $style->textContent."\n";
+            $style->parentNode->removeChild($style);
+        }
+        $css = preg_replace('/\.notula-inline-[A-Za-z0-9]+\s+/', '', $css) ?? $css;
+        $this->tempelkanCssSederhana($xpath, $css);
+
+        $body = '';
+        foreach ($dom->getElementsByTagName('body')->item(0)?->childNodes ?? [] as $anak) {
+            $body .= $dom->saveHTML($anak);
+        }
+
+        if ($notula->status === Notula::STATUS_DISETUJUI) {
+            $body .= $this->blokTtdDocx($notula);
+        }
+
+        return '<!DOCTYPE html><html><head><meta charset="utf-8"><style>'.$css.'</style></head><body>'.$body.'</body></html>';
+    }
+
+    /**
+     * Impor HTML LibreOffice mengabaikan aturan kelas (mis. "p.western { font-family:
+     * Arial }") untuk paragraf DI DALAM sel tabel -- teks tabel jatuh ke font serif
+     * bawaannya. Aturan berpemilih sederhana ("p", "p.western", ".P1") ditempelkan
+     * sebagai style inline; deklarasi inline yang sudah ada tetap menang (ditaruh
+     * di belakang).
+     */
+    private function tempelkanCssSederhana(\DOMXPath $xpath, string $css): void
+    {
+        preg_match_all('/([^{}]+)\{([^{}]*)\}/', $css, $aturan, PREG_SET_ORDER);
+
+        foreach ($aturan as [, $pemilihGabungan, $deklarasi]) {
+            $deklarasi = trim($deklarasi);
+            if ($deklarasi === '') {
+                continue;
+            }
+
+            foreach (explode(',', $pemilihGabungan) as $pemilih) {
+                if (! preg_match('/^\s*([a-z][a-z0-9]*)?(?:\.([A-Za-z0-9_-]+))?\s*$/i', $pemilih, $m) || ($m[1] ?? '') === '' && ($m[2] ?? '') === '') {
+                    continue;
+                }
+
+                $query = '//'.(($m[1] ?? '') !== '' ? strtolower($m[1]) : '*')
+                    .(($m[2] ?? '') !== '' ? '[contains(concat(" ", normalize-space(@class), " "), " '.$m[2].' ")]' : '');
+
+                foreach ($xpath->query($query) as $el) {
+                    $lama = trim($el->getAttribute('style'));
+                    $el->setAttribute('style', rtrim($deklarasi, '; ').'; '.$lama);
+                }
+            }
+        }
+    }
+
+    /**
+     * Padanan .ttd-blok pdf.notula-utuh dalam bentuk tabel tanpa garis -- float
+     * CSS tidak dipahami impor HTML LibreOffice.
+     */
+    private function blokTtdDocx(Notula $notula): string
+    {
+        $d = $this->dataNotulaUtuh($notula, true);
+        $tempatTanggal = trim(($d['kotaTtd'] ?: '').($d['kotaTtd'] && $d['tanggal'] ? ', ' : '').($d['tanggal'] ?: ''));
+        $titik = '.......................................';
+        $sel = 'width="50%" valign="top" style="border:none; text-align:center; font-family:Arial; font-size:11pt"';
+
+        return '<p><br></p><table width="100%" cellpadding="0" cellspacing="0" style="border:none"><tr>'
+            .'<td '.$sel.'>Mengetahui,<br>Kepala Badan Pusat Statistik Kabupaten Buton Utara<br><br><br><br><b>'.e($d['namaKepala'] ?: $titik).'</b></td>'
+            .'<td '.$sel.'>'.e($tempatTanggal).'<br><br>Notulis,<br><br><br><br><b>'.e($d['namaNotulis'] ?: $titik).'</b></td>'
+            .'</tr></table>';
+    }
+
+    /**
+     * Pasca-proses .docx hasil LibreOffice: tiap teks penanda rumus diganti OOXML
+     * Math (RumusMarkup::keOmml(), sama seperti unduhan berbasis template), dan
+     * ukuran kertas/margin disamakan dengan template Bagian I aktif (impor HTML
+     * LibreOffice memakai kertas bawaannya sendiri).
+     *
+     * @param  list<string>  $formula
+     */
+    private function sisipkanRumusDanTataHalamanDocx(string $docxPath, array $formula): void
+    {
+        $zip = new \ZipArchive;
+        if ($zip->open($docxPath) !== true) {
+            throw new RuntimeException('Berkas Bagian I (.docx) hasil konversi tidak bisa dibuka.');
+        }
+
+        try {
+            $xml = $zip->getFromName('word/document.xml');
+            if ($xml === false) {
+                throw new RuntimeException('Berkas Bagian I (.docx) hasil konversi rusak (document.xml tidak ada).');
+            }
+
+            foreach ($formula as $i => $rumus) {
+                $penanda = preg_quote(NotulaBagian1DocxService::penandaRumus($i), '/');
+                $pola = '/<w:r>((?:(?!<\/w:r>).)*?)<w:t(?:\s[^>]*)?>([^<]*?)'.$penanda.'([^<]*)<\/w:t>((?:(?!<\/w:r>).)*?)<\/w:r>/s';
+
+                $xml = preg_replace_callback($pola, function (array $m) use ($rumus) {
+                    $rPr = preg_match('/<w:rPr>.*?<\/w:rPr>/s', $m[1], $r) ? $r[0] : '';
+                    $run = fn (string $t) => $t === '' ? '' : '<w:r>'.$rPr.'<w:t xml:space="preserve">'.$t.'</w:t></w:r>';
+
+                    return $run($m[2]).RumusMarkup::keOmml($rumus).$run($m[3]);
+                }, $xml, 1) ?? $xml;
+            }
+
+            if (! str_contains($xml, 'xmlns:m=')) {
+                $xml = preg_replace('/<w:document\b/', '<w:document xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"', $xml, 1) ?? $xml;
+            }
+
+            $h = $this->docx->tataHalamanTemplate();
+            $twip = fn (string $k) => (int) round($h[$k] * 20);
+            $xml = preg_replace('/<w:pgSz\b[^>]*\/>/', '<w:pgSz w:w="'.$twip('lebar').'" w:h="'.$twip('tinggi').'"'.($h['lebar'] > $h['tinggi'] ? ' w:orient="landscape"' : '').'/>', $xml) ?? $xml;
+            $xml = preg_replace_callback('/<w:pgMar\b([^>]*)\/>/', function (array $m) use ($twip) {
+                $atr = $m[1];
+                foreach (['top' => 'atas', 'right' => 'kanan', 'bottom' => 'bawah', 'left' => 'kiri'] as $w => $k) {
+                    $atr = preg_replace('/\bw:'.$w.'="[^"]*"/', 'w:'.$w.'="'.$twip($k).'"', $atr) ?? $atr;
+                }
+
+                return '<w:pgMar'.$atr.'/>';
+            }, $xml) ?? $xml;
+
+            $zip->addFromString('word/document.xml', $xml);
+        } finally {
+            $zip->close();
+        }
+    }
+
      * Kumpulkan seluruh data siap-pakai untuk Bagian I (RF-42) — dipakai baik oleh
      * susunBagianSatu() (mengisi template lalu konversi ke HTML) maupun jalur unduhan
      * .docx murni (NotulaDownloadController::unduhBagian1Docx()), keduanya lewat
@@ -298,7 +488,7 @@ class NotulaService
         // triwulan target-nya (lihat PengisianKegiatan::targetTriwulanBerikutnya()),
         // jadi TW IV menyambung ke TW I tahun berikutnya. Draft yang belum diajukan
         // Ketua Tim tidak ikut dicetak.
-        [$tahunBerikutnya, $twBerikutnya] = (int) $tw === 4 ?[$periode->tahun + 1, 1] : [$periode->tahun, $tw + 1];
+        [$tahunBerikutnya, $twBerikutnya] = (int) $tw === 4 ? [$periode->tahun + 1, 1] : [$periode->tahun, $tw + 1];
         $rtlBerikutnyaPerIku = RtlEvaluasi::whereHas('periode', fn ($q) => $q->where('tahun', $tahunBerikutnya)->where('triwulan', $twBerikutnya))
             ->where('status_dokumen', '!=', RtlEvaluasi::STATUS_DRAFT)
             ->get()

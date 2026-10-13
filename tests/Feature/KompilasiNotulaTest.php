@@ -83,6 +83,27 @@ class KompilasiNotulaTest extends TestCase
     }
 
     /**
+     * Suntingan yang belum di-"Simpan" tetap ikut ke unduhan -- tombol unduh
+     * menyimpan isi editor dulu, supaya .docx/PDF selalu sama dengan pratinjau.
+     */
+    public function test_unduh_docx_menyimpan_suntingan_yang_belum_disimpan(): void
+    {
+        $this->fakeKonversiBagian1KeXmlMentah();
+        $this->loginSebagaiTimSakip();
+
+        $notula = $this->notulaUji(2026, 3);
+
+        Livewire::test(KompilasiNotula::class)
+            ->set('tahun', 2026)
+            ->set('triwulan', 3)
+            ->set('bagian1EditText', '<p>Angka rumus disunting tanpa disimpan.</p>')
+            ->call('unduhBagian1Docx')
+            ->assertRedirect(route('notula.unduh-bagian1-docx', $notula));
+
+        $this->assertStringContainsString('Angka rumus disunting tanpa disimpan.', $notula->fresh()->bagian1_html);
+    }
+
+    /**
      * susunUlangOtomatis() SENGAJA tetap menimpa bagian1_html (itu tujuannya) --
      * tapi isi LAMANYA harus tersalin dulu ke bagian1_html_cadangan supaya suntingan
      * manual Tim SAKIP tidak hilang tanpa jejak, lihat KompilasiNotula::susunUlangOtomatis().

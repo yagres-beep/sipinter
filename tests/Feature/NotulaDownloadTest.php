@@ -15,6 +15,10 @@ use App\Models\Role;
 use App\Models\RtlEvaluasi;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Services\LibreOfficeConversionService;
+use App\Services\NotulaBagian1DocxService;
+use App\Services\NotulaService;
+use App\Support\RumusMarkup;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 use ZipArchive;
@@ -566,13 +570,13 @@ class NotulaDownloadTest extends TestCase
         CapaianTahunan::create(['iku_id' => $iku->id, 'tahun' => 2026, 'y_alokasi_tw4' => 8, 'x_realisasi_tw2' => 2]);
 
         $notula = Notula::create(['periode_id' => $periode->id]);
-        $docx = app(\App\Services\NotulaBagian1DocxService::class);
+        $docx = app(NotulaBagian1DocxService::class);
         $path = tempnam(sys_get_temp_dir(), 'penanda').'.docx';
 
         try {
-            $docx->generate($notula, app(\App\Services\NotulaService::class)->kumpulkanDataBagianSatu($notula), $path, sertakanBlokTtdMandiri: false, untukPratinjauHtml: true);
+            $docx->generate($notula, app(NotulaService::class)->kumpulkanDataBagianSatu($notula), $path, sertakanBlokTtdMandiri: false, untukPratinjauHtml: true);
 
-            $zip = new \ZipArchive;
+            $zip = new ZipArchive;
             $zip->open($path);
             $xml = (string) $zip->getFromName('word/document.xml');
             $zip->close();
@@ -581,10 +585,64 @@ class NotulaDownloadTest extends TestCase
         }
 
         $this->assertCount(1, $docx->formulaUrutanTerakhir());
-        $this->assertStringContainsString(\App\Services\NotulaBagian1DocxService::penandaRumus(0), $xml);
+        $this->assertStringContainsString(NotulaBagian1DocxService::penandaRumus(0), $xml);
         $this->assertStringNotContainsString('<m:oMath>', $xml);
-        $this->assertStringContainsString(\App\Services\NotulaBagian1DocxService::penandaBlok('iku-'.$iku->id), $xml);
-        $this->assertStringContainsString(\App\Services\NotulaBagian1DocxService::penandaBlok('ekor'), $xml);
+        $this->assertStringContainsString(NotulaBagian1DocxService::penandaBlok('iku-'.$iku->id), $xml);
+        $this->assertStringContainsString(NotulaBagian1DocxService::penandaBlok('ekor'), $xml);
+    }
+
+    /**
+     * Bagian I yang sudah disusun & disunting di pratinjau: unduhan .docx dibangun dari
+     * bagian1_html tersimpan (sumber yang sama dengan PDF), BUKAN disusun ulang dari
+     * data -- teks & angka rumus hasil suntingan ikut, rumusnya tetap OOXML Math.
+     * LibreOffice dipalsukan: HTML yang dikirim ke konversi diperiksa, lalu dibalas
+     * .docx minimal berisi teks yang sama supaya pasca-proses rumusnya teruji.
+     */
+    public function test_docx_bagian1_mengikuti_suntingan_pratinjau(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 4, 'triwulan' => 2, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $rumusHtml = str_replace('>2<', '>5<', RumusMarkup::keHtml('y = [[n|N]] × 100% = [[2|8]] × 100%'));
+        $notula = Notula::create([
+            'periode_id' => $periode->id,
+            'bagian1_html' => '<style>.notula-inline-ABC p.western { font-family: "Arial" }</style><div class="notula-inline notula-inline-ABC">'
+                .'<p class="western">Analisis hasil suntingan Tim SAKIP</p>'
+                .'<p class="western" style="text-align:center"><span class="rumus">'.$rumusHtml.'</span></p>'
+                .'<p><i>{{bagian_2}}</i></p></div>',
+        ]);
+
+        $this->mock(LibreOfficeConversionService::class, function ($mock) {
+            $mock->shouldReceive('convertHtmlToDocx')->once()->andReturnUsing(function (string $htmlPath, string $dir) {
+                $html = file_get_contents($htmlPath);
+                $this->assertStringContainsString('Analisis hasil suntingan Tim SAKIP', $html);
+                $this->assertStringContainsString('font-family: "Arial"', $html);
+                $this->assertStringNotContainsString('{{bagian_2}}', $html);
+
+                $penanda = NotulaBagian1DocxService::penandaRumus(0);
+                $docx = $dir.'/palsu-'.uniqid().'.docx';
+                $zip = new ZipArchive;
+                $zip->open($docx, ZipArchive::CREATE);
+                $zip->addFromString('word/document.xml', '<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'
+                    .'<w:p><w:r><w:t>Analisis hasil suntingan Tim SAKIP</w:t></w:r></w:p>'
+                    .'<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>'.$penanda.'</w:t></w:r></w:p>'
+                    .'<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"/></w:sectPr></w:body></w:document>');
+                $zip->close();
+
+                return $docx;
+            });
+        });
+
+        $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
+
+        libxml_use_internal_errors(true);
+        $this->assertTrue((new \DOMDocument)->loadXML($xml), 'document.xml harus tetap well-formed setelah rumus disisipkan.');
+        $this->assertStringContainsString('Analisis hasil suntingan Tim SAKIP', $xml);
+        $this->assertStringContainsString('<m:oMath>', $xml);
+        $this->assertStringContainsString('<m:t xml:space="preserve">5</m:t>', $xml);
+        $this->assertStringContainsString('<m:t xml:space="preserve">8</m:t>', $xml);
+        $this->assertStringNotContainsString('SIPINTERRUMUS', $xml);
+        $this->assertStringContainsString('<w:pgSz w:w="11906" w:h="16838"/>', $xml);
     }
 
     /**
