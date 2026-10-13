@@ -1,4 +1,51 @@
-<div>
+<div
+    x-data="{
+        // Selama modal 'Ubah IKU' terbuka, kartu 'Tambah IKU Manual' disembunyikan
+        // (selama editingId terisi) — begitu modal ditutup kartu itu muncul lagi & tabel
+        // terdorong ke bawah, sehingga posisi baris yang tadi diubah hilang dari
+        // layar. Posisi baris (relatif viewport) + scroll .table-scroll dicatat saat
+        // 'Ubah' diklik, lalu dipulihkan setelah modal tertutup.
+        posisi: null,
+        ingatPosisi(tr) {
+            const wadah = tr.closest('.table-scroll');
+            this.posisi = {
+                id: tr.dataset.ikuId,
+                top: tr.getBoundingClientRect().top,
+                scrollWadah: wadah ? wadah.scrollTop : 0,
+            };
+        },
+        pulihkanPosisi() {
+            const p = this.posisi;
+            if (!p) return;
+            const root = this.$root;
+            const kunci = function () {
+                const tr = root.querySelector(`tr[data-iku-id='${p.id}']`);
+                if (!tr) return;
+                const wadah = tr.closest('.table-scroll');
+                if (wadah && 1 < Math.abs(wadah.scrollTop - p.scrollWadah)) wadah.scrollTop = p.scrollWadah;
+                const geser = tr.getBoundingClientRect().top - p.top;
+                if (1 < Math.abs(geser)) window.scrollBy(0, geser);
+            };
+            // Dikoreksi di beberapa frame — DOM hasil morph Livewire bisa masih
+            // bergeser tinggi setelah frame pertama.
+            requestAnimationFrame(function () {
+                kunci();
+                requestAnimationFrame(kunci);
+                setTimeout(kunci, 50);
+                setTimeout(kunci, 150);
+            });
+        },
+        // Dipakai tombol Simpan/Batal/✕ di modal: modal baru dianggap tertutup bila
+        // editingId sudah kosong (Simpan yang gagal validasi tetap membiarkan modal).
+        tutupModal(aksi) {
+            return this.$wire[aksi]().then(() => {
+                if (this.$wire.editingId) return;
+                this.pulihkanPosisi();
+                this.posisi = null;
+            });
+        },
+    }"
+>
     <div class="page-head">
         <div class="page-title">Master IKU</div>
         <div class="page-sub">Kelola Indikator Kinerja Utama sebagai sumber dropdown &amp; penamaan otomatis di seluruh modul.</div>
@@ -217,7 +264,7 @@
                 </thead>
                 <tbody x-ref="tbody">
                     @forelse ($ikuList as $iku)
-                        <tr wire:key="iku-{{ $iku->id }}">
+                        <tr wire:key="iku-{{ $iku->id }}" data-iku-id="{{ $iku->id }}">
                             <td><b>{{ $iku->nomor_kode }}</b></td>
                             <td>{{ $iku->indikator }}</td>
                             <td class="muted">{{ $iku->sasaran ?? '—' }}</td>
@@ -232,7 +279,7 @@
                             <td class="muted">{{ $iku->pakaiTriwulanan() ? 'Triwulanan' : 'Tahunan' }}</td>
                             <td class="muted">{{ $iku->timList->isNotEmpty() ? $iku->timList->pluck('tim')->implode(', ') : '—' }}</td>
                             <td style="text-align:right;white-space:nowrap">
-                                <button type="button" class="btn btn-ghost btn-sm" wire:click="edit({{ $iku->id }})" wire:loading.attr="disabled" wire:target="edit({{ $iku->id }})">
+                                <button type="button" class="btn btn-ghost btn-sm" @click="ingatPosisi($el.closest('tr'))" wire:click="edit({{ $iku->id }})" wire:loading.attr="disabled" wire:target="edit({{ $iku->id }})">
                                     <span wire:loading.remove wire:target="edit({{ $iku->id }})">Ubah</span>
                                     <span wire:loading wire:target="edit({{ $iku->id }})"><i class="spin"></i></span>
                                 </button>
@@ -275,17 +322,17 @@
             <div class="modal" style="max-width:640px;height:auto;max-height:92vh">
                 <div class="modal-top">
                     <div class="mt-t">✎ Ubah IKU</div>
-                    <button type="button" class="x" wire:click="cancelEdit" wire:loading.attr="disabled" wire:target="save" title="Tutup">✕</button>
+                    <button type="button" class="x" @click="tutupModal('cancelEdit')" wire:loading.attr="disabled" wire:target="save" title="Tutup">✕</button>
                 </div>
                 <div style="padding:18px;overflow-y:auto">
                     @include('livewire.partials._master-iku-form-fields')
 
                     <div class="btn-row">
-                        <button type="button" class="btn btn-primary" wire:click="save" wire:loading.attr="disabled" wire:target="save">
+                        <button type="button" class="btn btn-primary" @click="tutupModal('save')" wire:loading.attr="disabled" wire:target="save">
                             <span wire:loading.remove wire:target="save">Simpan Perubahan</span>
                             <span wire:loading wire:target="save"><i class="spin"></i> Menyimpan…</span>
                         </button>
-                        <button type="button" class="btn btn-ghost" wire:click="cancelEdit" wire:loading.attr="disabled" wire:target="save">Batal</button>
+                        <button type="button" class="btn btn-ghost" @click="tutupModal('cancelEdit')" wire:loading.attr="disabled" wire:target="save">Batal</button>
                     </div>
                 </div>
             </div>
