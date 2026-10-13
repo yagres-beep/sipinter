@@ -212,7 +212,7 @@ class KompilasiNotula extends Component
         $tercetakDiBagian1 = ['hari_tanggal', 'waktu', 'tempat', 'pimpinan_rapat', 'link_lampiran_basis_data'];
         $pesan = 'Detail rapat berhasil disimpan.';
         if (filled($notula->bagian1_html) && $notula->wasChanged($tercetakDiBagian1)) {
-            $pesan .= ' Bagian I masih memuat detail rapat sebelumnya -- tekan "Susun Ulang Otomatis" supaya ikut diperbarui (suntingan manual dicadangkan dan bisa dipulihkan).';
+            $pesan .= ' Bagian I masih memuat detail rapat sebelumnya -- tekan "Susun Ulang Otomatis" supaya ikut diperbarui (bagian lain yang sudah Anda sunting tetap dipertahankan).';
         }
 
         session()->flash('status', $pesan);
@@ -233,10 +233,9 @@ class KompilasiNotula extends Component
     }
 
     /**
-     * "Susun Ulang Otomatis" SENGAJA menimpa suntingan manual Tim SAKIP di pratinjau
-     * (lihat NotulaService::susunBagianSatu()) -- itu memang tujuannya: bangun ulang
-     * dari data terverifikasi terkini. Isi LAMANYA disalin dulu ke bagian1_html_cadangan
-     * SEBELUM ditimpa (bukan mencegah penimpaan itu sendiri) supaya kalau tombolnya
+     * "Susun Ulang Otomatis" memperbarui pratinjau dari data terverifikasi terkini
+     * sambil mempertahankan bagian yang sudah disunting (lihat susunUlangOtomatis()).
+     * Isi LAMANYA tetap disalin dulu ke bagian1_html_cadangan supaya kalau tombolnya
      * kepencet tidak sengaja / hasil susun ulangnya ternyata tidak diinginkan, Tim
      * SAKIP masih bisa memulihkannya lewat pulihkanSuntinganBagian1() -- lihat tombol
      * "Pulihkan Suntingan Sebelumnya" di Blade (cuma tampil bila cadangan ini terisi).
@@ -253,17 +252,25 @@ class KompilasiNotula extends Component
         $this->konfirmasiSusunUlang = false;
     }
 
-    public function susunUlangOtomatis(): void
+    /**
+     * Default-nya MENGGABUNGKAN: isi baru dari data (IKU baru, angka/kendala/RTL yang
+     * berubah) masuk, tapi bagian yang sudah disunting di pratinjau dipertahankan --
+     * lihat NotulaService::susunUlangBagianSatu(). $timpaSemua = susun penuh dari nol
+     * (tombol "Timpa Semua Suntingan" di modal konfirmasi).
+     */
+    public function susunUlangOtomatis(bool $timpaSemua = false): void
     {
         $this->konfirmasiSusunUlang = false;
 
         $notula = $this->notula();
         $isiLama = $notula->bagian1_html;
+        $suntinganSaatIni = filled($this->bagian1EditText) ? $this->bagian1EditText : $isiLama;
 
         // Cadangan baru ditulis SETELAH penyusunan berhasil -- bila gagal, isi Bagian I
         // maupun cadangan sebelumnya tetap utuh (tidak tertimpa diam-diam).
         try {
-            $html = app(NotulaService::class)->susunBagianSatu($notula);
+            $hasil = app(NotulaService::class)->susunUlangBagianSatu($notula, $suntinganSaatIni, $timpaSemua);
+            $html = $hasil['html'];
         } catch (\Throwable $e) {
             report($e);
             $this->addError('bagian1', 'Susun ulang gagal, Bagian I tidak diubah: '.$e->getMessage());
@@ -284,7 +291,18 @@ class KompilasiNotula extends Component
         $this->bagian1EditText = $html;
         $this->dispatchKontenBagian1();
 
-        session()->flash('status', 'Bagian I berhasil disusun ulang otomatis dari data terverifikasi. Suntingan sebelumnya dicadangkan -- tombol "Pulihkan Suntingan Sebelumnya" tersedia bila diperlukan.'.$this->imbuhanVersiBaru($notula));
+        if ($hasil['digabung']) {
+            $pesan = 'Bagian I diperbarui dari data terverifikasi terbaru. '
+                .($hasil['dipertahankan'] > 0
+                    ? $hasil['dipertahankan'].' bagian yang sudah Anda sunting tetap dipertahankan.'
+                    : 'Belum ada bagian yang disunting, jadi seluruhnya mengikuti data terbaru.');
+        } elseif ($timpaSemua || blank($isiLama)) {
+            $pesan = 'Bagian I berhasil disusun ulang penuh dari data terverifikasi.';
+        } else {
+            $pesan = 'Bagian I disusun ulang penuh dari data terverifikasi -- isi sebelumnya disusun dengan versi lama sehingga suntingannya belum bisa dipertahankan otomatis. Mulai sekarang suntingan Anda akan dipertahankan saat Susun Ulang.';
+        }
+
+        session()->flash('status', $pesan.' Isi sebelumnya dicadangkan -- tombol "Pulihkan Suntingan Sebelumnya" tersedia bila diperlukan.'.$this->imbuhanVersiBaru($notula));
     }
 
     /**
@@ -363,11 +381,22 @@ class KompilasiNotula extends Component
     {
         $notula = $this->notula();
 
-        return app(NotulaService::class)->sisipkanBagianDuaTiga($this->bagian1EditText, $notula->bagian2_html, $notula->bagian3_html);
+        return app(NotulaService::class)->sisipkanBagianDuaTiga($this->bagian1EditText, $notula->bagian2_html, $notula->bagian3_html, untukEditor: true);
+    }
+
+    /**
+     * Isi editor dikirim balik lengkap dengan Bagian II/III yang tersisip untuk
+     * pratinjau -- dikembalikan jadi penanda {{bagian_2}}/{{bagian_3}} supaya isi
+     * unggahan tidak ikut tersimpan permanen di bagian1_html.
+     */
+    public function updatedBagian1EditText(string $nilai): void
+    {
+        $this->bagian1EditText = app(NotulaService::class)->kembalikanPenandaBagianDuaTiga($nilai);
     }
 
     public function simpanSuntinganBagian1(): void
     {
+        $this->bagian1EditText = app(NotulaService::class)->kembalikanPenandaBagianDuaTiga($this->bagian1EditText);
         $notula = $this->notula();
         $notula->update(['bagian1_html' => $this->bagian1EditText]);
         $notula->tandaiPerluDigabungUlang(Auth::user(), 'Bagian I disunting setelah notula disetujui — notula dibuka kembali sebagai versi baru dan perlu digabung serta disetujui ulang.');

@@ -299,6 +299,7 @@
             <a href="{{ route('notula.template-bagian1') }}" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-block">⬇ Unduh Panduan Bagian I (referensi, tidak perlu diunggah balik)</a>
         </div>
         <p class="fhint" style="margin-bottom:10px">Klik lalu ketik langsung di dalam Bagian I pada pratinjau di bawah untuk menyunting — Bagian II &amp; III ikut tampil di bawahnya persis dari berkas yang diunggah.</p>
+        <p class="fhint" style="margin-bottom:10px">✏️ Baris yang Anda sunting diberi garis kuning tipis di kirinya. "↻ Susun Ulang Otomatis" hanya menambahkan/memperbarui isi dari data terbaru — baris bertanda kuning tidak diubah.</p>
         <p class="fhint" style="margin-bottom:10px">🔒 Rumus (mis. pecahan/sigma pada baris "Dasar Hitung dan Basis Data Realisasi IKU") tercetak otomatis pada tiap indikator yang mengisinya dan DIKUNCI di sini agar strukturnya tidak rusak saat mengetik — untuk mengubah rumusnya sendiri, sunting field "Dasar Hitung" di Data Master &amp; Konfigurasi &gt; Master IKU, lalu tekan "↻ Susun Ulang Otomatis" di bawah supaya pratinjau ini mengikuti.</p>
 
         <div x-data="{
@@ -353,6 +354,22 @@
                 // kena' karena seleksinya lewat di dalamnya.
                 return kena.filter(el => !kena.some(lain => lain !== el && el.contains(lain)));
             },
+            // Tandai blok (div[data-blok]) & baris tabel yang tersentuh seleksi/kursor
+            // sebagai 'disunting' -- 'Susun Ulang Otomatis' mempertahankan bagian
+            // bertanda ini dan hanya memperbarui sisanya dari data terbaru (lihat
+            // App\Support\BlokBagianSatu). Dipanggil SEBELUM perubahan terjadi
+            // (beforeinput/aksi toolbar), selagi node yang akan diubah masih ada.
+            tandaiDiedit() {
+                const sel = window.getSelection();
+                if (!sel.rangeCount) return;
+                const range = sel.getRangeAt(0);
+                if (!this.$refs.editor.contains(range.commonAncestorContainer)) return;
+                this.$refs.editor.querySelectorAll('[data-blok], tr').forEach(el => {
+                    if (!el.hasAttribute('data-diedit') && range.intersectsNode(el)) {
+                        el.setAttribute('data-diedit', '1');
+                    }
+                });
+            },
             perbaruiStatus() {
                 this.aktifBold = document.queryCommandState('bold');
                 this.aktifItalic = document.queryCommandState('italic');
@@ -369,6 +386,7 @@
                 // fokus' lewat @mousedown.prevent) — formatBlock/insertList butuh selection
                 // aktif di dalam elemen, tidak seperti bold/italic yang tetap jalan tanpa itu.
                 this.$refs.editor.focus();
+                this.tandaiDiedit();
                 document.execCommand(perintah, false, nilai);
                 this.perbaruiStatus();
                 this.$wire.set('bagian1EditText', this.$refs.editor.innerHTML);
@@ -381,6 +399,7 @@
             aturRata(nilai) {
                 const blok = this.blokTerpilih();
                 if (blok.length === 0) return;
+                this.tandaiDiedit();
                 blok.forEach(el => { el.style.textAlign = nilai; });
                 this.perbaruiStatus();
                 this.$wire.set('bagian1EditText', this.$refs.editor.innerHTML);
@@ -388,6 +407,7 @@
             aturFont(nilai) {
                 if (!nilai) return;
                 this.pulihkanSeleksi();
+                this.tandaiDiedit();
                 document.execCommand('fontName', false, nilai);
                 this.$wire.set('bagian1EditText', this.$refs.editor.innerHTML);
             },
@@ -397,6 +417,7 @@
                 // dibuat dengan style.fontSize sesuai pilihan pengguna.
                 if (!px) return;
                 this.pulihkanSeleksi();
+                this.tandaiDiedit();
                 document.execCommand('fontSize', false, '7');
                 Array.from(this.$refs.editor.getElementsByTagName('font')).forEach(el => {
                     if (el.getAttribute('size') === '7') {
@@ -414,6 +435,7 @@
                 this.pulihkanSeleksi();
                 const blok = this.blokTerpilih();
                 if (blok.length === 0) return;
+                this.tandaiDiedit();
                 blok.forEach(el => { el.style.lineHeight = nilai; });
                 this.$wire.set('bagian1EditText', this.$refs.editor.innerHTML);
             }
@@ -479,6 +501,7 @@
                      sini. Lihat KompilasiNotula::bagian1PreviewHtml(). --}}
                 <div class="notula-edit" contenteditable="true" wire:ignore spellcheck="false" x-ref="editor"
                     x-on:bagian1-diperbarui.window="$el.innerHTML = $event.detail.html"
+                    @beforeinput="tandaiDiedit()"
                     @keyup="perbaruiStatus()" @mouseup="perbaruiStatus()"
                     @blur="$wire.set('bagian1EditText', $el.innerHTML)">
                     @if (trim($bagian1PreviewHtml) === '')
@@ -517,10 +540,11 @@
         </div>
 
         <x-confirm-modal :show="$konfirmasiSusunUlang" title="Susun Ulang Otomatis?" :danger="false"
-            message="Ini akan menimpa suntingan manual Anda di pratinjau dengan hasil susun ulang dari data terverifikasi. Suntingan lama tetap dicadangkan dan bisa dipulihkan. Lanjutkan?">
+            message="Data terverifikasi terbaru (IKU baru, angka, kendala, RTL, dll.) akan dimasukkan ke pratinjau. Bagian yang sudah Anda sunting tetap dipertahankan. Pilih 'Timpa Semua' bila ingin menyusun ulang dari nol tanpa suntingan. Isi saat ini tetap dicadangkan dan bisa dipulihkan.">
             <button type="button" class="btn btn-ghost" wire:click="batalSusunUlangOtomatis" wire:loading.attr="disabled" wire:target="susunUlangOtomatis">Batal</button>
+            <button type="button" class="btn btn-ghost" wire:click="susunUlangOtomatis(true)" wire:loading.attr="disabled" wire:target="susunUlangOtomatis">Timpa Semua</button>
             <button type="button" class="btn btn-primary" wire:click="susunUlangOtomatis" wire:loading.attr="disabled" wire:target="susunUlangOtomatis">
-                <span wire:loading.remove wire:target="susunUlangOtomatis">Lanjutkan</span>
+                <span wire:loading.remove wire:target="susunUlangOtomatis">Perbarui &amp; Pertahankan Suntingan</span>
                 <span wire:loading wire:target="susunUlangOtomatis"><i class="spin"></i> Menyusun…</span>
             </button>
         </x-confirm-modal>

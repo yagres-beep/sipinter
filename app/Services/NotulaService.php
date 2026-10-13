@@ -16,6 +16,7 @@ use App\Models\RtlEvaluasi;
 use App\Models\User;
 use App\Support\HtmlNotulaDompdf;
 use App\Support\PenggantiBerkasAman;
+use App\Support\BlokBagianSatu;
 use App\Support\RumusMarkup;
 use Barryvdh\DomPDF\Facade\Pdf as PdfFacade;
 use Illuminate\Http\UploadedFile;
@@ -76,6 +77,39 @@ class NotulaService
      */
     public function susunBagianSatu(Notula $notula): string
     {
+        $html = $this->bangunHtmlBagianSatu($notula);
+
+        $notula->update(['bagian1_html' => $html]);
+
+        return $html;
+    }
+
+    /**
+     * "Susun Ulang Otomatis" yang MEMPERTAHANKAN suntingan manual: isi dari data
+     * terbaru (IKU baru, angka/kendala/RTL yang berubah) masuk, tapi blok & baris
+     * yang sudah disunting Tim SAKIP di pratinjau tidak ditimpa -- lihat
+     * App\Support\BlokBagianSatu::gabungkan(). $suntingan = isi editor saat ini.
+     *
+     * $timpaSemua, atau $suntingan yang belum punya pembungkus blok (disusun sebelum
+     * fitur ini ada), jatuh ke penyusunan penuh seperti susunBagianSatu().
+     *
+     * @return array{html: string, dipertahankan: int, digabung: bool}
+     */
+    public function susunUlangBagianSatu(Notula $notula, ?string $suntingan, bool $timpaSemua = false): array
+    {
+        $baru = $this->bangunHtmlBagianSatu($notula);
+        $suntingan = $suntingan !== null ? $this->kembalikanPenandaBagianDuaTiga($suntingan) : null;
+        $digabung = ! $timpaSemua && BlokBagianSatu::punyaBlok($suntingan) && BlokBagianSatu::punyaBlok($baru);
+
+        $hasil = $digabung ? BlokBagianSatu::gabungkan($suntingan, $baru) : ['html' => $baru, 'dipertahankan' => 0];
+
+        $notula->update(['bagian1_html' => $hasil['html']]);
+
+        return $hasil + ['digabung' => $digabung];
+    }
+
+    private function bangunHtmlBagianSatu(Notula $notula): string
+    {
         $data = $this->kumpulkanDataBagianSatu($notula);
 
         $dir = storage_path("app/private/notula/{$notula->id}/bagian1-sementara");
@@ -89,7 +123,7 @@ class NotulaService
         // gabungan Bagian I+II+III, yang sudah punya blok TTD akhirnya sendiri di
         // paling bawah (lihat pdf.notula-utuh, .ttd-blok) -- lihat catatan parameter
         // itu di NotulaBagian1DocxService::generate().
-        $this->docx->generate($notula, $data, $docxPath, sertakanBlokTtdMandiri: false, rumusSebagaiPenanda: true);
+        $this->docx->generate($notula, $data, $docxPath, sertakanBlokTtdMandiri: false, untukPratinjauHtml: true);
         $formulaUrutan = $this->docx->formulaUrutanTerakhir();
 
         try {
@@ -100,11 +134,7 @@ class NotulaService
             }
         }
 
-        $html = $this->gantiPenandaRumusDenganHtml($html, $formulaUrutan);
-
-        $notula->update(['bagian1_html' => $html]);
-
-        return $html;
+        return BlokBagianSatu::bungkus($this->gantiPenandaRumusDenganHtml($html, $formulaUrutan));
     }
 
     /**
@@ -378,22 +408,49 @@ class NotulaService
      * Fallback: bila $bagian1Html TIDAK memuat penanda (mis. template lama/kustom
      * tanpa {{bagian_2}}/{{bagian_3}}), Bagian II/III tetap ditempel di akhir
      * (perilaku lama) alih-alih hilang begitu saja.
+     *
+     * Paragraf yang memuat penanda diganti UTUH (bukan cuma teks penandanya) --
+     * penandanya ada di dalam <p><font><i>, dan isi Bagian II/III (berisi <div>/
+     * tabel) yang ditaruh di dalamnya akan dipecah browser keluar dari <p> sambil
+     * membawa format miringnya ke seluruh isi Bagian II/III.
+     *
+     * $untukEditor: isi sisipan dibuat tidak bisa disunting dan diapit komentar
+     * penanda, supaya saat pratinjau disimpan isi Bagian II/III bisa dikembalikan
+     * jadi penanda {{bagian_2}}/{{bagian_3}} (kembalikanPenandaBagianDuaTiga()) dan
+     * tidak ikut terbakar permanen ke dalam bagian1_html.
      */
-    public function sisipkanBagianDuaTiga(string $bagian1Html, ?string $bagian2Html, ?string $bagian3Html): string
+    public function sisipkanBagianDuaTiga(string $bagian1Html, ?string $bagian2Html, ?string $bagian3Html, bool $untukEditor = false): string
     {
-        $bagian2Html = trim((string) $bagian2Html);
-        $bagian3Html = trim((string) $bagian3Html);
+        $hasil = $bagian1Html;
 
-        $hasil = str_replace(['{{bagian_2}}', '{{bagian_3}}'], [$bagian2Html, $bagian3Html], $bagian1Html);
+        foreach (['bagian_2' => trim((string) $bagian2Html), 'bagian_3' => trim((string) $bagian3Html)] as $nama => $isi) {
+            if ($untukEditor && $isi !== '') {
+                $isi = "<!--sipinter:{$nama}--><div data-sisipan=\"{$nama}\" contenteditable=\"false\">{$isi}</div><!--/sipinter:{$nama}-->";
+            }
 
-        if (! str_contains($bagian1Html, '{{bagian_2}}')) {
-            $hasil .= $bagian2Html;
-        }
-        if (! str_contains($bagian1Html, '{{bagian_3}}')) {
-            $hasil .= $bagian3Html;
+            $penanda = '{{'.$nama.'}}';
+            if (! str_contains($hasil, $penanda)) {
+                $hasil .= $isi;
+
+                continue;
+            }
+
+            $pola = '/<p\b[^>]*>(?:(?!<\/p>).)*?'.preg_quote($penanda, '/').'(?:(?!<\/p>).)*?<\/p>/s';
+            $diganti = preg_replace_callback($pola, fn () => $isi, $hasil, 1, $jumlah);
+            $hasil = $jumlah > 0 && $diganti !== null ? $diganti : str_replace($penanda, $isi, $hasil);
         }
 
         return $hasil;
+    }
+
+    /**
+     * Kebalikan sisipkanBagianDuaTiga(untukEditor: true) untuk HTML yang dikirim
+     * balik dari editor pratinjau: isi Bagian II/III diganti lagi jadi paragraf
+     * penanda {{bagian_2}}/{{bagian_3}}.
+     */
+    public function kembalikanPenandaBagianDuaTiga(string $html): string
+    {
+        return preg_replace('/<!--sipinter:(bagian_[23])-->.*?<!--\/sipinter:\1-->/s', '<p>{{$1}}</p>', $html) ?? $html;
     }
 
     /**

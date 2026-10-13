@@ -62,10 +62,12 @@ class NotulaBagian1DocxService
     private array $formulaUrutan = [];
 
     /**
-     * true: rumus ditulis sebagai teks penanda (penandaRumus()), bukan OOXML Math --
-     * lihat setFormula() & parameter $rumusSebagaiPenanda di generate().
+     * true: docx dibuat untuk dikonversi jadi HTML pratinjau -- rumus ditulis sebagai
+     * teks penanda (penandaRumus(), lihat setFormula()) dan tiap bagian dokumen diawali
+     * paragraf penanda blok (penandaBlok(), lihat isiPerIkuDinamis()). Lihat parameter
+     * $untukPratinjauHtml di generate().
      */
-    private bool $rumusSebagaiPenanda = false;
+    private bool $untukPratinjauHtml = false;
 
     /**
      * Teks penanda rumus ke-$i -- TANPA spasi supaya tidak dipatahkan LibreOffice
@@ -74,6 +76,23 @@ class NotulaBagian1DocxService
     public static function penandaRumus(int $i): string
     {
         return "SIPINTERRUMUS{$i}X";
+    }
+
+    /**
+     * Teks penanda awal blok $kunci (mis. "iku-12", "kustom", "ekor") -- diubah jadi
+     * <div data-blok="..."> oleh App\Support\BlokBagianSatu::bungkus() supaya
+     * "Susun Ulang Otomatis" bisa memperbarui blok yang belum disunting saja.
+     */
+    public static function penandaBlok(string $kunci): string
+    {
+        return 'SIPINTERBLOK_'.$kunci;
+    }
+
+    private function paragrafPenandaBlok(string $kunci): string
+    {
+        return $this->untukPratinjauHtml
+            ? '<w:p><w:r><w:t>'.self::penandaBlok($kunci).'</w:t></w:r></w:p>'
+            : '';
     }
 
     /**
@@ -98,13 +117,14 @@ class NotulaBagian1DocxService
      * TERLEPAS dari $sertakanBlokTtdMandiri, tabelnya JUGA selalu dibuang bila notula
      * belum berstatus disetujui (RF-44) -- lihat catatan hapusBlokTtdMandiri().
      *
-     * $rumusSebagaiPenanda HANYA untuk jalur pratinjau HTML (susunBagianSatu()) --
-     * lihat setFormula(). Unduhan .docx tetap memakai OOXML Math sungguhan.
+     * $untukPratinjauHtml HANYA untuk jalur pratinjau HTML (susunBagianSatu()) --
+     * lihat $this->untukPratinjauHtml. Unduhan .docx tetap memakai OOXML Math
+     * sungguhan dan tidak memuat penanda apa pun.
      */
-    public function generate(Notula $notula, array $data, string $outputPath, bool $sertakanBlokTtdMandiri = true, bool $rumusSebagaiPenanda = false): string
+    public function generate(Notula $notula, array $data, string $outputPath, bool $sertakanBlokTtdMandiri = true, bool $untukPratinjauHtml = false): string
     {
         $this->formulaUrutan = [];
-        $this->rumusSebagaiPenanda = $rumusSebagaiPenanda;
+        $this->untukPratinjauHtml = $untukPratinjauHtml;
 
         $templatePath = $this->resolveTemplatePath();
 
@@ -298,7 +318,7 @@ class NotulaBagian1DocxService
         // (paragraf rumusnya jadi kosong), jadi yang disisipkan cukup teks penanda
         // tanpa spasi -- diganti HTML bersusun setelah konversi, lihat
         // NotulaService::gantiPenandaRumusDenganHtml().
-        if ($this->rumusSebagaiPenanda) {
+        if ($this->untukPratinjauHtml) {
             $p->setValue('formula_capaian', self::penandaRumus(count($this->formulaUrutan)), -1);
 
             return;
@@ -389,10 +409,12 @@ class NotulaBagian1DocxService
         $sub->setMacroChars('{{', '}}');
 
         $potongan = $daftarIku->map(function ($iku) use ($data, $ikuBlokTemplate, $sub) {
-            return $this->isiSatuIku($sub, $ikuBlokTemplate, $iku, $data);
+            return $this->paragrafPenandaBlok('iku-'.$iku->id).$this->isiSatuIku($sub, $ikuBlokTemplate, $iku, $data);
         });
 
-        $isiBaru = $potongan->implode('<w:p/>').$this->bagianKustomXml($data['bagianKustomPerBagian']);
+        $isiBaru = $potongan->implode('<w:p/>')
+            .$this->paragrafPenandaBlok('kustom').$this->bagianKustomXml($data['bagianKustomPerBagian'])
+            .$this->paragrafPenandaBlok('ekor');
 
         $this->setMainPart($processor, $before.$isiBaru.$after);
     }

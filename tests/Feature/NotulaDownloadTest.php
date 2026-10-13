@@ -569,7 +569,7 @@ class NotulaDownloadTest extends TestCase
         $path = tempnam(sys_get_temp_dir(), 'penanda').'.docx';
 
         try {
-            $docx->generate($notula, app(\App\Services\NotulaService::class)->kumpulkanDataBagianSatu($notula), $path, sertakanBlokTtdMandiri: false, rumusSebagaiPenanda: true);
+            $docx->generate($notula, app(\App\Services\NotulaService::class)->kumpulkanDataBagianSatu($notula), $path, sertakanBlokTtdMandiri: false, untukPratinjauHtml: true);
 
             $zip = new \ZipArchive;
             $zip->open($path);
@@ -582,6 +582,8 @@ class NotulaDownloadTest extends TestCase
         $this->assertCount(1, $docx->formulaUrutanTerakhir());
         $this->assertStringContainsString(\App\Services\NotulaBagian1DocxService::penandaRumus(0), $xml);
         $this->assertStringNotContainsString('<m:oMath>', $xml);
+        $this->assertStringContainsString(\App\Services\NotulaBagian1DocxService::penandaBlok('iku-'.$iku->id), $xml);
+        $this->assertStringContainsString(\App\Services\NotulaBagian1DocxService::penandaBlok('ekor'), $xml);
     }
 
     /**
