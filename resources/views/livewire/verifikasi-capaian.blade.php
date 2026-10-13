@@ -408,6 +408,65 @@
         </div>
     @endif
 
+    <div class="card">
+        <div class="sec"><span>Indikator Proksi</span></div>
+        <div class="info">
+            ℹ️ Opsional — berlaku untuk IKU apa pun (tidak lagi khusus IKU SAKIP). Klik "+ Tambah Proksi" hanya bila capaian IKU ini perlu dijelaskan lewat indikator proksi. Setiap proksi dicetak sebagai satu baris tabel <b>Indikator Proksi | Target s.d Triwulan | Realisasi s.d Triwulan</b> di notula. Bila tidak ada proksi yang diisi, seluruh bagian proksi tidak dicetak. Proksi disimpan per triwulan.
+            <details style="margin-top:6px">
+                <summary style="cursor:pointer">Cara memasangnya di template notula</summary>
+                <div style="margin-top:6px;line-height:1.6">
+                    Di dalam <code>@{{iku_blok}}</code>, setelah bagian RO, tulis berurutan:
+                    <ol style="margin:4px 0 0 18px;padding:0">
+                        <li><code>@{{blok_proksi}}</code> — paragraf/baris sendiri, tanpa teks lain.</li>
+                        <li>Judul/pertanyaan bagian proksi (teks biasa, mis. "Indikator Proksi :").</li>
+                        <li>Tabel 3 kolom: baris judul <i>Indikator Proksi | Target s.d Triwulan <code>@{{triwulan_angka}}</code> | Realisasi s.d Triwulan <code>@{{triwulan_angka}}</code></i>, lalu SATU baris isi: <code>@{{proksi_uraian}}</code> | <code>@{{proksi_target}}</code> | <code>@{{proksi_realisasi}}</code>. Baris isi ini digandakan otomatis sebanyak proksi.</li>
+                        <li><code>@{{/blok_proksi}}</code> — paragraf/baris sendiri, tanpa teks lain.</li>
+                    </ol>
+                </div>
+            </details>
+        </div>
+
+        @php $nomorProksi = 0; @endphp
+        @forelse ($indikatorProksi as $kunciProksi => $baris)
+            @php $nomorProksi++; @endphp
+            <div class="keg" style="margin-top:8px" wire:key="proksi-{{ $kunciProksi }}">
+                <div class="keg-head">
+                    <span class="t">Proksi {{ $nomorProksi }}</span>
+                    <button type="button" class="btn btn-ghost btn-sm" wire:click="hapusProksi('{{ $kunciProksi }}')" wire:loading.attr="disabled" wire:target="hapusProksi('{{ $kunciProksi }}')">✕ Hapus</button>
+                </div>
+
+                <div class="field">
+                    <label>Indikator Proksi</label>
+                    <input type="text" class="inp filled" wire:model.live.blur="indikatorProksi.{{ $kunciProksi }}.uraian" placeholder="mis. Persentase monitoring capaian kinerja triwulanan yang terlaksana tepat waktu">
+                    @error("indikatorProksi.{$kunciProksi}.uraian")
+                        <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                    @enderror
+                </div>
+
+                <div class="row2" style="margin-top:6px">
+                    <div class="field">
+                        <label>Target s.d Triwulan {{ $capaian->periode->triwulan }}</label>
+                        <input type="text" class="inp filled" wire:model.live.blur="indikatorProksi.{{ $kunciProksi }}.target" placeholder="mis. 100%">
+                        @error("indikatorProksi.{$kunciProksi}.target")
+                            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                        @enderror
+                    </div>
+                    <div class="field">
+                        <label>Realisasi s.d Triwulan {{ $capaian->periode->triwulan }}</label>
+                        <input type="text" class="inp filled" wire:model.live.blur="indikatorProksi.{{ $kunciProksi }}.realisasi" placeholder="mis. 100%">
+                        @error("indikatorProksi.{$kunciProksi}.realisasi")
+                            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                        @enderror
+                    </div>
+                </div>
+            </div>
+        @empty
+            <p style="color:var(--muted);font-size:12.5px;margin-top:8px">IKU ini belum punya indikator proksi — bagian proksi tidak akan muncul di notula.</p>
+        @endforelse
+
+        <button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px" wire:click="tambahProksi" wire:loading.attr="disabled" wire:target="tambahProksi">+ Tambah Proksi</button>
+    </div>
+
     @if ($kendalaSolusiList->isNotEmpty())
         <div class="card">
             <div class="sec"><span>Kendala &amp; Solusi</span></div>

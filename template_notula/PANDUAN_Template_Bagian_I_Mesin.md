@@ -29,7 +29,7 @@ menyentuh berkas ini sama sekali.
 
 **Kapan berkas ini BENAR-BENAR perlu disunting:** hanya kalau **struktur dokumen resmi**
 dari pusat berubah — misalnya ada kolom baru di tabel capaian, urutan bagian berubah,
-atau ada jenis indikator khusus baru (di luar pola SAKIP/BerAKHLAK yang sudah ada).
+atau ada jenis indikator khusus baru (di luar pola Proksi/BerAKHLAK yang sudah ada).
 
 ## Konvensi macro
 
@@ -61,7 +61,7 @@ dicari `hapusBlokTtdMandiri()`.
 ### Blok berulang per IKU: `{{iku_blok}}` ... `{{/iku_blok}}`
 
 Bungkus **satu tabel penuh** (baris Sasaran + tabel capaian + Analisis Capaian Kinerja
-+ RO/SAKIP/BerAKHLAK + Kendala/Solusi/RTL + Dasar Hitung/Bukti Dukung). Isinya digandakan
++ RO/Proksi/BerAKHLAK + Kendala/Solusi/RTL + Dasar Hitung/Bukti Dukung). Isinya digandakan
 sekali per Master IKU (urutan sasaran lalu kode, sama seperti pratinjau web) oleh
 `NotulaBagian1DocxService::isiPerIkuDinamis()`. Di DALAM blok ini, macro-nya GENERIK
 (tanpa akhiran kode) karena setiap salinan diisi lewat instance `TemplateProcessor`
@@ -79,15 +79,40 @@ sekali-pakai yang terpisah: `{{kode}}`, `{{indikator}}`, `{{sasaran}}`, `{{targe
   (TW IV → TW I tahun depan; draft yang belum diajukan tidak ikut).
 - `{{batas_waktu_rtl_berikutnya}}` — akhir triwulan berikutnya, mis. "Desember 2026".
 
-### Tiga varian setelah kotak "Analisis Capaian Kinerja" (persis satu yang tampil)
+### Blok opsional setelah kotak "Analisis Capaian Kinerja"
 
-Dideteksi dari TEKS indikator (bukan kode — lihat `notula-bagian1-konten.blade.php`
-untuk pola yang sama di jalur pratinjau web), lewat `str_contains(..., 'sakip')` /
-`'berakhlak'`:
+- `{{blok_proksi}}` ... `{{/blok_proksi}}` — tabel "Indikator Proksi". Tampil untuk
+  IKU **apa pun** yang punya Indikator Proksi isian Tim SAKIP (kartu "Indikator
+  Proksi" → "+ Tambah Proksi" di Detail Verifikasi, disimpan per IKU per triwulan,
+  `App\Models\IndikatorProksi`); dibuang total bila IKU tsb tidak punya proksi.
+  TIDAK lagi dideteksi dari teks "SAKIP" — `{{blok_sakip}}`, `{{target_proksi}}`,
+  `{{realisasi_proksi}}` sudah tidak dipakai (bila masih ada di template lama, blok
+  `blok_sakip` dibuang saat notula disusun dan muncul peringatan saat unggah).
+  Urutan tulisannya di template:
 
-- `{{blok_sakip}}` ... `{{/blok_sakip}}` — pertanyaan baku + tabel "Indikator Proksi"
-  (`{{target_proksi}}` / `{{realisasi_proksi}}`).
-- `{{blok_berakhlak}}` ... `{{/blok_berakhlak}}` — pertanyaan baku, tanpa tabel.
+  ```
+  {{blok_proksi}}                                  ← paragraf/baris sendiri
+  Capaian IKU ini dijelaskan melalui ... :         ← judul bebas (teks biasa, opsional)
+  ┌──────────────────┬──────────────────────────┬─────────────────────────────┐
+  │ Indikator Proksi │ Target s.d Triwulan      │ Realisasi s.d Triwulan      │
+  │                  │ {{triwulan_angka}}       │ {{triwulan_angka}}          │
+  ├──────────────────┼──────────────────────────┼─────────────────────────────┤
+  │ {{proksi_uraian}}│ {{proksi_target}}        │ {{proksi_realisasi}}        │ ← digandakan per proksi
+  └──────────────────┴──────────────────────────┴─────────────────────────────┘
+  {{/blok_proksi}}                                 ← paragraf/baris sendiri
+  ```
+
+  Penanda `{{blok_proksi}}`/`{{/blok_proksi}}` boleh berupa **baris tabel tersendiri**
+  (gaya template bawaan) ATAU **paragraf di dalam sel** yang juga berisi konten lain
+  (mis. di atas Kendala/Solusi, dengan tabel proksi bersarang di dalam sel) — dideteksi
+  otomatis (`NotulaBagian1DocxService::unitPenanda()`). Baris isi tabel tidak perlu
+  penanda sendiri seperti `{{ro_row}}`: baris yang memuat `{{proksi_uraian}}` itulah
+  yang digandakan. Kolom kosong dicetak "…".
+
+Dua varian berikut dideteksi dari TEKS indikator/realisasi:
+
+- `{{blok_berakhlak}}` ... `{{/blok_berakhlak}}` — pertanyaan baku, tanpa tabel
+  (indikator berteks "berakhlak").
 - `{{blok_ro}}` ... `{{/blok_ro}}` — tabel "Realisasi Volume RO dan Progress
   Pelaksanaan Kegiatan", HANYA tampil bila IKU tsb belum punya realisasi triwulan
   berjalan (sama seperti kondisi `@elseif (empty($rekap['realisasi']))` di Blade).
@@ -97,7 +122,7 @@ untuk pola yang sama di jalur pratinjau web), lewat `str_contains(..., 'sakip')`
   pratinjau PDF (`Kegiatan::rincian_output` / `volume_ro` / `progres_persen`),
   BUKAN katalog kode RO tetap seperti versi lama.
 
-Baris pembuka/penutup ketiga blok ini adalah baris tabel (`<w:tr>`) tersendiri berisi
+Baris pembuka/penutup `blok_berakhlak`/`blok_ro`/`ro_row` adalah baris tabel (`<w:tr>`) tersendiri berisi
 HANYA teks macro-nya — jangan digabung dengan baris konten lain, karena kode
 menghapus/menyimpan baris ini persis berdasarkan posisi baris (lihat
 `NotulaBagian1DocxService::splitOnMarkers()`, unit `'tr'`).
@@ -120,6 +145,6 @@ Cara paling aman:
    sudah punya beberapa Master IKU — pastikan tidak ada teks `{{...}}` mentah yang
    tersisa di hasil unduhan (tanda ada macro yang salah ketik/salah posisi).
 4. `tests/Feature/NotulaDownloadTest.php` punya beberapa pengujian regresi (kode IKU
-   yang bukan bawaan template, RO dari data Kegiatan sungguhan, format SAKIP/BerAKHLAK,
+   yang bukan bawaan template, RO dari data Kegiatan sungguhan, baris proksi, format BerAKHLAK,
    detail rapat & TTD) — jalankan `php artisan test --filter=NotulaDownloadTest`
    setelah menyunting untuk memastikan tidak ada yang rusak.

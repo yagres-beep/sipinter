@@ -7,6 +7,7 @@ use App\Models\BagianKustom;
 use App\Models\Berkas;
 use App\Models\Capaian;
 use App\Models\CapaianTahunan;
+use App\Models\IndikatorProksi;
 use App\Models\Kegiatan;
 use App\Models\KendalaSolusi;
 use App\Models\MasterIku;
@@ -14,8 +15,8 @@ use App\Models\Notula;
 use App\Models\Periode;
 use App\Models\RtlEvaluasi;
 use App\Models\User;
-use App\Support\HtmlNotulaDompdf;
 use App\Support\BlokBagianSatu;
+use App\Support\HtmlNotulaDompdf;
 use App\Support\PenggantiBerkasAman;
 use App\Support\RumusMarkup;
 use Barryvdh\DomPDF\Facade\Pdf as PdfFacade;
@@ -171,7 +172,6 @@ class NotulaService
         return $html;
     }
 
-    /**
     /**
      * Unduhan Bagian I .docx -- dibangun dari bagian1_html TERSIMPAN (isi pratinjau
      * yang sudah disunting, sumber yang SAMA dengan PDF pratinjau, PDF yang dikirim
@@ -362,6 +362,7 @@ class NotulaService
         }
     }
 
+    /**
      * Kumpulkan seluruh data siap-pakai untuk Bagian I (RF-42) — dipakai baik oleh
      * susunBagianSatu() (mengisi template lalu konversi ke HTML) maupun jalur unduhan
      * .docx murni (NotulaDownloadController::unduhBagian1Docx()), keduanya lewat
@@ -432,6 +433,14 @@ class NotulaService
                 return $kegiatan->rincianOutput->each(fn ($ro) => $ro->setRelation('kegiatan', $kegiatan));
             });
         });
+
+        // Indikator Proksi yang ditambahkan Tim SAKIP di Detail Verifikasi (per IKU per
+        // triwulan) — hanya baris yang benar-benar terisi yang dicetak di notula.
+        $proksiPerIku = IndikatorProksi::where('tahun', $periode->tahun)->where('triwulan', $tw)
+            ->orderBy('id')
+            ->get()
+            ->filter(fn (IndikatorProksi $p) => filled($p->uraian) || filled($p->target) || filled($p->realisasi))
+            ->groupBy('iku_id');
 
         // Target PK/Target TW/Realisasi/Capaian % — sumber tunggalnya CapaianTahunan
         // (diisi Tim SAKIP sekali per tahun, lihat App\Livewire\VerifikasiCapaian),
@@ -576,6 +585,7 @@ class NotulaService
             'capaianPerIku' => $capaianPerIku,
             'kegiatanPerIku' => $kegiatanPerIku,
             'roPerIku' => $roPerIku,
+            'proksiPerIku' => $proksiPerIku,
             'kendalaSolusiPerIku' => $kendalaSolusiPerIku,
             'rtlPerIku' => $rtlPerIku,
             'rtlSebelumnyaPerIku' => $rtlSebelumnyaPerIku,

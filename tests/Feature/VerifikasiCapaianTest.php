@@ -8,6 +8,7 @@ use App\Models\BagianKustomPoin;
 use App\Models\Berkas;
 use App\Models\Capaian;
 use App\Models\CapaianTahunan;
+use App\Models\IndikatorProksi;
 use App\Models\Kegiatan;
 use App\Models\KendalaSolusi;
 use App\Models\MasterIku;
@@ -1730,6 +1731,41 @@ class VerifikasiCapaianTest extends TestCase
 
         $this->assertCount(1, RincianOutput::where('kegiatan_id', $kegiatanId)->get());
         $this->assertSame('RO Kedua', RincianOutput::where('kegiatan_id', $kegiatanId)->first()->uraian);
+    }
+
+    public function test_tambah_simpan_dan_hapus_indikator_proksi_per_triwulan(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+        $capaian = $data['capaian']->load('periode');
+
+        $component = Livewire::test(VerifikasiCapaian::class, ['capaian' => $capaian]);
+        $this->assertSame([], $component->get('indikatorProksi'));
+
+        $component->call('tambahProksi')->call('tambahProksi')->call('tambahProksi');
+        $kunci = array_keys($component->get('indikatorProksi'));
+
+        $component
+            ->set("indikatorProksi.{$kunci[0]}.uraian", 'Proksi Pertama')
+            ->set("indikatorProksi.{$kunci[0]}.target", '100%')
+            ->set("indikatorProksi.{$kunci[0]}.realisasi", '80%')
+            ->set("indikatorProksi.{$kunci[1]}.uraian", 'Proksi Kedua')
+            // Baris ketiga dibiarkan kosong -- tidak boleh tersimpan.
+            ->call('simpanPerubahan')
+            ->assertHasNoErrors();
+
+        $tersimpan = IndikatorProksi::where('iku_id', $capaian->iku_id)->orderBy('id')->get();
+        $this->assertCount(2, $tersimpan);
+        $this->assertSame($capaian->periode->tahun, $tersimpan[0]->tahun);
+        $this->assertSame($capaian->periode->triwulan, $tersimpan[0]->triwulan);
+        $this->assertSame('80%', $tersimpan[0]->realisasi);
+
+        // Dibuka ulang: proksi tersimpan dimuat kembali.
+        $ulang = Livewire::test(VerifikasiCapaian::class, ['capaian' => $capaian->fresh()]);
+        $this->assertCount(2, $ulang->get('indikatorProksi'));
+
+        $ulang->call('hapusProksi', (string) $tersimpan[0]->id);
+        $this->assertSame(['Proksi Kedua'], IndikatorProksi::where('iku_id', $capaian->iku_id)->pluck('uraian')->all());
     }
 
     public function test_route_verifikasi_ditolak_untuk_peran_selain_tim_sakip(): void

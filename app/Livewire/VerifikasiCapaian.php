@@ -8,6 +8,7 @@ use App\Models\BagianKustomPoin;
 use App\Models\Berkas;
 use App\Models\Capaian;
 use App\Models\CapaianTahunan;
+use App\Models\IndikatorProksi;
 use App\Models\Kegiatan;
 use App\Models\KendalaSolusi;
 use App\Models\MasterIku;
@@ -67,6 +68,18 @@ class VerifikasiCapaian extends Component
      * @var array<string, array{id: int|null, kegiatan_id: int, uraian: string|null, volume_ro: string|null, progres_persen: string|null}>
      */
     public array $rincianOutput = [];
+
+    /**
+     * Indikator Proksi milik IKU ini pada TRIWULAN capaian ini (App\Models\IndikatorProksi)
+     * — opsional, ditambahkan Tim SAKIP sendiri lewat "+ Tambah Proksi" bila IKU ini
+     * memang diukur lewat proksi (tidak lagi khusus indikator berteks "SAKIP"). Tiap
+     * baris jadi satu baris tabel {{blok_proksi}} di notula, lihat
+     * NotulaBagian1DocxService::isiSatuIku(). Kunci array: id asli ATAU "baru-..." untuk
+     * baris yang belum disimpan (pola sama seperti $rincianOutput).
+     *
+     * @var array<string, array{id: int|null, uraian: string|null, target: string|null, realisasi: string|null}>
+     */
+    public array $indikatorProksi = [];
 
     /**
      * Centang item Rincian N (App\Models\RincianN) yang direalisasikan --
@@ -317,7 +330,7 @@ class VerifikasiCapaian extends Component
      * @var list<string>
      */
     protected const PROPERTI_ISIAN = [
-        'analisis_capaian', 'catatan', 'rincianOutput', 'koreksiKegiatan', 'koreksiKendala',
+        'analisis_capaian', 'catatan', 'rincianOutput', 'indikatorProksi', 'koreksiKegiatan', 'koreksiKendala',
         'koreksiRtlRealisasi', 'koreksiRtlBerikutnya', 'picRtlBerikutnyaTerpilih', 'rincianNPilih', 'rincianNTw',
     ];
 
@@ -427,6 +440,15 @@ class VerifikasiCapaian extends Component
         // Sengaja TIDAK menyiapkan baris RO kosong otomatis: tidak semua IKU punya
         // RO, jadi baris kosong bawaan hanya memberi kesan wajib diisi. Tim SAKIP
         // menambahkannya sendiri lewat "+ Tambah RO" bila IKU ini memang ber-RO.
+        // Indikator Proksi sama: tidak ada baris kosong bawaan.
+        foreach ($this->indikatorProksiTersimpan() as $proksi) {
+            $this->indikatorProksi[(string) $proksi->id] = [
+                'id' => $proksi->id,
+                'uraian' => $proksi->uraian,
+                'target' => $proksi->target,
+                'realisasi' => $proksi->realisasi,
+            ];
+        }
 
         foreach ($this->kendalaSolusiList() as $ks) {
             $this->koreksiKendala[$ks->id] = ['kendala' => $ks->kendala, 'solusi' => $ks->solusi];
@@ -1397,6 +1419,9 @@ class VerifikasiCapaian extends Component
             'rincianOutput.*.uraian' => ['nullable', 'string', 'max:255'],
             'rincianOutput.*.volume_ro' => ['nullable', 'string', 'max:255'],
             'rincianOutput.*.progres_persen' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'indikatorProksi.*.uraian' => ['nullable', 'string', 'max:255'],
+            'indikatorProksi.*.target' => ['nullable', 'string', 'max:255'],
+            'indikatorProksi.*.realisasi' => ['nullable', 'string', 'max:255'],
             'koreksiKendala.*.kendala' => ['required', 'string'],
             'koreksiKendala.*.solusi' => ['nullable', 'string'],
             'koreksiRtlRealisasi.*' => ['nullable', 'string'],
@@ -1438,6 +1463,9 @@ class VerifikasiCapaian extends Component
             'rincianOutput.*.uraian' => 'rincian output',
             'rincianOutput.*.volume_ro' => 'realisasi volume RO',
             'rincianOutput.*.progres_persen' => 'progres pelaksanaan kegiatan (%)',
+            'indikatorProksi.*.uraian' => 'indikator proksi',
+            'indikatorProksi.*.target' => 'target proksi',
+            'indikatorProksi.*.realisasi' => 'realisasi proksi',
             'koreksiRtlBerikutnya.*' => 'rencana RTL berikutnya',
             'alokasi_tw1' => 'Alokasi Target TW I',
             'alokasi_tw2' => 'Alokasi Target TW II',
@@ -1710,6 +1738,7 @@ class VerifikasiCapaian extends Component
         }
 
         $this->simpanRincianOutput();
+        $this->simpanIndikatorProksi();
 
         foreach ($this->koreksiKendala as $id => $data) {
             KendalaSolusi::whereKey($id)->update([
@@ -1783,6 +1812,85 @@ class VerifikasiCapaian extends Component
                 // menghapusnya dari DB (dikunci masih pakai kunci sementara "baru-...").
                 $ro = RincianOutput::create($payload);
                 $this->rincianOutput[$kunci]['id'] = $ro->id;
+            }
+        }
+    }
+
+    /**
+     * Indikator Proksi tersimpan untuk IKU ini pada tahun+triwulan capaian ini (bukan
+     * per baris Capaian/bulan — notula membacanya per triwulan, lihat
+     * NotulaService::kumpulkanDataBagianSatu()).
+     */
+    protected function indikatorProksiTersimpan(): Collection
+    {
+        return IndikatorProksi::where('iku_id', $this->capaian->iku_id)
+            ->where('tahun', $this->capaian->periode->tahun)
+            ->where('triwulan', $this->capaian->periode->triwulan)
+            ->orderBy('id')
+            ->get();
+    }
+
+    /**
+     * Tambah satu baris Indikator Proksi kosong — baru tersimpan ke DB saat
+     * "Simpan"/"Verifikasi Selesai"/dst. ditekan (lihat simpanIndikatorProksi()),
+     * pola sama seperti tambahRo().
+     */
+    public function tambahProksi(): void
+    {
+        $this->indikatorProksi['baru-'.(string) Str::uuid()] = ['id' => null, 'uraian' => null, 'target' => null, 'realisasi' => null];
+        $this->adaPerubahan = true;
+    }
+
+    /**
+     * Hapus satu baris Indikator Proksi — yang sudah tersimpan langsung dihapus dari DB,
+     * yang belum cukup dibuang dari state lokal (pola sama seperti hapusRo()).
+     */
+    public function hapusProksi(string $kunci): void
+    {
+        $baris = $this->indikatorProksi[$kunci] ?? null;
+        if (! $baris) {
+            return;
+        }
+
+        if ($baris['id']) {
+            IndikatorProksi::whereKey($baris['id'])->where('iku_id', $this->capaian->iku_id)->delete();
+            $this->adaPerubahan = true;
+        }
+
+        unset($this->indikatorProksi[$kunci]);
+    }
+
+    /**
+     * Tulis seluruh baris Indikator Proksi ke DB: baris yang ketiga kolomnya kosong
+     * dihapus (bila sudah tersimpan) atau dilewati; sisanya dibuat/diperbarui.
+     */
+    protected function simpanIndikatorProksi(): void
+    {
+        foreach ($this->indikatorProksi as $kunci => $baris) {
+            $payload = [
+                'uraian' => filled($baris['uraian'] ?? null) ? trim($baris['uraian']) : null,
+                'target' => filled($baris['target'] ?? null) ? trim($baris['target']) : null,
+                'realisasi' => filled($baris['realisasi'] ?? null) ? trim($baris['realisasi']) : null,
+            ];
+
+            if (array_filter($payload) === []) {
+                if (! empty($baris['id'])) {
+                    IndikatorProksi::whereKey($baris['id'])->where('iku_id', $this->capaian->iku_id)->delete();
+                    $this->indikatorProksi[$kunci]['id'] = null;
+                }
+
+                continue;
+            }
+
+            if (! empty($baris['id'])) {
+                IndikatorProksi::whereKey($baris['id'])->where('iku_id', $this->capaian->iku_id)->update($payload);
+            } else {
+                $proksi = IndikatorProksi::create($payload + [
+                    'iku_id' => $this->capaian->iku_id,
+                    'tahun' => $this->capaian->periode->tahun,
+                    'triwulan' => $this->capaian->periode->triwulan,
+                ]);
+                $this->indikatorProksi[$kunci]['id'] = $proksi->id;
             }
         }
     }

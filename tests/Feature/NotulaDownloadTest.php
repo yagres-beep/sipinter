@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Capaian;
 use App\Models\CapaianTahunan;
 use App\Models\FolderConfig;
+use App\Models\IndikatorProksi;
 use App\Models\Kegiatan;
 use App\Models\KendalaSolusi;
 use App\Models\MasterIku;
@@ -14,11 +15,11 @@ use App\Models\RincianN;
 use App\Models\Role;
 use App\Models\RtlEvaluasi;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use App\Services\LibreOfficeConversionService;
 use App\Services\NotulaBagian1DocxService;
 use App\Services\NotulaService;
 use App\Support\RumusMarkup;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 use ZipArchive;
@@ -468,11 +469,11 @@ class NotulaDownloadTest extends TestCase
     }
 
     /**
-     * Indikator SAKIP/BerAKHLAK pada .docx harus memakai format khusus (tabel Indikator
-     * Proksi / narasi tanpa tabel RO), sama seperti jalur pratinjau PDF -- dideteksi dari
-     * teks indikator, bukan kode (yang bisa berbeda tiap satker & berubah kapan pun).
+     * Indikator BerAKHLAK tetap memakai narasi khususnya (dideteksi dari teks indikator),
+     * sedangkan tabel Indikator Proksi TIDAK lagi muncul hanya karena indikatornya
+     * berteks "SAKIP" -- proksi kini isian Tim SAKIP sendiri (lihat uji di bawah).
      */
-    public function test_docx_bagian1_indikator_sakip_dan_berakhlak_memakai_format_khusus(): void
+    public function test_docx_bagian1_berakhlak_format_khusus_dan_sakip_tanpa_proksi_tidak_mencetak_tabel_proksi(): void
     {
         $this->loginSebagai('Tim SAKIP');
 
@@ -486,10 +487,42 @@ class NotulaDownloadTest extends TestCase
 
         $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
 
-        $this->assertStringContainsString('Jelaskan mengenai persentase monitoring capaian kinerja triwulanan yang terlaksana tepat waktu', $xml);
-        $this->assertStringContainsString('Indikator Proksi', $xml);
+        $this->assertStringNotContainsString('Indikator Proksi', $xml);
+        $this->assertDoesNotMatchRegularExpression('/\{\{\/?(blok_proksi|blok_sakip|proksi_|target_proksi|realisasi_proksi)/', $xml);
         $this->assertStringContainsString('Jelaskan mengenai Persentase kegiatan untuk mengoptimalkan implementasi BerAKHLAK yang terlaksana sesuai rencana', $xml);
         $this->assertStringNotContainsString('Realisasi Volume RO dan Progress Pelaksanaan Kegiatan', $xml);
+    }
+
+    /**
+     * Indikator Proksi isian Tim SAKIP dicetak untuk IKU APA PUN (bukan hanya SAKIP):
+     * satu baris tabel per proksi, hanya pada IKU pemiliknya & triwulan yang sama.
+     */
+    public function test_docx_bagian1_mencetak_baris_proksi_per_indikator_proksi_untuk_iku_apa_pun(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $ikuProksi = MasterIku::create(['kode' => '9010', 'indikator' => 'Persentase Publikasi Berkualitas', 'sasaran' => 'Sasaran Uji Proksi', 'tim' => 'Uji', 'penanggung_jawab' => 'A']);
+        $ikuLain = MasterIku::create(['kode' => '9011', 'indikator' => 'Indikator Tanpa Proksi', 'sasaran' => 'Sasaran Uji Proksi', 'tim' => 'Uji', 'penanggung_jawab' => 'A']);
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $this->verifikasiCapaian($ikuProksi, $periode);
+        $this->verifikasiCapaian($ikuLain, $periode);
+        IndikatorProksi::create(['iku_id' => $ikuProksi->id, 'tahun' => 2026, 'triwulan' => 3, 'uraian' => 'Proksi Satu & Dua', 'target' => '100%', 'realisasi' => '75%']);
+        IndikatorProksi::create(['iku_id' => $ikuProksi->id, 'tahun' => 2026, 'triwulan' => 3, 'uraian' => 'Proksi Kedua', 'target' => '4 laporan', 'realisasi' => null]);
+        // Triwulan lain -- tidak boleh ikut tercetak.
+        IndikatorProksi::create(['iku_id' => $ikuProksi->id, 'tahun' => 2026, 'triwulan' => 2, 'uraian' => 'Proksi TW Lalu', 'target' => '1', 'realisasi' => '1']);
+        $notula = Notula::create(['periode_id' => $periode->id]);
+
+        $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
+
+        $this->assertSame(1, substr_count($xml, 'Capaian IKU ini dijelaskan melalui indikator proksi berikut'));
+        $this->assertStringContainsString('Proksi Satu &amp; Dua', $xml);
+        $this->assertStringContainsString('75%', $xml);
+        $this->assertStringContainsString('Proksi Kedua', $xml);
+        $this->assertStringContainsString('4 laporan', $xml);
+        $this->assertStringNotContainsString('Proksi TW Lalu', $xml);
+        $this->assertDoesNotMatchRegularExpression('/\{\{\/?(blok_proksi|blok_sakip|proksi_|target_proksi|realisasi_proksi)/', $xml);
+        $this->assertNotFalse(simplexml_load_string($xml), 'document.xml hasil harus XML yang sah');
     }
 
     /**
