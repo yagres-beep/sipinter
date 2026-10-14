@@ -132,6 +132,21 @@ class Kegiatan extends Model
     }
 
     /**
+     * Nama capaian di notula: kegiatan yang dipisah ke beberapa tahapan dicatat per
+     * tahapan dengan nama folder tahapannya ("<Tahapan> <kegiatan>", atau nama yang
+     * diganti pengguna) — kegiatan induknya sendiri tidak ikut tercatat. Kegiatan
+     * "1 folder" tetap memakai uraian kegiatannya.
+     */
+    public function namaCapaian(): string
+    {
+        if ($this->jenis === 'survei_sensus' && filled($this->tahapan_survei)) {
+            return $this->uraianTampil();
+        }
+
+        return (string) $this->uraian_kegiatan;
+    }
+
+    /**
      * Nama folder Drive yang berlaku: nama pilihan pengguna (nama_folder_kustom)
      * bila diisi, selain itu rekomendasi sistem (nama_folder_auto, RF-17).
      */

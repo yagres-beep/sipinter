@@ -1316,6 +1316,222 @@ class PengisianKegiatan extends Component
         Cache::forget($this->cacheKeyPeriodeIku('rtl-berjalan'));
     }
 
+    /**
+     * Status yang dianggap "sudah diverifikasi Tim SAKIP" — pada status ini isian
+     * terkunci, tapi Ketua Tim tetap boleh MENAMBAH bukti dukung baru (lihat
+     * $buktiSusulan). Berkas lama tidak bisa diubah/dihapus.
+     *
+     * @var list<string>
+     */
+    public const STATUS_BOLEH_BUKTI_SUSULAN = [Kegiatan::STATUS_DIVERIFIKASI, Kegiatan::STATUS_DISETUJUI];
+
+    /** Kegiatan blok ini sudah diverifikasi → boleh ditambah bukti susulan. */
+    public function kegiatanBolehBuktiSusulan(array $block): bool
+    {
+        return ! empty($block['id']) && in_array($block['status_dokumen'] ?? null, self::STATUS_BOLEH_BUKTI_SUSULAN, true);
+    }
+
+    /** Evaluasi RTL periode ini sudah diverifikasi → boleh ditambah bukti susulan. */
+    public function evaluasiBolehBuktiSusulan(): bool
+    {
+        return in_array($this->statusCapaianSaatIni(), self::STATUS_BOLEH_BUKTI_SUSULAN, true);
+    }
+
+    /**
+     * Bukti dukung TAMBAHAN untuk kegiatan / poin evaluasi RTL yang SUDAH diverifikasi
+     * Tim SAKIP — kunci "kegiatan-<id>" atau "rtl-<id>". Begitu selesai dipilih,
+     * langsung disimpan & diunggah ke Drive (updatedBuktiSusulan()), tanpa membuka
+     * ulang isian yang sudah terkunci. Berkasnya berstatus "menunggu" supaya Tim
+     * SAKIP bisa memeriksanya.
+     *
+     * @var array<string, mixed>
+     */
+    public array $buktiSusulan = [];
+
+    public function updatedBuktiSusulan($nilai, ?string $kunci = null): void
+    {
+        $kunci = explode('.', (string) $kunci)[0];
+        unset($this->buktiSusulan[$kunci]);
+
+        [$jenis, $id] = array_pad(explode('-', $kunci, 2), 2, null);
+        $id = (int) $id;
+        $periode = $this->iku_id ? $this->periodeSaatIni() : null;
+
+        if (! $periode || ! $id) {
+            return;
+        }
+
+        $daftarBerkas = array_values(array_filter(is_array($nilai) ? $nilai : [$nilai]));
+        $validator = \Illuminate\Support\Facades\Validator::make(
+            ['bukti' => $daftarBerkas],
+            ['bukti' => ['required', 'array'], 'bukti.*' => ['file', 'mimes:pdf', 'max:10240']],
+            ['bukti.*.mimes' => 'Bukti dukung harus berupa PDF.', 'bukti.*.max' => 'Ukuran tiap bukti dukung maksimal 10 MB.']
+        );
+
+        if ($validator->fails()) {
+            $this->addError("buktiSusulan.{$kunci}", $validator->errors()->first());
+
+            return;
+        }
+
+        if ($jenis === 'kegiatan') {
+            $index = collect($this->blocks)->search(fn ($b) => (int) ($b['id'] ?? 0) === $id);
+            $kegiatan = $index === false ? null : Kegiatan::with(['periode', 'masterIku'])
+                ->where('iku_id', $this->iku_id)->where('periode_id', $periode->id)->find($id);
+
+            if (! $kegiatan || ! in_array($kegiatan->status_dokumen, self::STATUS_BOLEH_BUKTI_SUSULAN, true)) {
+                return;
+            }
+
+            $ref = $kegiatan;
+            $kategori = 'capaian';
+            $konteks = 'bukti dukung tambahan kegiatan';
+        } elseif ($jenis === 'rtl') {
+            $ref = $this->evaluasiBolehBuktiSusulan() ? $this->rtlTriwulanBerjalan()->firstWhere('id', $id) : null;
+
+            if (! $ref) {
+                return;
+            }
+
+            $ref->loadMissing(['periode', 'masterIku']);
+            $kategori = 'evaluasi_rtl';
+            $konteks = 'bukti dukung tambahan evaluasi RTL';
+        } else {
+            return;
+        }
+
+        $folderService = app(FolderStructureService::class);
+        $driveGagal = [];
+
+        foreach ($daftarBerkas as $file) {
+            $namaBerkas = $this->namaAsliBuktiBaru($file) ?: 'Bukti dukung tambahan';
+            $path = $file->store($kategori === 'capaian' ? 'bukti-capaian' : 'bukti-evaluasi-rtl', 'local');
+
+            $berkas = Berkas::create([
+                'ref_id' => $ref->id,
+                'ref_type' => $ref::class,
+                'kategori' => $kategori,
+                'nama_file' => $namaBerkas.'.pdf',
+                'path' => $path,
+                'status_verifikasi' => 'menunggu',
+            ]);
+
+            try {
+                $lokal = Storage::disk('local')->path($path);
+                $hasilDrive = $kategori === 'capaian'
+                    ? $folderService->unggahBerkasKegiatan($ref, 'capaian', $lokal, namaBerkasOverride: $namaBerkas)
+                    : $folderService->unggahBerkas($ref->periode, $ref->masterIku, 'evaluasi_rtl', $lokal, namaBerkasOverride: $namaBerkas);
+                $berkas->update($hasilDrive);
+                $this->notifikasiHasilUnggah($file->getClientOriginalName(), $konteks, true);
+            } catch (\Throwable $e) {
+                Log::warning("Gagal mengunggah {$konteks} ke Google Drive, disimpan lokal saja: ".$e->getMessage());
+                $driveGagal[] = $file->getClientOriginalName();
+                $this->notifikasiHasilUnggah($file->getClientOriginalName(), $konteks, false, $e->getMessage());
+            }
+
+            if ($kategori === 'capaian') {
+                $berkas->refresh();
+                $this->blocks[$index]['existing_bukti'][] = $this->maskBerkas([
+                    'id' => $berkas->id,
+                    'kode' => $berkas->kode,
+                    'nama_file' => $berkas->nama_file,
+                    'subfolder' => $berkas->subfolder,
+                    'diunggah_oleh' => $berkas->diunggah_oleh,
+                    'di_drive' => filled($berkas->drive_file_id),
+                    'status_verifikasi' => $berkas->status_verifikasi,
+                    'catatan' => $berkas->catatan,
+                ]);
+            }
+        }
+
+        if ($kategori === 'evaluasi_rtl') {
+            $this->cacheRtlBerjalan = null;
+            Cache::forget($this->cacheKeyPeriodeIku('rtl-berjalan'));
+        }
+
+        Cache::forget($this->kunciCacheLinkFolderIku());
+        $this->resetErrorBag("buktiSusulan.{$kunci}");
+
+        if ($driveGagal === []) {
+            $this->dispatch('notify', type: 'success', message: count($daftarBerkas).' bukti dukung tambahan tersimpan — menunggu diperiksa Tim SAKIP.');
+        }
+    }
+
+    /**
+     * Ketua Tim mengganti nama folder Drive kegiatan yang sudah terkunci (dipanggil
+     * <x-nama-folder>) — langsung tersimpan & ikut diganti di Drive, sama seperti
+     * VerifikasiCapaian::gantiNamaFolderKegiatan(). Kegiatan yang masih bisa diedit
+     * memakai ✏️ di form (tersimpan saat Simpan Draft/Ajukan).
+     *
+     * @return array{ok: bool, nama_folder?: string, pesan?: string}
+     */
+    public function gantiNamaFolderKegiatan(int $kegiatanId, string $namaBaru): array
+    {
+        $periode = $this->iku_id ? $this->periodeSaatIni() : null;
+        $kegiatan = $periode ? Kegiatan::where('iku_id', $this->iku_id)->where('periode_id', $periode->id)->find($kegiatanId) : null;
+
+        if (! $kegiatan || $this->formTerkunciSedangDitanganiFresh()) {
+            return ['ok' => false, 'pesan' => 'Folder kegiatan ini tidak bisa diganti namanya sekarang.'];
+        }
+
+        if (mb_strlen(trim($namaBaru)) > 150) {
+            return ['ok' => false, 'pesan' => 'Nama folder maksimal 150 karakter.'];
+        }
+
+        $hasil = $kegiatan->gantiNamaFolder($namaBaru);
+
+        foreach ($this->blocks as $i => $block) {
+            if ((int) ($block['id'] ?? 0) === $kegiatan->id) {
+                $this->blocks[$i]['nama_folder'] = (string) $kegiatan->fresh()->nama_folder_kustom;
+            }
+        }
+
+        $this->dispatch('notify', type: $hasil['peringatan'] ? 'warning' : 'success', message: $hasil['peringatan'] ?: "Nama folder diubah menjadi \"{$hasil['nama_folder']}\".");
+
+        return ['ok' => true, 'nama_folder' => $hasil['nama_folder']];
+    }
+
+    protected function kunciCacheLinkFolderIku(): string
+    {
+        return 'pengisian-kegiatan.link-folder-iku.'.$this->iku_id.'.'.$this->tahun.'.'.$this->triwulanDari($this->bulan);
+    }
+
+    /**
+     * Tautan folder Google Drive IKU ini (periode berjalan) — hanya bila foldernya
+     * memang sudah terbentuk, yaitu sudah ada berkas IKU ini pada triwulan ini yang
+     * masuk Drive. Di-cache supaya Drive tidak ditanya di setiap render.
+     */
+    public function linkFolderIku(): ?string
+    {
+        $periode = $this->iku_id ? $this->periodeSaatIni() : null;
+
+        if (! $periode) {
+            return null;
+        }
+
+        $hasil = Cache::remember($this->kunciCacheLinkFolderIku(), now()->addMinutes(30), function () use ($periode) {
+            $sudahDiDrive = Berkas::whereNotNull('drive_file_id')
+                ->whereHasMorph('ref', [Kegiatan::class, RtlEvaluasiModel::class, BagianKustomPoin::class], fn ($q) => $q
+                    ->where('iku_id', $this->iku_id)
+                    ->whereHas('periode', fn ($p) => $p->where('tahun', $periode->tahun)->where('triwulan', $periode->triwulan)))
+                ->exists();
+
+            if (! $sudahDiDrive) {
+                return ['link' => null];
+            }
+
+            try {
+                return ['link' => app(FolderStructureService::class)->linkBuktiDukungIku($periode, MasterIku::findOrFail($this->iku_id))];
+            } catch (\Throwable $e) {
+                Log::warning('Gagal mengambil tautan folder IKU: '.$e->getMessage());
+
+                return ['link' => null];
+            }
+        });
+
+        return $hasil['link'] ?? null;
+    }
+
     public function addKendalaBlock(): void
     {
         if ($this->formTerkunciSedangDitangani()) {
@@ -1463,6 +1679,7 @@ class PengisianKegiatan extends Component
         foreach (['riwayat', 'kendala-aktif', 'rtl-berjalan', 'rtl-berikutnya-ada', 'rtl-berikutnya-ada-edit', 'rtl-berikutnya-aktif', 'rtl-berikutnya-aktif-edit', 'rtl-berjalan-terpakai', 'capaian-status', 'catatan-penolakan', 'pengembalian-terakhir', 'periode'] as $bagian) {
             Cache::forget($this->cacheKeyPeriodeIku($bagian));
         }
+        Cache::forget($this->kunciCacheLinkFolderIku());
 
         foreach ($this->bagianKustomAktif() as $bagian) {
             Cache::forget($this->cacheKeyPeriodeIku("riwayat-bagian-{$bagian->id}"));
@@ -1971,6 +2188,7 @@ class PengisianKegiatan extends Component
                     'nama_file' => $b->nama_file,
                     'subfolder' => $b->subfolder,
                     'diunggah_oleh' => $b->diunggah_oleh,
+                    'di_drive' => filled($b->drive_file_id) || blank($b->path),
                     'status_verifikasi' => $b->status_verifikasi,
                     'catatan' => $b->catatan,
                 ]))->all(),
@@ -2142,6 +2360,7 @@ class PengisianKegiatan extends Component
                     'kode' => $b->kode,
                     'nama_file' => $b->nama_file,
                     'diunggah_oleh' => $b->diunggah_oleh,
+                    'di_drive' => filled($b->drive_file_id) || blank($b->path),
                     'status_verifikasi' => $b->status_verifikasi,
                     'catatan' => $b->catatan,
                 ]))->all(),
@@ -3271,6 +3490,7 @@ class PengisianKegiatan extends Component
 
         if (! empty($driveGagal)) {
             session()->flash('driveGagal', $driveGagal);
+            session()->flash('driveGagalAlasan', $this->alasanDriveGagal);
         }
 
         // Jam simpan dibawa lewat flash karena halaman dimuat ulang penuh di bawah —
@@ -3737,13 +3957,44 @@ class PengisianKegiatan extends Component
      */
     protected function notifikasiHasilUnggah(string $namaFile, string $konteks, bool $berhasil, ?string $alasan = null): void
     {
+        if (! $berhasil) {
+            $this->alasanDriveGagal ??= self::alasanGagalDrive($alasan);
+        }
+
         $this->dispatch(
             'notify',
             type: $berhasil ? 'success' : 'error',
             message: $berhasil
                 ? "✅ {$namaFile} ({$konteks}) tersalin ke Google Drive."
-                : "⚠️ {$namaFile} ({$konteks}) GAGAL tersalin ke Google Drive, disimpan lokal saja".($alasan ? ': '.Str::limit($alasan, 120) : '.')
+                : "⚠️ {$namaFile} ({$konteks}) TIDAK berhasil diunggah ke Google Drive — ".self::alasanGagalDrive($alasan).'.'
         );
+    }
+
+    /**
+     * Alasan pertama unggahan ke Drive gagal di request ini (lihat alasanGagalDrive()),
+     * ditampilkan di banner peringatan setelah halaman dimuat ulang.
+     */
+    protected ?string $alasanDriveGagal = null;
+
+    /**
+     * Terjemahkan pesan galat Drive jadi alasan yang dimengerti Ketua Tim.
+     */
+    public static function alasanGagalDrive(?string $pesan): string
+    {
+        $pesan = mb_strtolower((string) $pesan);
+
+        return match (true) {
+            str_contains($pesan, 'storage aktif') || str_contains($pesan, 'belum terkonfigurasi') || str_contains($pesan, 'not configured')
+                => 'akun Google Drive belum disambungkan/diaktifkan (menu Akun & Storage)',
+            str_contains($pesan, 'invalid_grant') || str_contains($pesan, 'unauthorized') || str_contains($pesan, 'token') || str_contains($pesan, '401')
+                => 'sambungan akun Google Drive kedaluwarsa — sambungkan ulang di menu Akun & Storage',
+            str_contains($pesan, 'quota') || str_contains($pesan, 'kuota') || str_contains($pesan, 'storagequotaexceeded')
+                => 'kuota penyimpanan Google Drive penuh',
+            str_contains($pesan, 'notfound') || str_contains($pesan, 'not found') || str_contains($pesan, '404')
+                => 'folder tujuan di Google Drive tidak ditemukan',
+            $pesan === '' => 'gangguan koneksi ke Google Drive',
+            default => 'gangguan koneksi ke Google Drive ('.Str::limit($pesan, 80).')',
+        };
     }
 
     /**
@@ -3766,6 +4017,7 @@ class PengisianKegiatan extends Component
                 }
             } catch (\Throwable $e) {
                 Log::warning("Sinkron ulang berkas {$berkas->kode} ke Drive masih gagal: {$e->getMessage()}");
+                $this->alasanDriveGagal ??= self::alasanGagalDrive($e->getMessage());
                 $driveGagal[] = "{$berkas->nama_file} (simpanan sebelumnya)";
 
                 // Drive-nya sendiri kemungkinan sedang bermasalah — sisa antrean
@@ -3839,6 +4091,7 @@ class PengisianKegiatan extends Component
 
         if (! empty($driveGagal)) {
             session()->flash('driveGagal', $driveGagal);
+            session()->flash('driveGagalAlasan', $this->alasanDriveGagal);
             $this->dispatch('notify', type: 'warning', message: 'Diajukan ke Tim SAKIP, tapi '.count($driveGagal).' berkas belum tersalin ke Google Drive — lihat rincian di bawah.');
         } else {
             $this->dispatch('notify', type: 'success', message: 'Berhasil diajukan ke Tim SAKIP. Semua berkas bukti tersalin ke Google Drive.');
@@ -3888,6 +4141,8 @@ class PengisianKegiatan extends Component
             'formTerkunciSedangDitangani' => $this->formTerkunciSedangDitangani(),
             'evaluasiTerkunci' => $this->capaianTerkunci(),
             'pengajuanBisaDiedit' => $this->pengajuanBisaDiedit(),
+            'linkFolderIku' => $this->linkFolderIku(),
+            'evaluasiBolehBuktiSusulan' => $this->evaluasiBolehBuktiSusulan(),
         ]);
     }
 }

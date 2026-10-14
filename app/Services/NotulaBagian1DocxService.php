@@ -545,7 +545,7 @@ class NotulaBagian1DocxService
         // (termasuk BerAKHLAK & yang punya proksi) -- kotak "Analisis Capaian Kinerja"
         // tidak lagi dirangkap jadi pertanyaan proksi seperti versi template lama.
         $analisis = trim((string) $capaian?->analisis_capaian);
-        $daftarKegiatan = $this->daftarBernomor($kegiatanIku->pluck('uraian_kegiatan')->filter());
+        $daftarKegiatan = $this->daftarBernomor($kegiatanIku->map(fn ($k) => $k->namaCapaian())->filter()->unique()->values());
         // $daftarKegiatan SUDAH diawali "\n" sendiri (lihat daftarBernomor()) -- pemisahnya
         // cukup SATU "\n" lagi di sini supaya total ada baris kosong di antara narasi dan
         // daftar (bukan dua "\n\n" + "\n" bawaan yang bikin tiga baris kosong).
@@ -848,7 +848,7 @@ class NotulaBagian1DocxService
 
             return $this->isiBarisRo(
                 $rowTemplate,
-                $ro->uraian ?: $ro->kegiatan?->uraianTampil() ?: '…',
+                $ro->uraian ?: $ro->kegiatan?->namaCapaian() ?: '…',
                 $ro->volume_ro ?: '…',
                 $progres
             );
