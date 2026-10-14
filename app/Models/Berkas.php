@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Support\Facades\Storage;
 
 class Berkas extends Model
 {
@@ -161,6 +162,63 @@ class Berkas extends Model
         $this->update(['nama_file' => $namaFile]);
 
         return ['nama_file' => $namaFile, 'peringatan' => $peringatan];
+    }
+
+    /**
+     * Berkas yang belum punya salinan di Drive (unggahan pertamanya gagal) tapi salinan
+     * lokalnya masih ada — calon sinkronUlangKeDrive(). Disk lokal container terhapus
+     * tiap deploy ulang, jadi berkas seperti ini harus segera disusulkan ke Drive
+     * sebelum itu terjadi (lihat perintah berkas:sinkron-drive).
+     */
+    public function scopeBelumDiDrive($query)
+    {
+        return $query->whereNull('drive_file_id')->whereNotNull('path');
+    }
+
+    /**
+     * Coba unggah ulang berkas ini ke Drive dari salinan lokalnya — ke folder yang
+     * sama dengan unggahan pertamanya (lihat titik unggah di PengisianKegiatan &
+     * RtlEvaluasi; berkas notula baru dibuat SETELAH sukses di Drive). Melempar exception bila Drive masih gagal;
+     * mengembalikan false bila tidak bisa dicoba (salinan lokal sudah hilang,
+     * pemiliknya sudah dihapus, atau kategorinya tidak dikenal).
+     */
+    public function sinkronUlangKeDrive(): bool
+    {
+        if ($this->drive_file_id || ! $this->path || ! Storage::disk('local')->exists($this->path)) {
+            return false;
+        }
+
+        $ref = $this->ref;
+        if (! $ref) {
+            return false;
+        }
+
+        $folderService = app(FolderStructureService::class);
+        $localPath = Storage::disk('local')->path($this->path);
+        $namaDasar = pathinfo($this->nama_file, PATHINFO_FILENAME);
+
+        $hasil = match (true) {
+            $ref instanceof Kegiatan => $folderService->unggahBerkasKegiatan(
+                $ref, $this->kategori, $localPath, namaBerkasOverride: $namaDasar, subfolder: $this->subfolder,
+            ),
+            $ref instanceof RtlEvaluasi => $folderService->unggahBerkas(
+                $ref->periode, $ref->masterIku, 'evaluasi_rtl', $localPath, namaBerkasOverride: $namaDasar,
+            ),
+            $ref instanceof BagianKustomPoin => $folderService->unggahBerkas(
+                $ref->periode, $ref->masterIku, 'bagian_kustom', $localPath,
+                namaFolderOverride: $ref->bagianKustom->nama,
+                namaBerkasOverride: $namaDasar,
+            ),
+            default => null,
+        };
+
+        if ($hasil === null) {
+            return false;
+        }
+
+        $this->update($hasil);
+
+        return true;
     }
 
     /**

@@ -96,8 +96,7 @@ class TahapanGandaDanSubfolderTest extends TestCase
         $komponen = $test->instance();
 
         $test->set('tahapanBuktiBaru.'.$komponen->kunciBuktiBaru($laporan), 'pelaksanaan')
-            ->set('blocks.0.pakai_subfolder', true)
-            ->call('tambahSubfolder', 0, 'Undangan')
+            ->call('tambahSubfolder', 0, 'Undangan', 'persiapan')
             ->set('subfolderBuktiBaru.'.$komponen->kunciBuktiBaru($undangan), 'Undangan')
             ->call('simpanDraft')
             ->assertHasNoErrors();
@@ -131,7 +130,7 @@ class TahapanGandaDanSubfolderTest extends TestCase
         $test = $this->formSurvei($iku)
             ->call('toggleTahapan', 0, 'persiapan')
             ->call('toggleTahapan', 0, 'pelaksanaan')
-            ->call('tambahSubfolder', 0, 'Surat Tugas')
+            ->call('tambahSubfolder', 0, 'Surat Tugas', 'pelaksanaan')
             // Tahapan ke-2 (Pelaksanaan), folder ke-1 (subfolder "Surat Tugas").
             ->set('unggahFolder.0.1.1', [UploadedFile::fake()->create('st.pdf', 10, 'application/pdf')])
             // Tahapan ke-1 (Persiapan), langsung di folder tahapan.
@@ -148,6 +147,77 @@ class TahapanGandaDanSubfolderTest extends TestCase
         $this->assertSame([], $test->get('unggahFolder'));
     }
 
+    public function test_susunan_subfolder_diatur_terpisah_per_tahapan(): void
+    {
+        $iku = $this->siapkan();
+
+        $test = $this->formSurvei($iku)
+            ->call('toggleTahapan', 0, 'persiapan')
+            ->call('toggleTahapan', 0, 'pengolahan')
+            ->call('tambahSubfolder', 0, 'Undangan', 'persiapan')
+            ->call('tambahSubfolder', 0, 'Notula', 'persiapan')
+            ->call('tambahSubfolder', 0, 'Hasil Validasi', 'pengolahan')
+            ->call('aturSusunanFolder', 0, false, 'pengolahan');
+
+        $komponen = $test->instance();
+        $block = $komponen->blocks[0];
+
+        $this->assertSame(['Undangan', 'Notula'], $komponen->subfolderBlok($block, 'persiapan'));
+        // Pengolahan kembali ke "1 folder" — daftarnya disimpan tapi tidak dipakai.
+        $this->assertSame([], $komponen->subfolderBlok($block, 'pengolahan'));
+        $this->assertSame(['Hasil Validasi'], $komponen->daftarSubfolder($block, 'pengolahan'));
+
+        $grup = $komponen->folderUnggahBlok(0);
+        $this->assertCount(3, $grup[0]['folder']);
+        $this->assertCount(1, $grup[1]['folder']);
+    }
+
+    public function test_tahapan_buatan_sendiri_bisa_ditambah_dan_disimpan(): void
+    {
+        $iku = $this->siapkan();
+
+        $this->mock(FolderStructureService::class, function ($mock) {
+            $mock->shouldReceive('unggahBerkasKegiatan')->andReturn(['drive_file_id' => 'x', 'storage_account_id' => null, 'nama_file' => 'x.pdf']);
+        });
+
+        $test = $this->formSurvei($iku)
+            ->call('toggleTahapan', 0, 'persiapan')
+            ->call('tambahTahapan', 0, 'Pelatihan Petugas')
+            // Nama yang sama dengan tahapan bawaan cukup mencentang tahapan bawaan itu.
+            ->call('tambahTahapan', 0, 'pelaksanaan')
+            ->assertSet('blocks.0.tahapan_kustom', ['Pelatihan Petugas'])
+            ->assertSet('blocks.0.tahapan_tambahan', ['Pelatihan Petugas', 'pelaksanaan'])
+            ->call('tambahSubfolder', 0, 'Daftar Hadir', 'Pelatihan Petugas')
+            ->set('unggahFolder.0.0.0', [UploadedFile::fake()->create('a.pdf', 10, 'application/pdf')])
+            ->set('unggahFolder.0.1.1', [UploadedFile::fake()->create('b.pdf', 10, 'application/pdf')])
+            ->set('unggahFolder.0.2.0', [UploadedFile::fake()->create('c.pdf', 10, 'application/pdf')])
+            ->call('simpanDraft')
+            ->assertHasNoErrors();
+
+        $pelatihan = Kegiatan::where('tahapan_survei', 'Pelatihan Petugas')->firstOrFail();
+        $this->assertSame('Pelatihan Petugas Survei Sakernas', $pelatihan->nama_folder_auto);
+        $this->assertSame('Daftar Hadir', Berkas::where('ref_id', $pelatihan->id)->sole()->subfolder);
+        $this->assertSame(3, Kegiatan::count());
+
+        // Saat dimuat ulang, tahapan buatan sendiri tetap tampil sebagai pilihan.
+        $this->formSurvei($iku)
+            ->assertSet('blocks.1.tahapan_survei', 'Pelatihan Petugas')
+            ->assertSet('blocks.1.tahapan_kustom', ['Pelatihan Petugas'])
+            ->assertSet('blocks.1.subfolders_tahapan', ['Pelatihan Petugas' => ['Daftar Hadir']]);
+    }
+
+    public function test_tahapan_buatan_sendiri_bisa_dihapus(): void
+    {
+        $iku = $this->siapkan();
+
+        $this->formSurvei($iku)
+            ->call('tambahTahapan', 0, 'Evaluasi')
+            ->assertSet('blocks.0.tahapan_survei', 'Evaluasi')
+            ->call('hapusTahapanKustom', 0, 'Evaluasi')
+            ->assertSet('blocks.0.tahapan_survei', '')
+            ->assertSet('blocks.0.tahapan_kustom', []);
+    }
+
     public function test_nama_folder_tahapan_tambahan_dan_subfolder_bisa_diganti(): void
     {
         $iku = $this->siapkan();
@@ -159,9 +229,9 @@ class TahapanGandaDanSubfolderTest extends TestCase
         $test = $this->formSurvei($iku)
             ->call('toggleTahapan', 0, 'persiapan')
             ->call('toggleTahapan', 0, 'pelaksanaan')
-            ->call('tambahSubfolder', 0, 'Undangan')
-            ->call('gantiNamaSubfolder', 0, 0, 'Surat Undangan')
-            ->assertSet('blocks.0.subfolders', ['Surat Undangan'])
+            ->call('tambahSubfolder', 0, 'Undangan', 'persiapan')
+            ->call('gantiNamaSubfolder', 0, 0, 'Surat Undangan', 'persiapan')
+            ->assertSet('blocks.0.subfolders_tahapan.persiapan', ['Surat Undangan'])
             ->set('blocks.0.nama_folder_tahapan.pelaksanaan', 'Lapangan Sakernas')
             ->set('blocks.0.bukti', [
                 UploadedFile::fake()->create('a.pdf', 10, 'application/pdf'),

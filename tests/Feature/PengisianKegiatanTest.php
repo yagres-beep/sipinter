@@ -703,13 +703,13 @@ class PengisianKegiatanTest extends TestCase
 
         $kekurangan = $component->instance()->kekuranganPengajuan();
 
-        $this->assertContains('Kegiatan #1 ("Pencacahan lapangan"): jenis kegiatan belum dipilih.', $kekurangan);
+        $this->assertContains('Kegiatan #1 ("Pencacahan lapangan"): pembentukan folder kegiatan belum dipilih.', $kekurangan);
         $this->assertContains('Kegiatan #1 ("Pencacahan lapangan"): bukti capaian (PDF) belum diunggah.', $kekurangan);
         $this->assertContains('Minimal satu pasangan Kendala & Solusi wajib diisi sebelum diajukan pada bulan terakhir triwulan ini.', $kekurangan);
         $this->assertContains('Rencana Tindak Lanjut poin #1: teks rencana belum diisi (hapus poin bila tidak dipakai).', $kekurangan);
 
         $component->assertSee('Belum bisa diajukan ke Tim SAKIP')
-            ->assertSee('jenis kegiatan belum dipilih');
+            ->assertSee('pembentukan folder kegiatan belum dipilih');
     }
 
     public function test_rtl_baru_hanya_bisa_diisi_pada_bulan_terakhir_triwulan(): void
@@ -1944,8 +1944,11 @@ class PengisianKegiatanTest extends TestCase
             'tahapan_tambahan' => [],
             'nama_folder' => '',
             'nama_folder_tahapan' => [],
+            'tahapan_kustom' => [],
             'pakai_subfolder' => false,
             'subfolders' => [],
+            'pakai_subfolder_tahapan' => [],
+            'subfolders_tahapan' => [],
             'bukti' => [],
             'existing_bukti' => [],
             'catatan_bukti_dihapus' => null,

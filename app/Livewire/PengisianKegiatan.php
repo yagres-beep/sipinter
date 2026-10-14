@@ -158,7 +158,87 @@ class PengisianKegiatan extends Component
     /** Saran nama subfolder khusus yang bisa langsung diklik. */
     public const SARAN_SUBFOLDER = ['Undangan', 'Daftar Hadir', 'Notula', 'Dokumentasi', 'Laporan'];
 
+    /** Saran subfolder khusus per tahapan bawaan — tahapan lain memakai SARAN_SUBFOLDER. */
+    public const SARAN_SUBFOLDER_TAHAPAN = [
+        'persiapan' => ['Surat Tugas', 'Undangan', 'Daftar Hadir', 'Notula', 'Bahan Pelatihan'],
+        'pelaksanaan' => ['Surat Tugas', 'Dokumentasi', 'Laporan Lapangan', 'Daftar Sampel'],
+        'pengolahan' => ['Laporan Pengolahan', 'Hasil Validasi', 'Dokumentasi'],
+        'diseminasi' => ['Publikasi', 'Bahan Rilis', 'Undangan', 'Dokumentasi'],
+    ];
+
     public const DAFTAR_TAHAPAN = ['persiapan' => 'Persiapan', 'pelaksanaan' => 'Pelaksanaan', 'pengolahan' => 'Pengolahan', 'diseminasi' => 'Diseminasi'];
+
+    /**
+     * Label tampil satu tahapan: tahapan bawaan dari DAFTAR_TAHAPAN, tahapan buatan
+     * Ketua Tim (lihat tambahTahapan()) disimpan apa adanya sebagai namanya sendiri.
+     */
+    public static function labelTahapan(string $tahapan): string
+    {
+        return self::DAFTAR_TAHAPAN[$tahapan] ?? $tahapan;
+    }
+
+    /**
+     * Tahapan sah untuk blok ini: tahapan bawaan atau tahapan tambahan buatan sendiri.
+     */
+    protected function tahapanSah(array $block, mixed $tahapan): bool
+    {
+        return is_string($tahapan) && $tahapan !== ''
+            && (array_key_exists($tahapan, self::DAFTAR_TAHAPAN) || in_array($tahapan, $block['tahapan_kustom'] ?? [], true));
+    }
+
+    /**
+     * Tambah tahapan selain empat tahapan bawaan, langsung tercentang. Nama yang
+     * sama dengan tahapan bawaan cukup mencentang tahapan bawaan itu.
+     */
+    public function tambahTahapan(int $index, string $nama): void
+    {
+        $block = $this->blocks[$index] ?? null;
+
+        // Titik dibuang karena tahapan dipakai sebagai kunci array bertitik (mis.
+        // blocks.*.nama_folder_tahapan.<tahapan>).
+        $nama = FolderStructureService::namaOtomatis(str_replace('.', ' ', $nama), 50);
+
+        if (! $block || $nama === '' || $this->blokTerkunci($block['status_dokumen'] ?? null)) {
+            return;
+        }
+
+        $bawaan = array_search(mb_strtolower($nama), array_map('mb_strtolower', self::DAFTAR_TAHAPAN), true);
+        $kustomSama = collect($block['tahapan_kustom'] ?? [])->first(fn ($t) => mb_strtolower($t) === mb_strtolower($nama));
+        $tahapan = $bawaan !== false ? $bawaan : ($kustomSama ?? $nama);
+
+        if (in_array(mb_strtolower($tahapan), array_map('mb_strtolower', $this->tahapanDipilih($block)), true)) {
+            return;
+        }
+
+        if (in_array($tahapan, $this->tahapanTerpakai($index), true)) {
+            $this->dispatch('notify', type: 'error', message: 'Tahapan "'.self::labelTahapan($tahapan).'" sudah dipilih untuk kegiatan ini pada triwulan ini.');
+
+            return;
+        }
+
+        if ($bawaan === false && $kustomSama === null) {
+            $this->blocks[$index]['tahapan_kustom'] = [...($block['tahapan_kustom'] ?? []), $nama];
+        }
+
+        $this->toggleTahapan($index, $tahapan);
+    }
+
+    /** Hapus tahapan buatan sendiri dari blok (sekaligus melepas centangnya). */
+    public function hapusTahapanKustom(int $index, string $tahapan): void
+    {
+        $block = $this->blocks[$index] ?? null;
+
+        if (! $block || $this->blokTerkunci($block['status_dokumen'] ?? null) || ! in_array($tahapan, $block['tahapan_kustom'] ?? [], true)) {
+            return;
+        }
+
+        if (in_array($tahapan, $this->tahapanDipilih($block), true)) {
+            $this->toggleTahapan($index, $tahapan);
+        }
+
+        $this->blocks[$index]['tahapan_kustom'] = array_values(array_diff($block['tahapan_kustom'], [$tahapan]));
+        $this->adaPerubahan = true;
+    }
 
     /**
      * Semua tahapan yang dipilih satu blok, berurutan: tahapan utama lalu tambahan.
@@ -184,7 +264,7 @@ class PengisianKegiatan extends Component
     {
         $block = $this->blocks[$index] ?? null;
 
-        if (! $block || ! array_key_exists($tahapan, self::DAFTAR_TAHAPAN) || $this->blokTerkunci($block['status_dokumen'] ?? null)) {
+        if (! $block || ! $this->tahapanSah($block, $tahapan) || $this->blokTerkunci($block['status_dokumen'] ?? null)) {
             return;
         }
 
@@ -224,68 +304,169 @@ class PengisianKegiatan extends Component
      */
     public function subfolderBerkasBaru(array $block, $file): string
     {
-        if (empty($block['pakai_subfolder'])) {
-            return '';
-        }
-
+        $daftar = $this->subfolderBlok($block, $this->tahapanBerkasBaru($block, $file));
         $pilihan = $this->subfolderBuktiBaru[$this->kunciBuktiBaru($file)] ?? '';
 
-        return in_array($pilihan, $block['subfolders'] ?? [], true) ? $pilihan : '';
+        return in_array($pilihan, $daftar, true) ? $pilihan : '';
     }
 
-    public function tambahSubfolder(int $index, string $nama): void
+    /**
+     * Susunan folder bukti diatur sendiri-sendiri per tahapan (survei/sensus) —
+     * mis. Persiapan dipisah ke Undangan & Notula, Pengolahan cukup satu folder.
+     * Kegiatan satu folder (tanpa tahapan) memakai blocks.*.pakai_subfolder &
+     * blocks.*.subfolders; tiap tahapan memakai blocks.*.pakai_subfolder_tahapan.<t>
+     * & blocks.*.subfolders_tahapan.<t>.
+     *
+     * @return array{0: string, 1: string} [kunci pakai, kunci daftar] relatif ke blok
+     */
+    protected function kunciSusunanFolder(array $block, ?string $tahapan): array
+    {
+        return ($block['jenis'] ?? '') === 'survei_sensus' && filled($tahapan)
+            ? ["pakai_subfolder_tahapan.{$tahapan}", "subfolders_tahapan.{$tahapan}"]
+            : ['pakai_subfolder', 'subfolders'];
+    }
+
+    /** Apakah folder kegiatan/tahapan ini dipisah ke beberapa subfolder. */
+    public function pakaiSubfolder(array $block, ?string $tahapan): bool
+    {
+        [$kunciPakai] = $this->kunciSusunanFolder($block, $tahapan);
+
+        return ! empty(data_get($block, $kunciPakai));
+    }
+
+    /**
+     * Daftar nama subfolder khusus (tersimpan) untuk folder kegiatan/tahapan ini,
+     * tanpa memandang pilihan "1 folder".
+     *
+     * @return list<string>
+     */
+    public function daftarSubfolder(array $block, ?string $tahapan): array
+    {
+        [, $kunciDaftar] = $this->kunciSusunanFolder($block, $tahapan);
+
+        return array_values((array) data_get($block, $kunciDaftar, []));
+    }
+
+    /**
+     * Subfolder khusus yang berlaku untuk folder kegiatan/tahapan ini (kosong bila
+     * folder itu memakai "1 folder").
+     *
+     * @return list<string>
+     */
+    public function subfolderBlok(array $block, ?string $tahapan): array
+    {
+        return $this->pakaiSubfolder($block, $tahapan) ? $this->daftarSubfolder($block, $tahapan) : [];
+    }
+
+    /** Saran nama subfolder untuk satu tahapan (atau kegiatan tanpa tahapan). */
+    public static function saranSubfolder(?string $tahapan): array
+    {
+        return self::SARAN_SUBFOLDER_TAHAPAN[$tahapan ?? ''] ?? self::SARAN_SUBFOLDER;
+    }
+
+    protected function simpanSusunanFolder(int $index, ?string $tahapan, ?bool $pakai, ?array $daftar): void
+    {
+        [$kunciPakai, $kunciDaftar] = $this->kunciSusunanFolder($this->blocks[$index], $tahapan);
+
+        if ($pakai !== null) {
+            data_set($this->blocks[$index], $kunciPakai, $pakai);
+        }
+        if ($daftar !== null) {
+            data_set($this->blocks[$index], $kunciDaftar, array_values($daftar));
+        }
+        $this->adaPerubahan = true;
+    }
+
+    /** Pilih "1 folder" ($pakai = false) atau "Pisah ke beberapa subfolder". */
+    public function aturSusunanFolder(int $index, bool $pakai, ?string $tahapan = null): void
+    {
+        if (! isset($this->blocks[$index])) {
+            return;
+        }
+
+        $this->simpanSusunanFolder($index, $tahapan, $pakai, null);
+    }
+
+    public function tambahSubfolder(int $index, string $nama, ?string $tahapan = null): void
     {
         if (! isset($this->blocks[$index])) {
             return;
         }
 
         $nama = FolderStructureService::namaOtomatis($nama, 100);
-        $sudahAda = array_map('mb_strtolower', $this->blocks[$index]['subfolders'] ?? []);
+        $daftar = $this->daftarSubfolder($this->blocks[$index], $tahapan);
 
-        if ($nama === '' || in_array(mb_strtolower($nama), $sudahAda, true)) {
+        if ($nama === '' || in_array(mb_strtolower($nama), array_map('mb_strtolower', $daftar), true)) {
             return;
         }
 
-        $this->blocks[$index]['subfolders'][] = $nama;
-        $this->blocks[$index]['pakai_subfolder'] = true;
-        $this->adaPerubahan = true;
+        $this->simpanSusunanFolder($index, $tahapan, true, [...$daftar, $nama]);
     }
 
-    public function hapusSubfolder(int $index, int $urutan): void
+    public function hapusSubfolder(int $index, int $urutan, ?string $tahapan = null): void
     {
-        if (! isset($this->blocks[$index]['subfolders'][$urutan])) {
+        if (! isset($this->blocks[$index])) {
             return;
         }
 
-        unset($this->blocks[$index]['subfolders'][$urutan]);
-        $this->blocks[$index]['subfolders'] = array_values($this->blocks[$index]['subfolders']);
-        $this->adaPerubahan = true;
+        $daftar = $this->daftarSubfolder($this->blocks[$index], $tahapan);
+
+        if (! isset($daftar[$urutan])) {
+            return;
+        }
+
+        unset($daftar[$urutan]);
+        $this->simpanSusunanFolder($index, $tahapan, null, $daftar);
     }
 
     /**
      * Ganti nama satu subfolder khusus; berkas baru yang sudah diarahkan ke
-     * subfolder itu ikut pindah ke nama barunya.
+     * subfolder itu (di tahapan yang sama) ikut pindah ke nama barunya.
      */
-    public function gantiNamaSubfolder(int $index, int $urutan, string $nama): void
+    public function gantiNamaSubfolder(int $index, int $urutan, string $nama, ?string $tahapan = null): void
     {
-        $lama = $this->blocks[$index]['subfolders'][$urutan] ?? null;
+        $block = $this->blocks[$index] ?? null;
+
+        if (! $block) {
+            return;
+        }
+
+        $daftar = $this->daftarSubfolder($block, $tahapan);
+        $lama = $daftar[$urutan] ?? null;
         $nama = FolderStructureService::namaOtomatis($nama, 100);
 
         if ($lama === null || $nama === '' || $nama === $lama) {
             return;
         }
 
-        $lainnya = array_map('mb_strtolower', array_diff_key($this->blocks[$index]['subfolders'], [$urutan => true]));
+        $lainnya = array_map('mb_strtolower', array_diff_key($daftar, [$urutan => true]));
         if (in_array(mb_strtolower($nama), $lainnya, true)) {
             return;
         }
 
-        $this->blocks[$index]['subfolders'][$urutan] = $nama;
-        foreach ($this->subfolderBuktiBaru as $kunci => $sub) {
-            if ($sub === $lama) {
+        $tahapanTujuan = ($block['jenis'] ?? '') === 'survei_sensus' && filled($tahapan) ? $tahapan : null;
+        foreach ($block['bukti'] ?? [] as $file) {
+            $kunci = $this->kunciBuktiBaru($file);
+            if (($this->subfolderBuktiBaru[$kunci] ?? '') === $lama && $this->tahapanBerkasBaru($block, $file) === $tahapanTujuan) {
                 $this->subfolderBuktiBaru[$kunci] = $nama;
             }
         }
+
+        $daftar[$urutan] = $nama;
+        $this->simpanSusunanFolder($index, $tahapan, null, $daftar);
+    }
+
+    /**
+     * Ganti nama folder satu tahapan tambahan (kosong = rekomendasi sistem). Lewat
+     * method — bukan wire:model — karena nama tahapan buatan sendiri bisa berspasi.
+     */
+    public function gantiNamaFolderTahapan(int $index, string $tahapan, string $nama): void
+    {
+        if (! isset($this->blocks[$index]) || ! $this->tahapanSah($this->blocks[$index], $tahapan)) {
+            return;
+        }
+
+        $this->blocks[$index]['nama_folder_tahapan'][$tahapan] = Str::limit(trim($nama), 150, '');
         $this->adaPerubahan = true;
     }
 
@@ -332,7 +513,7 @@ class PengisianKegiatan extends Component
         }
 
         $tahapan = ($block['jenis'] ?? '') === 'survei_sensus' ? ($this->tahapanDipilih($block)[$urutanTahapan] ?? null) : null;
-        $subfolder = $urutanFolder > 0 && ! empty($block['pakai_subfolder']) ? ($block['subfolders'][$urutanFolder - 1] ?? '') : '';
+        $subfolder = $urutanFolder > 0 ? ($this->subfolderBlok($block, $tahapan)[$urutanFolder - 1] ?? '') : '';
 
         foreach ($daftarBerkas as $berkas) {
             $this->blocks[$index]['bukti'][] = $berkas;
@@ -366,10 +547,10 @@ class PengisianKegiatan extends Component
         }
 
         $daftarTahapan = ($block['jenis'] ?? '') === 'survei_sensus' ? $this->tahapanDipilih($block) : [];
-        $subfolders = ! empty($block['pakai_subfolder']) ? array_values($block['subfolders'] ?? []) : [];
         $hasil = [];
 
         foreach ($daftarTahapan ?: [null] as $ti => $tahapan) {
+            $subfolders = $this->subfolderBlok($block, $tahapan);
             // Tahapan utama (dan kegiatan bukan survei) memakai nama folder pilihan
             // Ketua Tim bila diisi; tahapan tambahan memakai nama tahapannya.
             $kustomTahapan = trim($block['nama_folder_tahapan'][$tahapan] ?? '');
@@ -616,10 +797,15 @@ class PengisianKegiatan extends Component
             // Nama folder pilihan Ketua Tim untuk tahapan TAMBAHAN (kunci = tahapan);
             // tahapan utama memakai nama_folder di atas.
             'nama_folder_tahapan' => [],
+            // Tahapan buatan Ketua Tim selain DAFTAR_TAHAPAN (lihat tambahTahapan()).
+            'tahapan_kustom' => [],
             // Bawaan 1 folder; bila true, berkas bisa dimasukkan ke subfolder khusus
-            // ($subfolders) di dalam folder kegiatan.
+            // ($subfolders) di dalam folder kegiatan. Survei/sensus mengaturnya per
+            // tahapan lewat *_tahapan (kunci = tahapan), lihat kunciSusunanFolder().
             'pakai_subfolder' => false,
             'subfolders' => [],
+            'pakai_subfolder_tahapan' => [],
+            'subfolders_tahapan' => [],
             'bukti' => [],
             'existing_bukti' => [],
             'catatan_bukti_dihapus' => null,
@@ -1761,6 +1947,7 @@ class PengisianKegiatan extends Component
 
         $this->blocks = $kegiatanList->map(function (Kegiatan $kegiatan) {
             $subfolders = $kegiatan->berkas->pluck('subfolder')->filter()->unique()->values()->all();
+            $tahapan = $kegiatan->jenis === 'survei_sensus' ? $kegiatan->tahapan_survei : null;
 
             return [
                 'id' => $kegiatan->id,
@@ -1772,8 +1959,11 @@ class PengisianKegiatan extends Component
                 'tahapan_tambahan' => [],
                 'nama_folder' => $kegiatan->nama_folder_kustom ?? '',
                 'nama_folder_tahapan' => [],
+                'tahapan_kustom' => filled($tahapan) && ! array_key_exists($tahapan, self::DAFTAR_TAHAPAN) ? [$tahapan] : [],
                 'pakai_subfolder' => $subfolders !== [],
                 'subfolders' => $subfolders,
+                'pakai_subfolder_tahapan' => filled($tahapan) ? [$tahapan => $subfolders !== []] : [],
+                'subfolders_tahapan' => filled($tahapan) ? [$tahapan => $subfolders] : [],
                 'bukti' => [],
                 'existing_bukti' => $kegiatan->berkas->map(fn (Berkas $b) => $this->maskBerkas([
                     'id' => $b->id,
@@ -2159,8 +2349,8 @@ class PengisianKegiatan extends Component
                 return;
             }
 
-            if (! is_string($value) || ! array_key_exists($value, self::DAFTAR_TAHAPAN)) {
-                $fail('Tahapan survei tidak valid.');
+            if (! $this->tahapanSah($block, $value)) {
+                $fail('Tahapan tidak valid.');
 
                 return;
             }
@@ -2168,7 +2358,7 @@ class PengisianKegiatan extends Component
             $sebelumnya = array_merge([$block['tahapan_survei'] ?? ''], array_slice($block['tahapan_tambahan'] ?? [], 0, (int) $urutan));
 
             if (in_array($value, $sebelumnya, true) || in_array($value, $this->tahapanTerpakai((int) $index, hanyaSebelumnya: true), true)) {
-                $fail('Tahapan "'.ucfirst($value).'" sudah dipilih untuk kegiatan ini pada triwulan ini — pilih tahapan lain.');
+                $fail('Tahapan "'.self::labelTahapan($value).'" sudah dipilih untuk kegiatan ini pada triwulan ini — pilih tahapan lain.');
             }
         };
     }
@@ -2182,10 +2372,15 @@ class PengisianKegiatan extends Component
     protected function aturanTahapanDanSubfolder(): array
     {
         return [
-            'blocks.*.tahapan_tambahan' => ['nullable', 'array', 'max:3'],
+            'blocks.*.tahapan_tambahan' => ['nullable', 'array', 'max:15'],
             'blocks.*.tahapan_tambahan.*' => [$this->aturanTahapanTambahan()],
+            'blocks.*.tahapan_kustom' => ['nullable', 'array', 'max:12'],
+            'blocks.*.tahapan_kustom.*' => ['string', 'max:50'],
             'blocks.*.subfolders' => ['nullable', 'array', 'max:20'],
             'blocks.*.subfolders.*' => ['string', 'max:100'],
+            'blocks.*.subfolders_tahapan' => ['nullable', 'array'],
+            'blocks.*.subfolders_tahapan.*' => ['array', 'max:20'],
+            'blocks.*.subfolders_tahapan.*.*' => ['string', 'max:100'],
             'blocks.*.nama_folder_tahapan' => ['nullable', 'array'],
             'blocks.*.nama_folder_tahapan.*' => ['nullable', 'string', 'max:150'],
         ];
@@ -2205,8 +2400,14 @@ class PengisianKegiatan extends Component
                 return;
             }
 
+            if (! $this->tahapanSah($block, $value)) {
+                $fail('Tahapan tidak valid.');
+
+                return;
+            }
+
             if (in_array($value, $this->tahapanTerpakai($index, hanyaSebelumnya: true), true)) {
-                $fail('Tahapan "'.ucfirst($value).'" sudah dipilih untuk kegiatan ini pada triwulan ini — pilih tahapan lain.');
+                $fail('Tahapan "'.self::labelTahapan($value).'" sudah dipilih untuk kegiatan ini pada triwulan ini — pilih tahapan lain.');
             }
         };
     }
@@ -2240,7 +2441,7 @@ class PengisianKegiatan extends Component
                 'poin' => $poin,
                 'terpakai' => $terpilihIds->contains($poin->id),
                 'dipilih' => $dipakai->count(),
-                'tahapan' => $dipakai->where('jenis', 'survei_sensus')->pluck('tahapan_survei')->filter()->unique()->map(fn ($t) => ucfirst($t))->values()->all(),
+                'tahapan' => $dipakai->where('jenis', 'survei_sensus')->pluck('tahapan_survei')->filter()->unique()->map(fn ($t) => self::labelTahapan($t))->values()->all(),
             ];
         });
     }
@@ -2606,7 +2807,6 @@ class PengisianKegiatan extends Component
             'blocks.*.tahapan_survei' => [
                 'nullable',
                 'required_if:blocks.*.jenis,survei_sensus',
-                'in:persiapan,pelaksanaan,pengolahan,diseminasi',
                 $this->aturanTahapanTidakGanda(),
             ],
             'blocks.*.nama_folder' => ['nullable', 'string', 'max:150'],
@@ -2685,8 +2885,8 @@ class PengisianKegiatan extends Component
         $attrs = [
             'iku_id' => 'IKU',
             'blocks.*.uraian_kegiatan' => 'uraian kegiatan',
-            'blocks.*.jenis' => 'jenis kegiatan',
-            'blocks.*.tahapan_survei' => 'tahapan survei',
+            'blocks.*.jenis' => 'pembentukan folder kegiatan',
+            'blocks.*.tahapan_survei' => 'tahapan',
             'blocks.*.nama_folder' => 'nama folder',
             'blocks.*.bukti' => 'bukti capaian',
             'kendalaBlocks.*.kendala' => 'kendala',
@@ -2706,7 +2906,7 @@ class PengisianKegiatan extends Component
     protected function messages(): array
     {
         $messages = [
-            'blocks.*.tahapan_survei.required_if' => 'Tahapan survei wajib dipilih untuk kegiatan Survei/Sensus.',
+            'blocks.*.tahapan_survei.required_if' => 'Pilih minimal satu tahapan bila folder kegiatan dipisah ke beberapa tahapan.',
             'blocks.*.bukti.required' => 'Bukti capaian (PDF) wajib diunggah untuk tiap kegiatan.',
         ];
 
@@ -2760,7 +2960,7 @@ class PengisianKegiatan extends Component
                     if (! in_array($tahapan, $terisi, true) && ! ($ti === 0 && ! empty($block['existing_bukti']))) {
                         $validator->errors()->add(
                             "blocks.{$i}.tahapan_tambahan",
-                            'tahapan '.ucfirst($tahapan).' belum diberi bukti capaian — pilih tahapan tujuan pada berkas yang diunggah.'
+                            'tahapan '.self::labelTahapan($tahapan).' belum diberi bukti capaian — pilih tahapan tujuan pada berkas yang diunggah.'
                         );
                     }
                 }
@@ -2943,8 +3143,8 @@ class PengisianKegiatan extends Component
             return match (true) {
                 $bagian[2] === 'uraian_kegiatan' && $kosong => "{$label}: uraian kegiatan belum diisi.",
                 $bagian[2] === 'uraian_kegiatan' => "{$label}: uraian kegiatan terlalu panjang (maksimal 1.000 karakter).",
-                $bagian[2] === 'jenis' => "{$label}: jenis kegiatan belum dipilih.",
-                $bagian[2] === 'tahapan_survei' && $kosong => "{$label}: tahapan survei belum dipilih (wajib untuk kegiatan Survei/Sensus).",
+                $bagian[2] === 'jenis' => "{$label}: pembentukan folder kegiatan belum dipilih.",
+                $bagian[2] === 'tahapan_survei' && $kosong => "{$label}: tahapan belum dipilih (wajib bila folder kegiatan dipisah ke beberapa tahapan).",
                 $bagian[2] === 'tahapan_survei' => "{$label}: {$pesanAsli}",
                 $bagian[2] === 'nama_folder' => "{$label}: nama folder terlalu panjang (maksimal 150 karakter).",
                 $bagian[2] === 'bukti' && isset($bagian[3]) => "{$label}: berkas bukti ke-".((int) $bagian[3] + 1).' harus PDF berukuran maksimal 10 MB.',
@@ -3035,7 +3235,6 @@ class PengisianKegiatan extends Component
                 'blocks.*.tahapan_survei' => [
                     'nullable',
                     'required_if:blocks.*.jenis,survei_sensus',
-                    'in:persiapan,pelaksanaan,pengolahan,diseminasi',
                     $this->aturanTahapanTidakGanda(),
                 ],
                 'blocks.*.nama_folder' => ['nullable', 'string', 'max:150'],
@@ -3112,6 +3311,8 @@ class PengisianKegiatan extends Component
      */
     protected function simpanBagianIsian(Periode $periode, MasterIku $iku, FolderStructureService $folderService, array &$driveGagal, bool $ajukan): void
     {
+        $this->susulkanBerkasBelumDiDrive($driveGagal);
+
         $capaian = Capaian::firstOrCreate([
             'iku_id' => $this->iku_id,
             'periode_id' => $periode->id,
@@ -3543,6 +3744,35 @@ class PengisianKegiatan extends Component
                 ? "✅ {$namaFile} ({$konteks}) tersalin ke Google Drive."
                 : "⚠️ {$namaFile} ({$konteks}) GAGAL tersalin ke Google Drive, disimpan lokal saja".($alasan ? ': '.Str::limit($alasan, 120) : '.')
         );
+    }
+
+    /**
+     * Berkas unggahan Ketua Tim ini yang dulu GAGAL tersalin ke Drive (baik lewat
+     * Simpan Sementara maupun Ajukan) dicoba diunggah ulang tiap kali ia menyimpan
+     * lagi — salinan lokalnya ikut terhapus saat server di-deploy ulang, jadi jangan
+     * ditunda sampai isiannya diajukan. Perintah berkas:sinkron-drive juga mencobanya
+     * berkala di latar belakang.
+     */
+    protected function susulkanBerkasBelumDiDrive(array &$driveGagal): void
+    {
+        if (! auth()->id()) {
+            return;
+        }
+
+        foreach (Berkas::belumDiDrive()->where('diunggah_oleh', auth()->id())->get() as $berkas) {
+            try {
+                if ($berkas->sinkronUlangKeDrive()) {
+                    $this->notifikasiHasilUnggah($berkas->nama_file, 'simpanan sebelumnya', true);
+                }
+            } catch (\Throwable $e) {
+                Log::warning("Sinkron ulang berkas {$berkas->kode} ke Drive masih gagal: {$e->getMessage()}");
+                $driveGagal[] = "{$berkas->nama_file} (simpanan sebelumnya)";
+
+                // Drive-nya sendiri kemungkinan sedang bermasalah — sisa antrean
+                // tidak perlu dicoba satu per satu di request ini.
+                break;
+            }
+        }
     }
 
     public function ajukanIsian(): void
