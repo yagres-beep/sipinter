@@ -22,7 +22,7 @@ Artisan::command('inspire', function () {
 // ikut gagal hanya karena baris ini.
 try {
     $jamPengingat = PengaturanPengingat::ambil()->jamKirimFormat();
-} catch (\Throwable $e) {
+} catch (Throwable $e) {
     $jamPengingat = '08:00';
 }
 
@@ -36,3 +36,7 @@ Schedule::command('pengingat:google-reconnect')->dailyAt($jamPengingat)->timezon
 // Antrean WhatsApp: berjalan di latar belakang karena satu panggilan bisa
 // menunggu ±1 menit saat gateway Render Free sedang bangun dari tidur.
 Schedule::command('whatsapp:proses-antrean')->everyMinute()->withoutOverlapping(10)->runInBackground();
+
+// Berkas yang gagal terunggah ke Drive hanya tersimpan di disk lokal, yang ikut
+// terhapus tiap deploy ulang — disusulkan ke Drive secepatnya (lihat perintahnya).
+Schedule::command('berkas:sinkron-drive')->everyFiveMinutes()->withoutOverlapping(30)->runInBackground();

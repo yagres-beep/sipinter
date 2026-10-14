@@ -13,7 +13,6 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Component;
 use Livewire\WithFileUploads;
-use RuntimeException;
 
 /**
  * Ketua Tim — Rencana Tindak Lanjut & Evaluasinya (RF-29 s.d. RF-35).
@@ -320,7 +319,7 @@ class RtlEvaluasi extends Component
                 $localFullPath = Storage::disk('local')->path($path);
                 $hasilDrive = $folderService->unggahBerkas($poin->periode, $poin->masterIku, 'evaluasi_rtl', $localFullPath);
                 $berkas->update($hasilDrive);
-            } catch (RuntimeException $e) {
+            } catch (\Throwable $e) {
                 Log::warning('Gagal mengunggah bukti evaluasi RTL ke Google Drive, disimpan lokal saja: '.$e->getMessage());
             }
         }

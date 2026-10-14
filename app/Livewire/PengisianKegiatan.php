@@ -3112,6 +3112,8 @@ class PengisianKegiatan extends Component
      */
     protected function simpanBagianIsian(Periode $periode, MasterIku $iku, FolderStructureService $folderService, array &$driveGagal, bool $ajukan): void
     {
+        $this->susulkanBerkasBelumDiDrive($driveGagal);
+
         $capaian = Capaian::firstOrCreate([
             'iku_id' => $this->iku_id,
             'periode_id' => $periode->id,
@@ -3543,6 +3545,35 @@ class PengisianKegiatan extends Component
                 ? "✅ {$namaFile} ({$konteks}) tersalin ke Google Drive."
                 : "⚠️ {$namaFile} ({$konteks}) GAGAL tersalin ke Google Drive, disimpan lokal saja".($alasan ? ': '.Str::limit($alasan, 120) : '.')
         );
+    }
+
+    /**
+     * Berkas unggahan Ketua Tim ini yang dulu GAGAL tersalin ke Drive (baik lewat
+     * Simpan Sementara maupun Ajukan) dicoba diunggah ulang tiap kali ia menyimpan
+     * lagi — salinan lokalnya ikut terhapus saat server di-deploy ulang, jadi jangan
+     * ditunda sampai isiannya diajukan. Perintah berkas:sinkron-drive juga mencobanya
+     * berkala di latar belakang.
+     */
+    protected function susulkanBerkasBelumDiDrive(array &$driveGagal): void
+    {
+        if (! auth()->id()) {
+            return;
+        }
+
+        foreach (Berkas::belumDiDrive()->where('diunggah_oleh', auth()->id())->get() as $berkas) {
+            try {
+                if ($berkas->sinkronUlangKeDrive()) {
+                    $this->notifikasiHasilUnggah($berkas->nama_file, 'simpanan sebelumnya', true);
+                }
+            } catch (\Throwable $e) {
+                Log::warning("Sinkron ulang berkas {$berkas->kode} ke Drive masih gagal: {$e->getMessage()}");
+                $driveGagal[] = "{$berkas->nama_file} (simpanan sebelumnya)";
+
+                // Drive-nya sendiri kemungkinan sedang bermasalah — sisa antrean
+                // tidak perlu dicoba satu per satu di request ini.
+                break;
+            }
+        }
     }
 
     public function ajukanIsian(): void
