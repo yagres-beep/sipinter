@@ -185,8 +185,20 @@
             {{-- Hanya muncul bila folder IKU periode ini sudah terbentuk di Drive
                  (lihat PengisianKegiatan::linkFolderIku()). --}}
             @if ($iku_id && $linkFolderIku)
-                <div wire:loading.remove wire:target="iku_id,bulan,tahun" style="margin-top:8px">
-                    <a href="{{ $linkFolderIku }}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">📁 Buka folder IKU di Google Drive ↗</a>
+                <div wire:loading.remove wire:target="iku_id,bulan,tahun" style="margin-top:8px"
+                    x-data="{ tersalin: false, salin() {
+                        const teks = this.$refs.linkIku.value;
+                        const selesai = () => { this.tersalin = true; setTimeout(() => this.tersalin = false, 2000); };
+                        if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(teks).then(selesai); }
+                        else { this.$refs.linkIku.select(); document.execCommand('copy'); selesai(); }
+                    } }">
+                    <div style="font-size:11.5px;color:var(--muted);margin-bottom:4px">📁 Link folder IKU di Google Drive</div>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+                        <input type="text" class="inp" readonly x-ref="linkIku" value="{{ $linkFolderIku }}" data-abaikan-perubahan
+                            style="flex:1 1 260px;min-width:0;font-size:12px" @focus="$event.target.select()">
+                        <button type="button" class="btn btn-ghost btn-sm" style="white-space:nowrap" @click="salin()" x-text="tersalin ? '✓ Tersalin' : '📋 Salin'">📋 Salin</button>
+                        <a href="{{ $linkFolderIku }}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="white-space:nowrap">Buka ↗</a>
+                    </div>
                 </div>
             @endif
             @if ($ikuList->isEmpty())
