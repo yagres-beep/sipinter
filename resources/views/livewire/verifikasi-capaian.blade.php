@@ -272,7 +272,7 @@
                     <span class="t">Kegiatan {{ $loop->iteration }}</span>
                     <x-badge-status :status="$kegiatan->status_dokumen" />
                     <span style="color:var(--muted);font-size:11.5px">
-                        {{ $kegiatan->jenis === 'survei_sensus' ? 'Survei/Sensus' : 'Bukan Survei/Sensus' }}{{ $kegiatan->tahapan_survei ? ' · '.ucfirst($kegiatan->tahapan_survei) : '' }}
+                        {{ $kegiatan->jenis === 'survei_sensus' ? 'Pisah ke beberapa tahapan' : '1 folder (kegiatan)' }}{{ $kegiatan->tahapan_survei ? ' · Tahapan '.\App\Livewire\PengisianKegiatan::labelTahapan($kegiatan->tahapan_survei) : '' }}
                     </span>
                 </div>
                 @if ($kegiatan->jenis === 'survei_sensus' && $kegiatan->tahapan_survei)

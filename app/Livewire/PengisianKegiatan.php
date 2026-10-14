@@ -2350,7 +2350,7 @@ class PengisianKegiatan extends Component
             }
 
             if (! $this->tahapanSah($block, $value)) {
-                $fail('Tahapan survei tidak valid.');
+                $fail('Tahapan tidak valid.');
 
                 return;
             }
@@ -2401,7 +2401,7 @@ class PengisianKegiatan extends Component
             }
 
             if (! $this->tahapanSah($block, $value)) {
-                $fail('Tahapan survei tidak valid.');
+                $fail('Tahapan tidak valid.');
 
                 return;
             }
