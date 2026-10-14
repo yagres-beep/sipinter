@@ -2441,7 +2441,7 @@ class PengisianKegiatan extends Component
                 'poin' => $poin,
                 'terpakai' => $terpilihIds->contains($poin->id),
                 'dipilih' => $dipakai->count(),
-                'tahapan' => $dipakai->where('jenis', 'survei_sensus')->pluck('tahapan_survei')->filter()->unique()->map(fn ($t) => ucfirst($t))->values()->all(),
+                'tahapan' => $dipakai->where('jenis', 'survei_sensus')->pluck('tahapan_survei')->filter()->unique()->map(fn ($t) => self::labelTahapan($t))->values()->all(),
             ];
         });
     }
@@ -2807,7 +2807,6 @@ class PengisianKegiatan extends Component
             'blocks.*.tahapan_survei' => [
                 'nullable',
                 'required_if:blocks.*.jenis,survei_sensus',
-                'in:persiapan,pelaksanaan,pengolahan,diseminasi',
                 $this->aturanTahapanTidakGanda(),
             ],
             'blocks.*.nama_folder' => ['nullable', 'string', 'max:150'],
@@ -2886,8 +2885,8 @@ class PengisianKegiatan extends Component
         $attrs = [
             'iku_id' => 'IKU',
             'blocks.*.uraian_kegiatan' => 'uraian kegiatan',
-            'blocks.*.jenis' => 'jenis kegiatan',
-            'blocks.*.tahapan_survei' => 'tahapan survei',
+            'blocks.*.jenis' => 'pembentukan folder kegiatan',
+            'blocks.*.tahapan_survei' => 'tahapan',
             'blocks.*.nama_folder' => 'nama folder',
             'blocks.*.bukti' => 'bukti capaian',
             'kendalaBlocks.*.kendala' => 'kendala',
@@ -2907,7 +2906,7 @@ class PengisianKegiatan extends Component
     protected function messages(): array
     {
         $messages = [
-            'blocks.*.tahapan_survei.required_if' => 'Tahapan survei wajib dipilih untuk kegiatan Survei/Sensus.',
+            'blocks.*.tahapan_survei.required_if' => 'Pilih minimal satu tahapan bila folder kegiatan dipisah ke beberapa tahapan.',
             'blocks.*.bukti.required' => 'Bukti capaian (PDF) wajib diunggah untuk tiap kegiatan.',
         ];
 
@@ -2961,7 +2960,7 @@ class PengisianKegiatan extends Component
                     if (! in_array($tahapan, $terisi, true) && ! ($ti === 0 && ! empty($block['existing_bukti']))) {
                         $validator->errors()->add(
                             "blocks.{$i}.tahapan_tambahan",
-                            'tahapan '.ucfirst($tahapan).' belum diberi bukti capaian — pilih tahapan tujuan pada berkas yang diunggah.'
+                            'tahapan '.self::labelTahapan($tahapan).' belum diberi bukti capaian — pilih tahapan tujuan pada berkas yang diunggah.'
                         );
                     }
                 }
@@ -3144,8 +3143,8 @@ class PengisianKegiatan extends Component
             return match (true) {
                 $bagian[2] === 'uraian_kegiatan' && $kosong => "{$label}: uraian kegiatan belum diisi.",
                 $bagian[2] === 'uraian_kegiatan' => "{$label}: uraian kegiatan terlalu panjang (maksimal 1.000 karakter).",
-                $bagian[2] === 'jenis' => "{$label}: jenis kegiatan belum dipilih.",
-                $bagian[2] === 'tahapan_survei' && $kosong => "{$label}: tahapan survei belum dipilih (wajib untuk kegiatan Survei/Sensus).",
+                $bagian[2] === 'jenis' => "{$label}: pembentukan folder kegiatan belum dipilih.",
+                $bagian[2] === 'tahapan_survei' && $kosong => "{$label}: tahapan belum dipilih (wajib bila folder kegiatan dipisah ke beberapa tahapan).",
                 $bagian[2] === 'tahapan_survei' => "{$label}: {$pesanAsli}",
                 $bagian[2] === 'nama_folder' => "{$label}: nama folder terlalu panjang (maksimal 150 karakter).",
                 $bagian[2] === 'bukti' && isset($bagian[3]) => "{$label}: berkas bukti ke-".((int) $bagian[3] + 1).' harus PDF berukuran maksimal 10 MB.',
@@ -3236,7 +3235,6 @@ class PengisianKegiatan extends Component
                 'blocks.*.tahapan_survei' => [
                     'nullable',
                     'required_if:blocks.*.jenis,survei_sensus',
-                    'in:persiapan,pelaksanaan,pengolahan,diseminasi',
                     $this->aturanTahapanTidakGanda(),
                 ],
                 'blocks.*.nama_folder' => ['nullable', 'string', 'max:150'],

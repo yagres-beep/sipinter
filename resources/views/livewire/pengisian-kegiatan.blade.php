@@ -214,8 +214,8 @@
                         <div class="inp filled" style="background:var(--ro-bg)">{{ $block['uraian_kegiatan'] }}</div>
                     </div>
                     <div class="field">
-                        <label>Jenis Kegiatan</label>
-                        <div class="inp filled" style="background:var(--ro-bg)">{{ $block['jenis'] === 'survei_sensus' ? 'Survei/Sensus' : 'Bukan Survei/Sensus' }}@if ($block['tahapan_survei']) — {{ ucfirst($block['tahapan_survei']) }}@endif</div>
+                        <label>Pembentukan Folder Kegiatan</label>
+                        <div class="inp filled" style="background:var(--ro-bg)">{{ $block['jenis'] === 'survei_sensus' ? 'Pisah ke beberapa tahapan' : '1 folder (kegiatan)' }}@if ($block['tahapan_survei']) — {{ \App\Livewire\PengisianKegiatan::labelTahapan($block['tahapan_survei']) }}@endif</div>
                     </div>
                     <div class="foldername" style="margin-bottom:10px">📁 {{ $this->namaFolderBerlaku($i) }}</div>
 
@@ -335,15 +335,18 @@
                 </div>
 
                 <div class="field">
-                    <label>Jenis Kegiatan <span class="req">*</span></label>
+                    <label>Pembentukan Folder Kegiatan <span class="req">*</span></label>
 
-                    {{-- Terkunci/terbuka INSTAN di sisi klien begitu uraian diketik —
+                    {{-- Nilai tersimpan tetap jenis bukan_survei_sensus/survei_sensus:
+                         "1 folder" = satu folder kegiatan, "pisah tahapan" = satu folder
+                         induk kegiatan berisi folder per tahapan.
+                         Terkunci/terbuka INSTAN di sisi klien begitu uraian diketik —
                          tidak menunggu balasan server (wire:model.blur baru sinkron
                          saat blur, tapi keterbukaan pill sudah lebih dulu terlihat). --}}
                     <div x-show="!uraianTerisi" x-cloak>
                         <div class="pills">
-                            <span class="pill locked">Bukan Survei/Sensus</span>
-                            <span class="pill locked">Survei/Sensus</span>
+                            <span class="pill locked">1 folder (kegiatan)</span>
+                            <span class="pill locked">Pisah ke beberapa tahapan</span>
                         </div>
                         <div class="locked-note">🔒 Isi uraian kegiatan terlebih dahulu.</div>
                     </div>
@@ -351,10 +354,10 @@
                     <div x-show="uraianTerisi" x-cloak class="pills">
                         <span class="pill" :class="{ on: jenisTerpilih === 'bukan_survei_sensus' }"
                             @click="jenisTerpilih = 'bukan_survei_sensus'"
-                            wire:click="$set('blocks.{{ $i }}.jenis', 'bukan_survei_sensus')">Bukan Survei/Sensus</span>
+                            wire:click="$set('blocks.{{ $i }}.jenis', 'bukan_survei_sensus')">1 folder (kegiatan)</span>
                         <span class="pill" :class="{ on: jenisTerpilih === 'survei_sensus' }"
                             @click="jenisTerpilih = 'survei_sensus'"
-                            wire:click="$set('blocks.{{ $i }}.jenis', 'survei_sensus')">Survei/Sensus</span>
+                            wire:click="$set('blocks.{{ $i }}.jenis', 'survei_sensus')">Pisah ke beberapa tahapan</span>
                     </div>
                     @error("blocks.{$i}.jenis")
                         <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
@@ -362,7 +365,7 @@
                 </div>
 
                 <div class="field" x-show="jenisTerpilih === 'survei_sensus'" x-cloak>
-                    <label>Tahapan Survei <span class="req">*</span> <span style="color:var(--muted);font-weight:500">— boleh pilih lebih dari satu</span></label>
+                    <label>Tahapan <span class="req">*</span> <span style="color:var(--muted);font-weight:500">— boleh pilih lebih dari satu</span></label>
                     {{-- Tahapan yang sudah dipilih untuk kegiatan yang SAMA (poin RTL sama
                          atau uraian sama) di blok lain/bulan lain triwulan ini tidak bisa
                          dipilih lagi — lihat PengisianKegiatan::tahapanTerpakai(). --}}
@@ -371,22 +374,29 @@
                         $tahapanBlok = $this->tahapanDipilih($block);
                     @endphp
                     <div class="pills">
-                        @foreach (\App\Livewire\PengisianKegiatan::DAFTAR_TAHAPAN as $nilaiTahapan => $labelTahapan)
+                        {{-- Empat tahapan bawaan + tahapan buatan sendiri (tambahTahapan()). --}}
+                        @foreach (array_merge(array_keys(\App\Livewire\PengisianKegiatan::DAFTAR_TAHAPAN), $block['tahapan_kustom'] ?? []) as $nilaiTahapan)
                             @php
                                 $tahapanAktif = in_array($nilaiTahapan, $tahapanBlok, true);
                                 $sudahDipakai = ! $tahapanAktif && in_array($nilaiTahapan, $tahapanTerpakai, true);
+                                $tahapanKustom = ! array_key_exists($nilaiTahapan, \App\Livewire\PengisianKegiatan::DAFTAR_TAHAPAN);
                             @endphp
-                            <span class="pill {{ $tahapanAktif ? 'on' : '' }} {{ $sudahDipakai ? 'locked' : '' }}"
+                            <span class="pill {{ $tahapanAktif ? 'on' : '' }} {{ $sudahDipakai ? 'locked' : '' }}" wire:key="tahapan-{{ $i }}-{{ md5($nilaiTahapan) }}"
                                 @if ($sudahDipakai) title="Sudah dipilih untuk kegiatan ini pada triwulan ini"
-                                @else wire:click="toggleTahapan({{ $i }}, '{{ $nilaiTahapan }}')" wire:loading.class="btn-busy" wire:target="toggleTahapan({{ $i }}, '{{ $nilaiTahapan }}')" @endif
-                            >{{ $tahapanAktif ? '☑' : '☐' }} {{ $labelTahapan }}</span>
+                                @else wire:click="toggleTahapan({{ $i }}, @js($nilaiTahapan))" wire:loading.class="btn-busy" wire:target="toggleTahapan" @endif
+                            >{{ $tahapanAktif ? '☑' : '☐' }} {{ \App\Livewire\PengisianKegiatan::labelTahapan($nilaiTahapan) }}@if ($tahapanKustom)<span style="cursor:pointer;margin-left:6px" title="Hapus tahapan ini" wire:click.stop="hapusTahapanKustom({{ $i }}, @js($nilaiTahapan))">✕</span>@endif</span>
                         @endforeach
+                    </div>
+                    <div x-data="{ namaTahapan: '' }" style="margin-top:8px;display:flex;gap:6px">
+                        <input type="text" class="inp" maxlength="50" x-model="namaTahapan" placeholder="Tahapan lain, mis. Pelatihan Petugas, Evaluasi…" data-abaikan-perubahan
+                            @keydown.enter.prevent="if (namaTahapan.trim()) { $wire.tambahTahapan({{ $i }}, namaTahapan); namaTahapan = '' }">
+                        <button type="button" class="btn btn-ghost btn-sm" style="white-space:nowrap" @click="if (namaTahapan.trim()) { $wire.tambahTahapan({{ $i }}, namaTahapan); namaTahapan = '' }">＋ Tambah Tahapan</button>
                     </div>
                     @if (count($tahapanBlok) > 1)
                         <div class="fhint">🗂️ {{ count($tahapanBlok) }} tahapan dipilih — saat disimpan, tiap tahapan tercatat sebagai kegiatan sendiri (diverifikasi terpisah oleh Tim SAKIP) dengan folder masing-masing di dalam folder kegiatan. Unggah bukti lewat tombol di folder tiap tahapan di bawah.</div>
                     @endif
                     @if ($tahapanTerpakai)
-                        <div class="fhint">🔁 Kegiatan ini sudah tercatat pada tahapan {{ collect($tahapanTerpakai)->map(fn ($t) => ucfirst($t))->join(', ', ' dan ') }} di triwulan ini — pilih tahapan lain.</div>
+                        <div class="fhint">🔁 Kegiatan ini sudah tercatat pada tahapan {{ collect($tahapanTerpakai)->map(fn ($t) => \App\Livewire\PengisianKegiatan::labelTahapan($t))->join(', ', ' dan ') }} di triwulan ini — pilih tahapan lain.</div>
                     @endif
                     @error("blocks.{$i}.tahapan_survei")
                         <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
@@ -405,44 +415,57 @@
                      tombol unggah tiap folder ditampilkan di bagian Bukti Capaian di bawah. --}}
                 @php $tahapanBlok = $block['jenis'] === 'survei_sensus' ? $this->tahapanDipilih($block) : []; @endphp
 
-                {{-- Bawaan semua bukti masuk SATU folder kegiatan; bila perlu dipisah,
-                     Ketua Tim menambah subfolder khusus di dalam folder kegiatan dan
-                     memilih subfolder tujuan pada tiap berkas di bawah. --}}
-                @php $pakaiSubfolder = ! empty($block['pakai_subfolder']); @endphp
+                {{-- Bawaan semua bukti masuk SATU folder; bila perlu dipisah, Ketua Tim
+                     menambah subfolder khusus. Survei/sensus mengaturnya PER TAHAPAN —
+                     mis. Persiapan dipisah (Undangan, Notula), Pengolahan cukup 1 folder
+                     (lihat PengisianKegiatan::kunciSusunanFolder()). --}}
                 <div class="field" x-show="jenisTerpilih !== '' && (jenisTerpilih !== 'survei_sensus' || tahapanTerisi)" x-cloak>
-                    <label>Susunan Folder Bukti</label>
-                    <div class="pills">
-                        <span class="pill {{ $pakaiSubfolder ? '' : 'on' }}" wire:click="$set('blocks.{{ $i }}.pakai_subfolder', false)">1 folder (bawaan)</span>
-                        <span class="pill {{ $pakaiSubfolder ? 'on' : '' }}" wire:click="$set('blocks.{{ $i }}.pakai_subfolder', true)">Pisah ke beberapa subfolder</span>
-                    </div>
-                    @if ($pakaiSubfolder)
-                        {{-- Nama folder bebas diketik sendiri; daftar "Saran" hanya pintasan. --}}
-                        <div x-data="{ namaSub: '' }" style="margin-top:8px;display:flex;gap:6px">
-                            <input type="text" class="inp" maxlength="100" x-model="namaSub" placeholder="Ketik nama folder sendiri, mis. Surat Tugas, Bahan Paparan…" data-abaikan-perubahan
-                                @keydown.enter.prevent="if (namaSub.trim()) { $wire.tambahSubfolder({{ $i }}, namaSub); namaSub = '' }">
-                            <button type="button" class="btn btn-ghost btn-sm" style="white-space:nowrap" @click="if (namaSub.trim()) { $wire.tambahSubfolder({{ $i }}, namaSub); namaSub = '' }">＋ Tambah Folder</button>
-                        </div>
-                        @if (! empty($block['subfolders']))
-                            <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-                                @foreach ($block['subfolders'] as $si => $namaSub)
-                                    <span class="pill on" wire:key="subfolder-{{ $i }}-{{ md5($namaSub) }}">📁 {{ $namaSub }}
-                                        <span style="cursor:pointer;margin-left:4px" title="Hapus folder" wire:click="hapusSubfolder({{ $i }}, {{ $si }})">✕</span>
-                                    </span>
-                                @endforeach
+                    <label>Susunan Folder Bukti @if ($tahapanBlok)<span style="color:var(--muted);font-weight:500">— diatur per tahapan</span>@endif</label>
+                    @foreach ($tahapanBlok ?: [null] as $tahapanSusunan)
+                        @php
+                            $pakaiSubfolder = $this->pakaiSubfolder($block, $tahapanSusunan);
+                            $daftarSub = $this->daftarSubfolder($block, $tahapanSusunan);
+                            $argTahapan = \Illuminate\Support\Js::from($tahapanSusunan);
+                        @endphp
+                        <div wire:key="susunan-{{ $i }}-{{ md5((string) $tahapanSusunan) }}"
+                            @if ($tahapanSusunan !== null) style="border:1.5px dashed var(--line);border-radius:10px;padding:10px 12px;margin-top:8px" @endif>
+                            @if ($tahapanSusunan !== null)
+                                <div class="foldername" style="margin-bottom:6px">📁 {{ \App\Livewire\PengisianKegiatan::labelTahapan($tahapanSusunan) }}</div>
+                            @endif
+                            <div class="pills">
+                                <span class="pill {{ $pakaiSubfolder ? '' : 'on' }}" wire:click="aturSusunanFolder({{ $i }}, false, {{ $argTahapan }})">1 folder (bawaan)</span>
+                                <span class="pill {{ $pakaiSubfolder ? 'on' : '' }}" wire:click="aturSusunanFolder({{ $i }}, true, {{ $argTahapan }})">Pisah ke beberapa subfolder</span>
                             </div>
-                        @endif
-                        <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-                            <span style="color:var(--muted);font-size:11.5px">Saran:</span>
-                            @foreach (\App\Livewire\PengisianKegiatan::SARAN_SUBFOLDER as $saran)
-                                @if (! in_array(mb_strtolower($saran), array_map('mb_strtolower', $block['subfolders'] ?? []), true))
-                                    <span class="pill" style="border-style:dashed" wire:click="tambahSubfolder({{ $i }}, @js($saran))">＋ {{ $saran }}</span>
+                            @if ($pakaiSubfolder)
+                                {{-- Nama folder bebas diketik sendiri; daftar "Saran" hanya pintasan. --}}
+                                <div x-data="{ namaSub: '' }" style="margin-top:8px;display:flex;gap:6px">
+                                    <input type="text" class="inp" maxlength="100" x-model="namaSub" placeholder="Ketik nama folder sendiri, mis. Surat Tugas, Bahan Paparan…" data-abaikan-perubahan
+                                        @keydown.enter.prevent="if (namaSub.trim()) { $wire.tambahSubfolder({{ $i }}, namaSub, {{ $argTahapan }}); namaSub = '' }">
+                                    <button type="button" class="btn btn-ghost btn-sm" style="white-space:nowrap" @click="if (namaSub.trim()) { $wire.tambahSubfolder({{ $i }}, namaSub, {{ $argTahapan }}); namaSub = '' }">＋ Tambah Folder</button>
+                                </div>
+                                @if ($daftarSub !== [])
+                                    <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+                                        @foreach ($daftarSub as $si => $namaSub)
+                                            <span class="pill on" wire:key="subfolder-{{ $i }}-{{ md5((string) $tahapanSusunan) }}-{{ md5($namaSub) }}">📁 {{ $namaSub }}
+                                                <span style="cursor:pointer;margin-left:4px" title="Hapus folder" wire:click="hapusSubfolder({{ $i }}, {{ $si }}, {{ $argTahapan }})">✕</span>
+                                            </span>
+                                        @endforeach
+                                    </div>
                                 @endif
-                            @endforeach
+                                <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+                                    <span style="color:var(--muted);font-size:11.5px">Saran:</span>
+                                    @foreach (\App\Livewire\PengisianKegiatan::saranSubfolder($tahapanSusunan) as $saran)
+                                        @if (! in_array(mb_strtolower($saran), array_map('mb_strtolower', $daftarSub), true))
+                                            <span class="pill" style="border-style:dashed" wire:click="tambahSubfolder({{ $i }}, @js($saran), {{ $argTahapan }})">＋ {{ $saran }}</span>
+                                        @endif
+                                    @endforeach
+                                </div>
+                                <div class="fhint">Folder dibuat di dalam folder {{ $tahapanSusunan !== null ? 'tahapan '.\App\Livewire\PengisianKegiatan::labelTahapan($tahapanSusunan) : 'kegiatan' }}. Tiap folder punya tombol unggah sendiri di bawah.</div>
+                            @else
+                                <div class="fhint">Semua bukti masuk langsung ke folder {{ $tahapanSusunan !== null ? 'tahapan '.\App\Livewire\PengisianKegiatan::labelTahapan($tahapanSusunan) : 'kegiatan' }}. Pilih "Pisah ke beberapa subfolder" untuk membuat folder sendiri (mis. Undangan, Dokumentasi).</div>
+                            @endif
                         </div>
-                        <div class="fhint">Folder dibuat di dalam folder {{ $tahapanBlok ? 'tiap tahapan' : 'kegiatan' }}. Tiap folder punya tombol unggah sendiri di bawah.</div>
-                    @else
-                        <div class="fhint">Semua bukti masuk langsung ke folder {{ $tahapanBlok ? 'tahapan' : 'kegiatan' }}. Pilih "Pisah ke beberapa subfolder" untuk membuat folder sendiri (mis. Undangan, Dokumentasi).</div>
-                    @endif
+                    @endforeach
                 </div>
 
                 <div class="field" style="margin-bottom:0">
@@ -478,7 +501,7 @@
 
                     <div x-show="jenisTerpilih === '' || (jenisTerpilih === 'survei_sensus' && !tahapanTerisi)" x-cloak
                         class="locked-note" style="padding:14px;border:1.5px dashed var(--line);border-radius:10px;text-align:center">
-                        🔒 Lengkapi jenis kegiatan<span x-show="jenisTerpilih === 'survei_sensus'"> dan tahapan survei</span> terlebih dahulu untuk mengunggah bukti.
+                        🔒 Lengkapi pembentukan folder kegiatan<span x-show="jenisTerpilih === 'survei_sensus'"> dan tahapan</span> terlebih dahulu untuk mengunggah bukti.
                     </div>
 
                     {{-- Satu kotak unggah per folder tujuan: tiap tahapan survei terpilih
@@ -546,9 +569,9 @@
                                                     @enderror
                                                 @elseif ($folderInduk)
                                                     <div x-show="ubahIni" x-cloak style="margin-top:6px">
-                                                        <input type="text" class="inp filled" maxlength="150" x-ref="inputNamaIni"
-                                                            wire:model.live.blur="blocks.{{ $i }}.nama_folder_tahapan.{{ $grup['tahapan'] }}"
-                                                            @blur="ubahIni = false"
+                                                        <input type="text" class="inp filled" maxlength="150" x-ref="inputNamaIni" data-abaikan-perubahan
+                                                            value="{{ $block['nama_folder_tahapan'][$grup['tahapan']] ?? '' }}"
+                                                            @blur="ubahIni = false; $wire.gantiNamaFolderTahapan({{ $i }}, @js($grup['tahapan']), $event.target.value)"
                                                             @keydown.enter.prevent="$event.target.blur()"
                                                             placeholder="{{ $grup['otomatis'] }}">
                                                         <div class="fhint">Kosongkan untuk memakai nama rekomendasi sistem.</div>
@@ -556,7 +579,7 @@
                                                 @else
                                                     <div x-show="ubahIni" x-cloak style="margin-top:6px">
                                                         <input type="text" class="inp filled" maxlength="100" x-ref="inputNamaIni" value="{{ $folder['subfolder'] }}" data-abaikan-perubahan
-                                                            @blur="ubahIni = false; if ($event.target.value.trim()) $wire.gantiNamaSubfolder({{ $i }}, {{ $folder['urutan'] - 1 }}, $event.target.value)"
+                                                            @blur="ubahIni = false; if ($event.target.value.trim()) $wire.gantiNamaSubfolder({{ $i }}, {{ $folder['urutan'] - 1 }}, $event.target.value, @js($grup['tahapan']))"
                                                             @keydown.enter.prevent="$event.target.blur()">
                                                     </div>
                                                 @endif
