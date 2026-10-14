@@ -75,7 +75,8 @@
 
     @if (session('driveGagal'))
         <div class="info red" style="margin-bottom:14px">
-            ⚠️ {{ count(session('driveGagal')) }} berkas gagal disalin ke Google Drive (tetap tersimpan aman di server, tapi belum tersalin) — kemungkinan sambungan akun Google Drive sedang bermasalah. Cek menu <b>Akun &amp; Storage</b>, sambungkan ulang bila perlu, lalu hubungi Tim SAKIP untuk mengunggah ulang berkas berikut:
+            ⚠️ <b>{{ count(session('driveGagal')) }} berkas TIDAK berhasil diunggah ke Google Drive</b> — {{ session('driveGagalAlasan') ?? 'gangguan koneksi ke Google Drive' }}.
+            Berkasnya masih tersimpan sementara di server (ditandai "⚠️ Belum berhasil diunggah ke Google Drive" di bawah) dan otomatis dicoba diunggah ulang setiap kali Anda menyimpan. Bila tetap gagal, hapus lalu unggah ulang setelah akun Google Drive tersambung, atau hubungi Tim SAKIP. Berkas yang belum masuk Drive:
             <ul style="margin:6px 0 0 18px;padding:0">
                 @foreach (session('driveGagal') as $namaBerkas)
                     <li>{{ $namaBerkas }}</li>
@@ -181,6 +182,13 @@
             @error('iku_id')
                 <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
             @enderror
+            {{-- Hanya muncul bila folder IKU periode ini sudah terbentuk di Drive
+                 (lihat PengisianKegiatan::linkFolderIku()). --}}
+            @if ($iku_id && $linkFolderIku)
+                <div wire:loading.remove wire:target="iku_id,bulan,tahun" style="margin-top:8px">
+                    <a href="{{ $linkFolderIku }}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">📁 Buka folder IKU di Google Drive ↗</a>
+                </div>
+            @endif
             @if ($ikuList->isEmpty())
                 <div style="color:var(--muted);font-size:11.5px;margin-top:5px">Belum ada data master IKU. Hubungi Tim SAKIP untuk mengunggah data IKU.</div>
             @endif
@@ -197,7 +205,7 @@
         <div wire:loading wire:target="iku_id,bulan,tahun" class="info">⏳ Memuat kegiatan yang sudah pernah diisi untuk IKU &amp; periode ini, kalau ada…</div>
 
         <div wire:loading.remove wire:target="iku_id,bulan,tahun">
-        <div class="info">ℹ️ Isi tiap kolom berurutan dari atas — uraian kegiatan dulu, baru jenis kegiatan bisa dipilih. Nama folder Drive direkomendasikan otomatis dari tahapan dan uraian kegiatan (bisa diganti lewat ✏️). Bukti capaian wajib diunggah tiap kegiatan; bila lebih dari satu berkas, nama bawaannya diberi nomor urut di belakang dan tetap bisa diganti lewat ✏️.</div>
+        <div class="info">ℹ️ Isi tiap kolom berurutan dari atas — uraian kegiatan dulu, baru pembentukan folder kegiatan bisa dipilih. Nama folder Drive direkomendasikan otomatis dari tahapan dan uraian kegiatan (bisa diganti lewat ✏️). Bukti capaian wajib diunggah tiap kegiatan; bila lebih dari satu berkas, nama bawaannya diberi nomor urut di belakang dan tetap bisa diganti lewat ✏️.</div>
 
         @foreach ($blocks as $i => $block)
             @php $terkunci = $this->blokTerkunci($block['status_dokumen']); @endphp
@@ -207,7 +215,14 @@
                         <span class="t">Kegiatan {{ $i + 1 }}</span>
                         <x-badge-status :status="$block['status_dokumen']" />
                     </div>
-                    <div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">🔒 Sudah ditangani/diverifikasi Tim SAKIP — tidak bisa diedit dari sini.</div>
+                    @php $bolehSusulan = $this->kegiatanBolehBuktiSusulan($block); @endphp
+                    <div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">
+                        @if ($bolehSusulan)
+                            🔒 Sudah diverifikasi Tim SAKIP — isian tidak bisa diubah, tapi Anda masih bisa menambahkan bukti dukung baru di bawah.
+                        @else
+                            🔒 Sudah ditangani/diverifikasi Tim SAKIP — tidak bisa diedit dari sini.
+                        @endif
+                    </div>
 
                     <div class="field">
                         <label>Uraian Kegiatan</label>
@@ -217,7 +232,13 @@
                         <label>Pembentukan Folder Kegiatan</label>
                         <div class="inp filled" style="background:var(--ro-bg)">{{ $block['jenis'] === 'survei_sensus' ? 'Pisah ke beberapa tahapan' : '1 folder (kegiatan)' }}@if ($block['tahapan_survei']) — {{ \App\Livewire\PengisianKegiatan::labelTahapan($block['tahapan_survei']) }}@endif</div>
                     </div>
-                    <div class="foldername" style="margin-bottom:10px">📁 {{ $this->namaFolderBerlaku($i) }}</div>
+                    <div style="margin-bottom:10px">
+                        @if ($block['id'] && ! $formTerkunciSedangDitangani)
+                            <x-nama-folder :id="$block['id']" :nama="$this->namaFolderBerlaku($i)" :kustom="filled($block['nama_folder'] ?? '')" />
+                        @else
+                            <span class="foldername">📁 {{ $this->namaFolderBerlaku($i) }}</span>
+                        @endif
+                    </div>
 
                     <div class="field" style="margin-bottom:0">
                         <label>Bukti Capaian (PDF)</label>
@@ -225,7 +246,7 @@
                             @forelse ($block['existing_bukti'] as $file)
                                 <div class="filechip {{ $file['status_verifikasi'] === 'terverifikasi' ? 'ok' : ($file['status_verifikasi'] === 'ditolak' ? 'no' : '') }}">
                                     <span class="nm">
-                                        <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" />
+                                        <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" /><x-belum-di-drive :di-drive="$file['di_drive'] ?? true" />
                                         @if (filled($file['subfolder'] ?? null))
                                             <span class="sub">📁 {{ $file['subfolder'] }}</span>
                                         @endif
@@ -239,6 +260,9 @@
                                 <p style="color:var(--muted);font-size:12.5px">Belum ada bukti diunggah.</p>
                             @endforelse
                         </div>
+                        @if ($bolehSusulan)
+                            @include('livewire.partials._bukti-susulan', ['kunciSusulan' => 'kegiatan-'.$block['id']])
+                        @endif
                     </div>
                 </div>
             @else
@@ -421,8 +445,10 @@
                      (lihat PengisianKegiatan::kunciSusunanFolder()). --}}
                 <div class="field" x-show="jenisTerpilih !== '' && (jenisTerpilih !== 'survei_sensus' || tahapanTerisi)" x-cloak>
                     <label>Susunan Folder Bukti @if ($tahapanBlok)<span style="color:var(--muted);font-weight:500">— diatur per tahapan</span>@endif</label>
+                    @php $labelFolderTahapan = collect($this->folderUnggahBlok($i))->pluck('label', 'tahapan'); @endphp
                     @foreach ($tahapanBlok ?: [null] as $tahapanSusunan)
                         @php
+                            $namaFolderTahapan = $tahapanSusunan !== null ? ($labelFolderTahapan[$tahapanSusunan] ?? \App\Livewire\PengisianKegiatan::labelTahapan($tahapanSusunan)) : null;
                             $pakaiSubfolder = $this->pakaiSubfolder($block, $tahapanSusunan);
                             $daftarSub = $this->daftarSubfolder($block, $tahapanSusunan);
                             $argTahapan = \Illuminate\Support\Js::from($tahapanSusunan);
@@ -430,7 +456,7 @@
                         <div wire:key="susunan-{{ $i }}-{{ md5((string) $tahapanSusunan) }}"
                             @if ($tahapanSusunan !== null) style="border:1.5px dashed var(--line);border-radius:10px;padding:10px 12px;margin-top:8px" @endif>
                             @if ($tahapanSusunan !== null)
-                                <div class="foldername" style="margin-bottom:6px">📁 {{ \App\Livewire\PengisianKegiatan::labelTahapan($tahapanSusunan) }}</div>
+                                <div class="foldername" style="margin-bottom:6px">📁 {{ $namaFolderTahapan }}</div>
                             @endif
                             <div class="pills">
                                 <span class="pill {{ $pakaiSubfolder ? '' : 'on' }}" wire:click="aturSusunanFolder({{ $i }}, false, {{ $argTahapan }})">1 folder (bawaan)</span>
@@ -460,9 +486,9 @@
                                         @endif
                                     @endforeach
                                 </div>
-                                <div class="fhint">Folder dibuat di dalam folder {{ $tahapanSusunan !== null ? 'tahapan '.\App\Livewire\PengisianKegiatan::labelTahapan($tahapanSusunan) : 'kegiatan' }}. Tiap folder punya tombol unggah sendiri di bawah.</div>
+                                <div class="fhint">Folder dibuat di dalam folder {{ $tahapanSusunan !== null ? '"'.$namaFolderTahapan.'"' : 'kegiatan' }}. Tiap folder punya tombol unggah sendiri di bawah.</div>
                             @else
-                                <div class="fhint">Semua bukti masuk langsung ke folder {{ $tahapanSusunan !== null ? 'tahapan '.\App\Livewire\PengisianKegiatan::labelTahapan($tahapanSusunan) : 'kegiatan' }}. Pilih "Pisah ke beberapa subfolder" untuk membuat folder sendiri (mis. Undangan, Dokumentasi).</div>
+                                <div class="fhint">Semua bukti masuk langsung ke folder {{ $tahapanSusunan !== null ? '"'.$namaFolderTahapan.'"' : 'kegiatan' }}. Pilih "Pisah ke beberapa subfolder" untuk membuat folder sendiri (mis. Undangan, Dokumentasi).</div>
                             @endif
                         </div>
                     @endforeach
@@ -482,7 +508,7 @@
                             @foreach ($block['existing_bukti'] as $file)
                                 <div class="filechip {{ $file['status_verifikasi'] === 'terverifikasi' ? 'ok' : ($file['status_verifikasi'] === 'ditolak' ? 'no' : '') }}">
                                     <span class="nm">
-                                        <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" />
+                                        <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" /><x-belum-di-drive :di-drive="$file['di_drive'] ?? true" />
                                         @if (filled($file['subfolder'] ?? null))
                                             <span class="sub">📁 {{ $file['subfolder'] }}</span>
                                         @endif
@@ -826,7 +852,7 @@
                             @foreach ($poin->berkas as $file)
                                 <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}">
                                     <span class="nm">
-                                        <x-nama-berkas :id="$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" />
+                                        <x-nama-berkas :id="$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" /><x-belum-di-drive :di-drive="filled($file->drive_file_id) || blank($file->path)" />
                                         @if ($file->status_verifikasi === 'ditolak' && $file->catatan)
                                             <span class="sub" style="color:var(--red)">{{ $file->catatan }}</span>
                                         @endif
@@ -852,11 +878,15 @@
                             @endforeach
                         </div>
 
+                        @if ($evaluasiBolehBuktiSusulan)
+                            @include('livewire.partials._bukti-susulan', ['kunciSusulan' => 'rtl-'.$poin->id])
+                        @elseif (! $evaluasiTerkunci)
                         <label class="upload" style="cursor:pointer;display:block;padding:10px;margin-top:8px">
                             <div style="font-weight:600;font-size:11.5px;color:var(--blue-600)">📤 Tambah bukti realisasi (PDF) — boleh lebih dari satu</div>
                             <input type="file" wire:model="evaluasi.{{ $poin->id }}.bukti" multiple accept="application/pdf" style="display:none"
                                 @change="pendingBuktiRealisasiNames = Array.from($event.target.files).map(f => f.name)">
                         </label>
+                        @endif
 
                         <div wire:loading wire:target="evaluasi.{{ $poin->id }}.bukti" style="font-size:11.5px;color:var(--muted);margin-top:6px">
                             <template x-for="nama in pendingBuktiRealisasiNames" :key="nama">
@@ -1040,7 +1070,7 @@
                                                          jadi tidak perlu tombol hapus di sini. --}}
                                                     <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}">
                                                         <span class="nm">
-                                                            <x-nama-berkas :id="$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" />
+                                                            <x-nama-berkas :id="$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" /><x-belum-di-drive :di-drive="filled($file->drive_file_id) || blank($file->path)" />
                                                             @if ($file->status_verifikasi === 'ditolak' && $file->catatan)
                                                                 <span class="sub" style="color:var(--red)">{{ $file->catatan }}</span>
                                                             @endif
@@ -1096,7 +1126,7 @@
                                     @foreach ($blok['existing_bukti'] as $file)
                                         <div class="filechip {{ $file['status_verifikasi'] === 'terverifikasi' ? 'ok' : ($file['status_verifikasi'] === 'ditolak' ? 'no' : '') }}">
                                             <span class="nm">
-                                                <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" />
+                                                <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" /><x-belum-di-drive :di-drive="$file['di_drive'] ?? true" />
                                                 @if ($file['status_verifikasi'] === 'ditolak' && $file['catatan'])
                                                     <span class="sub" style="color:var(--red)">{{ $file['catatan'] }}</span>
                                                 @endif
