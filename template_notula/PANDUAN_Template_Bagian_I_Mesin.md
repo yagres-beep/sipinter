@@ -29,7 +29,7 @@ menyentuh berkas ini sama sekali.
 
 **Kapan berkas ini BENAR-BENAR perlu disunting:** hanya kalau **struktur dokumen resmi**
 dari pusat berubah — misalnya ada kolom baru di tabel capaian, urutan bagian berubah,
-atau ada jenis indikator khusus baru (di luar pola Proksi/BerAKHLAK yang sudah ada).
+atau ada jenis indikator khusus baru (di luar pola Proksi yang sudah ada).
 
 ## Konvensi macro
 
@@ -61,7 +61,7 @@ dicari `hapusBlokTtdMandiri()`.
 ### Blok berulang per IKU: `{{iku_blok}}` ... `{{/iku_blok}}`
 
 Bungkus **satu tabel penuh** (baris Sasaran + tabel capaian + Analisis Capaian Kinerja
-+ RO/Proksi/BerAKHLAK + Kendala/Solusi/RTL + Dasar Hitung/Bukti Dukung). Isinya digandakan
++ RO/Proksi + Kendala/Solusi/RTL + Dasar Hitung/Bukti Dukung). Isinya digandakan
 sekali per Master IKU (urutan sasaran lalu kode, sama seperti pratinjau web) oleh
 `NotulaBagian1DocxService::isiPerIkuDinamis()`. Di DALAM blok ini, macro-nya GENERIK
 (tanpa akhiran kode) karena setiap salinan diisi lewat instance `TemplateProcessor`
@@ -111,8 +111,11 @@ sekali-pakai yang terpisah: `{{kode}}`, `{{indikator}}`, `{{sasaran}}`, `{{targe
 
 Dua varian berikut dideteksi dari TEKS indikator/realisasi:
 
-- `{{blok_berakhlak}}` ... `{{/blok_berakhlak}}` — pertanyaan baku, tanpa tabel
-  (indikator berteks "berakhlak").
+- `{{blok_berakhlak}}` ... `{{/blok_berakhlak}}` — **OPSIONAL / usang**: pertanyaan
+  baku, tanpa tabel (indikator berteks "berakhlak"). Tidak perlu lagi karena
+  Indikator Proksi (`blok_proksi`) kini berlaku untuk SEMUA IKU termasuk BerAKHLAK;
+  template boleh tidak memuatnya (template bawaan sudah tidak memuatnya). Bila masih
+  ada, pasangan penandanya harus lengkap.
 - `{{blok_ro}}` ... `{{/blok_ro}}` — tabel "Realisasi Volume RO dan Progress
   Pelaksanaan Kegiatan", HANYA tampil bila IKU tsb belum punya realisasi triwulan
   berjalan (sama seperti kondisi `@elseif (empty($rekap['realisasi']))` di Blade).
@@ -126,6 +129,20 @@ Baris pembuka/penutup `blok_berakhlak`/`blok_ro`/`ro_row` adalah baris tabel (`<
 HANYA teks macro-nya — jangan digabung dengan baris konten lain, karena kode
 menghapus/menyimpan baris ini persis berdasarkan posisi baris (lihat
 `NotulaBagian1DocxService::splitOnMarkers()`, unit `'tr'`).
+
+Pasangan pembuka & penutup juga harus **setingkat**: bila tabel RO/proksi diletakkan
+sebagai tabel bersarang di dalam satu sel tabel IKU (gaya template bawaan sekarang),
+`{{blok_ro}}` dan `{{/blok_ro}}` masing-masing baris tersendiri di tabel LUAR — tepat
+di atas dan di bawah baris yang memuat tabel bersarang itu — bukan salah satunya
+menjadi baris terakhir tabel bersarang. Penanda yang tidak setingkat ditolak saat
+unggah karena membuang isinya akan memotong tag tabel dan merusak berkas.
+
+Di bawah "Dasar Hitung dan Basis Data Realisasi IKU :" taruh `{{blok_formula}}`
+`{{formula_capaian}}` `{{/blok_formula}}` lalu `{{dasar_hitung}}` (keterangan n/N,
+rincian N, dan Basis Data) — tanpa `{{dasar_hitung}}` keterangan itu tidak tercetak.
+
+Tabel TTD dikenali dari teksnya ("Kepala Badan Pusat Statistik" + "Kabupaten Buton
+Utara"), jadi label tsb boleh dipisah baris/run di Word.
 
 ## Cara menyunting berkas ini dengan aman
 

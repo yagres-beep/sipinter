@@ -425,10 +425,10 @@ class NotulaDownloadTest extends TestCase
 
         $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
 
-        // "Kendala : " diikuti LANGSUNG <w:br/> (pindah baris) baru "1. Kendala pertama
-        // uji" -- BUKAN "Kendala : 1. Kendala pertama uji" menempel di baris yang sama.
-        $this->assertStringContainsString('Kendala : </w:t></w:r><w:r><w:rPr><w:b w:val="0"/><w:i w:val="0"/><w:color w:val="000000"/></w:rPr><w:t></w:t><w:br/><w:t>1. Kendala pertama uji', $xml);
-        $this->assertStringContainsString('Solusi : </w:t></w:r><w:r><w:rPr><w:b w:val="0"/><w:i w:val="0"/><w:color w:val="000000"/></w:rPr><w:t></w:t><w:br/><w:t>1. Solusi pertama uji', $xml);
+        // "Kendala :" diikuti <w:br/> (pindah baris) baru "1. Kendala pertama uji" --
+        // BUKAN "Kendala : 1. Kendala pertama uji" menempel di baris yang sama.
+        $this->assertMatchesRegularExpression('/Kendala :(?:(?!<\/w:p>|1\. Kendala).)*<w:br\/><w:t>1\. Kendala pertama uji/s', $xml);
+        $this->assertMatchesRegularExpression('/Solusi :(?:(?!<\/w:p>|1\. Solusi).)*<w:br\/><w:t>1\. Solusi pertama uji/s', $xml);
     }
 
     /**
@@ -463,15 +463,22 @@ class NotulaDownloadTest extends TestCase
         // Kedua baris "Tautan Bukti Dukung ...:" tetap biru (1F4E79) -- placeholder
         // "…" pun tetap biru karena warnanya atribut tetap template, bukan tergantung
         // ada/tidaknya link sungguhan.
-        $this->assertSame(2, substr_count($xml, 'w:val="1F4E79"'));
-        // Sasaran (bukan tautan) harus hitam.
-        $this->assertStringContainsString('<w:color w:val="000000"/></w:rPr><w:t>Sasaran Uji RO</w:t>', $xml);
+        // (Teks label statis lain boleh saja berwarna sesuai desain template; yang diuji
+        // di sini isian datanya.)
+        // Run isian boleh punya properti lain (mis. <w:lang/>) setelah <w:color/>-nya.
+        $warna = fn (string $hex) => '<w:color w:val="'.$hex.'"\/>(?:(?!<\/w:rPr>).)*<\/w:rPr><w:t[^>]*>';
+        $this->assertMatchesRegularExpression('/Tautan Bukti Dukung Realisasi Target :.*?'.$warna('1F4E79').'…<\/w:t>/su', $xml);
+        // Isian bukan tautan (Sasaran, Kendala, Solusi) harus hitam.
+        $this->assertMatchesRegularExpression('/'.$warna('000000').'Sasaran Uji RO<\/w:t>/su', $xml);
+        $this->assertMatchesRegularExpression('/Kendala :(?:(?!<\/w:p>).)*'.$warna('000000').'…<\/w:t>/su', $xml);
+        $this->assertMatchesRegularExpression('/Solusi :(?:(?!<\/w:p>).)*'.$warna('000000').'…<\/w:t>/su', $xml);
     }
 
     /**
-     * Indikator BerAKHLAK tetap memakai narasi khususnya (dideteksi dari teks indikator),
-     * sedangkan tabel Indikator Proksi TIDAK lagi muncul hanya karena indikatornya
-     * berteks "SAKIP" -- proksi kini isian Tim SAKIP sendiri (lihat uji di bawah).
+     * Indikator BerAKHLAK tidak lagi punya narasi khusus di template bawaan (blok_berakhlak
+     * dihapus -- proksi kini berlaku untuk SEMUA IKU), dan tabel Indikator Proksi TIDAK
+     * muncul hanya karena indikatornya berteks "SAKIP" -- proksi isian Tim SAKIP sendiri
+     * (lihat uji di bawah).
      */
     public function test_docx_bagian1_berakhlak_format_khusus_dan_sakip_tanpa_proksi_tidak_mencetak_tabel_proksi(): void
     {
@@ -489,7 +496,8 @@ class NotulaDownloadTest extends TestCase
 
         $this->assertStringNotContainsString('Indikator Proksi', $xml);
         $this->assertDoesNotMatchRegularExpression('/\{\{\/?(blok_proksi|blok_sakip|proksi_|target_proksi|realisasi_proksi)/', $xml);
-        $this->assertStringContainsString('Jelaskan mengenai Persentase kegiatan untuk mengoptimalkan implementasi BerAKHLAK yang terlaksana sesuai rencana', $xml);
+        $this->assertStringNotContainsString('Jelaskan mengenai Persentase kegiatan untuk mengoptimalkan implementasi BerAKHLAK', $xml);
+        $this->assertStringNotContainsString('blok_berakhlak', $xml);
         $this->assertStringNotContainsString('Realisasi Volume RO dan Progress Pelaksanaan Kegiatan', $xml);
     }
 
@@ -515,7 +523,8 @@ class NotulaDownloadTest extends TestCase
 
         $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
 
-        $this->assertSame(1, substr_count($xml, 'Capaian IKU ini dijelaskan melalui indikator proksi berikut'));
+        // Satu tabel proksi saja (judul kolom "Indikator Proksi"), hanya untuk IKU pemiliknya.
+        $this->assertSame(1, substr_count(strip_tags($xml), 'Indikator Proksi'));
         $this->assertStringContainsString('Proksi Satu &amp; Dua', $xml);
         $this->assertStringContainsString('75%', $xml);
         $this->assertStringContainsString('Proksi Kedua', $xml);
@@ -867,11 +876,12 @@ class NotulaDownloadTest extends TestCase
 
         $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
 
-        $totalBaris = substr_count($xml, '<w:tr>');
-        $totalCantSplit = substr_count($xml, '<w:tr><w:trPr><w:cantSplit/></w:trPr>');
+        // <w:tr> bisa beratribut (w:rsidR, w14:paraId, ...) dan <w:trPr> bisa punya anak lain.
+        $totalBaris = preg_match_all('/<w:tr(?: [^>]*)?>/', $xml);
+        $totalCantSplit = preg_match_all('/<w:tr(?: [^>]*)?><w:trPr>(?:(?!<\/w:trPr>).)*<w:cantSplit\/>/s', $xml);
 
         $this->assertGreaterThan(0, $totalBaris);
-        $this->assertSame($totalBaris, $totalCantSplit, 'Setiap <w:tr> harus langsung diikuti <w:trPr><w:cantSplit/></w:trPr>.');
+        $this->assertSame($totalBaris, $totalCantSplit, 'Setiap <w:tr> harus punya <w:cantSplit/> di dalam <w:trPr>-nya.');
     }
 
     /**
@@ -985,10 +995,11 @@ class NotulaDownloadTest extends TestCase
     }
 
     /**
-     * Batas Waktu Tindak Lanjut HARUS selalu akhir bulan triwulan periode notula itu
-     * sendiri (RF-34, sesuai Kertas Kerja resmi) -- dihitung dari triwulan/tahun
-     * periode, BUKAN dibaca apa adanya dari kolom rtl_evaluasi.batas_waktu tersimpan
-     * (yang bisa salah kalau pernah diketik manual sebelum field itu dikunci di form).
+     * Batas Waktu Tindak Lanjut ({{batas_waktu_rtl_berikutnya}} di template bawaan) HARUS
+     * selalu akhir bulan triwulan BERIKUTNYA yang jadi target RTL itu (RF-34, sesuai Kertas
+     * Kerja resmi) -- dihitung dari triwulan/tahun periode, BUKAN dibaca apa adanya dari
+     * kolom rtl_evaluasi.batas_waktu tersimpan (yang bisa salah kalau pernah diketik manual
+     * sebelum field itu dikunci di form).
      */
     public function test_docx_bagian1_batas_waktu_rtl_selalu_akhir_triwulan_bukan_kolom_tersimpan(): void
     {
@@ -999,25 +1010,28 @@ class NotulaDownloadTest extends TestCase
             'penanggung_jawab' => 'Uji', 'sasaran' => 'Sasaran Uji Batas Waktu RTL',
         ]);
 
-        // Triwulan II 2026 -> akhir triwulannya Juni 2026 -- batas_waktu TERSIMPAN
-        // sengaja diisi tanggal yang SALAH (Desember) untuk membuktikan kolom ini
-        // tidak lagi dipakai apa adanya.
+        // Notula Triwulan II 2026 -> RTL berikutnya untuk TW III, akhir triwulannya
+        // September 2026 -- batas_waktu TERSIMPAN sengaja diisi tanggal yang SALAH
+        // (Desember) untuk membuktikan kolom ini tidak lagi dipakai apa adanya.
         $periode = Periode::create(['tahun' => 2026, 'bulan' => 4, 'triwulan' => 2, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $periodeBerikutnya = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
         $this->verifikasiCapaian($iku, $periode);
 
         RtlEvaluasi::create([
             'iku_id' => $iku->id,
-            'periode_id' => $periode->id,
+            'periode_id' => $periodeBerikutnya->id,
             'rtl_teks' => 'RTL uji batas waktu',
             'pic' => 'Uji',
             'batas_waktu' => '2026-12-31',
+            'status_dokumen' => RtlEvaluasi::STATUS_DIAJUKAN,
         ]);
 
         $notula = Notula::create(['periode_id' => $periode->id]);
 
         $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
 
-        $this->assertStringContainsString('Juni 2026', $xml);
+        $this->assertStringContainsString('RTL uji batas waktu', $xml);
+        $this->assertStringContainsString('September 2026', $xml);
         $this->assertStringNotContainsString('Desember 2026', $xml);
     }
 

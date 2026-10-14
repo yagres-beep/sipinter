@@ -33,7 +33,8 @@ use Throwable;
  * menulis ulang template-nya; satu-satunya alasan template perlu disunting lagi adalah bila
  * STRUKTUR dokumen resmi sendiri berubah dari pusat. Blok RO ({{ro_row}}...{{/ro_row}}) di dalamnya
  * ikut digandakan per Kegiatan pada IKU tsb (Kegiatan::rincian_output/volume_ro/progres_persen),
- * {{blok_berakhlak}}/{{blok_ro}} ditampilkan sesuai teks indikator/realisasi, dan {{blok_proksi}}
+ * {{blok_ro}} ditampilkan sesuai realisasi ({{blok_berakhlak}} usang, hanya diproses bila template
+ * lama masih memuatnya), dan {{blok_proksi}}
  * (baris tabel proksi digandakan per App\Models\IndikatorProksi) untuk IKU mana pun yang punya
  * proksi isian Tim SAKIP (lihat isiSatuIku() di bawah).
  *
@@ -512,7 +513,12 @@ class NotulaBagian1DocxService
                 $xml = $this->gandakanBarisProksi($xml, $proksiIku);
             }
         }
-        $xml = $this->resolveBlokKondisional($xml, 'blok_berakhlak', $isBerakhlak);
+        // blok_berakhlak OPSIONAL: sejak Indikator Proksi berlaku untuk SEMUA IKU (termasuk
+        // BerAKHLAK), template baru cukup memakai blok_proksi -- penanda ini hanya diproses
+        // bila template lama masih memuatnya.
+        if (str_contains($xml, '{{blok_berakhlak}}')) {
+            $xml = $this->resolveBlokKondisional($xml, 'blok_berakhlak', $isBerakhlak);
+        }
         $xml = $this->resolveBlokKondisional($xml, 'blok_ro', $tampilkanRo);
         $xml = $this->resolveBlokKondisional($xml, 'blok_formula', $tampilkanFormula, 'p');
         if ($tampilkanRo) {
@@ -993,17 +999,22 @@ class NotulaBagian1DocxService
     {
         $xml = $this->getMainPart($p);
 
-        $labelPos = strpos($xml, 'Kepala Badan Pusat Statistik Kabupaten Buton Utara</w:t>');
-        if ($labelPos === false) {
+        // Label dicocokkan dari TEKS polos tabel (tag & pindah baris diabaikan), bukan string
+        // XML persis -- di template unggahan, Word bisa memecah label jadi beberapa run atau
+        // menaruh <w:br/> di antara "Statistik" dan "Kabupaten", mis.
+        // "...Statistik</w:t></w:r><w:r><w:br/><w:t>Kab</w:t></w:r><w:r><w:t>upaten...".
+        // Diambil tabel TERAKHIR yang cocok -- tabel TTD selalu di ujung dokumen.
+        $tblStart = null;
+        $tblEnd = null;
+        foreach ($this->tabelTingkatAtas($xml) as [$awal, $akhir]) {
+            $teks = preg_replace('/\s+/', ' ', strip_tags(str_replace(['<w:br/>', '</w:p>'], ' ', substr($xml, $awal, $akhir - $awal))));
+            if (str_contains($teks, 'Kepala Badan Pusat Statistik') && str_contains($teks, 'Kabupaten Buton Utara')) {
+                [$tblStart, $tblEnd] = [$awal, $akhir];
+            }
+        }
+        if ($tblStart === null) {
             return;
         }
-
-        $tblStart = strrpos(substr($xml, 0, $labelPos), '<w:tbl>');
-        $tblEndTagPos = strpos($xml, '</w:tbl>', $labelPos);
-        if ($tblStart === false || $tblEndTagPos === false) {
-            return;
-        }
-        $tblEnd = $tblEndTagPos + strlen('</w:tbl>');
 
         $before = substr($xml, 0, $tblStart);
         if (str_ends_with($before, '<w:p/>')) {
@@ -1011,6 +1022,31 @@ class NotulaBagian1DocxService
         }
 
         $this->setMainPart($p, $before.substr($xml, $tblEnd));
+    }
+
+    /**
+     * Posisi [awal, akhir] setiap <w:tbl> TINGKAT ATAS (bukan tabel bersarang di dalam sel).
+     *
+     * @return list<array{int, int}>
+     */
+    private function tabelTingkatAtas(string $xml): array
+    {
+        preg_match_all('/<w:tbl>|<\/w:tbl>/', $xml, $cocok, PREG_OFFSET_CAPTURE);
+
+        $hasil = [];
+        $kedalaman = 0;
+        $awal = 0;
+        foreach ($cocok[0] as [$tag, $pos]) {
+            if ($tag === '<w:tbl>') {
+                if ($kedalaman++ === 0) {
+                    $awal = $pos;
+                }
+            } elseif (--$kedalaman === 0) {
+                $hasil[] = [$awal, $pos + strlen('</w:tbl>')];
+            }
+        }
+
+        return $hasil;
     }
 
     // ------------------------------------------------------------------
@@ -1100,7 +1136,11 @@ class NotulaBagian1DocxService
                     $masalah[] = 'Baris isi tabel proksi ({{proksi_uraian}} | {{proksi_target}} | {{proksi_realisasi}}) tidak ditemukan di antara {{blok_proksi}} dan {{/blok_proksi}}.';
                 }
             }
-            $this->cariBlokAman($ikuBlok, '{{blok_berakhlak}}', '{{/blok_berakhlak}}', 'tr', $masalah);
+            // blok_berakhlak OPSIONAL (digantikan blok_proksi yang berlaku untuk semua IKU),
+            // tapi bila masih ada pasangan penandanya harus lengkap.
+            if (str_contains($ikuBlok, '{{blok_berakhlak}}') || str_contains($ikuBlok, '{{/blok_berakhlak}}')) {
+                $this->cariBlokAman($ikuBlok, '{{blok_berakhlak}}', '{{/blok_berakhlak}}', 'tr', $masalah);
+            }
             $blokRo = $this->cariBlokAman($ikuBlok, '{{blok_ro}}', '{{/blok_ro}}', 'tr', $masalah);
             $this->cariBlokAman($ikuBlok, '{{blok_formula}}', '{{/blok_formula}}', 'p', $masalah);
 
@@ -1212,7 +1252,18 @@ class NotulaBagian1DocxService
             throw new RuntimeException("Penanda penutup tidak ditemukan di template: {$closeNeedle}");
         }
         [$closeStart, $closeEnd] = $this->elementBounds($xml, $closePos, $unit);
+        $inner = substr($xml, $openEnd, $closeStart - $openEnd);
 
-        return [substr($xml, 0, $openStart), substr($xml, $openEnd, $closeStart - $openEnd), substr($xml, $closeEnd)];
+        // Penanda pembuka & penutup harus SETINGKAT (sama-sama di tabel luar, atau sama-sama
+        // di sel/tabel bersarang yang sama). Kalau mis. {{/blok_ro}} diletakkan di baris TABEL
+        // BERSARANG sementara {{blok_ro}} di baris tabel luar, membuang/menyalin isi di
+        // antaranya memotong tag tabel di tengah -- document.xml jadi rusak (tidak bisa dibuka).
+        foreach (['w:tbl', 'w:tr', 'w:tc'] as $tag) {
+            if (preg_match_all('/<'.$tag.'[ >]/', $inner) !== substr_count($inner, "</{$tag}>")) {
+                throw new RuntimeException("Penanda {$openNeedle} dan {$closeNeedle} tidak setingkat (salah satunya ada di dalam tabel/sel bersarang) -- letakkan keduanya pada tingkat tabel yang sama.");
+            }
+        }
+
+        return [substr($xml, 0, $openStart), $inner, substr($xml, $closeEnd)];
     }
 }
