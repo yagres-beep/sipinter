@@ -52,6 +52,7 @@
             </form>
 
             <div class="auth-alt">Belum punya akun? <a wire:navigate href="{{ route('register') }}">Daftar di sini</a></div>
+            <div class="auth-alt" style="margin-top:8px"><a href="{{ route('kebijakan-privasi') }}">Kebijakan Privasi</a> · <a href="{{ route('ketentuan-layanan') }}">Ketentuan Layanan</a></div>
         </div>
     </div>
 @endsection

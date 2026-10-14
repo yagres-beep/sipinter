@@ -13,6 +13,10 @@ Route::get('/', function () {
     return auth()->check() ? redirect()->route('dashboard') : redirect()->route('login');
 });
 
+// Halaman publik untuk layar persetujuan OAuth Google (lihat resources/views/legal).
+Route::view('/kebijakan-privasi', 'legal.kebijakan-privasi')->name('kebijakan-privasi');
+Route::view('/ketentuan-layanan', 'legal.ketentuan-layanan')->name('ketentuan-layanan');
+
 Route::middleware(['auth', 'profile.complete'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 

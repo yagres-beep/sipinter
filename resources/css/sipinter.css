@@ -617,6 +617,16 @@ th.th-sort.active .th-arrow{opacity:1;color:var(--blue-600);font-weight:700}
 .auth-alt{text-align:center;font-size:12.5px;color:var(--muted);margin-top:16px}
 .auth-alt a{color:var(--blue-600);font-weight:600;text-decoration:none}
 
+/* Kebijakan Privasi & Ketentuan Layanan (resources/views/legal) */
+.legal{width:100%;max-width:760px;background:var(--white);color:var(--ink);border-radius:var(--radius);box-shadow:var(--sh);padding:36px 40px;font-size:14px;line-height:1.7}
+.legal h1{font-size:24px;margin:8px 0 2px}
+.legal h2{font-size:16px;margin:24px 0 6px}
+.legal p,.legal ul{margin:0 0 10px}
+.legal ul{padding-left:20px;list-style:disc}
+.legal a{color:var(--blue-600)}
+.legal-meta{color:var(--muted);font-size:12.5px}
+@media (max-width:640px){.legal{padding:24px 16px;border-radius:0;box-shadow:none}}
+
 /* filechip — status sesuai/tidak sesuai */
 .filechip.ok{border-color:color-mix(in srgb, var(--green) 35%, transparent);background:var(--green-soft)}
 .filechip.no{border-color:color-mix(in srgb, var(--red) 35%, transparent);background:var(--red-soft)}
