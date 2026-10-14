@@ -282,6 +282,56 @@ class TahapanGandaDanSubfolderTest extends TestCase
         $this->assertSame('folder-persiapan', $kegiatan->fresh()->drive_folder_id);
     }
 
+    public function test_kegiatan_sama_bulan_lain_triwulan_ini_memakai_folder_yang_sama(): void
+    {
+        $iku = $this->siapkan();
+        $juli = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $september = Periode::create(['tahun' => 2026, 'bulan' => 9, 'triwulan' => 3, 'bulan_ke' => 3, 'flag_bulan_terlewat' => false]);
+        $oktober = Periode::create(['tahun' => 2026, 'bulan' => 10, 'triwulan' => 4, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+
+        $dasar = ['iku_id' => $iku->id, 'jenis' => 'bukan_survei_sensus', 'nama_folder_auto' => 'Menyusun Buklet', 'status_dokumen' => Kegiatan::STATUS_DRAFT];
+        $kegiatanJuli = Kegiatan::create($dasar + ['periode_id' => $juli->id, 'uraian_kegiatan' => 'Menyusun Buklet', 'drive_folder_id' => 'folder-buklet', 'nama_folder_kustom' => 'Buklet Kemiskinan']);
+        $kegiatanSeptember = Kegiatan::create($dasar + ['periode_id' => $september->id, 'uraian_kegiatan' => ' menyusun buklet ']);
+        $kegiatanLain = Kegiatan::create(['periode_id' => $september->id, 'uraian_kegiatan' => 'Rapat lain', 'nama_folder_auto' => 'Rapat lain'] + $dasar);
+        $kegiatanTwBerikutnya = Kegiatan::create($dasar + ['periode_id' => $oktober->id, 'uraian_kegiatan' => 'Menyusun Buklet']);
+
+        $drive = $this->mock(GoogleDriveService::class);
+        $drive->shouldReceive('namesInFolder')->andReturn([]);
+        $drive->shouldReceive('createFolder')->once()->with('Rapat lain', 'folder-capaian')->andReturn('folder-rapat');
+        $drive->shouldReceive('createFolder')->once()->with('Menyusun Buklet', 'folder-capaian-tw4')->andReturn('folder-buklet-tw4');
+        $layanan = app(FolderStructureService::class);
+
+        // Bulan lain, kegiatan sama → folder Juli dipakai lagi, nama folder ikut.
+        $this->assertSame('folder-buklet', $layanan->resolveKegiatanFolder($kegiatanSeptember, 'folder-capaian'));
+        $this->assertSame('Buklet Kemiskinan', $kegiatanSeptember->fresh()->nama_folder_kustom);
+
+        // Kegiatan berbeda & triwulan berbeda tetap dibuatkan folder sendiri.
+        $this->assertSame('folder-rapat', $layanan->resolveKegiatanFolder($kegiatanLain, 'folder-capaian'));
+        $this->assertSame('folder-buklet-tw4', $layanan->resolveKegiatanFolder($kegiatanTwBerikutnya, 'folder-capaian-tw4'));
+
+        // Ganti nama dari salah satu bulan → bulan lain yang berbagi folder ikut.
+        $drive->shouldReceive('renameFile')->once()->with('folder-buklet', 'Buklet Kemiskinan 2026');
+        $kegiatanSeptember->fresh()->gantiNamaFolder('Buklet Kemiskinan 2026');
+        $this->assertSame('Buklet Kemiskinan 2026', $kegiatanJuli->fresh()->namaFolder());
+    }
+
+    public function test_folder_kegiatan_tidak_digabung_bila_dipecah_per_bulan_lebih_dulu(): void
+    {
+        $iku = $this->siapkan();
+        $juli = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $agustus = Periode::create(['tahun' => 2026, 'bulan' => 8, 'triwulan' => 3, 'bulan_ke' => 2, 'flag_bulan_terlewat' => false]);
+
+        $dasar = ['iku_id' => $iku->id, 'jenis' => 'bukan_survei_sensus', 'uraian_kegiatan' => 'Menyusun Buklet', 'nama_folder_auto' => 'Menyusun Buklet', 'status_dokumen' => Kegiatan::STATUS_DRAFT];
+        Kegiatan::create($dasar + ['periode_id' => $juli->id, 'drive_folder_id' => 'folder-juli']);
+        $kegiatanAgustus = Kegiatan::create($dasar + ['periode_id' => $agustus->id]);
+
+        $drive = $this->mock(GoogleDriveService::class);
+        $drive->shouldReceive('namesInFolder')->andReturn([]);
+        $drive->shouldReceive('createFolder')->once()->with('Menyusun Buklet', 'folder-agustus')->andReturn('folder-buklet-agustus');
+
+        $this->assertSame('folder-buklet-agustus', app(FolderStructureService::class)->resolveKegiatanFolder($kegiatanAgustus, 'folder-agustus', gabungBulanLain: false));
+    }
+
     public function test_kegiatan_bukan_survei_tetap_langsung_di_folder_kategori(): void
     {
         $iku = $this->siapkan();

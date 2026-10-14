@@ -353,10 +353,24 @@ class FolderStructureService
      * kegiatan tetap punya folder sendiri-sendiri. Karena itu identitas foldernya
      * disimpan per baris kegiatan, bukan dicocokkan ulang lewat nama setiap saat.
      */
-    public function resolveKegiatanFolder(Kegiatan $kegiatan, string $kategoriFolderId): string
+    public function resolveKegiatanFolder(Kegiatan $kegiatan, string $kategoriFolderId, bool $gabungBulanLain = true): string
     {
         if ($kegiatan->drive_folder_id) {
             return $kegiatan->drive_folder_id;
+        }
+
+        // Kegiatan yang SAMA dari bulan lain di triwulan ini (Ketua Tim mengunggah
+        // bukti tiap bulan untuk satu kegiatan) memakai folder kegiatan yang sudah
+        // ada — tidak dibuatkan folder kembar "<nama> (2)" di sebelahnya. Hanya bila
+        // folder kegiatannya memang satu induk untuk semua bulan (tidak dipecah ke
+        // folder Bulan lebih dulu, lihat $gabungBulanLain di unggahBerkas()).
+        if ($gabungBulanLain && ($sama = $this->kegiatanSamaBulanLain($kegiatan))) {
+            $kegiatan->update([
+                'drive_folder_id' => $sama->drive_folder_id,
+                'nama_folder_kustom' => $kegiatan->nama_folder_kustom ?: $sama->nama_folder_kustom,
+            ]);
+
+            return $sama->drive_folder_id;
         }
 
         // Kegiatan survei/sensus dikelompokkan dalam SATU folder induk bernama uraian
@@ -386,6 +400,45 @@ class FolderStructureService
         $kegiatan->update(['drive_folder_id' => $folderId]);
 
         return $folderId;
+    }
+
+    /**
+     * Kegiatan yang sama (IKU & triwulan sama, bulan berbeda) yang sudah punya folder
+     * di Drive — "sama" = tertaut ke poin RTL yang sama atau uraiannya sama persis
+     * (abaikan besar/kecil huruf & spasi tepi), dengan pembentukan folder & tahapan
+     * yang sama. Sama seperti PengisianKegiatan::kegiatanSama().
+     */
+    protected function kegiatanSamaBulanLain(Kegiatan $kegiatan): ?Kegiatan
+    {
+        $periode = $kegiatan->periode;
+        $uraian = mb_strtolower(trim((string) $kegiatan->uraian_kegiatan));
+
+        if (! $periode || ($uraian === '' && ! $kegiatan->rtl_evaluasi_id)) {
+            return null;
+        }
+
+        return Kegiatan::query()
+            ->where('iku_id', $kegiatan->iku_id)
+            ->whereKeyNot($kegiatan->id)
+            ->where('periode_id', '!=', $kegiatan->periode_id)
+            ->whereNotNull('drive_folder_id')
+            ->where('jenis', $kegiatan->jenis)
+            ->when(
+                filled($kegiatan->tahapan_survei),
+                fn ($q) => $q->where('tahapan_survei', $kegiatan->tahapan_survei),
+                fn ($q) => $q->whereNull('tahapan_survei'),
+            )
+            ->whereHas('periode', fn ($q) => $q->where('tahun', $periode->tahun)->where('triwulan', $periode->triwulan))
+            ->where(function ($q) use ($kegiatan, $uraian) {
+                if ($kegiatan->rtl_evaluasi_id) {
+                    $q->orWhere('rtl_evaluasi_id', $kegiatan->rtl_evaluasi_id);
+                }
+                if ($uraian !== '') {
+                    $q->orWhereRaw('LOWER(TRIM(uraian_kegiatan)) = ?', [$uraian]);
+                }
+            })
+            ->orderBy('id')
+            ->first();
     }
 
     // ================================================================
@@ -422,7 +475,12 @@ class FolderStructureService
         $tujuanFolderId = $kategoriFolderId;
 
         if ($kegiatan && in_array($namaKategori, $config->kategoriDenganSubfolderKegiatan(), true)) {
-            $tujuanFolderId = $this->resolveKegiatanFolder($kegiatan, $kategoriFolderId);
+            // Folder kegiatan dipakai bersama lintas bulan triwulan ini KECUALI kategori
+            // ini dipecah ke folder Bulan lebih dulu (Kategori/Bulan/Kegiatan) — di
+            // situ tiap bulan memang punya induk sendiri.
+            $bulanDuluan = in_array($namaKategori, $config->kategoriDenganSubfolderBulan(), true)
+                && $config->kategoriUrutanBulanKegiatan($namaKategori) === 'bulan_dulu';
+            $tujuanFolderId = $this->resolveKegiatanFolder($kegiatan, $kategoriFolderId, gabungBulanLain: ! $bulanDuluan);
 
             // Urutan 'kegiatan_dulu': folder Bulan (bila kategori ini juga pakai
             // subfolder per bulan) SENGAJA belum dibuat oleh resolveKategoriFolder()

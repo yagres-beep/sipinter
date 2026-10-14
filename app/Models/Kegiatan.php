@@ -184,6 +184,16 @@ class Kegiatan extends Model
 
         $this->save();
 
+        // Kegiatan yang sama dari bulan lain triwulan ini bisa memakai folder Drive
+        // yang SAMA (lihat FolderStructureService::resolveKegiatanFolder()) — nama
+        // foldernya ikut disamakan supaya tampilan & notula tidak berbeda.
+        if ($this->drive_folder_id && $namaBerlaku !== $namaLama) {
+            static::where('drive_folder_id', $this->drive_folder_id)->whereKeyNot($this->id)->get()
+                ->each(fn (Kegiatan $lain) => $lain->update([
+                    'nama_folder_kustom' => $namaBerlaku === $lain->nama_folder_auto ? null : $namaBerlaku,
+                ]));
+        }
+
         return ['nama_folder' => $namaBerlaku, 'peringatan' => $peringatan];
     }
 
