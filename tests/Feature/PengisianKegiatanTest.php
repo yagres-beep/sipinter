@@ -1742,13 +1742,15 @@ class PengisianKegiatanTest extends TestCase
 
     /**
      * Begitu Kegiatan-nya sudah terkunci (mis. sudah diajukan/diverifikasi/disetujui),
-     * hapusBuktiLama() menolak permintaan sama sekali — defense in depth, bukan cuma
-     * disembunyikan tombolnya di blade.
+     * hapusBuktiLama() menolak berkas yang belum ditandai "Tidak Sesuai" — defense in
+     * depth, bukan cuma disembunyikan tombolnya di blade. (Berkas "Tidak Sesuai" tetap
+     * boleh dihapus/diganti, lihat BuktiSusulanDanNamaCapaianTest.)
      */
     public function test_hapus_bukti_lama_menolak_saat_kegiatan_sudah_terkunci(): void
     {
         $data = $this->siapkanKegiatanDikembalikanDenganBerkasDitolak();
         $data['kegiatan']->update(['status_dokumen' => Kegiatan::STATUS_DIAJUKAN]);
+        $data['berkas']->update(['status_verifikasi' => 'menunggu', 'catatan' => null]);
 
         $this->actingAs($data['ketua']);
 

@@ -99,6 +99,64 @@ class BuktiSusulanDanNamaCapaianTest extends TestCase
         $this->assertSame(0, Berkas::count());
     }
 
+    protected function berkas(Kegiatan $kegiatan, string $status, string $nama = 'undangan.pdf'): Berkas
+    {
+        return Berkas::create([
+            'ref_id' => $kegiatan->id, 'ref_type' => Kegiatan::class, 'kategori' => 'capaian',
+            'nama_file' => $nama, 'path' => "bukti-capaian/{$nama}", 'subfolder' => 'Undangan',
+            'status_verifikasi' => $status, 'catatan' => $status === 'ditolak' ? 'Tidak ada tanda tangan' : null,
+            'drive_file_id' => 'drive-lama',
+        ]);
+    }
+
+    public function test_berkas_tidak_sesuai_di_kegiatan_terverifikasi_bisa_diganti_dan_dihapus(): void
+    {
+        $kegiatan = $this->kegiatan(['status_dokumen' => Kegiatan::STATUS_DIVERIFIKASI]);
+        Capaian::create(['iku_id' => $this->iku->id, 'periode_id' => $this->periode->id, 'status' => Capaian::STATUS_DIVERIFIKASI]);
+        $ditolak = $this->berkas($kegiatan, 'ditolak');
+        $sesuai = $this->berkas($kegiatan, 'terverifikasi', 'laporan.pdf');
+
+        $this->mock(FolderStructureService::class, function ($mock) {
+            $mock->shouldReceive('unggahBerkasKegiatan')->once()
+                ->withArgs(fn ($k, $kategori, $path, $ekstensi = '.pdf', $mime = 'application/pdf', $nama = null, $subfolder = null) => $nama === 'undangan bertanda tangan' && $subfolder === 'Undangan')
+                ->andReturn(['drive_file_id' => 'drive-baru', 'storage_account_id' => null, 'nama_file' => 'undangan bertanda tangan.pdf']);
+            $mock->shouldReceive('linkBuktiDukungIku')->andReturn(null);
+        });
+
+        $form = $this->form()
+            ->assertSee('🔁 Ganti')
+            ->set("gantiBerkas.{$ditolak->id}", UploadedFile::fake()->create('undangan bertanda tangan.pdf', 10, 'application/pdf'))
+            ->assertHasNoErrors();
+
+        $this->assertNull(Berkas::find($ditolak->id));
+        $baru = Berkas::where('ref_id', $kegiatan->id)->where('nama_file', 'undangan bertanda tangan.pdf')->sole();
+        $this->assertSame('menunggu', $baru->status_verifikasi);
+        $this->assertSame('Undangan', $baru->subfolder);
+        $this->assertSame('Tidak ada tanda tangan', $kegiatan->fresh()->catatan_bukti_dihapus);
+
+        // Berkas "Sesuai" hanya-lihat: tidak bisa dihapus maupun diganti namanya.
+        $form->call('hapusBuktiLama', 0, $sesuai->id);
+        $this->assertNotNull(Berkas::find($sesuai->id));
+        $this->assertFalse($sesuai->fresh()->bisaDiubahNamaOleh(auth()->user()));
+
+        // Berkas pengganti belum diperiksa → di kegiatan terkunci tidak bisa dihapus.
+        $form->call('hapusBuktiLama', 0, $baru->id);
+        $this->assertNotNull(Berkas::find($baru->id));
+    }
+
+    public function test_berkas_tidak_sesuai_tidak_bisa_diubah_selagi_sedang_ditangani(): void
+    {
+        $kegiatan = $this->kegiatan(['status_dokumen' => Kegiatan::STATUS_DIAJUKAN]);
+        Capaian::create(['iku_id' => $this->iku->id, 'periode_id' => $this->periode->id, 'status' => Capaian::STATUS_SEDANG_DITANGANI]);
+        $ditolak = $this->berkas($kegiatan, 'ditolak');
+
+        $this->form()
+            ->assertDontSee('🔁 Ganti')
+            ->call('hapusBuktiLama', 0, $ditolak->id);
+
+        $this->assertNotNull(Berkas::find($ditolak->id));
+    }
+
     public function test_berkas_yang_gagal_ke_drive_diberi_peringatan_dan_alasan(): void
     {
         $kegiatan = $this->kegiatan();
