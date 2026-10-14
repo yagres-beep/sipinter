@@ -1167,16 +1167,12 @@ class PengisianKegiatan extends Component
             return;
         }
 
-        if ($this->blokTerkunci($block['status_dokumen']) || $this->formTerkunciSedangDitanganiFresh()) {
-            return;
-        }
-
         $berkas = Berkas::where('id', $berkasId)
             ->where('ref_type', Kegiatan::class)
             ->where('ref_id', $block['id'])
             ->first();
 
-        if (! $berkas || $berkas->status_verifikasi === 'terverifikasi') {
+        if (! $berkas || ! $this->buktiLamaBisaDikelola($berkas->status_verifikasi, $this->blokTerkunci($block['status_dokumen']), fresh: true)) {
             return;
         }
 
@@ -1214,7 +1210,7 @@ class PengisianKegiatan extends Component
     {
         $periode = $this->iku_id ? $this->periodeSaatIni() : null;
 
-        if (! $periode || $this->capaianTerkunci() || $this->formTerkunciSedangDitanganiFresh()) {
+        if (! $periode) {
             return;
         }
 
@@ -1232,7 +1228,7 @@ class PengisianKegiatan extends Component
             ->where('ref_id', $poin->id)
             ->first();
 
-        if (! $berkas || $berkas->status_verifikasi === 'terverifikasi') {
+        if (! $berkas || ! $this->buktiLamaBisaDikelola($berkas->status_verifikasi, $this->capaianTerkunci(), fresh: true)) {
             return;
         }
 
@@ -1250,6 +1246,7 @@ class PengisianKegiatan extends Component
         $berkas->delete();
 
         Cache::forget($this->cacheKeyPeriodeIku("riwayat-bagian-{$poin->bagian_kustom_id}"));
+        Cache::forget($this->cacheKeyPeriodeIku("riwayat-bagian-{$poin->bagian_kustom_id}-edit"));
 
         // Cerminkan penghapusan ke state in-memory (dimuat lewat muatBagianKustomBlocks())
         // supaya blade langsung mencerminkannya tanpa reload — pola sama seperti
@@ -1280,10 +1277,6 @@ class PengisianKegiatan extends Component
      */
     public function hapusBuktiLamaEvaluasi(int $rtlId, int $berkasId): void
     {
-        if ($this->capaianTerkunci() || $this->formTerkunciSedangDitanganiFresh()) {
-            return;
-        }
-
         $poin = $this->rtlTriwulanBerjalan()->firstWhere('id', $rtlId);
 
         if (! $poin) {
@@ -1295,7 +1288,7 @@ class PengisianKegiatan extends Component
             ->where('ref_id', $poin->id)
             ->first();
 
-        if (! $berkas || $berkas->status_verifikasi === 'terverifikasi') {
+        if (! $berkas || ! $this->buktiLamaBisaDikelola($berkas->status_verifikasi, $this->capaianTerkunci(), fresh: true)) {
             return;
         }
 
@@ -1329,6 +1322,155 @@ class PengisianKegiatan extends Component
     public function kegiatanBolehBuktiSusulan(array $block): bool
     {
         return ! empty($block['id']) && in_array($block['status_dokumen'] ?? null, self::STATUS_BOLEH_BUKTI_SUSULAN, true);
+    }
+
+    /**
+     * Bolehkah Ketua Tim menghapus/mengganti/mengganti nama SATU berkas yang sudah
+     * tersimpan? "Sesuai" (terverifikasi) = hanya-lihat. Berkas yang ditandai "Tidak
+     * Sesuai" Tim SAKIP selalu bisa dikelola walau bagiannya terkunci (mis. kegiatan
+     * sudah diverifikasi), kecuali selagi Tim SAKIP sedang menanganinya. Berkas yang
+     * belum diperiksa hanya bisa dikelola selagi bagiannya belum terkunci.
+     */
+    public function buktiLamaBisaDikelola(?string $status, bool $bagianTerkunci, bool $fresh = false): bool
+    {
+        if ($status === 'terverifikasi') {
+            return false;
+        }
+
+        if ($fresh ? $this->formTerkunciSedangDitanganiFresh() : $this->formTerkunciSedangDitangani()) {
+            return false;
+        }
+
+        return ! $bagianTerkunci || ($status === 'ditolak' && $this->verifikasiTerlihat());
+    }
+
+    /**
+     * Berkas pengganti untuk berkas yang ditandai "Tidak Sesuai" — kunci = id berkas
+     * lama. Begitu dipilih, berkas lama langsung diganti (updatedGantiBerkas()).
+     *
+     * @var array<int|string, mixed>
+     */
+    public array $gantiBerkas = [];
+
+    public function updatedGantiBerkas($nilai, ?string $kunci = null): void
+    {
+        $berkasId = (int) explode('.', (string) $kunci)[0];
+        unset($this->gantiBerkas[$berkasId]);
+
+        $file = is_array($nilai) ? (array_values(array_filter($nilai))[0] ?? null) : $nilai;
+        $periode = $this->iku_id ? $this->periodeSaatIni() : null;
+        $lama = $berkasId ? Berkas::find($berkasId) : null;
+
+        if (! $file || ! $periode || ! $lama || $lama->status_verifikasi !== 'ditolak') {
+            return;
+        }
+
+        $validator = \Illuminate\Support\Facades\Validator::make(
+            ['bukti' => $file],
+            ['bukti' => ['file', 'mimes:pdf', 'max:10240']],
+            ['bukti.mimes' => 'Berkas pengganti harus berupa PDF.', 'bukti.max' => 'Ukuran berkas pengganti maksimal 10 MB.']
+        );
+
+        if ($validator->fails()) {
+            $this->addError("gantiBerkas.{$berkasId}", $validator->errors()->first());
+
+            return;
+        }
+
+        // Pastikan berkas ini milik IKU + periode form ini, dan tentukan bagiannya terkunci atau tidak.
+        $ref = $lama->ref;
+        [$milikForm, $terkunci] = match (true) {
+            $ref instanceof Kegiatan => [(int) $ref->iku_id === (int) $this->iku_id && (int) $ref->periode_id === (int) $periode->id, $this->blokTerkunci($ref->status_dokumen)],
+            $ref instanceof RtlEvaluasiModel => [$this->rtlTriwulanBerjalan()->contains('id', $ref->id), $this->capaianTerkunci()],
+            $ref instanceof BagianKustomPoin => [(int) $ref->iku_id === (int) $this->iku_id && (int) $ref->periode_id === (int) $periode->id, $this->capaianTerkunci()],
+            default => [false, true],
+        };
+
+        if (! $milikForm || ! $this->buktiLamaBisaDikelola($lama->status_verifikasi, $terkunci, fresh: true)) {
+            return;
+        }
+
+        $namaBerkas = $this->namaAsliBuktiBaru($file) ?: pathinfo($lama->nama_file, PATHINFO_FILENAME);
+        $path = $file->store(dirname((string) $lama->path) !== '.' ? dirname((string) $lama->path) : 'bukti-capaian', 'local');
+
+        $baru = Berkas::create([
+            'ref_id' => $lama->ref_id,
+            'ref_type' => $lama->ref_type,
+            'kategori' => $lama->kategori,
+            'nama_file' => $namaBerkas.'.pdf',
+            'subfolder' => $lama->subfolder,
+            'path' => $path,
+            'status_verifikasi' => 'menunggu',
+        ]);
+
+        try {
+            $folderService = app(FolderStructureService::class);
+            $lokal = Storage::disk('local')->path($path);
+            $hasilDrive = match (true) {
+                $ref instanceof Kegiatan => $folderService->unggahBerkasKegiatan($ref, $lama->kategori, $lokal, namaBerkasOverride: $namaBerkas, subfolder: $lama->subfolder),
+                $ref instanceof BagianKustomPoin => $folderService->unggahBerkas($ref->periode, $ref->masterIku, 'bagian_kustom', $lokal, namaFolderOverride: $ref->bagianKustom->nama, namaBerkasOverride: $namaBerkas),
+                default => $folderService->unggahBerkas($ref->periode, $ref->masterIku, $lama->kategori, $lokal, namaBerkasOverride: $namaBerkas),
+            };
+            $baru->update($hasilDrive);
+            $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'berkas pengganti', true);
+        } catch (\Throwable $e) {
+            Log::warning('Gagal mengunggah berkas pengganti ke Google Drive, disimpan lokal saja: '.$e->getMessage());
+            $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'berkas pengganti', false, $e->getMessage());
+        }
+
+        // Alasan penolakan disimpan di kegiatan/poinnya supaya Tim SAKIP tetap tahu
+        // apa yang diperbaiki (sama seperti hapusBuktiLama()).
+        if ($lama->catatan) {
+            $ref->update(['catatan_bukti_dihapus' => $lama->catatan]);
+        }
+        if ($lama->path) {
+            Storage::disk('local')->delete($lama->path);
+        }
+        $lama->delete();
+
+        $baru->refresh();
+        $dataBaru = [
+            'id' => $baru->id,
+            'kode' => $baru->kode,
+            'nama_file' => $baru->nama_file,
+            'subfolder' => $baru->subfolder,
+            'diunggah_oleh' => $baru->diunggah_oleh,
+            'di_drive' => filled($baru->drive_file_id),
+            'status_verifikasi' => $baru->status_verifikasi,
+            'catatan' => $baru->catatan,
+        ];
+
+        foreach ($this->blocks as $i => $block) {
+            foreach ($block['existing_bukti'] ?? [] as $j => $f) {
+                if ($f['id'] === $berkasId) {
+                    $this->blocks[$i]['existing_bukti'][$j] = $this->maskBerkas($dataBaru);
+                    $this->blocks[$i]['catatan_bukti_dihapus'] = $lama->catatan ?: ($block['catatan_bukti_dihapus'] ?? null);
+                }
+            }
+        }
+
+        foreach ($this->bagianKustomBlocks as $bagianId => $daftar) {
+            foreach ($daftar as $j => $blok) {
+                foreach ($blok['existing_bukti'] ?? [] as $k => $f) {
+                    if ($f['id'] === $berkasId) {
+                        unset($dataBaru['subfolder']);
+                        $this->bagianKustomBlocks[$bagianId][$j]['existing_bukti'][$k] = $this->maskBerkas($dataBaru);
+                    }
+                }
+            }
+        }
+
+        if ($ref instanceof RtlEvaluasiModel) {
+            $this->cacheRtlBerjalan = null;
+            Cache::forget($this->cacheKeyPeriodeIku('rtl-berjalan'));
+        }
+        if ($ref instanceof BagianKustomPoin) {
+            Cache::forget($this->cacheKeyPeriodeIku("riwayat-bagian-{$ref->bagian_kustom_id}"));
+            Cache::forget($this->cacheKeyPeriodeIku("riwayat-bagian-{$ref->bagian_kustom_id}-edit"));
+        }
+
+        $this->resetErrorBag("gantiBerkas.{$berkasId}");
+        $this->dispatch('notify', type: 'success', message: "Berkas diganti dengan \"{$baru->nama_file}\" — menunggu diperiksa ulang Tim SAKIP.");
     }
 
     /** Evaluasi RTL periode ini sudah diverifikasi → boleh ditambah bukti susulan. */

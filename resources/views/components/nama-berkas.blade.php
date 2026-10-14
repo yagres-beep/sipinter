@@ -8,7 +8,7 @@
     wire:ignore + wire:key berisi nama: nama baru hasil Alpine tidak ditimpa nama lama
     saat induk re-render, tapi bila nama dari server memang berubah elemen dibuat ulang.
 --}}
-@props(['id', 'nama', 'diunggahOleh' => null, 'aksi' => 'gantiNamaBerkas', 'bisaUbah' => null])
+@props(['id', 'nama', 'diunggahOleh' => null, 'aksi' => 'gantiNamaBerkas', 'bisaUbah' => null, 'status' => null])
 
 {{--
     aksi: method Livewire yang dipanggil (id, namaBaru) dan mengembalikan
@@ -18,7 +18,9 @@
 --}}
 @php
     $user = auth()->user();
-    $bisaUbah ??= $user && (
+    // Berkas yang sudah ditandai "Sesuai" hanya-lihat bagi selain Tim SAKIP
+    // (dicek ulang di Berkas::bisaDiubahNamaOleh()).
+    $bisaUbah ??= $user && ($status !== 'terverifikasi' || $user->namaRole() === 'Tim SAKIP') && (
         $user->namaRole() === 'Tim SAKIP'
         || $diunggahOleh === null
         || (int) $diunggahOleh === (int) $user->id

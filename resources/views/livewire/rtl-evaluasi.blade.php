@@ -86,7 +86,7 @@
                         <div class="filechip-grid">
                             @foreach ($poin->berkas as $file)
                                 <div class="filechip">
-                                    <span class="nm"><x-nama-berkas :id="$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" /></span>
+                                    <span class="nm"><x-nama-berkas :id="$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" :status="$file->status_verifikasi" /></span>
                                 </div>
                             @endforeach
                         </div>

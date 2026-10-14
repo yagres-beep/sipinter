@@ -114,6 +114,11 @@ class Berkas extends Model
             return true;
         }
 
+        // Sudah ditandai "Sesuai" Tim SAKIP → hanya-lihat bagi selain Tim SAKIP.
+        if ($this->status_verifikasi === 'terverifikasi') {
+            return false;
+        }
+
         if ($this->diunggah_oleh !== null) {
             return (int) $this->diunggah_oleh === (int) $user->id;
         }

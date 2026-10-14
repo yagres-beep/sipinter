@@ -222,6 +222,9 @@
                         @else
                             🔒 Sudah ditangani/diverifikasi Tim SAKIP — tidak bisa diedit dari sini.
                         @endif
+                        @if (collect($block['existing_bukti'])->contains(fn ($f) => $this->buktiLamaBisaDikelola($f['status_verifikasi'], true)))
+                            Bukti yang ditandai <b style="color:var(--red)">Tidak Sesuai</b> bisa diganti atau dihapus; bukti yang sudah Sesuai hanya bisa dilihat.
+                        @endif
                     </div>
 
                     <div class="field">
@@ -246,7 +249,7 @@
                             @forelse ($block['existing_bukti'] as $file)
                                 <div class="filechip {{ $file['status_verifikasi'] === 'terverifikasi' ? 'ok' : ($file['status_verifikasi'] === 'ditolak' ? 'no' : '') }}">
                                     <span class="nm">
-                                        <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" /><x-belum-di-drive :di-drive="$file['di_drive'] ?? true" />
+                                        <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" :status="$file['status_verifikasi'] ?? null" /><x-belum-di-drive :di-drive="$file['di_drive'] ?? true" />
                                         @if (filled($file['subfolder'] ?? null))
                                             <span class="sub">📁 {{ $file['subfolder'] }}</span>
                                         @endif
@@ -255,6 +258,11 @@
                                         @endif
                                     </span>
                                     <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file['id'] }}">🔍 Lihat</button>
+                                    {{-- Kegiatan terkunci: berkas "Tidak Sesuai" tetap bisa diganti/dihapus. --}}
+                                    @if ($this->buktiLamaBisaDikelola($file['status_verifikasi'], true))
+                                        @include('livewire.partials._ganti-berkas', ['berkasId' => $file['id']])
+                                        <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLama', args: [{{ $i }}, {{ $file['id'] }}] }" wire:loading.class="btn-busy" wire:target="hapusBuktiLama({{ $i }}, {{ $file['id'] }})">🗑️</span>
+                                    @endif
                                 </div>
                             @empty
                                 <p style="color:var(--muted);font-size:12.5px">Belum ada bukti diunggah.</p>
@@ -508,7 +516,7 @@
                             @foreach ($block['existing_bukti'] as $file)
                                 <div class="filechip {{ $file['status_verifikasi'] === 'terverifikasi' ? 'ok' : ($file['status_verifikasi'] === 'ditolak' ? 'no' : '') }}">
                                     <span class="nm">
-                                        <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" /><x-belum-di-drive :di-drive="$file['di_drive'] ?? true" />
+                                        <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" :status="$file['status_verifikasi'] ?? null" /><x-belum-di-drive :di-drive="$file['di_drive'] ?? true" />
                                         @if (filled($file['subfolder'] ?? null))
                                             <span class="sub">📁 {{ $file['subfolder'] }}</span>
                                         @endif
@@ -517,6 +525,9 @@
                                         @endif
                                     </span>
                                     <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file['id'] }}">🔍 Lihat</button>
+                                    @if ($file['status_verifikasi'] === 'ditolak')
+                                        @include('livewire.partials._ganti-berkas', ['berkasId' => $file['id']])
+                                    @endif
                                     @if ($file['status_verifikasi'] !== 'terverifikasi')
                                         <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLama', args: [{{ $i }}, {{ $file['id'] }}] }" wire:loading.class="btn-busy" wire:target="hapusBuktiLama({{ $i }}, {{ $file['id'] }})">🗑️</span>
                                     @endif
@@ -852,12 +863,15 @@
                             @foreach ($poin->berkas as $file)
                                 <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}">
                                     <span class="nm">
-                                        <x-nama-berkas :id="$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" /><x-belum-di-drive :di-drive="filled($file->drive_file_id) || blank($file->path)" />
+                                        <x-nama-berkas :id="$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" :status="$file->status_verifikasi" /><x-belum-di-drive :di-drive="filled($file->drive_file_id) || blank($file->path)" />
                                         @if ($file->status_verifikasi === 'ditolak' && $file->catatan)
                                             <span class="sub" style="color:var(--red)">{{ $file->catatan }}</span>
                                         @endif
                                     </span>
-                                    @if (! $evaluasiTerkunci && $file->status_verifikasi !== 'terverifikasi')
+                                    @if ($file->status_verifikasi === 'ditolak' && $this->buktiLamaBisaDikelola($file->status_verifikasi, $evaluasiTerkunci))
+                                        @include('livewire.partials._ganti-berkas', ['berkasId' => $file->id])
+                                    @endif
+                                    @if ($this->buktiLamaBisaDikelola($file->status_verifikasi, $evaluasiTerkunci))
                                         <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLamaEvaluasi', args: [{{ $poin->id }}, {{ $file->id }}] }" wire:loading.class="btn-busy" wire:target="hapusBuktiLamaEvaluasi({{ $poin->id }}, {{ $file->id }})">🗑️</span>
                                     @endif
                                 </div>
@@ -1065,16 +1079,21 @@
                                                 @foreach ($entri->berkas as $file)
                                                     {{-- Riwayat di sini hanya berisi poin yang SUDAH TERKUNCI (diajukan/diverifikasi/
                                                          disetujui) atau milik triwulan sebelumnya — lihat pengecualian di
-                                                         riwayatBagianKustom(). Poin periode berjalan yang masih bisa diedit (termasuk
-                                                         menghapus bukti ditolak) tampil di form bawah lewat muatBagianKustomBlocks(),
-                                                         jadi tidak perlu tombol hapus di sini. --}}
+                                                         riwayatBagianKustom(). Poin periode berjalan yang masih bisa diedit tampil di
+                                                         form bawah lewat muatBagianKustomBlocks(). Poin periode INI yang terkunci tetap
+                                                         bisa mengganti/menghapus berkas "Tidak Sesuai" dari sini. --}}
                                                     <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}">
                                                         <span class="nm">
-                                                            <x-nama-berkas :id="$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" /><x-belum-di-drive :di-drive="filled($file->drive_file_id) || blank($file->path)" />
+                                                            <x-nama-berkas :id="$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" :status="$file->status_verifikasi" /><x-belum-di-drive :di-drive="filled($file->drive_file_id) || blank($file->path)" />
                                                             @if ($file->status_verifikasi === 'ditolak' && $file->catatan)
                                                                 <span class="sub" style="color:var(--red)">{{ $file->catatan }}</span>
                                                             @endif
                                                         </span>
+                                                        @if ((int) $entri->periode?->tahun === (int) $tahun && (int) $entri->periode?->bulan === (int) $bulan
+                                                            && $file->status_verifikasi === 'ditolak' && $this->buktiLamaBisaDikelola($file->status_verifikasi, true))
+                                                            @include('livewire.partials._ganti-berkas', ['berkasId' => $file->id])
+                                                            <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLamaBagianKustom', args: [{{ $entri->id }}, {{ $file->id }}] }" wire:loading.class="btn-busy" wire:target="hapusBuktiLamaBagianKustom({{ $entri->id }}, {{ $file->id }})">🗑️</span>
+                                                        @endif
                                                     </div>
                                                 @endforeach
                                             </div>
@@ -1126,11 +1145,14 @@
                                     @foreach ($blok['existing_bukti'] as $file)
                                         <div class="filechip {{ $file['status_verifikasi'] === 'terverifikasi' ? 'ok' : ($file['status_verifikasi'] === 'ditolak' ? 'no' : '') }}">
                                             <span class="nm">
-                                                <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" /><x-belum-di-drive :di-drive="$file['di_drive'] ?? true" />
+                                                <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" :status="$file['status_verifikasi'] ?? null" /><x-belum-di-drive :di-drive="$file['di_drive'] ?? true" />
                                                 @if ($file['status_verifikasi'] === 'ditolak' && $file['catatan'])
                                                     <span class="sub" style="color:var(--red)">{{ $file['catatan'] }}</span>
                                                 @endif
                                             </span>
+                                            @if ($file['status_verifikasi'] === 'ditolak')
+                                                @include('livewire.partials._ganti-berkas', ['berkasId' => $file['id']])
+                                            @endif
                                             @if ($file['status_verifikasi'] !== 'terverifikasi')
                                                 <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLamaBagianKustom', args: [{{ $blok['id'] }}, {{ $file['id'] }}] }" wire:loading.class="btn-busy" wire:target="hapusBuktiLamaBagianKustom({{ $blok['id'] }}, {{ $file['id'] }})">🗑️</span>
                                             @endif
