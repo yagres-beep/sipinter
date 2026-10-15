@@ -645,8 +645,10 @@ class NotulaBagian1DocxService
      * rumusnya unik per indikator dan tetap diketik manual). n & N di sini BUKAN
      * pasangan yang dipakai capaian_tw/capaian_pk (itu memakai kumulatif TW I s.d.
      * TW berjalan, lihat CapaianTahunan::realisasiKumulatif() -- TIDAK disentuh):
-     * - n = nilai MENTAH triwulan berjalan SAJA (rekap['x_realisasi_tw'], apa adanya
-     *   yang diketik Tim SAKIP di Verifikasi Capaian, BUKAN kumulatif).
+     * - n = KUMULATIF TW I s.d. TW berjalan (rekap['x_realisasi_kumulatif']), sama
+     *   seperti "item kumulatif s.d. TW ini" di Verifikasi Capaian & Realisasi
+     *   Kumulatif (%) -- bukan nilai mentah triwulan berjalan saja (yang bisa 0
+     *   walau item sudah terealisasi di triwulan sebelumnya).
      * - N = Alokasi Y TW IV (rekap['y_target'], sumber App\Models\CapaianTahunan::
      *   y_alokasi_tw4 -- konstan sepanjang tahun, dibaca langsung TANPA dijumlah,
      *   sama seperti App\Models\CapaianTahunan::targetTahunan()).
@@ -664,7 +666,7 @@ class NotulaBagian1DocxService
             return null;
         }
 
-        $n = $rekap['x_realisasi_tw'] ?? null;
+        $n = $rekap['x_realisasi_kumulatif'] ?? null;
         $besarN = $rekap['y_target'] ?? null;
         if ($n === null || $besarN === null) {
             return null;
@@ -755,15 +757,15 @@ class NotulaBagian1DocxService
     }
 
     /**
-     * Rincian nyata isi n (item yang triwulan_realisasi-nya = triwulan Notula ini,
-     * BUKAN kumulatif -- sama seperti n mentah di formulaBaris()) dan N
+     * Rincian nyata isi n (item yang triwulan_realisasi-nya <= triwulan Notula ini,
+     * KUMULATIF -- sama seperti n di formulaBaris() & daftar di Verifikasi Capaian) dan N
      * (SELURUH item tahun ini) untuk IKU bermetode Rasio, format
      * "n = 1 mencakup:\n• uraian\n\nN = 4 mencakup:\n• uraian...", persis contoh
      * manual yang sebelumnya diketik Tim SAKIP sendiri ke kolom dasar_hitung.
      * Null bila IKU ini belum punya satu pun baris RincianN untuk tahun tsb.
      *
      * Baris "n = ..." DIHILANGKAN SAMA SEKALI (bukan dicetak "n = 0") bila belum ada
-     * satu pun item yang direalisasikan triwulan ini -- langsung lompat ke rincian N,
+     * satu pun item yang direalisasikan s.d. triwulan ini -- langsung lompat ke rincian N,
      * sesuai contoh dokumen resmi.
      */
     private function rincianNMencakupTeks(MasterIku $iku, Periode $periode): ?string
@@ -774,7 +776,7 @@ class NotulaBagian1DocxService
             return null;
         }
 
-        $terealisasi = $semua->where('triwulan_realisasi', $periode->triwulan);
+        $terealisasi = $semua->filter(fn (RincianN $r) => $r->triwulan_realisasi !== null && $r->triwulan_realisasi <= $periode->triwulan);
 
         $daftar = fn (Collection $baris) => $baris->map(fn (RincianN $r) => '• '.$r->uraian)->implode("\n");
 

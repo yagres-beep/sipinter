@@ -536,12 +536,12 @@ class NotulaDownloadTest extends TestCase
 
     /**
      * IKU bersatuan Persen: "Dasar Hitung" harus dirakit otomatis jadi "y = n/N x 100%"
-     * dari Deskripsi X/Y + data CapaianTahunan -- n = nilai MENTAH triwulan berjalan
-     * saja (x_realisasi_twN, BUKAN kumulatif dari TW sebelumnya), N = Target Tahunan Y
-     * (konstan). Kolom dasar_hitung manual (kalau diisi) tetap tampil sebagai keterangan
-     * tambahan setelah rumus otomatis, bukan digantikan.
+     * dari Deskripsi X/Y + data CapaianTahunan -- n = KUMULATIF x_realisasi TW I s.d.
+     * TW berjalan (sama dengan Realisasi Kumulatif di Verifikasi Capaian), N = Target
+     * Tahunan Y (konstan). Kolom dasar_hitung manual (kalau diisi) tetap tampil sebagai
+     * keterangan tambahan setelah rumus otomatis, bukan digantikan.
      */
-    public function test_docx_bagian1_dasar_hitung_persen_otomatis_pakai_realisasi_mentah_bukan_kumulatif(): void
+    public function test_docx_bagian1_dasar_hitung_persen_otomatis_pakai_realisasi_kumulatif(): void
     {
         $this->loginSebagai('Tim SAKIP');
 
@@ -555,8 +555,8 @@ class NotulaDownloadTest extends TestCase
         $periode = Periode::create(['tahun' => 2026, 'bulan' => 4, 'triwulan' => 2, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
         $this->verifikasiCapaian($iku, $periode);
 
-        // TW I mentah = 5, TW II mentah = 2 (kumulatifnya 7) -- rumus HARUS pakai 2
-        // (mentah TW II saja), bukan 7 (kumulatif TW I+II).
+        // TW I mentah = 5, TW II mentah = 2 -- rumus HARUS pakai 7 (kumulatif
+        // TW I+II), bukan 2 (mentah TW II saja).
         CapaianTahunan::create([
             'iku_id' => $iku->id, 'tahun' => 2026, 'y_alokasi_tw4' => 8,
             'x_realisasi_tw1' => 5, 'x_realisasi_tw2' => 2,
@@ -575,11 +575,11 @@ class NotulaDownloadTest extends TestCase
 
         // Rumus dirakit jadi pecahan bersusun SUNGGUHAN (OOXML Math <m:f>, lihat
         // App\Support\RumusMarkup::keOmml()) -- pembilang/penyebutnya elemen XML
-        // terpisah, BUKAN notasi teks "2/8" lagi. Angkanya bilangan bulat, bukan "2.00".
-        $this->assertStringContainsString('<m:t xml:space="preserve">2</m:t>', $xml);
+        // terpisah, BUKAN notasi teks "7/8" lagi. Angkanya bilangan bulat, bukan "7.00".
+        $this->assertStringContainsString('<m:t xml:space="preserve">7</m:t>', $xml);
         $this->assertStringContainsString('<m:t xml:space="preserve">8</m:t>', $xml);
-        $this->assertStringNotContainsString('<m:t xml:space="preserve">7</m:t>', $xml);
-        $this->assertStringNotContainsString('2.00', $xml);
+        $this->assertStringNotContainsString('<m:t xml:space="preserve">2</m:t>', $xml);
+        $this->assertStringNotContainsString('7.00', $xml);
         $this->assertStringContainsString('Jumlah Publikasi Berkualitas', $xml);
         $this->assertStringContainsString('Jumlah Seluruh Publikasi', $xml);
         $this->assertStringContainsString('Target 2026: N = 8 mencakup: Laporan A, Laporan B.', $xml);
@@ -779,7 +779,7 @@ class NotulaDownloadTest extends TestCase
     /**
      * Baris "n = 0 (belum ada item yang direalisasikan triwulan ini)" DIHILANGKAN
      * SAMA SEKALI (bukan dicetak "n = 0 ...") bila belum ada satu pun item RincianN
-     * yang triwulan_realisasi-nya = triwulan notula ini -- langsung lompat ke "N = ...
+     * yang triwulan_realisasi-nya <= triwulan notula ini -- langsung lompat ke "N = ...
      * mencakup:", sesuai contoh dokumen resmi.
      */
     public function test_docx_bagian1_dasar_hitung_rincian_n_tidak_menampilkan_baris_n_bila_belum_ada_realisasi(): void
@@ -811,6 +811,44 @@ class NotulaDownloadTest extends TestCase
         $this->assertStringNotContainsString('n = 0', $xml);
         $this->assertStringContainsString('N = 2 mencakup:', $xml);
         $this->assertStringContainsString('Publikasi Statistik Kesejahteraan Rakyat 2026', $xml);
+    }
+
+    /**
+     * Rincian n KUMULATIF: item yang direalisasikan di TW sebelumnya tetap tercetak
+     * di "n = ... mencakup:" notula TW berikutnya (sama seperti daftar "item kumulatif
+     * s.d. TW ini" di Verifikasi Capaian) -- walau di TW berjalan tidak ada item baru.
+     */
+    public function test_docx_bagian1_dasar_hitung_rincian_n_kumulatif_dari_tw_sebelumnya(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $iku = MasterIku::create([
+            'kode' => '3011', 'indikator' => 'Persentase Uji Rincian N Kumulatif', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
+            'sasaran' => 'Sasaran Uji Rincian N Kumulatif', 'satuan' => 'Persen', 'metode_capaian' => MasterIku::METODE_RASIO,
+            'deskripsi_x' => 'Jumlah Desa Cinta Statistik', 'deskripsi_y' => 'Jumlah Desa Setara',
+        ]);
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 6, 'triwulan' => 2, 'bulan_ke' => 3, 'flag_bulan_terlewat' => false]);
+        $this->verifikasiCapaian($iku, $periode);
+
+        CapaianTahunan::create([
+            'iku_id' => $iku->id, 'tahun' => 2026, 'y_alokasi_tw4' => 3,
+            'x_realisasi_tw1' => 2, 'x_realisasi_tw2' => 0,
+        ]);
+
+        RincianN::create(['iku_id' => $iku->id, 'tahun' => 2026, 'uraian' => 'Desa Linsowu (2021)', 'triwulan_realisasi' => 1]);
+        RincianN::create(['iku_id' => $iku->id, 'tahun' => 2026, 'uraian' => 'Desa Kalibu (2022)', 'triwulan_realisasi' => 1]);
+        RincianN::create(['iku_id' => $iku->id, 'tahun' => 2026, 'uraian' => 'Desa Laangke (2026)']);
+
+        $notula = Notula::create(['periode_id' => $periode->id]);
+
+        $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
+
+        $this->assertStringContainsString('n = 2 mencakup:', $xml);
+        $this->assertStringContainsString('N = 3 mencakup:', $xml);
+        $this->assertStringContainsString('<m:t xml:space="preserve">2</m:t>', $xml);
+        $this->assertStringContainsString('<m:t xml:space="preserve">3</m:t>', $xml);
+        $this->assertStringNotContainsString('<m:t xml:space="preserve">0</m:t>', $xml);
     }
 
     /**

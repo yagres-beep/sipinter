@@ -459,12 +459,16 @@ class NotulaService
                 'capaian_tw' => $ct?->capaianTriwulanan($tw),
                 'capaian_pk' => $ct?->capaianSetahun($tw),
                 // Untuk rumus "Dasar Hitung" IKU bersatuan Persen (lihat
-                // NotulaBagian1DocxService::formulaPersenOtomatis()) -- n = nilai
-                // MENTAH triwulan berjalan saja (x_realisasi_twN, BUKAN kumulatif,
-                // lihat docblock CapaianTahunan), N = Alokasi Y TW IV (y_alokasi_tw4,
+                // NotulaBagian1DocxService::formulaBaris()) -- n = KUMULATIF
+                // x_realisasi TW I s.d. TW berjalan (sama seperti
+                // CapaianTahunan::realisasiKumulatif() & "item kumulatif s.d. TW ini"
+                // di Verifikasi Capaian), N = Alokasi Y TW IV (y_alokasi_tw4,
                 // konstan sepanjang tahun, SUMBER TUNGGAL sama seperti targetTahunan()
-                // -- x_target/y_target lama TIDAK dipakai lagi di sini).
-                'x_realisasi_tw' => $ct?->{"x_realisasi_tw{$tw}"},
+                // -- x_target/y_target lama TIDAK dipakai lagi di sini). Null bila
+                // belum ada satu pun x_realisasi yang diisi s.d. TW ini.
+                'x_realisasi_kumulatif' => $ct && collect(range(1, $tw))->contains(fn ($n) => $ct->{"x_realisasi_tw{$n}"} !== null)
+                    ? collect(range(1, $tw))->sum(fn ($n) => (float) ($ct->{"x_realisasi_tw{$n}"} ?? 0))
+                    : null,
                 'y_target' => $ct?->y_alokasi_tw4,
             ]];
         });
