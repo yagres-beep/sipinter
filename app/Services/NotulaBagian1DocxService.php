@@ -597,7 +597,14 @@ class NotulaBagian1DocxService
         // KEDUA dst.) yang jadi keterangan di sini -- bukan dasar_hitung utuh lagi,
         // supaya rumusnya tidak tercetak dobel (sekali bersusun di blok_formula, sekali
         // lagi mendatar di sini).
-        $dasarHitungSumber = $formulaKustom !== null ? $formulaKustom['sisa'] : $iku->dasar_hitung;
+        // Untuk IKU % (rumus otomatis), baris rumus ketikan lama di Dasar Hitung manual
+        // (mis. "y = n/N x 100%") ikut dibuang -- rumusnya sudah tercetak bersusun di
+        // blok_formula & "y = ..." sudah dijelaskan di keterangan "dimana:".
+        $dasarHitungSumber = match (true) {
+            $formulaKustom !== null => $formulaKustom['sisa'],
+            $formulaOtomatis !== null => $this->buangBarisRumusManual($iku->dasar_hitung),
+            default => $iku->dasar_hitung,
+        };
         $dasarHitungGabungan = collect([$this->formulaKeterangan($iku, $rekap, $data['periode']), $dasarHitungSumber])
             ->filter(fn ($t) => filled($t))
             ->implode("\n\n");
@@ -703,6 +710,19 @@ class NotulaBagian1DocxService
         }
 
         return ['formula' => $barisPertama, 'sisa' => $sisa !== null && trim($sisa) !== '' ? trim($sisa) : null];
+    }
+
+    /**
+     * Dasar Hitung manual TANPA baris berawalan "y =" (rumus ketikan lama yang
+     * kini dobel dengan rumus otomatis formulaBaris()). Null bila tidak bersisa.
+     */
+    private function buangBarisRumusManual(?string $dasarHitung): ?string
+    {
+        $sisa = collect(preg_split('/\R/u', (string) $dasarHitung))
+            ->reject(fn (string $baris) => preg_match('/^\s*y\s*=/iu', $baris))
+            ->implode("\n");
+
+        return trim($sisa) !== '' ? trim($sisa) : null;
     }
 
     /**
