@@ -40,6 +40,14 @@ class RumusMarkupTest extends TestCase
         $this->assertSame('y = [[n|N]] × 100% = [[5|8]] × 100%', RumusMarkup::dariHtml($this->spanRumus($html)));
     }
 
+    public function test_dariHtml_mempertahankan_pembilang_nol(): void
+    {
+        $rumus = 'y = [[n|N]] × 100% = [[0|1]] × 100%';
+
+        $this->assertSame($rumus, RumusMarkup::dariHtml($this->spanRumus(RumusMarkup::keHtml($rumus))));
+        $this->assertStringContainsString('<m:t xml:space="preserve">0</m:t>', RumusMarkup::keOmml(RumusMarkup::dariHtml($this->spanRumus(RumusMarkup::keHtml($rumus)))));
+    }
+
     public function test_rapikanHtmlTersimpan_membuka_kunci_dan_membulatkan_angka(): void
     {
         $lama = '<span contenteditable="false">'.RumusMarkup::keHtml('y = [[n|N]] × 100% = [[1.00|3.00]] × 100%').'</span>';
