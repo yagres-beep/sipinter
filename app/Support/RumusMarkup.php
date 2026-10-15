@@ -169,7 +169,12 @@ class RumusMarkup
                 ));
                 $gaya = strtolower($anak->getAttribute('style'));
                 // Bagian yang dikosongkan tetap diberi spasi -- POLA butuh isi minimal satu karakter.
-                $isi = fn (int $i) => self::teksBersih($bagian[$i]->textContent) ?: ' ';
+                // Dibandingkan dengan '' (bukan ?:) -- "0" falsy di PHP, pembilang 0 sempat hilang.
+                $isi = function (int $i) use ($bagian): string {
+                    $teks = self::teksBersih($bagian[$i]->textContent);
+
+                    return $teks !== '' ? $teks : ' ';
+                };
 
                 if (str_contains($gaya, 'inline-flex') && count($bagian) === 3) {
                     $hasil .= '[[SUM:'.$isi(2).','.$isi(0).'|';
