@@ -488,7 +488,7 @@ class KompilasiNotula extends Component
         $field = $bagianKe === 2 ? 'bagian2File' : 'bagian3File';
 
         $this->validate([
-            $field => ['required', 'file', 'mimes:'.self::FORMAT_BAGIAN_DIDUKUNG, 'max:10240'],
+            $field => ['required', 'file', 'mimes:'.self::FORMAT_BAGIAN_DIDUKUNG],
         ], [
             "{$field}.mimes" => 'Berkas Bagian '.($bagianKe === 2 ? 'II' : 'III').' harus berformat .docx.',
         ]);

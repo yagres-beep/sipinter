@@ -2,11 +2,13 @@
 
 namespace App\Services;
 
+use App\Models\BagianKustomPoin;
 use App\Models\FolderConfig;
 use App\Models\IkuFolderConfig;
 use App\Models\Kegiatan;
 use App\Models\MasterIku;
 use App\Models\Periode;
+use App\Models\RtlEvaluasi;
 use App\Models\StorageAccount;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -189,10 +191,12 @@ class FolderStructureService
 
         $folderId = $this->findOrCreateFolderCached($namaKategori, $folderId);
 
-        $pakaiSubfolderBulan = in_array($namaKategori, $config->kategoriDenganSubfolderBulan(), true);
-        $bulanDuluan = $config->kategoriUrutanBulanKegiatan($namaKategori) === 'bulan_dulu';
+        // 'kegiatan_dulu' hanya bermakna bila kategori ini memang punya subfolder
+        // per kegiatan; tanpa itu folder Bulan langsung dibuat di dalam kategori.
+        $bulanDuluan = $config->kategoriUrutanBulanKegiatan($namaKategori) === 'bulan_dulu'
+            || ! $config->kategoriPakai($namaKategori, 'subfolder_per_kegiatan');
 
-        if ($pakaiSubfolderBulan && $bulanDuluan) {
+        if ($config->kategoriPakai($namaKategori, 'subfolder_per_bulan') && $bulanDuluan) {
             $folderId = $this->findOrCreateFolderCached($this->namaBulan($periode), $folderId);
         }
 
@@ -461,9 +465,12 @@ class FolderStructureService
      *                                           lookup KATEGORI_KE_FOLDER[$kategoriEnum] — dipakai bagian kustom (RF baru)
      *                                           yang namanya dinamis (mis. "Manajemen Risiko"), bukan salah satu dari 4
      *                                           kategori baku, tapi berkas.kategori di DB tetap nilai enum tetap ('bagian_kustom').
+     * @param  string|null  $namaItem  nama folder "per kegiatan" untuk berkas yang tidak terikat ke
+     *                                 satu Kegiatan (mis. teks poin RTL) — dipakai hanya bila kategorinya
+     *                                 diatur Tim SAKIP dengan subfolder per kegiatan.
      * @return array{drive_file_id: string, storage_account_id: ?int, nama_file: string}
      */
-    public function unggahBerkas(Periode $periode, MasterIku $iku, string $kategoriEnum, string $localPath, ?Kegiatan $kegiatan = null, string $ekstensi = '.pdf', string $mimeType = 'application/pdf', ?string $namaFolderOverride = null, ?string $namaBerkasOverride = null, ?string $subfolder = null): array
+    public function unggahBerkas(Periode $periode, MasterIku $iku, string $kategoriEnum, string $localPath, ?Kegiatan $kegiatan = null, string $ekstensi = '.pdf', string $mimeType = 'application/pdf', ?string $namaFolderOverride = null, ?string $namaBerkasOverride = null, ?string $subfolder = null, ?string $namaItem = null): array
     {
         $namaKategori = $namaFolderOverride
             ?? self::KATEGORI_KE_FOLDER[$kategoriEnum]
@@ -474,23 +481,36 @@ class FolderStructureService
         $config = $this->configUntukIku($iku);
         $tujuanFolderId = $kategoriFolderId;
 
-        if ($kegiatan && in_array($namaKategori, $config->kategoriDenganSubfolderKegiatan(), true)) {
+        $pakaiSubfolderBulan = $config->kategoriPakai($namaKategori, 'subfolder_per_bulan');
+        $kegiatanDulu = $pakaiSubfolderBulan && $config->kategoriUrutanBulanKegiatan($namaKategori) === 'kegiatan_dulu';
+        $namaItem = self::namaOtomatis((string) $namaItem, 150);
+
+        // "Subfolder per kegiatan" yang diatur Tim SAKIP di menu Struktur Folder berlaku
+        // untuk SEMUA kategori, bukan hanya Capaian: bukti Kegiatan memakai folder
+        // kegiatannya (resolveKegiatanFolder), sedangkan bukti yang tidak terikat ke
+        // satu Kegiatan (poin Evaluasi RTL, poin bagian kustom) memakai folder bernama
+        // $namaItem — mis. teks RTL-nya — supaya tidak tercampur langsung di kategori.
+        $pakaiFolderItem = $config->kategoriPakai($namaKategori, 'subfolder_per_kegiatan')
+            && ($kegiatan || $namaItem !== '');
+
+        if ($pakaiFolderItem) {
             // Folder kegiatan dipakai bersama lintas bulan triwulan ini KECUALI kategori
             // ini dipecah ke folder Bulan lebih dulu (Kategori/Bulan/Kegiatan) — di
             // situ tiap bulan memang punya induk sendiri.
-            $bulanDuluan = in_array($namaKategori, $config->kategoriDenganSubfolderBulan(), true)
-                && $config->kategoriUrutanBulanKegiatan($namaKategori) === 'bulan_dulu';
-            $tujuanFolderId = $this->resolveKegiatanFolder($kegiatan, $kategoriFolderId, gabungBulanLain: ! $bulanDuluan);
+            $tujuanFolderId = $kegiatan
+                ? $this->resolveKegiatanFolder($kegiatan, $kategoriFolderId, gabungBulanLain: ! $pakaiSubfolderBulan || $kegiatanDulu)
+                : $this->findOrCreateFolderCached($namaItem, $kategoriFolderId);
+        }
 
-            // Urutan 'kegiatan_dulu': folder Bulan (bila kategori ini juga pakai
-            // subfolder per bulan) SENGAJA belum dibuat oleh resolveKategoriFolder()
-            // di atas — dibuat di sini, DI DALAM folder kegiatan, supaya susunannya
-            // Kategori/Kegiatan/Bulan.
-            if (in_array($namaKategori, $config->kategoriDenganSubfolderBulan(), true)
-                && $config->kategoriUrutanBulanKegiatan($namaKategori) === 'kegiatan_dulu') {
-                $tujuanFolderId = $this->findOrCreateFolderCached($this->namaBulan($periode), $tujuanFolderId);
-            }
+        // Urutan 'kegiatan_dulu': folder Bulan SENGAJA belum dibuat oleh
+        // resolveKategoriFolder() di atas — dibuat di sini, DI DALAM folder kegiatan
+        // (Kategori/Kegiatan/Bulan), atau langsung di kategori bila berkas ini tidak
+        // punya folder kegiatan sama sekali.
+        if ($kegiatanDulu && $config->kategoriPakai($namaKategori, 'subfolder_per_kegiatan')) {
+            $tujuanFolderId = $this->findOrCreateFolderCached($this->namaBulan($periode), $tujuanFolderId);
+        }
 
+        if ($pakaiFolderItem) {
             // Subfolder khusus pilihan Ketua Tim di dalam folder kegiatan (mis.
             // "Undangan", "Dokumentasi"); kosong = langsung di folder kegiatan.
             $namaSubfolder = self::namaOtomatis((string) $subfolder, 100);
@@ -543,6 +563,25 @@ class FolderStructureService
     public function unggahBerkasKegiatan(Kegiatan $kegiatan, string $kategoriEnum, string $localPath, string $ekstensi = '.pdf', string $mimeType = 'application/pdf', ?string $namaBerkasOverride = null, ?string $subfolder = null): array
     {
         return $this->unggahBerkas($kegiatan->periode, $kegiatan->masterIku, $kategoriEnum, $localPath, $kegiatan, $ekstensi, $mimeType, namaBerkasOverride: $namaBerkasOverride, subfolder: $subfolder);
+    }
+
+    /**
+     * Unggah bukti evaluasi satu poin RTL ke kategori Evaluasi-RTL — dalam folder
+     * bernama teks RTL-nya bila Tim SAKIP mengaktifkan subfolder per kegiatan di kategori itu.
+     */
+    public function unggahBerkasRtl(RtlEvaluasi $poin, string $localPath, ?string $namaBerkasOverride = null): array
+    {
+        return $this->unggahBerkas($poin->periode, $poin->masterIku, 'evaluasi_rtl', $localPath, namaBerkasOverride: $namaBerkasOverride, namaItem: $poin->rtl_teks);
+    }
+
+    /**
+     * Unggah bukti satu poin bagian kustom ke folder bernama bagiannya (mis. "Manajemen
+     * Risiko") — dalam folder bernama teks poinnya bila Tim SAKIP mengaktifkan subfolder
+     * per kegiatan di kategori itu.
+     */
+    public function unggahBerkasBagianKustom(BagianKustomPoin $poin, string $localPath, ?string $namaBerkasOverride = null): array
+    {
+        return $this->unggahBerkas($poin->periode, $poin->masterIku, 'bagian_kustom', $localPath, namaFolderOverride: $poin->bagianKustom->nama, namaBerkasOverride: $namaBerkasOverride, namaItem: $poin->teks);
     }
 
     // ================================================================

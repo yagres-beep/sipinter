@@ -32,7 +32,7 @@ class TemplateNotula extends Component
     protected function rules(): array
     {
         return [
-            'templateFile' => ['required', 'file', 'mimes:docx', 'max:5120'],
+            'templateFile' => ['required', 'file', 'mimes:docx'],
         ];
     }
 

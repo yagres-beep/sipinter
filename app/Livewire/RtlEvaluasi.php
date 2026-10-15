@@ -287,7 +287,7 @@ class RtlEvaluasi extends Component
         $this->validate([
             "evaluasi.{$rtlId}.realisasi" => ['required', 'string'],
             "evaluasi.{$rtlId}.status_cocok" => ['required', 'in:cocok,perlu_ditinjau,tidak_cocok'],
-            "evaluasi.{$rtlId}.bukti.*" => ['file', 'mimes:pdf', 'max:10240'],
+            "evaluasi.{$rtlId}.bukti.*" => ['file', 'mimes:pdf'],
         ], [], [
             "evaluasi.{$rtlId}.realisasi" => 'realisasi',
             "evaluasi.{$rtlId}.status_cocok" => 'status kecocokan',
@@ -317,7 +317,7 @@ class RtlEvaluasi extends Component
 
             try {
                 $localFullPath = Storage::disk('local')->path($path);
-                $hasilDrive = $folderService->unggahBerkas($poin->periode, $poin->masterIku, 'evaluasi_rtl', $localFullPath);
+                $hasilDrive = $folderService->unggahBerkasRtl($poin, $localFullPath);
                 $berkas->update($hasilDrive);
             } catch (\Throwable $e) {
                 Log::warning('Gagal mengunggah bukti evaluasi RTL ke Google Drive, disimpan lokal saja: '.$e->getMessage());

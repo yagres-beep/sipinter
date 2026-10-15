@@ -227,7 +227,7 @@ class MasterIku extends Component
     public function pratinjauExcel(): void
     {
         $this->validate([
-            'excelFile' => ['required', 'file', 'mimes:xlsx', 'max:5120'],
+            'excelFile' => ['required', 'file', 'mimes:xlsx'],
             'tahunImpor' => ['required', 'integer', 'min:2000', 'max:2100'],
             'modeImpor' => ['required', 'in:insert,upsert'],
         ]);

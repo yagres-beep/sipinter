@@ -79,8 +79,23 @@ trait PolaFolderHierarki
      */
     public function kategoriUrutanBulanKegiatan(string $namaKategori): string
     {
-        $kategori = collect($this->kategoriList())->firstWhere('nama', $namaKategori);
+        return $this->kategoriBernama($namaKategori)['urutan_bulan_kegiatan'] ?? 'bulan_dulu';
+    }
 
-        return $kategori['urutan_bulan_kegiatan'] ?? 'bulan_dulu';
+    /**
+     * Apakah kategori $namaKategori dikonfigurasi Tim SAKIP dengan $opsi aktif
+     * ('subfolder_per_kegiatan' / 'subfolder_per_bulan'). Nama dicocokkan tanpa
+     * peduli huruf besar/kecil — nama folder bagian kustom (mis. "Manajemen Risiko")
+     * bisa berbeda kapitalisasi dengan yang tercatat di pola.
+     */
+    public function kategoriPakai(string $namaKategori, string $opsi): bool
+    {
+        return (bool) ($this->kategoriBernama($namaKategori)[$opsi] ?? false);
+    }
+
+    protected function kategoriBernama(string $namaKategori): ?array
+    {
+        return collect($this->kategoriList())
+            ->first(fn ($k) => mb_strtolower((string) ($k['nama'] ?? '')) === mb_strtolower($namaKategori));
     }
 }

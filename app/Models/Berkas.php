@@ -206,14 +206,8 @@ class Berkas extends Model
             $ref instanceof Kegiatan => $folderService->unggahBerkasKegiatan(
                 $ref, $this->kategori, $localPath, namaBerkasOverride: $namaDasar, subfolder: $this->subfolder,
             ),
-            $ref instanceof RtlEvaluasi => $folderService->unggahBerkas(
-                $ref->periode, $ref->masterIku, 'evaluasi_rtl', $localPath, namaBerkasOverride: $namaDasar,
-            ),
-            $ref instanceof BagianKustomPoin => $folderService->unggahBerkas(
-                $ref->periode, $ref->masterIku, 'bagian_kustom', $localPath,
-                namaFolderOverride: $ref->bagianKustom->nama,
-                namaBerkasOverride: $namaDasar,
-            ),
+            $ref instanceof RtlEvaluasi => $folderService->unggahBerkasRtl($ref, $localPath, namaBerkasOverride: $namaDasar),
+            $ref instanceof BagianKustomPoin => $folderService->unggahBerkasBagianKustom($ref, $localPath, namaBerkasOverride: $namaDasar),
             default => null,
         };
 

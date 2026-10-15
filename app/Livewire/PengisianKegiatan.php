@@ -502,8 +502,8 @@ class PengisianKegiatan extends Component
 
         $validator = \Illuminate\Support\Facades\Validator::make(
             ['bukti' => $daftarBerkas],
-            ['bukti.*' => ['file', 'mimes:pdf', 'max:10240']],
-            ['bukti.*.mimes' => 'Bukti capaian harus berupa PDF.', 'bukti.*.max' => 'Ukuran tiap bukti capaian maksimal 10 MB.']
+            ['bukti.*' => ['file', 'mimes:pdf']],
+            ['bukti.*.mimes' => 'Bukti capaian harus berupa PDF.']
         );
 
         if ($validator->fails()) {
@@ -1367,8 +1367,8 @@ class PengisianKegiatan extends Component
 
         $validator = \Illuminate\Support\Facades\Validator::make(
             ['bukti' => $file],
-            ['bukti' => ['file', 'mimes:pdf', 'max:10240']],
-            ['bukti.mimes' => 'Berkas pengganti harus berupa PDF.', 'bukti.max' => 'Ukuran berkas pengganti maksimal 10 MB.']
+            ['bukti' => ['file', 'mimes:pdf']],
+            ['bukti.mimes' => 'Berkas pengganti harus berupa PDF.']
         );
 
         if ($validator->fails()) {
@@ -1408,7 +1408,8 @@ class PengisianKegiatan extends Component
             $lokal = Storage::disk('local')->path($path);
             $hasilDrive = match (true) {
                 $ref instanceof Kegiatan => $folderService->unggahBerkasKegiatan($ref, $lama->kategori, $lokal, namaBerkasOverride: $namaBerkas, subfolder: $lama->subfolder),
-                $ref instanceof BagianKustomPoin => $folderService->unggahBerkas($ref->periode, $ref->masterIku, 'bagian_kustom', $lokal, namaFolderOverride: $ref->bagianKustom->nama, namaBerkasOverride: $namaBerkas),
+                $ref instanceof BagianKustomPoin => $folderService->unggahBerkasBagianKustom($ref, $lokal, namaBerkasOverride: $namaBerkas),
+                $ref instanceof RtlEvaluasiModel => $folderService->unggahBerkasRtl($ref, $lokal, namaBerkasOverride: $namaBerkas),
                 default => $folderService->unggahBerkas($ref->periode, $ref->masterIku, $lama->kategori, $lokal, namaBerkasOverride: $namaBerkas),
             };
             $baru->update($hasilDrive);
@@ -1506,8 +1507,8 @@ class PengisianKegiatan extends Component
         $daftarBerkas = array_values(array_filter(is_array($nilai) ? $nilai : [$nilai]));
         $validator = \Illuminate\Support\Facades\Validator::make(
             ['bukti' => $daftarBerkas],
-            ['bukti' => ['required', 'array'], 'bukti.*' => ['file', 'mimes:pdf', 'max:10240']],
-            ['bukti.*.mimes' => 'Bukti dukung harus berupa PDF.', 'bukti.*.max' => 'Ukuran tiap bukti dukung maksimal 10 MB.']
+            ['bukti' => ['required', 'array'], 'bukti.*' => ['file', 'mimes:pdf']],
+            ['bukti.*.mimes' => 'Bukti dukung harus berupa PDF.']
         );
 
         if ($validator->fails()) {
@@ -1562,7 +1563,7 @@ class PengisianKegiatan extends Component
                 $lokal = Storage::disk('local')->path($path);
                 $hasilDrive = $kategori === 'capaian'
                     ? $folderService->unggahBerkasKegiatan($ref, 'capaian', $lokal, namaBerkasOverride: $namaBerkas)
-                    : $folderService->unggahBerkas($ref->periode, $ref->masterIku, 'evaluasi_rtl', $lokal, namaBerkasOverride: $namaBerkas);
+                    : $folderService->unggahBerkasRtl($ref, $lokal, namaBerkasOverride: $namaBerkas);
                 $berkas->update($hasilDrive);
                 $this->notifikasiHasilUnggah($file->getClientOriginalName(), $konteks, true);
             } catch (\Throwable $e) {
@@ -3192,7 +3193,7 @@ class PengisianKegiatan extends Component
             $rules["blocks.{$i}.bukti"] = ($terkunci || $adaBuktiLama)
                 ? ['nullable', 'array']
                 : ['required', 'array', 'min:1'];
-            $rules["blocks.{$i}.bukti.*"] = ['file', 'mimes:pdf', 'max:10240'];
+            $rules["blocks.{$i}.bukti.*"] = ['file', 'mimes:pdf'];
         }
 
         // Bagian kustom (mis. Manajemen Risiko): poin kosong dilewati saat disimpan
@@ -3213,14 +3214,14 @@ class PengisianKegiatan extends Component
                     : ['nullable', 'array'];
             }
 
-            $rules["bagianKustomBlocks.{$bagian->id}.*.bukti.*"] = ['file', 'mimes:pdf', 'max:10240'];
+            $rules["bagianKustomBlocks.{$bagian->id}.*.bukti.*"] = ['file', 'mimes:pdf'];
         }
 
         // RF-29/31: poin RTL triwulan sebelumnya cukup ditampilkan + tempat unggah bukti —
         // WAJIB SEMUA (bukan cuma satu) sudah punya bukti sebelum bisa diajukan, tapi
         // aturan itu hanya digerbang pada bulan TERAKHIR triwulan (dicek di buatValidator()).
         foreach ($this->evaluasi as $rtlId => $data) {
-            $rules["evaluasi.{$rtlId}.bukti.*"] = ['file', 'mimes:pdf', 'max:10240'];
+            $rules["evaluasi.{$rtlId}.bukti.*"] = ['file', 'mimes:pdf'];
         }
 
         // RF-32/33/34: RTL triwulan berikutnya hanya boleh (dan wajib) ditetapkan pada bulan
@@ -3510,7 +3511,7 @@ class PengisianKegiatan extends Component
                 $bagian[2] === 'tahapan_survei' && $kosong => "{$label}: tahapan belum dipilih (wajib bila folder kegiatan dipisah ke beberapa tahapan).",
                 $bagian[2] === 'tahapan_survei' => "{$label}: {$pesanAsli}",
                 $bagian[2] === 'nama_folder' => "{$label}: nama folder terlalu panjang (maksimal 150 karakter).",
-                $bagian[2] === 'bukti' && isset($bagian[3]) => "{$label}: berkas bukti ke-".((int) $bagian[3] + 1).' harus PDF berukuran maksimal 10 MB.',
+                $bagian[2] === 'bukti' && isset($bagian[3]) => "{$label}: berkas bukti ke-".((int) $bagian[3] + 1).' harus berupa PDF.',
                 $bagian[2] === 'bukti' => "{$label}: bukti capaian (PDF) belum diunggah.",
                 default => "{$label}: {$pesanAsli}",
             };
@@ -3526,7 +3527,7 @@ class PengisianKegiatan extends Component
             $label = "{$nama} poin #".((int) $bagian[2] + 1);
 
             return match (true) {
-                ($bagian[3] ?? null) === 'bukti' && isset($bagian[4]) => "{$label}: berkas bukti ke-".((int) $bagian[4] + 1).' harus PDF berukuran maksimal 10 MB.',
+                ($bagian[3] ?? null) === 'bukti' && isset($bagian[4]) => "{$label}: berkas bukti ke-".((int) $bagian[4] + 1).' harus berupa PDF.',
                 ($bagian[3] ?? null) === 'bukti' => "{$label}: bukti dukung (PDF) belum diunggah.",
                 default => "{$label}: {$pesanAsli}",
             };
@@ -3539,7 +3540,7 @@ class PengisianKegiatan extends Component
 
             $teks = $this->rtlTriwulanBerjalan()->firstWhere('id', (int) $bagian[1])?->rtl_teks;
 
-            return 'Evaluasi RTL'.($teks ? ' "'.Str::limit($teks, 40).'"' : '').': berkas bukti realisasi harus PDF berukuran maksimal 10 MB.';
+            return 'Evaluasi RTL'.($teks ? ' "'.Str::limit($teks, 40).'"' : '').': berkas bukti realisasi harus berupa PDF.';
         }
 
         if ($kunci === 'rtlBaru') {
@@ -3891,7 +3892,7 @@ class PengisianKegiatan extends Component
                 try {
                     $this->streamProgresUnggah($file->getClientOriginalName(), 'bukti evaluasi RTL');
                     $localFullPath = Storage::disk('local')->path($path);
-                    $hasilDrive = $folderService->unggahBerkas($poin->periode, $poin->masterIku, 'evaluasi_rtl', $localFullPath, namaBerkasOverride: $namaBerkas);
+                    $hasilDrive = $folderService->unggahBerkasRtl($poin, $localFullPath, namaBerkasOverride: $namaBerkas);
                     $berkas->update($hasilDrive);
                     $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti evaluasi RTL', true);
                 } catch (\Throwable $e) {
@@ -4039,11 +4040,7 @@ class PengisianKegiatan extends Component
                     try {
                         $this->streamProgresUnggah($file->getClientOriginalName(), "bukti {$bagian->nama}");
                         $localFullPath = Storage::disk('local')->path($path);
-                        $hasilDrive = $folderService->unggahBerkas(
-                            $periode, $iku, 'bagian_kustom', $localFullPath,
-                            namaFolderOverride: $bagian->nama,
-                            namaBerkasOverride: $namaBerkas,
-                        );
+                        $hasilDrive = $folderService->unggahBerkasBagianKustom($poin, $localFullPath, namaBerkasOverride: $namaBerkas);
                         $berkas->update($hasilDrive);
                         $this->notifikasiHasilUnggah($file->getClientOriginalName(), "bukti {$bagian->nama}", true);
                     } catch (\Throwable $e) {

@@ -538,13 +538,16 @@ class FolderConfigManager extends Component
         $baris[] = ['teks' => '📁 2026', 'indent' => $indent, 'tipe' => 'folder'];
 
         foreach ($hierarki as $h) {
-            if ($h['level'] === 'tahun' || ! $h['aktif']) {
+            // "bulan" pada data lama tidak lagi jadi tingkat hierarki (lihat
+            // PolaFolderHierarki::hierarkiAktif()) — pratinjau mengikuti unggahan sungguhan.
+            if (in_array($h['level'], ['tahun', 'bulan'], true) || ! $h['aktif']) {
                 continue;
             }
 
             $label = match ($h['level']) {
                 'triwulan' => 'Triwulan III',
-                'iku' => 'IKU 1131',
+                // Sama seperti FolderStructureService::namaFolderIku(): "<kode>. <indikator>".
+                'iku' => '1131. <Indikator Kinerja Utama>',
                 // Tingkat kustom (RF-15) memakai namanya sendiri apa adanya sebagai folder tetap.
                 default => $h['level'],
             };

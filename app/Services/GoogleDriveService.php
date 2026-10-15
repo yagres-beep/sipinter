@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\StorageAccount;
 use Google\Client as GoogleClient;
+use Google\Http\MediaFileUpload;
 use Google\Service\Drive;
 use Google\Service\Drive\DriveFile;
 use Google\Service\Drive\Permission;
@@ -37,6 +38,14 @@ class GoogleDriveService
     protected ?Drive $drive = null;
 
     /**
+     * Berkas di atas ukuran ini diunggah bertahap (resumable, per potongan 8 MB)
+     * alih-alih dibaca utuh ke memori — unggahan bukti tidak lagi dibatasi ukuran,
+     * jadi berkas ratusan MB tidak boleh menabrak memory_limit PHP. Harus kelipatan
+     * 256 KB (syarat Drive API untuk unggahan resumable).
+     */
+    protected const UKURAN_POTONGAN_UNGGAH = 8 * 1024 * 1024;
+
+    /**
      * Unggah satu berkas lokal ke sebuah folder Drive.
      *
      * @param  string  $localPath  Path berkas di disk lokal server (mis. hasil upload sementara Livewire).
@@ -58,13 +67,18 @@ class GoogleDriveService
         ]);
 
         /** @var DriveFile $uploaded */
-        $uploaded = $this->panggilApi(fn () => $this->drive()->files->create($metadata, [
-            'data' => file_get_contents($localPath),
-            'mimeType' => $mimeType,
-            'uploadType' => 'multipart',
-            // 'fields' membatasi respons API hanya ke kolom yang kita perlukan (hemat kuota API).
-            'fields' => 'id, name, webViewLink, size',
-        ]), "mengunggah berkas \"{$filename}\"");
+        $uploaded = $this->panggilApi(
+            fn () => filesize($localPath) > self::UKURAN_POTONGAN_UNGGAH
+                ? $this->unggahBertahap($localPath, $metadata, $mimeType)
+                : $this->drive()->files->create($metadata, [
+                    'data' => file_get_contents($localPath),
+                    'mimeType' => $mimeType,
+                    'uploadType' => 'multipart',
+                    // 'fields' membatasi respons API hanya ke kolom yang kita perlukan (hemat kuota API).
+                    'fields' => 'id, name, webViewLink, size',
+                ]),
+            "mengunggah berkas \"{$filename}\""
+        );
 
         return [
             'id' => $uploaded->getId(),
@@ -72,6 +86,45 @@ class GoogleDriveService
             'web_view_link' => $uploaded->getWebViewLink(),
             'size_bytes' => (int) $uploaded->getSize(),
         ];
+    }
+
+    /**
+     * Unggahan resumable per potongan UKURAN_POTONGAN_UNGGAH — pemakaian memori tetap
+     * kecil berapa pun ukuran berkasnya. Batas waktu eksekusi PHP dilepas selama
+     * unggahan berjalan karena berkas besar bisa memakan waktu lebih lama dari
+     * max_execution_time.
+     */
+    protected function unggahBertahap(string $localPath, DriveFile $metadata, string $mimeType): DriveFile
+    {
+        @set_time_limit(0);
+
+        $client = $this->client();
+        $client->setDefer(true);
+
+        try {
+            $request = $this->drive()->files->create($metadata, ['fields' => 'id, name, webViewLink, size']);
+            $media = new MediaFileUpload($client, $request, $mimeType, null, true, self::UKURAN_POTONGAN_UNGGAH);
+            $media->setFileSize(filesize($localPath));
+
+            $handle = fopen($localPath, 'rb');
+            $hasil = false;
+
+            try {
+                while ($hasil === false && ! feof($handle)) {
+                    $hasil = $media->nextChunk(stream_get_contents($handle, self::UKURAN_POTONGAN_UNGGAH));
+                }
+            } finally {
+                fclose($handle);
+            }
+        } finally {
+            $client->setDefer(false);
+        }
+
+        if (! $hasil instanceof DriveFile) {
+            throw new RuntimeException('Unggahan bertahap ke Google Drive tidak selesai.');
+        }
+
+        return $hasil;
     }
 
     /**
