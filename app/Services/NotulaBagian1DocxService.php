@@ -305,6 +305,40 @@ class NotulaBagian1DocxService
     }
 
     /**
+     * Isi macro dengan TAUTAN SUNGGUHAN (bisa diklik, biru bergaris bawah seperti
+     * hyperlink Word biasa), bukan teks URL polos -- lewat field HYPERLINK, yang
+     * tidak butuh relasi (document.xml.rels) sehingga aman juga di dalam blok IKU
+     * yang digandakan lewat TemplateProcessor sementara. Sama seperti setFormula(),
+     * nilainya "memutus" run tempat macro berada: menutup <w:t>/<w:r>, menyisipkan
+     * run-run field, lalu membuka <w:r>/<w:t> kosong baru supaya XML tetap sah.
+     *
+     * Nilai yang bukan URL http(s) (mis. diketik bebas) jatuh ke set() biasa.
+     */
+    private function setTautan(TemplateProcessor $p, string $nama, ?string $url): void
+    {
+        $url = trim((string) $url);
+        if (! preg_match('#^https?://\S+$#i', $url)) {
+            $this->set($p, $nama, $url !== '' ? $url : null);
+
+            return;
+        }
+
+        $teks = htmlspecialchars($url, ENT_QUOTES | ENT_XML1);
+        // Tanda kutip di dalam instrText HYPERLINK "..." harus di-encode supaya
+        // argumen field tidak terpotong.
+        $target = htmlspecialchars(str_replace('"', '%22', $url), ENT_QUOTES | ENT_XML1);
+        $gaya = '<w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr>';
+
+        $p->setValue($nama, '</w:t></w:r>'
+            .'<w:r><w:fldChar w:fldCharType="begin"/></w:r>'
+            .'<w:r><w:instrText xml:space="preserve"> HYPERLINK "'.$target.'" </w:instrText></w:r>'
+            .'<w:r><w:fldChar w:fldCharType="separate"/></w:r>'
+            .'<w:r>'.$gaya.'<w:t xml:space="preserve">'.$teks.'</w:t></w:r>'
+            .'<w:r><w:fldChar w:fldCharType="end"/></w:r>'
+            .'<w:r><w:t xml:space="preserve">', -1);
+    }
+
+    /**
      * Isi {{formula_capaian}} dengan pecahan bersusun SUNGGUHAN (OOXML Math, lihat
      * App\Support\RumusMarkup::keOmml()) -- BEDA dari set() biasa karena <m:oMath>
      * TIDAK sah sebagai isi <w:t> (macro-nya ada di dalam satu <w:t> milik satu
@@ -391,7 +425,7 @@ class NotulaBagian1DocxService
         // Satu token global dipakai berulang di setiap blok IKU (linknya sama untuk
         // seluruh IKU pada triwulan yang sama) -- diisi SEKALI di sini, bukan per IKU,
         // karena setValue() sudah mengganti SEMUA kemunculannya di seluruh dokumen.
-        $this->set($p, 'lampiran_basis_data', $notula->link_lampiran_basis_data);
+        $this->setTautan($p, 'lampiran_basis_data', $notula->linkLampiranBasisDataEfektif());
     }
 
     /**
@@ -611,19 +645,19 @@ class NotulaBagian1DocxService
         $dasarHitungTeks = RumusMarkup::keTeksPolos($dasarHitungGabungan);
         $dasarHitung = trim(($dasarHitungTeks ?: '').($iku->basis_data ? ' Basis Data: '.$iku->basis_data : ''));
         $this->set($sub, 'dasar_hitung', $dasarHitung !== '' ? $dasarHitung : null);
-        $this->set($sub, 'bukti_realisasi', $linkFolder);
+        $this->setTautan($sub, 'bukti_realisasi', $linkFolder);
         // Bagian 4 Isian Kegiatan (Evaluasi RTL): poin RTL yang DIRENCANAKAN untuk
         // triwulan notula ini -- isinya sama dengan {{rtl}}, nama terpisah supaya jelas
         // di template. Bagian 5 (RTL triwulan berikutnya, TW IV -> TW I tahun depan):
         // {{rtl_berikutnya}} + batas waktunya (akhir triwulan berikutnya).
         $rtlBerikutnyaIku = ($data['rtlBerikutnyaPerIku'] ?? collect())->get($iku->id, collect());
         $this->set($sub, 'rtl_evaluasi', $rtlTeks);
-        $this->set($sub, 'bukti_rtl_evaluasi', ($data['linkFolderEvaluasiRtlPerIku'] ?? collect())->get($iku->id));
+        $this->setTautan($sub, 'bukti_rtl_evaluasi', ($data['linkFolderEvaluasiRtlPerIku'] ?? collect())->get($iku->id));
         $this->set($sub, 'rtl_berikutnya', $this->daftarBernomor($rtlBerikutnyaIku->pluck('rtl_teks')->filter()));
         $this->set($sub, 'batas_waktu_rtl_berikutnya', $rtlBerikutnyaIku->isNotEmpty()
             ? $this->akhirTriwulan($data['tahunTwBerikutnya'], $data['twBerikutnya'])->translatedFormat('F Y')
             : null);
-        $this->set($sub, 'bukti_rtl_sebelumnya', $rtlSebelumnyaIku->isNotEmpty() ? $linkFolderTwSebelumnya : null);
+        $this->setTautan($sub, 'bukti_rtl_sebelumnya',$rtlSebelumnyaIku->isNotEmpty() ? $linkFolderTwSebelumnya : null);
         $this->set($sub, 'penjelasan_lainnya', $capaian?->catatan);
 
         return $this->getMainPart($sub);
@@ -1102,7 +1136,16 @@ class NotulaBagian1DocxService
             $ref->setValue(null, $nilai);
         }
 
-        return new TemplateProcessor($templatePath);
+        $processor = new TemplateProcessor($templatePath);
+
+        // Word memecah macro yang ditandai salah eja (mis. "{{" | "tahun" | "}} ")
+        // jadi beberapa run; saat PhpWord menyatukannya, spasi di ekor run terakhir
+        // pindah ke <w:t> run PERTAMA yang tidak bertanda xml:space="preserve" --
+        // Word/LibreOffice lalu membuang spasinya ("IKU 2026dapat dilihat").
+        // Semua <w:t> polos ditandai preserve; tampilan teks lain tidak berubah.
+        $this->setMainPart($processor, str_replace('<w:t>', '<w:t xml:space="preserve">', $this->getMainPart($processor)));
+
+        return $processor;
     }
 
     private function getMainPart(TemplateProcessor $p): string

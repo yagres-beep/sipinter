@@ -15,6 +15,7 @@ use App\Models\RincianN;
 use App\Models\Role;
 use App\Models\RtlEvaluasi;
 use App\Models\User;
+use App\Services\FolderStructureService;
 use App\Services\LibreOfficeConversionService;
 use App\Services\NotulaBagian1DocxService;
 use App\Services\NotulaService;
@@ -849,6 +850,171 @@ class NotulaDownloadTest extends TestCase
         $this->assertStringContainsString('<m:t xml:space="preserve">2</m:t>', $xml);
         $this->assertStringContainsString('<m:t xml:space="preserve">3</m:t>', $xml);
         $this->assertStringNotContainsString('<m:t xml:space="preserve">0</m:t>', $xml);
+    }
+
+    /**
+     * Unduhan .docx = notula LENGKAP: Bagian I dari pratinjau tersimpan, Bagian II dari
+     * .docx ASLI unggahan (gayanya dipertahankan, tidak lewat HTML), Bagian III yang
+     * belum punya .docx asli (unggahan lama) dari HTML hasil konversinya.
+     */
+    public function test_unduh_docx_notula_lengkap_menyisipkan_bagian2_docx_asli_dan_bagian3_html_lama(): void
+    {
+        if (! is_file((string) config('services.libreoffice.binary_path'))) {
+            $this->markTestSkipped('LibreOffice tidak terpasang.');
+        }
+
+        $this->loginSebagai('Tim SAKIP');
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 4, 'triwulan' => 2, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+
+        $bagian2 = tempnam(sys_get_temp_dir(), 'b2_').'.docx';
+        $zip = new ZipArchive;
+        $zip->open($bagian2, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+        $w = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+        $zip->addFromString('[Content_Types].xml', '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>');
+        $zip->addFromString('_rels/.rels', '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>');
+        $zip->addFromString('word/_rels/document.xml.rels', '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>');
+        $zip->addFromString('word/styles.xml', '<?xml version="1.0"?><w:styles '.$w.'><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr></w:style></w:styles>');
+        $zip->addFromString('word/document.xml', '<?xml version="1.0"?><w:document '.$w.'><w:body><w:p><w:r><w:t>Isi Bagian Dua Asli</w:t></w:r></w:p><w:sectPr><w:pgSz w:w="11906" w:h="16838"/></w:sectPr></w:body></w:document>');
+        $zip->close();
+
+        $notula = Notula::create([
+            'periode_id' => $periode->id,
+            'bagian1_html' => '<p>Isi Bagian Satu</p><p>{{bagian_2}}</p><p>{{bagian_3}}</p><p>Akhir Bagian Satu</p>',
+            'bagian2_html' => '<p>HTML Bagian Dua (tidak dipakai)</p>',
+            'bagian2_docx' => base64_encode((string) file_get_contents($bagian2)),
+            'bagian3_html' => '<p>Isi Bagian Tiga Lama</p>',
+        ]);
+        @unlink($bagian2);
+
+        $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
+
+        libxml_use_internal_errors(true);
+        $this->assertTrue((new \DOMDocument)->loadXML($xml), 'document.xml notula lengkap harus XML yang sah.');
+        $teks = strip_tags(str_replace('</w:p>', "\n", $xml));
+        $this->assertMatchesRegularExpression('/Isi Bagian Satu.*Isi Bagian Dua Asli.*Isi Bagian Tiga Lama.*Akhir Bagian Satu/s', $teks);
+        $this->assertStringNotContainsString('HTML Bagian Dua', $teks);
+        $this->assertStringNotContainsString('SIPINTERBAGIAN', $xml);
+        $this->assertStringNotContainsString('{{bagian_', $teks);
+    }
+
+    /**
+     * PDF notula dibuat dari .docx lengkap lewat LibreOffice (isi sama dengan unduhan
+     * .docx); bila LibreOffice gagal, otomatis jatuh ke dompdf -- PDF tetap jadi.
+     */
+    public function test_pdf_notula_jatuh_ke_dompdf_bila_libreoffice_gagal(): void
+    {
+        config(['services.libreoffice.pdf_notula' => true]);
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 4, 'triwulan' => 2, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $notula = Notula::create(['periode_id' => $periode->id, 'bagian1_html' => '<p>Isi Bagian Satu</p>']);
+
+        $this->mock(LibreOfficeConversionService::class, function ($mock) {
+            $mock->shouldReceive('convertHtmlToDocx')->andThrow(new \RuntimeException('LibreOffice mati'));
+        });
+
+        $path = storage_path('app/private/uji-pdf-'.uniqid().'.pdf');
+        app(NotulaService::class)->renderPratinjauPdf($notula, $path);
+
+        $this->assertStringStartsWith('%PDF-', (string) file_get_contents($path));
+        @unlink($path);
+    }
+
+    public function test_pdf_notula_dari_docx_lengkap_lewat_libreoffice(): void
+    {
+        if (! is_file((string) config('services.libreoffice.binary_path'))) {
+            $this->markTestSkipped('LibreOffice tidak terpasang.');
+        }
+        config(['services.libreoffice.pdf_notula' => true]);
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 4, 'triwulan' => 2, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $notula = Notula::create([
+            'periode_id' => $periode->id,
+            'bagian1_html' => '<p>Isi Bagian Satu</p><p>{{bagian_2}}</p>',
+            'bagian2_html' => '<p>Isi Bagian Dua Lewat HTML</p>',
+        ]);
+
+        $path = storage_path('app/private/uji-pdf-'.uniqid().'.pdf');
+        app(NotulaService::class)->renderPratinjauPdf($notula, $path);
+        $pdf = (string) file_get_contents($path);
+        @unlink($path);
+
+        $this->assertStringStartsWith('%PDF-', $pdf);
+        // LibreOffice menulis Producer-nya sendiri -- bukti PDF bukan dari dompdf.
+        $this->assertStringContainsString('LibreOffice', $pdf);
+    }
+
+    /**
+     * Link Lampiran Basis Data IKU berlaku per tahun: notula yang belum mengisinya
+     * memakai link notula lain di tahun yang SAMA (bukan tahun lain).
+     */
+    public function test_link_lampiran_basis_data_kosong_memakai_link_triwulan_lain_tahun_sama(): void
+    {
+        $tw2 = Periode::create(['tahun' => 2026, 'bulan' => 4, 'triwulan' => 2, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $tw3 = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $tahunLalu = Periode::create(['tahun' => 2025, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+
+        Notula::create(['periode_id' => $tahunLalu->id, 'link_lampiran_basis_data' => 'https://contoh.test/2025']);
+        $notulaTw2 = Notula::create(['periode_id' => $tw2->id]);
+
+        $this->assertNull($notulaTw2->linkLampiranBasisDataEfektif());
+
+        Notula::create(['periode_id' => $tw3->id, 'link_lampiran_basis_data' => 'https://contoh.test/2026']);
+        $this->assertSame('https://contoh.test/2026', $notulaTw2->fresh()->linkLampiranBasisDataEfektif());
+
+        $notulaTw2->update(['link_lampiran_basis_data' => 'https://contoh.test/khusus-tw2']);
+        $this->assertSame('https://contoh.test/khusus-tw2', $notulaTw2->fresh()->linkLampiranBasisDataEfektif());
+    }
+
+    /**
+     * Semua <w:t> hasil generate bertanda xml:space="preserve" -- macro yang dipecah Word
+     * ("{{" | "tahun" | "}} ") disatukan PhpWord ke run pertama; tanpa preserve, spasi
+     * setelah macro dibuang ("IKU 2026dapat dilihat").
+     */
+    public function test_docx_bagian1_spasi_setelah_macro_dipertahankan(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 4, 'triwulan' => 2, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $notula = Notula::create(['periode_id' => $periode->id]);
+
+        $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
+
+        $this->assertNotSame('', $xml);
+        $this->assertStringNotContainsString('<w:t>', $xml);
+    }
+
+    /**
+     * Variabel tautan ({{lampiran_basis_data}}, {{bukti_realisasi}}, dst.) dicetak
+     * sebagai HYPERLINK sungguhan (bisa diklik, biru bergaris bawah), bukan teks URL
+     * polos -- dan "&" di URL tetap di-escape supaya document.xml tetap sah.
+     */
+    public function test_docx_bagian1_variabel_tautan_dicetak_sebagai_hyperlink(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $iku = MasterIku::create([
+            'kode' => '3012', 'indikator' => 'Indikator Uji Tautan', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
+            'sasaran' => 'Sasaran Uji Tautan',
+        ]);
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 6, 'triwulan' => 2, 'bulan_ke' => 3, 'flag_bulan_terlewat' => false]);
+        $this->verifikasiCapaian($iku, $periode);
+
+        Kegiatan::create([
+            'iku_id' => $iku->id, 'periode_id' => $periode->id, 'uraian_kegiatan' => 'Kegiatan uji tautan',
+            'jenis' => 'bukan_survei_sensus', 'status_dokumen' => Kegiatan::STATUS_DIVERIFIKASI,
+        ]);
+
+        $this->mock(FolderStructureService::class, function ($mock) {
+            $mock->shouldReceive('linkKategoriIku', 'linkBuktiDukungIku')->andReturn('https://drive.google.com/drive/folders/iku-uji?usp=drive_link&x=1');
+        });
+
+        $notula = Notula::create(['periode_id' => $periode->id]);
+
+        $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
+        libxml_use_internal_errors(true);
+        $this->assertTrue((new \DOMDocument)->loadXML($xml), 'document.xml harus tetap well-formed setelah tautan disisipkan.');
+        $this->assertStringContainsString(' HYPERLINK "https://drive.google.com/drive/folders/iku-uji?usp=drive_link&amp;x=1" ', $xml);
+        $this->assertStringContainsString('<w:u w:val="single"/></w:rPr><w:t xml:space="preserve">https://drive.google.com/drive/folders/iku-uji?usp=drive_link&amp;x=1</w:t>', $xml);
     }
 
     /**

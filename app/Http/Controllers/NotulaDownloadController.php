@@ -107,19 +107,19 @@ class NotulaDownloadController extends Controller
     }
 
     /**
-     * Unduh Bagian I sebagai .docx ASLI (bukan panduan statis) — dibangun dari isi
-     * pratinjau yang sudah disunting (bagian1_html), sumber yang SAMA dengan PDF
-     * pratinjau/kiriman ke Kepala/final, lihat NotulaService::renderBagianSatuDocx().
-     * Digenerate on-the-fly ke berkas sementara lalu langsung dihapus setelah terkirim.
+     * Unduh notula LENGKAP (Bagian I + II + III) sebagai .docx — Bagian I dari isi
+     * pratinjau yang sudah disunting (bagian1_html), Bagian II/III dari .docx asli
+     * unggahan, lihat NotulaService::renderNotulaLengkapDocx(). Digenerate on-the-fly
+     * ke berkas sementara lalu langsung dihapus setelah terkirim.
      */
     public function unduhBagian1Docx(Notula $notula, NotulaService $notulaService): BinaryFileResponse
     {
         // Nama unik per permintaan -- dua unduhan bersamaan tidak saling menimpa/
         // menghapus berkas sementara milik yang lain (deleteFileAfterSend()).
-        $path = storage_path("app/private/notula/{$notula->id}/bagian1-mesin-".Str::random(10).'.docx');
-        $notulaService->renderBagianSatuDocx($notula, $path);
+        $path = storage_path("app/private/notula/{$notula->id}/notula-lengkap-".Str::random(10).'.docx');
+        $notulaService->renderNotulaLengkapDocx($notula, $path);
 
-        return response()->download($path, $notula->namaUnduhan('bagian1', 'docx'))->deleteFileAfterSend();
+        return response()->download($path, $notula->namaUnduhan('lengkap', 'docx'))->deleteFileAfterSend();
     }
 
     /**

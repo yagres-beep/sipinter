@@ -29,6 +29,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         postgresql-client \
         fonts-dejavu \
         fonts-liberation \
+        fonts-crosextra-carlito \
+        fonts-crosextra-caladea \
     && docker-php-ext-install pdo_pgsql pgsql zip gd mbstring bcmath curl opcache \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 

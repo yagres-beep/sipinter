@@ -17,11 +17,13 @@ use App\Models\RtlEvaluasi;
 use App\Models\User;
 use App\Support\BlokBagianSatu;
 use App\Support\HtmlNotulaDompdf;
+use App\Support\PenggabungDocx;
 use App\Support\PenggantiBerkasAman;
 use App\Support\RumusMarkup;
 use Barryvdh\DomPDF\Facade\Pdf as PdfFacade;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -173,38 +175,80 @@ class NotulaService
     }
 
     /**
-     * Unduhan Bagian I .docx -- dibangun dari bagian1_html TERSIMPAN (isi pratinjau
-     * yang sudah disunting, sumber yang SAMA dengan PDF pratinjau, PDF yang dikirim
-     * ke Kepala, dan PDF final), BUKAN disusun ulang dari data mentah, supaya ketiga
-     * bentuk dokumen selalu sama isinya. Rumus bersusun (span.rumus) dibaca balik
-     * jadi sintaks RumusMarkup (lihat RumusMarkup::dariHtml()) lalu disisipkan sebagai
-     * OOXML Math sungguhan -- termasuk angka yang sudah disunting di pratinjau.
+     * Notula LENGKAP (Bagian I + II + III) sebagai .docx -- Bagian I dibangun dari
+     * bagian1_html TERSIMPAN (isi pratinjau yang sudah disunting, bukan disusun ulang
+     * dari data mentah). Rumus bersusun (span.rumus) dibaca balik jadi sintaks
+     * RumusMarkup (lihat RumusMarkup::dariHtml()) lalu disisipkan sebagai OOXML Math
+     * sungguhan -- termasuk angka yang sudah disunting di pratinjau.
+     *
+     * Bagian II/III disisipkan dari .docx ASLI unggahan (bagian{2,3}_docx) di posisi
+     * penanda {{bagian_2}}/{{bagian_3}} lewat App\Support\PenggabungDocx -- tabel,
+     * penomoran, gaya & pengaturan halamannya tetap seperti yang diunggah, bukan hasil
+     * konversi HTML yang merusak format. Unggahan lama (sebelum .docx aslinya
+     * disimpan) memakai HTML hasil konversinya sebagai cadangan -- unggah ulang
+     * Bagian II/III supaya formatnya persis seperti berkas aslinya.
      *
      * Notula yang Bagian I-nya belum pernah disusun jatuh ke template + data mentah
      * (NotulaBagian1DocxService::generate()) seperti sebelumnya.
      */
-    public function renderBagianSatuDocx(Notula $notula, string $outputPath): string
+    public function renderNotulaLengkapDocx(Notula $notula, string $outputPath, ?bool $sertakanTtd = null): string
     {
+        $sertakanTtd ??= $notula->status === Notula::STATUS_DISETUJUI;
+
         if (blank($notula->bagian1_html)) {
             return $this->docx->generate($notula, $this->kumpulkanDataBagianSatu($notula), $outputPath);
         }
 
         $dir = dirname($outputPath);
         $this->pastikanFolder($dir);
-        $htmlPath = $dir.'/bagian1-unduh-'.Str::lower(Str::random(10)).'.html';
+        $acak = Str::lower(Str::random(10));
+        $htmlPath = $dir.'/notula-unduh-'.$acak.'.html';
         $formula = [];
+        $sisipan = [];
+        $sementara = [$htmlPath];
 
         try {
-            file_put_contents($htmlPath, $this->htmlUntukDocx($notula, $formula));
+            foreach ([2 => [$notula->bagian2_docx, $notula->bagian2_html], 3 => [$notula->bagian3_docx, $notula->bagian3_html]] as $ke => [$base64, $htmlBagian]) {
+                $isi = filled($base64) ? base64_decode((string) $base64, true) : false;
+
+                if ($isi !== false && $isi !== '') {
+                    $path = $dir."/bagian{$ke}-asli-{$acak}.docx";
+                    file_put_contents($path, $isi);
+                } elseif (filled($htmlBagian)) {
+                    // Unggahan lama (sebelum .docx aslinya disimpan): HTML hasil konversinya
+                    // dijadikan .docx TERSENDIRI dulu, supaya gayanya (kelas P1, T1, ...
+                    // bernama sama dengan milik Bagian I) tidak bentrok dengan Bagian I.
+                    $htmlBagianPath = $dir."/bagian{$ke}-html-{$acak}.html";
+                    file_put_contents($htmlBagianPath, $this->dokumenHtmlUntukLibreOffice((string) $htmlBagian));
+                    $sementara[] = $htmlBagianPath;
+                    $path = $this->konversi->convertHtmlToDocx($htmlBagianPath, $dir);
+                    // Impor HTML LibreOffice memakai kertas bawaannya -- samakan dengan
+                    // template, karena PenggabungDocx mempertahankan tata halaman sumber.
+                    $this->sisipkanRumusDanTataHalamanDocx($path, []);
+                } else {
+                    continue;
+                }
+
+                $sementara[] = $path;
+                $sisipan[self::penandaBagianDocx($ke)] = $path;
+            }
+
+            file_put_contents($htmlPath, $this->htmlUntukDocx($notula, $formula, array_keys($sisipan), $sertakanTtd));
             $hasil = $this->konversi->convertHtmlToDocx($htmlPath, $dir);
             $this->sisipkanRumusDanTataHalamanDocx($hasil, $formula);
 
+            if ($sisipan !== []) {
+                (new PenggabungDocx)->sisipkan($hasil, $sisipan);
+            }
+
             if ($hasil !== $outputPath && ! @rename($hasil, $outputPath)) {
-                throw new RuntimeException('Berkas Bagian I (.docx) gagal dipindahkan ke lokasi unduhan.');
+                throw new RuntimeException('Berkas notula (.docx) gagal dipindahkan ke lokasi unduhan.');
             }
         } finally {
-            if (file_exists($htmlPath)) {
-                @unlink($htmlPath);
+            foreach ($sementara as $path) {
+                if (file_exists($path)) {
+                    @unlink($path);
+                }
             }
         }
 
@@ -212,29 +256,62 @@ class NotulaService
     }
 
     /**
-     * Dokumen HTML utuh untuk dikonversi LibreOffice jadi .docx: penanda Bagian II/III
-     * dibuang (unduhan ini khusus Bagian I), CSS dilepas dari lingkup .notula-inline-*
-     * (pemilih turunan tidak dipahami impor HTML LibreOffice) & dipindah ke <head>,
-     * tiap rumus diganti teks penanda (isi rumusnya dikumpulkan ke $formula), dan blok
-     * TTD ditambahkan bila notula sudah disetujui -- sama seperti PDF final.
+     * Teks paragraf penanda posisi Bagian II/III di .docx hasil konversi HTML --
+     * diganti isi .docx asli oleh PenggabungDocx. Tanpa spasi supaya tidak dipecah
+     * LibreOffice ke beberapa run.
+     */
+    public static function penandaBagianDocx(int $ke): string
+    {
+        return "SIPINTERBAGIAN{$ke}X";
+    }
+
+    /**
+     * Dokumen HTML utuh untuk dikonversi LibreOffice jadi .docx: CSS dilepas dari
+     * lingkup .notula-inline-* (pemilih turunan tidak dipahami impor HTML LibreOffice)
+     * & dipindah ke <head>, tiap rumus diganti teks penanda (isi rumusnya dikumpulkan
+     * ke $formula), dan blok TTD ditambahkan bila $sertakanTtd.
+     *
+     * Bagian II/III yang akan disisipkan sebagai .docx ($penandaDocx) diganti paragraf
+     * penanda (lihat penandaBagianDocx()); sisanya dikosongkan.
      *
      * @param  list<string>  $formula
+     * @param  list<string>  $penandaDocx
      */
-    private function htmlUntukDocx(Notula $notula, array &$formula): string
+    private function htmlUntukDocx(Notula $notula, array &$formula, array $penandaDocx = [], bool $sertakanTtd = false): string
     {
-        $html = $this->sisipkanBagianDuaTiga((string) $notula->bagian1_html, null, null);
+        $isiBagian = [];
+        foreach ([2, 3] as $ke) {
+            $penanda = self::penandaBagianDocx($ke);
+            $isiBagian[$ke] = in_array($penanda, $penandaDocx, true) ? '<p>'.$penanda.'</p>' : null;
+        }
 
+        $html = $this->sisipkanBagianDuaTiga((string) $notula->bagian1_html, $isiBagian[2], $isiBagian[3]);
+
+        return $this->dokumenHtmlUntukLibreOffice($html, function (\DOMDocument $dom, \DOMXPath $xpath) use (&$formula) {
+            $daftarRumus = $xpath->query('//span[contains(concat(" ", normalize-space(@class), " "), " rumus ") or @contenteditable="false"]');
+            foreach (iterator_to_array($daftarRumus) as $span) {
+                $penanda = NotulaBagian1DocxService::penandaRumus(count($formula));
+                $formula[] = RumusMarkup::dariHtml($span);
+                $span->parentNode->replaceChild($dom->createTextNode($penanda), $span);
+            }
+        }, $sertakanTtd ? $this->blokTtdDocx($notula) : '');
+    }
+
+    /**
+     * Potongan HTML (pratinjau tersimpan) jadi dokumen HTML utuh yang dipahami impor
+     * HTML LibreOffice: <style> dipindah ke <head> dengan lingkup .notula-inline-*
+     * dilepas, dan aturan berpemilih sederhana ditempelkan inline.
+     */
+    private function dokumenHtmlUntukLibreOffice(string $html, ?callable $olahDom = null, string $tambahanBody = ''): string
+    {
         $dom = new \DOMDocument;
         libxml_use_internal_errors(true);
         $dom->loadHTML('<?xml encoding="utf-8" ?><html><body>'.$html.'</body></html>', LIBXML_NOWARNING | LIBXML_NOERROR);
         libxml_clear_errors();
 
         $xpath = new \DOMXPath($dom);
-        $daftarRumus = $xpath->query('//span[contains(concat(" ", normalize-space(@class), " "), " rumus ") or @contenteditable="false"]');
-        foreach (iterator_to_array($daftarRumus) as $span) {
-            $penanda = NotulaBagian1DocxService::penandaRumus(count($formula));
-            $formula[] = RumusMarkup::dariHtml($span);
-            $span->parentNode->replaceChild($dom->createTextNode($penanda), $span);
+        if ($olahDom !== null) {
+            $olahDom($dom, $xpath);
         }
 
         $css = '';
@@ -250,9 +327,7 @@ class NotulaService
             $body .= $dom->saveHTML($anak);
         }
 
-        if ($notula->status === Notula::STATUS_DISETUJUI) {
-            $body .= $this->blokTtdDocx($notula);
-        }
+        $body .= $tambahanBody;
 
         return '<!DOCTYPE html><html><head><meta charset="utf-8"><style>'.$css.'</style></head><body>'.$body.'</body></html>';
     }
@@ -725,15 +800,17 @@ class NotulaService
      */
     private function renderNotulaUtuhPdf(Notula $notula, bool $sertakanTtd, string $outputPath, ?callable $lanjutan = null, array $opsi = []): string
     {
-        $data = $this->dataNotulaUtuh($notula, $sertakanTtd);
         $sementara = $outputPath.'.'.Str::random(8).'.tmp';
 
         try {
             $this->berkas->pastikanFolder(dirname($outputPath));
 
-            PdfFacade::loadView('pdf.notula-utuh', $data)
-                ->setPaper([0, 0, $data['halaman']['lebar'], $data['halaman']['tinggi']])
-                ->save($sementara);
+            if (! $this->renderPdfDariDocx($notula, $sertakanTtd, $sementara)) {
+                $data = $this->dataNotulaUtuh($notula, $sertakanTtd);
+                PdfFacade::loadView('pdf.notula-utuh', $data)
+                    ->setPaper([0, 0, $data['halaman']['lebar'], $data['halaman']['tinggi']])
+                    ->save($sementara);
+            }
 
             $kepala = is_file($sementara) ? (string) @file_get_contents($sementara, false, null, 0, 5) : '';
             if ($kepala !== '%PDF-') {
@@ -751,6 +828,43 @@ class NotulaService
         $this->berkas->pasang($sementara, $outputPath, $lanjutan, $opsi + self::OPSI_PDF);
 
         return $outputPath;
+    }
+
+    /**
+     * PDF notula dari .docx lengkap (renderNotulaLengkapDocx()) lewat LibreOffice --
+     * isinya SAMA dengan .docx unduhan: tabel Bagian I tidak terpotong seperti di
+     * dompdf, dan Bagian II/III tampil persis seperti berkas yang diunggah. False bila
+     * gagal (mis. LibreOffice tidak tersedia), supaya pemanggil jatuh ke dompdf.
+     */
+    private function renderPdfDariDocx(Notula $notula, bool $sertakanTtd, string $tujuan): bool
+    {
+        if (! config('services.libreoffice.pdf_notula')) {
+            return false;
+        }
+
+        $dir = dirname($tujuan).'/pdf-docx-'.Str::lower(Str::random(10));
+        $docxPath = $dir.'/notula.docx';
+
+        try {
+            $this->pastikanFolder($dir);
+            $this->renderNotulaLengkapDocx($notula, $docxPath, $sertakanTtd);
+            $pdf = $this->konversi->convertToPdf($docxPath, $dir);
+
+            if (! @rename($pdf, $tujuan)) {
+                throw new RuntimeException('PDF hasil konversi gagal dipindahkan.');
+            }
+
+            return true;
+        } catch (\Throwable $e) {
+            Log::warning('PDF notula dari .docx gagal, memakai dompdf: '.$e->getMessage(), ['notula_id' => $notula->id]);
+            if (file_exists($tujuan)) {
+                @unlink($tujuan);
+            }
+
+            return false;
+        } finally {
+            File::deleteDirectory($dir);
+        }
     }
 
     /** Validasi format PDF hasil render/konversi sebelum menggantikan berkas lama. */
@@ -806,6 +920,7 @@ class NotulaService
         $fullPathTujuanPdf = Storage::disk('local')->path($relatifTujuanPdf);
         $kolomPdf = $bagianKe === 2 ? 'bagian2_pdf' : 'bagian3_pdf';
         $kolomHtml = $bagianKe === 2 ? 'bagian2_html' : 'bagian3_html';
+        $kolomDocx = $bagianKe === 2 ? 'bagian2_docx' : 'bagian3_docx';
         $romawi = $bagianKe === 2 ? 'II' : 'III';
 
         // Urutan: konversi PDF -> salin ke berkas sementara di folder tujuan (WAJIB
@@ -816,6 +931,12 @@ class NotulaService
         // pernah berpasangan dengan HTML lama (atau sebaliknya). Berkas sementara selalu
         // dibersihkan (finally; sumber yang sudah terpasang sudah tidak ada lagi).
         try {
+            // .docx ASLI disimpan juga -- dipakai notula lengkap (.docx/PDF) supaya isi
+            // unggahan tersisip apa adanya (lihat renderNotulaLengkapDocx()). Tidak
+            // terbaca/kosong: null, notula lengkap memakai HTML hasil konversinya.
+            $docxAsli = @file_get_contents($fullPathAsli);
+            $docxAsli = $docxAsli !== false && $docxAsli !== '' ? base64_encode($docxAsli) : null;
+
             $fullPathPdf = $this->konversi->convertToPdf($fullPathAsli, $dirKerja);
 
             $this->berkas->pastikanFolder(dirname($fullPathTujuanPdf));
@@ -829,9 +950,9 @@ class NotulaService
             $sumber = $pdfSementaraTujuan;
             $pdfSementaraTujuan = null; // sejak sini tanggung jawab PenggantiBerkasAman
 
-            $this->berkas->pasang($sumber, $fullPathTujuanPdf, function () use ($notula, $kolomPdf, $kolomHtml, $relatifTujuanPdf, $kontenInline, $pelaku, $romawi) {
-                DB::transaction(function () use ($notula, $kolomPdf, $kolomHtml, $relatifTujuanPdf, $kontenInline, $pelaku, $romawi) {
-                    $notula->update([$kolomPdf => $relatifTujuanPdf, $kolomHtml => $kontenInline]);
+            $this->berkas->pasang($sumber, $fullPathTujuanPdf, function () use ($notula, $kolomPdf, $kolomHtml, $kolomDocx, $docxAsli, $relatifTujuanPdf, $kontenInline, $pelaku, $romawi) {
+                DB::transaction(function () use ($notula, $kolomPdf, $kolomHtml, $kolomDocx, $docxAsli, $relatifTujuanPdf, $kontenInline, $pelaku, $romawi) {
+                    $notula->update([$kolomPdf => $relatifTujuanPdf, $kolomHtml => $kontenInline, $kolomDocx => $docxAsli]);
                     $notula->tandaiPerluDigabungUlang($pelaku, "Berkas Bagian {$romawi} diganti setelah notula disetujui — notula dibuka kembali sebagai versi baru dan perlu digabung serta disetujui ulang.");
                 });
             }, self::OPSI_PDF + [
