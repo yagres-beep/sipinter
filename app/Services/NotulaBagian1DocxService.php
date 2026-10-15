@@ -589,7 +589,7 @@ class NotulaBagian1DocxService
         $this->set($sub, 'analisis_capaian', $analisisLengkap);
 
         // Kendala & Solusi sebagai DUA variabel terpisah (mengikuti dua baris terpisah
-        // pada dokumen resmi), KUMULATIF TW1..TW berjalan (RF-28), disusun sebagai
+        // pada dokumen resmi), HANYA triwulan notula ini (tidak kumulatif), disusun sebagai
         // daftar bernomor per indikator -- sama seperti jalur PDF.
         $semuaKendalaSolusi = $kendalaSolusiTriwulan->flatten(1);
         $this->set($sub, 'kendala', $this->daftarBernomor($semuaKendalaSolusi->pluck('kendala')->filter()));

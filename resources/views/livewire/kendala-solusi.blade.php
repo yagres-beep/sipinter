@@ -1,7 +1,7 @@
 <div>
     <div class="page-head">
         <div class="page-title">Kendala &amp; Solusi</div>
-        <div class="page-sub">Catat kendala dan solusi per IKU. Ditampilkan kumulatif pada notula sampai triwulan berjalan.</div>
+        <div class="page-sub">Catat kendala dan solusi per IKU. Ditampilkan pada notula triwulan yang bersangkutan saja.</div>
     </div>
 
     @if (session('status'))

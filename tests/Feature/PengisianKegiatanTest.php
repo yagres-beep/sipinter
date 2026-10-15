@@ -1347,7 +1347,7 @@ class PengisianKegiatanTest extends TestCase
         $this->assertDatabaseHas('rtl_evaluasi', ['rtl_teks' => 'RTL uji coba tanpa PIC', 'pic' => null]);
     }
 
-    public function test_riwayat_kendala_solusi_kumulatif_dari_triwulan_1_sampai_berjalan(): void
+    public function test_riwayat_kendala_solusi_hanya_triwulan_berjalan(): void
     {
         $peranKetua = Role::create(['nama' => 'Ketua Tim']);
         $ketua = User::create([
@@ -1364,13 +1364,13 @@ class PengisianKegiatanTest extends TestCase
 
         $this->actingAs($ketua);
 
-        // Sedang mengisi bulan 8 (Agustus) = Triwulan III â€” riwayat kumulatif harus
-        // tetap menampilkan kendala dari TW I dan TW II, bukan cuma TW III.
+        // Sedang mengisi bulan 6 (Juni) = Triwulan II -- riwayat hanya menampilkan
+        // kendala TW II (Mei), TIDAK lagi kumulatif dari TW I.
         Livewire::test(PengisianKegiatan::class)
             ->set('tahun', 2026)
-            ->set('bulan', 8)
+            ->set('bulan', 6)
             ->set('iku_id', $iku->id)
-            ->assertSee('Kendala triwulan pertama')
+            ->assertDontSee('Kendala triwulan pertama')
             ->assertSee('Kendala triwulan kedua');
     }
 

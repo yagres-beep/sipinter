@@ -1830,8 +1830,8 @@ class PengisianKegiatan extends Component
     }
 
     /**
-     * Riwayat kendala-solusi kumulatif (RF-28): seluruh pasangan milik IKU terpilih,
-     * dari triwulan 1 sampai triwulan yang sedang berjalan, tahun yang sama —
+     * Riwayat kendala-solusi triwulan berjalan: seluruh pasangan milik IKU terpilih
+     * pada triwulan yang sedang berjalan saja (tidak kumulatif dari TW I) —
      * KECUALI pasangan periode INI SENDIRI yang belum diterima Tim SAKIP (menunggu
      * baru diajukan, atau ditolak perlu diperbaiki), supaya tidak tampil dobel:
      * yang belum diterima ditampilkan sebagai blok yang BISA diedit lewat
@@ -1862,8 +1862,10 @@ class PengisianKegiatan extends Component
 
             return KendalaSolusiModel::with('periode')
                 ->where('iku_id', $this->iku_id)
+                // Hanya triwulan berjalan (bulan-bulan lain di triwulan yang sama), BUKAN
+                // kumulatif dari TW I — kendala & solusi tiap triwulan berdiri sendiri.
                 ->whereHas('periode', function ($q) use ($triwulanSekarang) {
-                    $q->where('tahun', $this->tahun)->where('triwulan', '<=', $triwulanSekarang);
+                    $q->where('tahun', $this->tahun)->where('triwulan', $triwulanSekarang);
                 })
                 ->when($periodeSaatIni, function ($q) use ($periodeSaatIni, $verifikasiTerlihat) {
                     if ($verifikasiTerlihat) {

@@ -548,12 +548,11 @@ class NotulaService
             ]];
         });
 
-        // RF-28: kumulatif dari triwulan 1 s.d. triwulan berjalan, tahun yang sama —
-        // dikelompokkan per IKU dulu (kerangka resmi menampilkan Kendala/Solusi di
-        // bawah tiap indikator, bukan sebagai satu daftar gabungan seperti sebelumnya),
-        // baru per triwulan di dalamnya supaya kumulatifnya tetap terlihat jelas.
+        // Kendala/Solusi HANYA triwulan notula ini (tidak lagi kumulatif dari TW I) —
+        // dikelompokkan per IKU (kerangka resmi menampilkan Kendala/Solusi di bawah tiap
+        // indikator), lalu per triwulan supaya bentuk datanya tetap sama bagi pemakai.
         $kendalaSolusiPerIku = KendalaSolusi::with('periode')
-            ->whereHas('periode', fn ($q) => $q->where('tahun', $periode->tahun)->where('triwulan', '<=', $tw))
+            ->whereHas('periode', fn ($q) => $q->where('tahun', $periode->tahun)->where('triwulan', $tw))
             ->get()
             ->groupBy('iku_id')
             ->map(fn ($items) => $items->sortBy(fn ($k) => $k->periode->triwulan)->groupBy(fn ($k) => $k->periode->triwulan));

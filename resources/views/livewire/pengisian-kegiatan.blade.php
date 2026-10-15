@@ -717,7 +717,7 @@
 
         @if ($iku_id && $riwayatKendala->isNotEmpty())
             <div style="margin-bottom:16px">
-                <div style="font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📜 Riwayat Kumulatif Triwulan Berjalan</div>
+                <div style="font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📜 Riwayat Triwulan Berjalan</div>
                 @foreach ($riwayatKendala as $triwulanKe => $entriTriwulan)
                     <div style="margin-bottom:10px">
                         <div style="font-size:11px;font-weight:700;color:var(--blue-600);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">
