@@ -519,13 +519,14 @@ class NotulaService
             }])
             ->get();
 
-        // RF baru: link bukti dukung per IKU (folder Drive IKU tsb), supaya Tim SAKIP/
+        // RF baru: link bukti dukung realisasi per IKU (subfolder "Capaian" milik IKU tsb,
+        // tempat bukti capaian diunggah -- bukan folder IKU induknya), supaya Tim SAKIP/
         // Kepala bisa langsung buka bukti dari dalam dokumen notula. Dihitung sekali per
         // IKU yang benar-benar punya kegiatan triwulan ini (bukan seluruh Master IKU) —
         // gagal Drive pada satu IKU (mis. storage belum aktif) tidak menggagalkan
         // penyusunan notula.
         $linkFolderPerIku = $kegiatanPerIku->mapWithKeys(function ($daftarKegiatan, $ikuId) use ($periode) {
-            return [$ikuId => $this->folder->linkBuktiDukungIku($periode, $daftarKegiatan->first()->masterIku)];
+            return [$ikuId => $this->folder->linkKategoriIku($periode, $daftarKegiatan->first()->masterIku, 'capaian')];
         });
 
         // Tautan bukti dukung RTL triwulan SEBELUMNYA (F1.3) — periode sebelumnya dibuat
