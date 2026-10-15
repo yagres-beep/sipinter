@@ -87,7 +87,7 @@ class LibreOfficeConversionService
     /**
      * Konversi berkas .html menjadi .docx -- dipakai unduhan Bagian I .docx supaya
      * isinya SAMA dengan pratinjau yang sudah disunting (bagian1_html), lihat
-     * NotulaService::renderBagianSatuDocx(). --infilter wajib: tanpanya LibreOffice
+     * NotulaService::renderNotulaLengkapDocx(). --infilter wajib: tanpanya LibreOffice
      * membuka .html sebagai dokumen Writer/Web yang tidak punya filter ekspor .docx.
      *
      * @return string path lengkap ke .docx hasil konversi.

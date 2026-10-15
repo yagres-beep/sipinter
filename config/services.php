@@ -102,6 +102,9 @@ return [
     */
     'libreoffice' => [
         'binary_path' => env('LIBREOFFICE_PATH', 'C:\\Program Files\\LibreOffice\\program\\soffice.exe'),
+        // PDF notula (pratinjau/draf/final) dibuat dari .docx lengkap lewat LibreOffice
+        // (sama persis dengan unduhan .docx); false = langsung dompdf seperti dulu.
+        'pdf_notula' => env('NOTULA_PDF_LIBREOFFICE', true),
     ],
 
     /*

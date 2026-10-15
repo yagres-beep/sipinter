@@ -206,7 +206,7 @@
             <div class="field" style="flex:2;min-width:260px">
                 <label>Link Lampiran Basis Data IKU</label>
                 <input type="text" class="inp filled" style="width:100%" wire:model.blur="linkLampiranBasisData" placeholder="mis. http://s.bps.go.id/7409_LampiranBasisDataIKU2026">
-                <div class="fhint">Dicetak di Bagian I pada tiap indikator, di bawah "Dasar Hitung dan Basis Data Realisasi IKU".</div>
+                <div class="fhint">Dicetak di Bagian I pada tiap indikator, di bawah "Dasar Hitung dan Basis Data Realisasi IKU". Berlaku untuk seluruh triwulan di tahun yang sama — bila kosong, dipakai link yang sudah diisi di triwulan lain tahun ini.</div>
                 @error('linkLampiranBasisData')
                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                 @enderror
@@ -314,11 +314,11 @@
                  tersimpan dulu -- isi unduhan selalu sama dengan pratinjau di bawah. --}}
             <button type="button" class="btn btn-teal btn-sm" wire:click="unduhPratinjauPdf" wire:loading.attr="disabled" wire:target="unduhPratinjauPdf">⬇ Unduh Pratinjau Lengkap (.pdf)</button>
             @if ($bagian1Siap)
-                <button type="button" class="btn btn-ghost btn-sm" wire:click="unduhBagian1Docx" wire:loading.attr="disabled" wire:target="unduhBagian1Docx">⬇ Unduh Bagian I (.docx, sama dengan pratinjau)</button>
+                <button type="button" class="btn btn-ghost btn-sm" wire:click="unduhBagian1Docx" wire:loading.attr="disabled" wire:target="unduhBagian1Docx" title="Bagian I sesuai pratinjau, Bagian II & III persis dari berkas .docx yang diunggah">⬇ Unduh Notula Lengkap (.docx, Bagian I–III)</button>
             @endif
             <a href="{{ route('notula.template-bagian1') }}" class="btn btn-ghost btn-sm" style="text-decoration:none;display:inline-block">⬇ Unduh Panduan Bagian I (referensi, tidak perlu diunggah balik)</a>
         </div>
-        <p class="fhint" style="margin-bottom:10px">Klik lalu ketik langsung di dalam Bagian I pada pratinjau di bawah untuk menyunting — Bagian II &amp; III ikut tampil di bawahnya persis dari berkas yang diunggah.</p>
+        <p class="fhint" style="margin-bottom:10px">Klik lalu ketik langsung di dalam Bagian I pada pratinjau di bawah untuk menyunting — Bagian II &amp; III ikut tampil di bawahnya sebagai gambaran. Di PDF dan .docx unduhan, Bagian II &amp; III disisipkan persis dari berkas .docx yang diunggah (tabel, penomoran, dan tata halamannya tidak diubah).</p>
         <p class="fhint" style="margin-bottom:10px">✏️ Baris yang Anda sunting diberi garis kuning tipis di kirinya. "↻ Susun Ulang Otomatis" hanya menambahkan/memperbarui isi dari data terbaru — baris bertanda kuning tidak diubah.</p>
         <p class="fhint" style="margin-bottom:10px">🧮 Rumus (mis. pecahan/sigma pada baris "Dasar Hitung dan Basis Data Realisasi IKU", bergaris putus-putus) bisa disunting langsung di sini — klik angka/teks pembilang atau penyebutnya lalu ketik. Hasil suntingan ikut ke PDF, .docx, dan kiriman ke Kepala. Untuk mengubah rumus bawaannya, sunting field "Dasar Hitung" di Data Master &amp; Konfigurasi &gt; Master IKU, lalu tekan "↻ Susun Ulang Otomatis".</p>
 

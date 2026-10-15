@@ -65,6 +65,8 @@ class Notula extends Model
         'bagian3_pdf',
         'bagian2_html',
         'bagian3_html',
+        'bagian2_docx',
+        'bagian3_docx',
         'pdf_gabungan',
         'pdf_final',
         'status',
@@ -73,6 +75,14 @@ class Notula extends Model
         'disetujui_pada',
         'catatan_pengembalian',
     ];
+
+    /**
+     * .docx asli Bagian II/III (base64, bisa ratusan KB) -- tidak ikut diserialisasi
+     * (toArray/JSON/payload Livewire).
+     *
+     * @var list<string>
+     */
+    protected $hidden = ['bagian2_docx', 'bagian3_docx'];
 
     protected function casts(): array
     {
@@ -324,6 +334,33 @@ class Notula extends Model
      * (App\Http\Controllers\NotulaDownloadController), nama berkas fisik di disk
      * (NotulaService::gabungkan()/setujui()), maupun nama arsip di Google Drive.
      */
+    /**
+     * Link "Lampiran Basis Data IKU" berlaku per TAHUN (satu lampiran untuk seluruh
+     * triwulan) -- bila notula ini belum mengisinya sendiri, dipakai link terbaru dari
+     * notula lain di tahun yang sama, supaya cukup diisi sekali.
+     */
+    public function linkLampiranBasisDataEfektif(): ?string
+    {
+        if (filled($this->link_lampiran_basis_data)) {
+            return trim($this->link_lampiran_basis_data);
+        }
+
+        $tahun = $this->periode?->tahun;
+        if ($tahun === null) {
+            return null;
+        }
+
+        $link = static::query()
+            ->whereKeyNot($this->getKey())
+            ->whereNotNull('link_lampiran_basis_data')
+            ->where('link_lampiran_basis_data', '!=', '')
+            ->whereHas('periode', fn ($q) => $q->where('tahun', $tahun))
+            ->latest('updated_at')
+            ->value('link_lampiran_basis_data');
+
+        return filled($link) ? trim($link) : null;
+    }
+
     public function namaUnduhan(string $jenis, string $ekstensi = 'pdf'): string
     {
         $tw = $this->periode?->triwulan ?? '-';

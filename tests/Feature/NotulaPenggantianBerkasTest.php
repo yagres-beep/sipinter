@@ -291,10 +291,12 @@ class NotulaPenggantianBerkasTest extends TestCase
         Storage::disk('local')->put("notula/{$notula->id}/bagian2.pdf", '%PDF-lama');
         $this->konversiBerhasil('<p>Bagian II baru</p>');
 
-        app(NotulaService::class)->terimaUploadBagian($notula, 2, UploadedFile::fake()->create('b2.docx', 5));
+        app(NotulaService::class)->terimaUploadBagian($notula, 2, UploadedFile::fake()->createWithContent('b2.docx', 'ISI-DOCX-ASLI'));
 
         $this->assertSame(self::PDF_BARU, Storage::disk('local')->get("notula/{$notula->id}/bagian2.pdf"));
         $this->assertSame('<p>Bagian II baru</p>', $notula->fresh()->bagian2_html);
+        // .docx asli ikut tersimpan (base64) untuk disisipkan apa adanya ke notula lengkap.
+        $this->assertSame(base64_encode('ISI-DOCX-ASLI'), $notula->fresh()->bagian2_docx);
         $this->assertSame(["notula/{$notula->id}/bagian2.pdf"], Storage::disk('local')->files("notula/{$notula->id}"));
         $this->assertSame([], Storage::disk('local')->files('notula-sementara'));
     }
