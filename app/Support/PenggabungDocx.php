@@ -57,6 +57,9 @@ class PenggabungDocx
 
     private int $urutanSumber = 0;
 
+    /** @var list<string> teks penanda seluruh sisipan pada panggilan sisipkan() ini */
+    private array $semuaPenanda = [];
+
     /**
      * @param  array<string, string>  $sisipan  teks penanda paragraf => path .docx sumber,
      *                                          diproses berurutan. Penanda yang tidak ditemukan
@@ -70,6 +73,7 @@ class PenggabungDocx
         }
 
         $this->partTujuan = [];
+        $this->semuaPenanda = array_map('strval', array_keys($sisipan));
 
         try {
             foreach ($sisipan as $penanda => $pathSumber) {
@@ -141,9 +145,14 @@ class PenggabungDocx
             }
 
             $sectTujuan = $xpTujuan->query('w:sectPr', $bodyTujuan)->item(0);
+            $titik = $this->cariParagrafPenanda($xpTujuan, $bodyTujuan, $penanda);
 
+            // Section break penutup isi tujuan SEBELUM sisipan -- dilewati bila sebelum
+            // titik sisip tidak ada isi lagi sejak section break terakhir (mis. tepat
+            // setelah sisipan Bagian II). Section kosong seperti itu dicetak Word sebagai
+            // halaman kosong bila ukuran kertasnya beda dengan section di sekitarnya.
             $sebelum = null;
-            if ($sectTujuan instanceof DOMElement) {
+            if ($sectTujuan instanceof DOMElement && $this->adaIsiSebelum($titik, $sectTujuan)) {
                 $sebelum = $docTujuan->createElementNS(self::NS_W, 'w:p');
                 $pPr = $sebelum->appendChild($docTujuan->createElementNS(self::NS_W, 'w:pPr'));
                 $pPr->appendChild($sectTujuan->cloneNode(true));
@@ -158,7 +167,6 @@ class PenggabungDocx
                 $pPr->appendChild($sectBaru);
             }
 
-            $titik = $this->cariParagrafPenanda($xpTujuan, $bodyTujuan, $penanda);
             $rangkaian = array_values(array_filter([$sebelum, ...$impor, $sesudah]));
 
             if ($titik !== null) {
@@ -807,6 +815,35 @@ class PenggabungDocx
         }
 
         return $id;
+    }
+
+    /**
+     * Apakah ada isi (paragraf/tabel) di antara section break terakhir dan titik sisip?
+     * $titik null = sisipan ditempel di akhir body (sebelum $sectBody). Paragraf penanda
+     * sisipan lain yang belum diproses tidak dihitung sebagai isi.
+     */
+    private function adaIsiSebelum(?DOMElement $titik, DOMElement $sectBody): bool
+    {
+        $node = ($titik ?? $sectBody)->previousSibling;
+
+        while ($node !== null) {
+            if ($node instanceof DOMElement && $node->namespaceURI === self::NS_W) {
+                if ($node->localName === 'p') {
+                    $pPr = $this->anakPertama($node, 'pPr');
+                    if ($pPr !== null && $this->anakPertama($pPr, 'sectPr') !== null) {
+                        return false;
+                    }
+                    if (! in_array(trim($node->textContent), $this->semuaPenanda, true)) {
+                        return true;
+                    }
+                } elseif ($node->localName === 'tbl' || $node->localName === 'sdt') {
+                    return true;
+                }
+            }
+            $node = $node->previousSibling;
+        }
+
+        return false;
     }
 
     private function cariParagrafPenanda(DOMXPath $xp, DOMElement $body, string $penanda): ?DOMElement

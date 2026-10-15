@@ -181,6 +181,40 @@ class PenggabungDocxTest extends TestCase
         $this->assertMatchesRegularExpression('/<w:document[^>]*mc:Ignorable="[^"]*w14/', $doc);
     }
 
+    public function test_penanda_bersebelahan_tidak_menghasilkan_section_kosong(): void
+    {
+        $tujuan = $this->buatDocx([
+            '[Content_Types].xml' => $this->contentTypes(),
+            'word/_rels/document.xml.rels' => '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                .'<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>',
+            'word/styles.xml' => '<?xml version="1.0"?><w:styles '.self::W.'/>',
+            'word/document.xml' => '<?xml version="1.0"?><w:document '.self::W.'><w:body>'
+                .'<w:p><w:r><w:t>Bagian I</w:t></w:r></w:p>'
+                .'<w:p><w:r><w:t>SIPINTERBAGIAN2X</w:t></w:r></w:p>'
+                .'<w:p><w:r><w:t>SIPINTERBAGIAN3X</w:t></w:r></w:p>'
+                .'<w:p><w:r><w:t>Penutup</w:t></w:r></w:p>'
+                .'<w:sectPr><w:pgSz w:w="11906" w:h="16838"/></w:sectPr>'
+                .'</w:body></w:document>',
+        ]);
+
+        (new PenggabungDocx)->sisipkan($tujuan, ['SIPINTERBAGIAN2X' => $this->sumber(), 'SIPINTERBAGIAN3X' => $this->sumber()]);
+
+        $xp = $this->xpath($this->baca($tujuan, 'word/document.xml'));
+
+        // Bagian I | Bagian II | Bagian III | Penutup = 4 section, tanpa section kosong
+        // di antara Bagian II & III (Word mencetaknya sebagai halaman kosong).
+        $this->assertCount(4, iterator_to_array($xp->query('//w:sectPr')));
+        foreach ($xp->query('//w:body/w:p[w:pPr/w:sectPr]') as $penutupSection) {
+            $sebelumnya = $penutupSection->previousSibling;
+            $this->assertFalse(
+                $sebelumnya !== null && $xp->query('w:pPr/w:sectPr', $sebelumnya)->length > 0,
+                'Dua section break berturut-turut = section kosong.'
+            );
+        }
+        $teks = implode('|', array_map(fn ($t) => $t->textContent, iterator_to_array($xp->query('//w:t'))));
+        $this->assertMatchesRegularExpression('/^Bagian I\|Peran BPS.*\|Peran BPS.*\|Penutup$/', $teks);
+    }
+
     public function test_penanda_tidak_ditemukan_isi_ditempel_di_akhir_dan_dua_sumber_tidak_bentrok(): void
     {
         $tujuan = $this->tujuan();
