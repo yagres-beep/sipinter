@@ -11,6 +11,7 @@ use App\Models\Periode;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\FolderStructureService;
+use App\Services\GoogleDriveService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Livewire\Livewire;
@@ -122,6 +123,7 @@ class BuktiSusulanDanNamaCapaianTest extends TestCase
                 ->andReturn(['drive_file_id' => 'drive-baru', 'storage_account_id' => null, 'nama_file' => 'undangan bertanda tangan.pdf']);
             $mock->shouldReceive('linkBuktiDukungIku')->andReturn(null);
         });
+        $this->mock(GoogleDriveService::class)->shouldReceive('deleteFile')->once()->with('drive-lama', null);
 
         $form = $this->form()
             ->assertSee('title="Ganti dengan berkas PDF lain"', false)
@@ -142,6 +144,31 @@ class BuktiSusulanDanNamaCapaianTest extends TestCase
         // Berkas pengganti belum diperiksa → di kegiatan terkunci tidak bisa dihapus.
         $form->call('hapusBuktiLama', 0, $baru->id);
         $this->assertNotNull(Berkas::find($baru->id));
+    }
+
+    public function test_ganti_berkas_gagal_hapus_lama_di_drive_berkas_lama_tetap_ada(): void
+    {
+        $kegiatan = $this->kegiatan(['status_dokumen' => Kegiatan::STATUS_DIVERIFIKASI]);
+        Capaian::create(['iku_id' => $this->iku->id, 'periode_id' => $this->periode->id, 'status' => Capaian::STATUS_DIVERIFIKASI]);
+        $ditolak = $this->berkas($kegiatan, 'ditolak');
+
+        $this->mock(FolderStructureService::class, function ($mock) {
+            $mock->shouldReceive('unggahBerkasKegiatan')->once()
+                ->andReturn(['drive_file_id' => 'drive-baru', 'storage_account_id' => null, 'nama_file' => 'pengganti.pdf']);
+            $mock->shouldReceive('linkBuktiDukungIku')->andReturn(null);
+        });
+        $this->mock(GoogleDriveService::class)->shouldReceive('deleteFile')->once()->andThrow(new \RuntimeException('Drive mati'));
+
+        $form = $this->form()
+            ->set("gantiBerkas.{$ditolak->id}", UploadedFile::fake()->create('pengganti.pdf', 10, 'application/pdf'))
+            ->assertCount('blocks.0.existing_bukti', 2);
+
+        $this->assertTrue(collect($form->effects['dispatches'])->contains(
+            fn ($d) => $d['name'] === 'notify' && $d['params']['type'] === 'error' && str_contains($d['params']['message'], 'berkas lama masih ada')
+        ));
+
+        $this->assertNotNull(Berkas::find($ditolak->id));
+        $this->assertSame(2, Berkas::where('ref_id', $kegiatan->id)->count());
     }
 
     public function test_berkas_tidak_sesuai_tidak_bisa_diubah_selagi_sedang_ditangani(): void

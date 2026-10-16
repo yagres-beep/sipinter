@@ -248,25 +248,29 @@ class Berkas extends Model
     }
 
     /**
-     * Buang salinan fisik berkas ini SEBELUM barisnya dihapus: salinan lokal dan
-     * salinan Drive dihapus permanen (pengguna sudah mengonfirmasi lewat dialog di
-     * layar) — supaya bukti yang dihapus dari aplikasi tidak tertinggal di folder
-     * Drive. Gagal di Drive tidak menggagalkan penghapusan, cukup dicatat di log.
+     * Buang salinan fisik berkas ini SEBELUM barisnya dihapus: salinan Drive lebih
+     * dulu — dihapus permanen, atau dipindah ke Sampah Drive bila $keSampah (hapus
+     * kegiatan) — baru salinan lokal. Bila Drive GAGAL, exception diteruskan dan
+     * TIDAK ada yang dihapus, supaya pemanggil bisa membiarkan berkas tetap ada dan
+     * menampilkan kegagalannya ke pengguna.
      */
-    public function buangSalinan(): void
+    public function buangSalinan(bool $keSampah = false): void
     {
+        if ($this->drive_file_id) {
+            try {
+                $drive = app(GoogleDriveService::class);
+                $keSampah
+                    ? $drive->trashFile($this->drive_file_id, $this->storageAccount)
+                    : $drive->deleteFile($this->drive_file_id, $this->storageAccount);
+            } catch (\Throwable $e) {
+                Log::warning("Gagal membuang berkas {$this->drive_file_id} dari Google Drive: ".$e->getMessage());
+
+                throw $e;
+            }
+        }
+
         if ($this->path) {
             Storage::disk('local')->delete($this->path);
-        }
-
-        if (! $this->drive_file_id) {
-            return;
-        }
-
-        try {
-            app(GoogleDriveService::class)->deleteFile($this->drive_file_id, $this->storageAccount);
-        } catch (\Throwable $e) {
-            Log::warning("Gagal menghapus berkas {$this->drive_file_id} dari Google Drive: ".$e->getMessage());
         }
     }
 }

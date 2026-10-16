@@ -226,19 +226,46 @@ class GoogleDriveService
 
     /**
      * Hapus berkas dari Drive secara PERMANEN (tidak lewat Sampah, tidak bisa
-     * dipulihkan) — pengguna sudah diminta konfirmasi lebih dulu di layar. Di Drive
-     * biasa hanya PEMILIK berkas yang boleh menghapusnya, jadi dipakai akun storage
-     * yang dulu mengunggahnya ($akun) bila akun itu bukan akun aktif. Berkas yang
-     * memang sudah tidak ada di Drive (404) dianggap berhasil.
+     * dipulihkan) — pengguna sudah diminta konfirmasi lebih dulu di layar.
      */
     public function deleteFile(string $fileId, ?StorageAccount $akun = null): void
     {
-        $drive = $akun && $akun->id !== StorageAccount::aktif()?->id && $akun->googleTerhubung()
+        $drive = $this->driveMilik($akun);
+
+        $this->abaikanBilaSudahTiada(fn () => $this->panggilApi(fn () => $drive->files->delete($fileId), 'menghapus berkas'));
+    }
+
+    /**
+     * Pindahkan berkas ke Sampah Drive — masih bisa dipulihkan dari Sampah selama 30
+     * hari. Dipakai saat SATU KEGIATAN dihapus (buktinya bisa saja masih dibutuhkan,
+     * mis. bagian dari RTL triwulan itu), beda dari hapus satu bukti (deleteFile()).
+     */
+    public function trashFile(string $fileId, ?StorageAccount $akun = null): void
+    {
+        $drive = $this->driveMilik($akun);
+
+        $this->abaikanBilaSudahTiada(fn () => $this->panggilApi(
+            fn () => $drive->files->update($fileId, new DriveFile(['trashed' => true]), ['fields' => 'id']),
+            'memindahkan berkas ke Sampah'
+        ));
+    }
+
+    /**
+     * Drive service milik akun storage yang dulu mengunggah berkas — di Drive biasa
+     * hanya PEMILIK berkas yang boleh menghapus/membuangnya.
+     */
+    protected function driveMilik(?StorageAccount $akun): Drive
+    {
+        return $akun && $akun->id !== StorageAccount::aktif()?->id && $akun->googleTerhubung()
             ? new Drive($this->clientOAuthUntukAkun($akun))
             : $this->drive();
+    }
 
+    /** Berkas yang memang sudah tidak ada di Drive (404) dianggap beres. */
+    protected function abaikanBilaSudahTiada(callable $panggilan): void
+    {
         try {
-            $this->panggilApi(fn () => $drive->files->delete($fileId), 'menghapus berkas');
+            $panggilan();
         } catch (RuntimeException $e) {
             if (($e->getPrevious()?->getCode()) !== 404) {
                 throw $e;

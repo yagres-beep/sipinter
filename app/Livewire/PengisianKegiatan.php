@@ -1149,11 +1149,34 @@ class PengisianKegiatan extends Component
             return;
         }
 
+        // Bukti kegiatan TIDAK dihapus permanen dari Drive, hanya dipindah ke Sampah
+        // (bisa dipulihkan 30 hari) — kegiatan bisa saja bagian dari RTL triwulan ini.
+        // Bukti yang gagal dibuang dibiarkan tetap ada, dan kegiatannya tidak dihapus.
+        $gagal = [];
+        $alasan = null;
         foreach ($kegiatan->berkas as $berkas) {
-            $berkas->buangSalinan();
+            try {
+                $berkas->buangSalinan(keSampah: true);
+                $berkas->delete();
+            } catch (\Throwable $e) {
+                $gagal[$berkas->id] = $berkas->nama_file;
+                $alasan ??= self::alasanGagalDrive($e->getMessage());
+            }
         }
 
-        $kegiatan->berkas()->delete();
+        $this->lupakanCachePeriodeIku();
+
+        if ($gagal !== []) {
+            $this->blocks[$index]['existing_bukti'] = array_values(array_filter(
+                $this->blocks[$index]['existing_bukti'] ?? [],
+                fn ($file) => isset($gagal[$file['id']])
+            ));
+            $this->dispatch('notify', type: 'error', message: 'Kegiatan TIDAK dihapus — '.count($gagal).' bukti gagal dipindahkan ke Sampah Google Drive ('.$alasan.'): '.implode(', ', $gagal).'. Bukti tersebut masih ada di SIPINTER dan Google Drive; coba lagi nanti.');
+
+            return;
+        }
+
+        $jumlahBukti = $kegiatan->berkas->count();
         $kegiatan->delete();
 
         unset($this->blocks[$index]);
@@ -1163,7 +1186,31 @@ class PengisianKegiatan extends Component
             $this->blocks = [$this->emptyBlock()];
         }
 
-        $this->lupakanCachePeriodeIku();
+        $this->dispatch('notify', type: 'success', message: $jumlahBukti > 0
+            ? "Kegiatan dihapus. {$jumlahBukti} bukti dipindahkan ke Sampah Google Drive (masih bisa dipulihkan dari Sampah selama 30 hari)."
+            : 'Kegiatan dihapus.');
+    }
+
+    /**
+     * Hapus permanen salinan SATU bukti (Drive & lokal) lalu tampilkan hasilnya.
+     * false = Drive gagal: berkas dibiarkan utuh & alasan kegagalan ditampilkan.
+     */
+    protected function hapusSalinanBukti(Berkas $berkas): bool
+    {
+        try {
+            $berkas->buangSalinan();
+
+            return true;
+        } catch (\Throwable $e) {
+            $this->dispatch('notify', type: 'error', message: "Gagal menghapus \"{$berkas->nama_file}\" dari Google Drive — ".self::alasanGagalDrive($e->getMessage()).'. Bukti TIDAK dihapus dan masih ada di SIPINTER maupun Google Drive; coba lagi nanti.');
+
+            return false;
+        }
+    }
+
+    protected function notifikasiBuktiDihapus(Berkas $berkas): void
+    {
+        $this->dispatch('notify', type: 'success', message: "Bukti \"{$berkas->nama_file}\" dihapus permanen dari SIPINTER".($berkas->drive_file_id ? ' dan Google Drive.' : '.'));
     }
 
     /**
@@ -1247,6 +1294,10 @@ class PengisianKegiatan extends Component
             return;
         }
 
+        if (! $this->hapusSalinanBukti($berkas)) {
+            return;
+        }
+
         // Catatan penolakan disalin ke Kegiatan-nya SENDIRI sebelum berkasnya benar-benar
         // hilang — begitu berkas ini dihapus, baris & catatannya lenyap dari tabel
         // `berkas`, jadi Tim SAKIP tidak akan tahu lagi APA yang tadinya salah saat
@@ -1257,8 +1308,8 @@ class PengisianKegiatan extends Component
             $this->blocks[$blockIndex]['catatan_bukti_dihapus'] = $berkas->catatan;
         }
 
-        $berkas->buangSalinan();
         $berkas->delete();
+        $this->notifikasiBuktiDihapus($berkas);
 
         $this->blocks[$blockIndex]['existing_bukti'] = collect($this->blocks[$blockIndex]['existing_bukti'])
             ->reject(fn ($file) => $file['id'] === $berkasId)
@@ -1271,8 +1322,8 @@ class PengisianKegiatan extends Component
      * TERSIMPAN dan ditandai "Tidak Sesuai" oleh Tim SAKIP — pasangan dari
      * hapusBuktiLama() di atas, tapi untuk BagianKustomPoin. Poin dicocokkan ke
      * iku_id+periode_id form ini supaya Ketua Tim tidak bisa menghapus bukti milik
-     * IKU/periode lain lewat manipulasi parameter. File fisik lokal ikut dihapus;
-     * salinan di Google Drive TIDAK ikut dihapus (sama seperti hapusBuktiLama()).
+     * IKU/periode lain lewat manipulasi parameter. Salinan lokal & Google Drive ikut
+     * dihapus permanen (sama seperti hapusBuktiLama()).
      */
     public function hapusBuktiLamaBagianKustom(int $poinId, int $berkasId): void
     {
@@ -1300,6 +1351,10 @@ class PengisianKegiatan extends Component
             return;
         }
 
+        if (! $this->hapusSalinanBukti($berkas)) {
+            return;
+        }
+
         // Sama seperti hapusBuktiLama() untuk Kegiatan — salin catatan penolakan ke
         // poin ini sendiri sebelum berkasnya hilang. Dikosongkan lagi begitu poin
         // ditandai "Sesuai" (lihat VerifikasiCapaian::tandaiBagianKustomSesuai()).
@@ -1307,8 +1362,8 @@ class PengisianKegiatan extends Component
             $poin->update(['catatan_bukti_dihapus' => $berkas->catatan]);
         }
 
-        $berkas->buangSalinan();
         $berkas->delete();
+        $this->notifikasiBuktiDihapus($berkas);
 
         Cache::forget($this->cacheKeyPeriodeIku("riwayat-bagian-{$poin->bagian_kustom_id}"));
         Cache::forget($this->cacheKeyPeriodeIku("riwayat-bagian-{$poin->bagian_kustom_id}-edit"));
@@ -1357,6 +1412,10 @@ class PengisianKegiatan extends Component
             return;
         }
 
+        if (! $this->hapusSalinanBukti($berkas)) {
+            return;
+        }
+
         // Sama seperti hapusBuktiLama() untuk Kegiatan — salin catatan penolakan ke
         // poin RTL ini sendiri sebelum berkasnya hilang. Dikosongkan lagi begitu poin
         // ditandai "Sesuai" (lihat VerifikasiCapaian::tandaiRtlSesuai()).
@@ -1364,8 +1423,8 @@ class PengisianKegiatan extends Component
             $poin->update(['catatan_bukti_dihapus' => $berkas->catatan]);
         }
 
-        $berkas->buangSalinan();
         $berkas->delete();
+        $this->notifikasiBuktiDihapus($berkas);
 
         $this->cacheRtlBerjalan = null;
         Cache::forget($this->cacheKeyPeriodeIku('rtl-berjalan'));
@@ -1481,13 +1540,24 @@ class PengisianKegiatan extends Component
             $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'berkas pengganti', false, $e->getMessage());
         }
 
-        // Alasan penolakan disimpan di kegiatan/poinnya supaya Tim SAKIP tetap tahu
-        // apa yang diperbaiki (sama seperti hapusBuktiLama()).
-        if ($lama->catatan) {
-            $ref->update(['catatan_bukti_dihapus' => $lama->catatan]);
+        // Berkas lama baru dihapus bila salinan Drive-nya berhasil dihapus — bila gagal,
+        // berkas lama dibiarkan tetap ada (tampil di samping berkas pengganti).
+        $alasanLamaGagal = null;
+        try {
+            $lama->buangSalinan();
+        } catch (\Throwable $e) {
+            $alasanLamaGagal = self::alasanGagalDrive($e->getMessage());
         }
-        $lama->buangSalinan();
-        $lama->delete();
+
+        if ($alasanLamaGagal === null) {
+            // Alasan penolakan disimpan di kegiatan/poinnya supaya Tim SAKIP tetap tahu
+            // apa yang diperbaiki (sama seperti hapusBuktiLama()).
+            if ($lama->catatan) {
+                $ref->update(['catatan_bukti_dihapus' => $lama->catatan]);
+            }
+            $lama->delete();
+        }
+        $hapusLama = $alasanLamaGagal === null ? 1 : 0;
 
         $baru->refresh();
         $dataBaru = [
@@ -1504,8 +1574,10 @@ class PengisianKegiatan extends Component
         foreach ($this->blocks as $i => $block) {
             foreach ($block['existing_bukti'] ?? [] as $j => $f) {
                 if ($f['id'] === $berkasId) {
-                    $this->blocks[$i]['existing_bukti'][$j] = $this->maskBerkas($dataBaru);
-                    $this->blocks[$i]['catatan_bukti_dihapus'] = $lama->catatan ?: ($block['catatan_bukti_dihapus'] ?? null);
+                    array_splice($this->blocks[$i]['existing_bukti'], $j + 1 - $hapusLama, $hapusLama, [$this->maskBerkas($dataBaru)]);
+                    if ($hapusLama) {
+                        $this->blocks[$i]['catatan_bukti_dihapus'] = $lama->catatan ?: ($block['catatan_bukti_dihapus'] ?? null);
+                    }
                 }
             }
         }
@@ -1515,7 +1587,7 @@ class PengisianKegiatan extends Component
                 foreach ($blok['existing_bukti'] ?? [] as $k => $f) {
                     if ($f['id'] === $berkasId) {
                         unset($dataBaru['subfolder']);
-                        $this->bagianKustomBlocks[$bagianId][$j]['existing_bukti'][$k] = $this->maskBerkas($dataBaru);
+                        array_splice($this->bagianKustomBlocks[$bagianId][$j]['existing_bukti'], $k + 1 - $hapusLama, $hapusLama, [$this->maskBerkas($dataBaru)]);
                     }
                 }
             }
@@ -1531,7 +1603,14 @@ class PengisianKegiatan extends Component
         }
 
         $this->resetErrorBag("gantiBerkas.{$berkasId}");
-        $this->dispatch('notify', type: 'success', message: "Berkas diganti dengan \"{$baru->nama_file}\" — menunggu diperiksa ulang Tim SAKIP.");
+
+        if ($alasanLamaGagal !== null) {
+            $this->dispatch('notify', type: 'error', message: "Berkas pengganti \"{$baru->nama_file}\" sudah tersimpan, tetapi berkas lama \"{$lama->nama_file}\" GAGAL dihapus dari Google Drive ({$alasanLamaGagal}) — berkas lama masih ada di SIPINTER dan Google Drive. Hapus berkas lama lagi nanti.");
+
+            return;
+        }
+
+        $this->dispatch('notify', type: 'success', message: "Berkas diganti dengan \"{$baru->nama_file}\" — berkas lama dihapus permanen dari SIPINTER".($lama->drive_file_id ? ' dan Google Drive' : '').'. Menunggu diperiksa ulang Tim SAKIP.');
     }
 
     /** Evaluasi RTL periode ini sudah diverifikasi → boleh ditambah bukti susulan. */

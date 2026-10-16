@@ -334,7 +334,7 @@
                     @endif
                     @if (count($blocks) > 1)
                         @if ($block['id'])
-                            <button type="button" class="btn btn-red btn-sm" @click="pendingHapus = { method: 'removeBlock', args: [{{ $i }}] }" wire:loading.class="btn-busy" wire:target="removeBlock({{ $i }})">🗑 Hapus</button>
+                            <button type="button" class="btn btn-red btn-sm" @click="pendingHapus = { method: 'removeBlock', args: [{{ $i }}], rtl: @js(filled($block['rtl_evaluasi_id'] ?? null)) }" wire:loading.class="btn-busy" wire:target="removeBlock({{ $i }})">🗑 Hapus</button>
                         @else
                             <button type="button" class="btn btn-red btn-sm" wire:click="removeBlock({{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="removeBlock({{ $i }})">🗑 Hapus</button>
                         @endif
@@ -1306,12 +1306,16 @@
             </div>
             <div class="modal-body" style="flex-direction:column;padding:18px;gap:16px">
                 <p style="margin:0;font-size:13px;color:var(--ink);line-height:1.6" x-text="{
-                    removeBlock: 'Kegiatan ini beserta seluruh buktinya akan dihapus permanen dari SIPINTER dan dari Google Drive.',
+                    removeBlock: 'Kegiatan ini akan dihapus dari SIPINTER. Seluruh buktinya dipindahkan ke Sampah Google Drive — tidak dihapus permanen, masih bisa dipulihkan dari Sampah selama 30 hari.',
                     ganti: 'Setelah berkas pengganti dipilih, bukti lama akan dihapus permanen dari SIPINTER dan dari Google Drive.',
                 }[pendingHapus?.method] ?? 'Bukti ini akan dihapus permanen dari SIPINTER dan dari Google Drive. Pastikan untuk mengunggah bukti pengganti bila memang masih diperlukan.'"></p>
-                <div style="font-size:12.5px;line-height:1.5;padding:10px 12px;border-radius:8px;background:var(--red-soft);color:var(--red)">
+                <div x-show="pendingHapus?.method === 'removeBlock' && pendingHapus?.rtl" style="font-size:12.5px;line-height:1.5;padding:10px 12px;border-radius:8px;background:var(--amber-soft);color:var(--amber)">
+                    📌 Kegiatan ini <b>tertaut ke poin RTL</b> triwulan ini. Bila dihapus, kegiatan tidak lagi dihitung sebagai pelaksanaan RTL tersebut.
+                </div>
+                <div x-show="pendingHapus?.method !== 'removeBlock'" style="font-size:12.5px;line-height:1.5;padding:10px 12px;border-radius:8px;background:var(--red-soft);color:var(--red)">
                     ⚠️ Berkas <b>tidak masuk Sampah</b> Google Drive dan <b>tidak bisa dikembalikan</b>.
                 </div>
+                <p style="margin:0;font-size:12px;color:var(--muted);line-height:1.5">Bila Google Drive sedang bermasalah, tidak ada yang dihapus — hasilnya (berhasil atau gagal beserta alasannya) ditampilkan setelah ini.</p>
                 <div style="display:flex;gap:10px;justify-content:flex-end">
                     <button type="button" class="btn btn-ghost btn-sm" @click="pendingHapus = null">Batal</button>
                     <button type="button" class="btn btn-red btn-sm"
@@ -1319,7 +1323,7 @@
                             ? document.getElementById(pendingHapus.input)?.click()
                             : $wire.call(pendingHapus.method, ...pendingHapus.args);
                             pendingHapus = null"
-                        x-text="pendingHapus?.method === 'ganti' ? '🔁 Ya, Pilih Pengganti' : '🗑️ Ya, Hapus Permanen'"></button>
+                        x-text="{ ganti: '🔁 Ya, Pilih Pengganti', removeBlock: '🗑️ Ya, Hapus Kegiatan' }[pendingHapus?.method] ?? '🗑️ Ya, Hapus Permanen'"></button>
                 </div>
             </div>
         </div>
