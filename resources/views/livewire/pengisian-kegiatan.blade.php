@@ -1301,16 +1301,25 @@
     <div class="modal-overlay" x-show="pendingHapus" x-cloak style="display:none" @click.self="pendingHapus = null" @keydown.escape.window="pendingHapus = null">
         <div class="modal" style="max-width:420px;height:auto">
             <div class="modal-top">
-                <div class="mt-t" x-text="pendingHapus?.method === 'removeBlock' ? '🗑️ Hapus Kegiatan' : '🗑️ Hapus Bukti'"></div>
+                <div class="mt-t" x-text="{ removeBlock: '🗑️ Hapus Kegiatan', ganti: '🔁 Ganti Bukti' }[pendingHapus?.method] ?? '🗑️ Hapus Bukti'"></div>
                 <button type="button" class="x" @click="pendingHapus = null">✕</button>
             </div>
             <div class="modal-body" style="flex-direction:column;padding:18px;gap:16px">
-                <p style="margin:0;font-size:13px;color:var(--ink);line-height:1.6" x-text="pendingHapus?.method === 'removeBlock'
-                    ? 'Kegiatan ini beserta seluruh bukti yang sudah diunggah akan dihapus permanen dan tidak bisa dikembalikan.'
-                    : 'Bukti ini akan dihapus dan tidak bisa dikembalikan. Pastikan untuk mengunggah bukti pengganti bila memang masih diperlukan.'"></p>
+                <p style="margin:0;font-size:13px;color:var(--ink);line-height:1.6" x-text="{
+                    removeBlock: 'Kegiatan ini beserta seluruh buktinya akan dihapus permanen dari SIPINTER dan dari Google Drive.',
+                    ganti: 'Setelah berkas pengganti dipilih, bukti lama akan dihapus permanen dari SIPINTER dan dari Google Drive.',
+                }[pendingHapus?.method] ?? 'Bukti ini akan dihapus permanen dari SIPINTER dan dari Google Drive. Pastikan untuk mengunggah bukti pengganti bila memang masih diperlukan.'"></p>
+                <div style="font-size:12.5px;line-height:1.5;padding:10px 12px;border-radius:8px;background:var(--red-soft);color:var(--red)">
+                    ⚠️ Berkas <b>tidak masuk Sampah</b> Google Drive dan <b>tidak bisa dikembalikan</b>.
+                </div>
                 <div style="display:flex;gap:10px;justify-content:flex-end">
                     <button type="button" class="btn btn-ghost btn-sm" @click="pendingHapus = null">Batal</button>
-                    <button type="button" class="btn btn-red btn-sm" @click="$wire.call(pendingHapus.method, ...pendingHapus.args); pendingHapus = null">🗑️ Ya, Hapus</button>
+                    <button type="button" class="btn btn-red btn-sm"
+                        @click="pendingHapus.method === 'ganti'
+                            ? document.getElementById(pendingHapus.input)?.click()
+                            : $wire.call(pendingHapus.method, ...pendingHapus.args);
+                            pendingHapus = null"
+                        x-text="pendingHapus?.method === 'ganti' ? '🔁 Ya, Pilih Pengganti' : '🗑️ Ya, Hapus Permanen'"></button>
                 </div>
             </div>
         </div>

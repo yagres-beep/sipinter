@@ -225,21 +225,25 @@ class GoogleDriveService
     }
 
     /**
-     * Pindahkan berkas ke Sampah (Trash) Drive — BUKAN hapus permanen, jadi masih bisa
-     * dipulihkan dari Sampah selama 30 hari. Di Drive biasa hanya PEMILIK berkas yang
-     * boleh membuangnya, jadi dipakai akun storage yang dulu mengunggahnya ($akun) bila
-     * akun itu bukan akun aktif.
+     * Hapus berkas dari Drive secara PERMANEN (tidak lewat Sampah, tidak bisa
+     * dipulihkan) — pengguna sudah diminta konfirmasi lebih dulu di layar. Di Drive
+     * biasa hanya PEMILIK berkas yang boleh menghapusnya, jadi dipakai akun storage
+     * yang dulu mengunggahnya ($akun) bila akun itu bukan akun aktif. Berkas yang
+     * memang sudah tidak ada di Drive (404) dianggap berhasil.
      */
-    public function trashFile(string $fileId, ?StorageAccount $akun = null): void
+    public function deleteFile(string $fileId, ?StorageAccount $akun = null): void
     {
         $drive = $akun && $akun->id !== StorageAccount::aktif()?->id && $akun->googleTerhubung()
             ? new Drive($this->clientOAuthUntukAkun($akun))
             : $this->drive();
 
-        $this->panggilApi(
-            fn () => $drive->files->update($fileId, new DriveFile(['trashed' => true]), ['fields' => 'id']),
-            'memindahkan berkas ke Sampah'
-        );
+        try {
+            $this->panggilApi(fn () => $drive->files->delete($fileId), 'menghapus berkas');
+        } catch (RuntimeException $e) {
+            if (($e->getPrevious()?->getCode()) !== 404) {
+                throw $e;
+            }
+        }
     }
 
     /**

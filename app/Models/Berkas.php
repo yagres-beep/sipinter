@@ -248,10 +248,10 @@ class Berkas extends Model
     }
 
     /**
-     * Buang salinan fisik berkas ini SEBELUM barisnya dihapus: salinan lokal dihapus,
-     * salinan Drive dipindah ke Sampah (bisa dipulihkan 30 hari) — supaya bukti yang
-     * dihapus dari aplikasi tidak tertinggal di folder Drive dan membingungkan Tim
-     * SAKIP. Gagal di Drive tidak menggagalkan penghapusan, cukup dicatat di log.
+     * Buang salinan fisik berkas ini SEBELUM barisnya dihapus: salinan lokal dan
+     * salinan Drive dihapus permanen (pengguna sudah mengonfirmasi lewat dialog di
+     * layar) — supaya bukti yang dihapus dari aplikasi tidak tertinggal di folder
+     * Drive. Gagal di Drive tidak menggagalkan penghapusan, cukup dicatat di log.
      */
     public function buangSalinan(): void
     {
@@ -264,9 +264,9 @@ class Berkas extends Model
         }
 
         try {
-            app(GoogleDriveService::class)->trashFile($this->drive_file_id, $this->storageAccount);
+            app(GoogleDriveService::class)->deleteFile($this->drive_file_id, $this->storageAccount);
         } catch (\Throwable $e) {
-            Log::warning("Gagal memindahkan berkas {$this->drive_file_id} ke Sampah Google Drive: ".$e->getMessage());
+            Log::warning("Gagal menghapus berkas {$this->drive_file_id} dari Google Drive: ".$e->getMessage());
         }
     }
 }

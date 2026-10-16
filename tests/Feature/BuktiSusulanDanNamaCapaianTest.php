@@ -124,7 +124,7 @@ class BuktiSusulanDanNamaCapaianTest extends TestCase
         });
 
         $form = $this->form()
-            ->assertSee('🔁 Ganti')
+            ->assertSee('title="Ganti dengan berkas PDF lain"', false)
             ->set("gantiBerkas.{$ditolak->id}", UploadedFile::fake()->create('undangan bertanda tangan.pdf', 10, 'application/pdf'))
             ->assertHasNoErrors();
 
@@ -151,7 +151,7 @@ class BuktiSusulanDanNamaCapaianTest extends TestCase
         $ditolak = $this->berkas($kegiatan, 'ditolak');
 
         $this->form()
-            ->assertDontSee('🔁 Ganti')
+            ->assertDontSee('title="Ganti dengan berkas PDF lain"', false)
             ->call('hapusBuktiLama', 0, $ditolak->id);
 
         $this->assertNotNull(Berkas::find($ditolak->id));

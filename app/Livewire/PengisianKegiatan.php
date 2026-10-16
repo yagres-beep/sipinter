@@ -1227,8 +1227,8 @@ class PengisianKegiatan extends Component
      * yang ditolak (lihat "Rincian N" — status per-berkas, bukan per-kegiatan). Dicek
      * di sini, bukan cuma disembunyikan tombolnya di blade — defense in depth, pola
      * yang sama dipakai VerifikasiCapaian::tandaiTolak() dkk.
-     * File fisik lokal ikut dihapus; salinan di Google Drive dipindah ke Sampah (lihat
-     * Berkas::buangSalinan()).
+     * File fisik lokal & salinan di Google Drive ikut dihapus permanen (lihat
+     * Berkas::buangSalinan()); konfirmasinya lewat dialog pendingHapus di blade.
      */
     public function hapusBuktiLama(int $blockIndex, int $berkasId): void
     {
