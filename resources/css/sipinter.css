@@ -155,7 +155,11 @@ a{text-decoration:none;color:inherit}
 .filechip-grid .filechip{margin-top:0;min-width:0}
 .filechip-grid .filechip .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
 /* Ganti nama berkas langsung dari web (komponen <x-nama-berkas>) */
-.btn-ubah-nama{background:none;border:0;padding:0 2px;margin-left:4px;cursor:pointer;font-size:12px;opacity:.55;vertical-align:baseline}
+.btn-ubah-nama{background:none;border:0;padding:0 2px;margin-left:4px;cursor:pointer;font-size:12px;opacity:.55;vertical-align:baseline;flex:none}
+/* Nama panjang: hanya .teks-nama yang terpotong (white-space mewarisi induk — di filechip-grid nowrap → "…", di tempat lain tetap membungkus) */
+.nama-berkas .tampil-nama{display:inline-flex;align-items:center;gap:4px;max-width:100%;min-width:0;vertical-align:bottom}
+.nama-berkas .ikon-nama{flex:none}
+.nama-berkas .teks-nama{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .btn-ubah-nama:hover{opacity:1}
 .filechip .nm:has(.sedang-ubah){white-space:normal;overflow:visible;flex:1}
 .filechip:has(.sedang-ubah){flex-wrap:wrap}

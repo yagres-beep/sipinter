@@ -54,7 +54,8 @@
     :class="{ 'sedang-ubah': edit }"
     @click.stop
 >
-    <span x-show="!edit">📄 <span x-text="nama">{{ $nama }}</span>
+    {{-- Yang dipotong (…) hanya teks nama; ✏️ selalu tampil walau nama panjang. --}}
+    <span x-show="!edit" class="tampil-nama"><span class="ikon-nama">📄</span><span class="teks-nama" x-text="nama" :title="nama">{{ $nama }}</span>
         @if ($bisaUbah)
             <button type="button" class="btn-ubah-nama" title="Ganti nama berkas" @click.stop.prevent="mulai()">✏️</button>
         @endif
