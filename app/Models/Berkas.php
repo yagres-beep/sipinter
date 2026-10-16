@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class Berkas extends Model
@@ -244,5 +245,28 @@ class Berkas extends Model
         }
 
         return app(GoogleDriveService::class)->getFileLink($this->drive_file_id);
+    }
+
+    /**
+     * Buang salinan fisik berkas ini SEBELUM barisnya dihapus: salinan lokal dihapus,
+     * salinan Drive dipindah ke Sampah (bisa dipulihkan 30 hari) — supaya bukti yang
+     * dihapus dari aplikasi tidak tertinggal di folder Drive dan membingungkan Tim
+     * SAKIP. Gagal di Drive tidak menggagalkan penghapusan, cukup dicatat di log.
+     */
+    public function buangSalinan(): void
+    {
+        if ($this->path) {
+            Storage::disk('local')->delete($this->path);
+        }
+
+        if (! $this->drive_file_id) {
+            return;
+        }
+
+        try {
+            app(GoogleDriveService::class)->trashFile($this->drive_file_id, $this->storageAccount);
+        } catch (\Throwable $e) {
+            Log::warning("Gagal memindahkan berkas {$this->drive_file_id} ke Sampah Google Drive: ".$e->getMessage());
+        }
     }
 }

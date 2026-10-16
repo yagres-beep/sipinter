@@ -1150,9 +1150,7 @@ class PengisianKegiatan extends Component
         }
 
         foreach ($kegiatan->berkas as $berkas) {
-            if ($berkas->path) {
-                Storage::disk('local')->delete($berkas->path);
-            }
+            $berkas->buangSalinan();
         }
 
         $kegiatan->berkas()->delete();
@@ -1229,8 +1227,8 @@ class PengisianKegiatan extends Component
      * yang ditolak (lihat "Rincian N" — status per-berkas, bukan per-kegiatan). Dicek
      * di sini, bukan cuma disembunyikan tombolnya di blade — defense in depth, pola
      * yang sama dipakai VerifikasiCapaian::tandaiTolak() dkk.
-     * File fisik lokal ikut dihapus; salinan di Google Drive (bila sempat tersalin)
-     * TIDAK ikut dihapus (belum ada mekanisme hapus-dari-Drive di GoogleDriveService).
+     * File fisik lokal ikut dihapus; salinan di Google Drive dipindah ke Sampah (lihat
+     * Berkas::buangSalinan()).
      */
     public function hapusBuktiLama(int $blockIndex, int $berkasId): void
     {
@@ -1259,10 +1257,7 @@ class PengisianKegiatan extends Component
             $this->blocks[$blockIndex]['catatan_bukti_dihapus'] = $berkas->catatan;
         }
 
-        if ($berkas->path) {
-            Storage::disk('local')->delete($berkas->path);
-        }
-
+        $berkas->buangSalinan();
         $berkas->delete();
 
         $this->blocks[$blockIndex]['existing_bukti'] = collect($this->blocks[$blockIndex]['existing_bukti'])
@@ -1312,10 +1307,7 @@ class PengisianKegiatan extends Component
             $poin->update(['catatan_bukti_dihapus' => $berkas->catatan]);
         }
 
-        if ($berkas->path) {
-            Storage::disk('local')->delete($berkas->path);
-        }
-
+        $berkas->buangSalinan();
         $berkas->delete();
 
         Cache::forget($this->cacheKeyPeriodeIku("riwayat-bagian-{$poin->bagian_kustom_id}"));
@@ -1372,10 +1364,7 @@ class PengisianKegiatan extends Component
             $poin->update(['catatan_bukti_dihapus' => $berkas->catatan]);
         }
 
-        if ($berkas->path) {
-            Storage::disk('local')->delete($berkas->path);
-        }
-
+        $berkas->buangSalinan();
         $berkas->delete();
 
         $this->cacheRtlBerjalan = null;
@@ -1497,9 +1486,7 @@ class PengisianKegiatan extends Component
         if ($lama->catatan) {
             $ref->update(['catatan_bukti_dihapus' => $lama->catatan]);
         }
-        if ($lama->path) {
-            Storage::disk('local')->delete($lama->path);
-        }
+        $lama->buangSalinan();
         $lama->delete();
 
         $baru->refresh();
