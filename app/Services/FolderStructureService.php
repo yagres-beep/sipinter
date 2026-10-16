@@ -36,6 +36,9 @@ class FolderStructureService
         'bukti_dukung_sakip' => 'Bukti-Dukung-SAKIP',
     ];
 
+    /** Kunci appProperties Drive berisi kode Berkas — lihat GoogleDriveService::cariBerkasBerpenanda(). */
+    public const PENANDA_KODE = 'sipinter_kode';
+
     public function __construct(protected GoogleDriveService $drive) {}
 
     /**
@@ -470,7 +473,7 @@ class FolderStructureService
      *                                 diatur Tim SAKIP dengan subfolder per kegiatan.
      * @return array{drive_file_id: string, storage_account_id: ?int, nama_file: string}
      */
-    public function unggahBerkas(Periode $periode, MasterIku $iku, string $kategoriEnum, string $localPath, ?Kegiatan $kegiatan = null, string $ekstensi = '.pdf', string $mimeType = 'application/pdf', ?string $namaFolderOverride = null, ?string $namaBerkasOverride = null, ?string $subfolder = null, ?string $namaItem = null): array
+    public function unggahBerkas(Periode $periode, MasterIku $iku, string $kategoriEnum, string $localPath, ?Kegiatan $kegiatan = null, string $ekstensi = '.pdf', string $mimeType = 'application/pdf', ?string $namaFolderOverride = null, ?string $namaBerkasOverride = null, ?string $subfolder = null, ?string $namaItem = null, ?string $kodeBerkas = null): array
     {
         $namaKategori = $namaFolderOverride
             ?? self::KATEGORI_KE_FOLDER[$kategoriEnum]
@@ -544,7 +547,7 @@ class FolderStructureService
         $namaBerkas = self::namaUnik($namaDasar, $namaSudahAda, $ekstensi);
         $this->tandaiNamaDipakai($tujuanFolderId, $namaBerkas);
 
-        $hasil = $this->drive->uploadFile($localPath, $namaBerkas, $tujuanFolderId, $mimeType);
+        $hasil = $this->drive->uploadFile($localPath, $namaBerkas, $tujuanFolderId, $mimeType, $kodeBerkas ? [self::PENANDA_KODE => $kodeBerkas] : []);
 
         $akun = StorageAccount::aktif();
         $akun?->tambahKuotaTerpakai($hasil['size_bytes']);
@@ -560,18 +563,18 @@ class FolderStructureService
      * Alias nyaman untuk unggahan kategori "Capaian" yang SELALU terikat ke satu
      * kegiatan — dipakai oleh PengisianKegiatan.
      */
-    public function unggahBerkasKegiatan(Kegiatan $kegiatan, string $kategoriEnum, string $localPath, string $ekstensi = '.pdf', string $mimeType = 'application/pdf', ?string $namaBerkasOverride = null, ?string $subfolder = null): array
+    public function unggahBerkasKegiatan(Kegiatan $kegiatan, string $kategoriEnum, string $localPath, string $ekstensi = '.pdf', string $mimeType = 'application/pdf', ?string $namaBerkasOverride = null, ?string $subfolder = null, ?string $kodeBerkas = null): array
     {
-        return $this->unggahBerkas($kegiatan->periode, $kegiatan->masterIku, $kategoriEnum, $localPath, $kegiatan, $ekstensi, $mimeType, namaBerkasOverride: $namaBerkasOverride, subfolder: $subfolder);
+        return $this->unggahBerkas($kegiatan->periode, $kegiatan->masterIku, $kategoriEnum, $localPath, $kegiatan, $ekstensi, $mimeType, namaBerkasOverride: $namaBerkasOverride, subfolder: $subfolder, kodeBerkas: $kodeBerkas);
     }
 
     /**
      * Unggah bukti evaluasi satu poin RTL ke kategori Evaluasi-RTL — dalam folder
      * bernama teks RTL-nya bila Tim SAKIP mengaktifkan subfolder per kegiatan di kategori itu.
      */
-    public function unggahBerkasRtl(RtlEvaluasi $poin, string $localPath, ?string $namaBerkasOverride = null): array
+    public function unggahBerkasRtl(RtlEvaluasi $poin, string $localPath, ?string $namaBerkasOverride = null, ?string $kodeBerkas = null): array
     {
-        return $this->unggahBerkas($poin->periode, $poin->masterIku, 'evaluasi_rtl', $localPath, namaBerkasOverride: $namaBerkasOverride, namaItem: $poin->rtl_teks);
+        return $this->unggahBerkas($poin->periode, $poin->masterIku, 'evaluasi_rtl', $localPath, namaBerkasOverride: $namaBerkasOverride, namaItem: $poin->rtl_teks, kodeBerkas: $kodeBerkas);
     }
 
     /**
@@ -579,9 +582,9 @@ class FolderStructureService
      * Risiko") — dalam folder bernama teks poinnya bila Tim SAKIP mengaktifkan subfolder
      * per kegiatan di kategori itu.
      */
-    public function unggahBerkasBagianKustom(BagianKustomPoin $poin, string $localPath, ?string $namaBerkasOverride = null): array
+    public function unggahBerkasBagianKustom(BagianKustomPoin $poin, string $localPath, ?string $namaBerkasOverride = null, ?string $kodeBerkas = null): array
     {
-        return $this->unggahBerkas($poin->periode, $poin->masterIku, 'bagian_kustom', $localPath, namaFolderOverride: $poin->bagianKustom->nama, namaBerkasOverride: $namaBerkasOverride, namaItem: $poin->teks);
+        return $this->unggahBerkas($poin->periode, $poin->masterIku, 'bagian_kustom', $localPath, namaFolderOverride: $poin->bagianKustom->nama, namaBerkasOverride: $namaBerkasOverride, namaItem: $poin->teks, kodeBerkas: $kodeBerkas);
     }
 
     // ================================================================

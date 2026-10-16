@@ -16,6 +16,7 @@ use App\Models\RtlEvaluasi as RtlEvaluasiModel;
 use App\Services\FolderStructureService;
 use Illuminate\Contracts\Cache\Lock;
 use Illuminate\Contracts\Cache\LockTimeoutException;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -697,7 +698,15 @@ class PengisianKegiatan extends Component
      */
     protected function unggahLangsung(string $jalur): void
     {
-        $daftarBerkas = array_values(array_filter((array) data_get($this, "{$jalur}.bukti", [])));
+        $daftarBerkas = array_values(array_filter(Arr::wrap(data_get($this, "{$jalur}.bukti", []))));
+        data_set($this, "{$jalur}.bukti", $daftarBerkas);
+
+        // Poin evaluasi RTL hanya milik IKU & triwulan form ini — id dari browser tidak dipercaya.
+        if (preg_match('/^evaluasi\.(\d+)$/', $jalur, $cocok) && ! $this->rtlTriwulanBerjalan()->contains('id', (int) $cocok[1])) {
+            unset($this->evaluasi[(int) $cocok[1]]);
+
+            return;
+        }
 
         if ($daftarBerkas === []) {
             return;
@@ -1143,7 +1152,11 @@ class PengisianKegiatan extends Component
             return;
         }
 
-        $kegiatan = Kegiatan::with('berkas')->find($block['id']);
+        // Hanya kegiatan milik IKU & periode form ini — id dari browser tidak dipercaya.
+        $periode = $this->periodeSaatIni();
+        $kegiatan = $periode
+            ? Kegiatan::with('berkas')->where('iku_id', $this->iku_id)->where('periode_id', $periode->id)->find($block['id'])
+            : null;
 
         if (! $kegiatan) {
             return;
@@ -1206,6 +1219,53 @@ class PengisianKegiatan extends Component
 
             return false;
         }
+    }
+
+    /**
+     * Coba lagi unggah SATU berkas yang tersimpan tapi belum masuk Google Drive
+     * (tombol "Coba lagi" di <x-belum-di-drive>) — tanpa mengulang berkas lain.
+     * Berkas yang sebenarnya sudah masuk Drive tidak diunggah dobel (lihat
+     * Berkas::sinkronUlangKeDrive()).
+     */
+    public function cobaLagiDrive(int $berkasId): void
+    {
+        $periode = $this->iku_id ? $this->periodeSaatIni() : null;
+        $berkas = $periode ? Berkas::belumDiDrive()->whereKey($berkasId)->first() : null;
+
+        if (! $berkas || ! $this->berkasMilikForm($berkas, $periode)) {
+            return;
+        }
+
+        try {
+            $berhasil = $berkas->sinkronUlangKeDrive();
+        } catch (\Throwable $e) {
+            Log::warning("Coba lagi berkas {$berkas->kode} ke Drive gagal: {$e->getMessage()}");
+            $this->dispatch('notify', type: 'error', message: "\"{$berkas->nama_file}\" masih BELUM masuk Google Drive — ".self::alasanGagalDrive($e->getMessage()).'. Berkas tetap tersimpan di server; coba lagi nanti.');
+
+            return;
+        }
+
+        if (! $berhasil) {
+            $this->dispatch('notify', type: 'error', message: "\"{$berkas->nama_file}\" tidak bisa diunggah ulang — salinannya di server sudah tidak ada. Hapus berkas ini lalu unggah ulang dari komputer Anda.");
+
+            return;
+        }
+
+        $this->dispatch('notify', type: 'success', message: "✅ \"{$berkas->nama_file}\" sekarang sudah tersimpan di Google Drive.");
+        $this->lupakanCachePeriodeIku();
+        $this->muatUlangForm($this->catatIsianBelumTersimpan());
+    }
+
+    /** Berkas ini milik kegiatan/poin IKU & periode yang sedang dibuka di form ini? */
+    protected function berkasMilikForm(Berkas $berkas, Periode $periode): bool
+    {
+        $ref = $berkas->ref;
+
+        return match (true) {
+            $ref instanceof Kegiatan, $ref instanceof BagianKustomPoin => (int) $ref->iku_id === (int) $this->iku_id && (int) $ref->periode_id === (int) $periode->id,
+            $ref instanceof RtlEvaluasiModel => $this->rtlTriwulanBerjalan()->contains('id', $ref->id),
+            default => false,
+        };
     }
 
     protected function notifikasiBuktiDihapus(Berkas $berkas): void
@@ -1525,15 +1585,7 @@ class PengisianKegiatan extends Component
         ]);
 
         try {
-            $folderService = app(FolderStructureService::class);
-            $lokal = Storage::disk('local')->path($path);
-            $hasilDrive = match (true) {
-                $ref instanceof Kegiatan => $folderService->unggahBerkasKegiatan($ref, $lama->kategori, $lokal, namaBerkasOverride: $namaBerkas, subfolder: $lama->subfolder),
-                $ref instanceof BagianKustomPoin => $folderService->unggahBerkasBagianKustom($ref, $lokal, namaBerkasOverride: $namaBerkas),
-                $ref instanceof RtlEvaluasiModel => $folderService->unggahBerkasRtl($ref, $lokal, namaBerkasOverride: $namaBerkas),
-                default => $folderService->unggahBerkas($ref->periode, $ref->masterIku, $lama->kategori, $lokal, namaBerkasOverride: $namaBerkas),
-            };
-            $baru->update($hasilDrive);
+            $baru->setRelation('ref', $ref)->unggahKeDrive();
             $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'berkas pengganti', true);
         } catch (\Throwable $e) {
             Log::warning('Gagal mengunggah berkas pengganti ke Google Drive, disimpan lokal saja: '.$e->getMessage());
@@ -1700,10 +1752,7 @@ class PengisianKegiatan extends Component
 
             try {
                 $lokal = Storage::disk('local')->path($path);
-                $hasilDrive = $kategori === 'capaian'
-                    ? $folderService->unggahBerkasKegiatan($ref, 'capaian', $lokal, namaBerkasOverride: $namaBerkas)
-                    : $folderService->unggahBerkasRtl($ref, $lokal, namaBerkasOverride: $namaBerkas);
-                $berkas->update($hasilDrive);
+                $berkas->setRelation('ref', $ref)->unggahKeDrive();
                 $this->notifikasiHasilUnggah($file->getClientOriginalName(), $konteks, true);
             } catch (\Throwable $e) {
                 Log::warning("Gagal mengunggah {$konteks} ke Google Drive, disimpan lokal saja: ".$e->getMessage());
@@ -4021,7 +4070,7 @@ class PengisianKegiatan extends Component
                     // supaya menyimpan/mengajukan ulang isian yang sudah ada tidak membuat
                     // baris duplikat. drive_folder_id SENGAJA tidak disentuh (dipakai ulang
                     // oleh FolderStructureService, lihat catatan di model Kegiatan).
-                    $kegiatan = Kegiatan::findOrFail($block['id']);
+                    $kegiatan = Kegiatan::where('iku_id', $this->iku_id)->where('periode_id', $periode->id)->findOrFail($block['id']);
                     $kegiatan->update([
                         'rtl_evaluasi_id' => $this->rtlEvaluasiIdUntukBlock($block),
                         'uraian_kegiatan' => $block['uraian_kegiatan'],
@@ -4086,8 +4135,7 @@ class PengisianKegiatan extends Component
                     try {
                         $this->streamProgresUnggah($file->getClientOriginalName(), 'bukti kegiatan');
                         $localFullPath = Storage::disk('local')->path($path);
-                        $hasilDrive = $folderService->unggahBerkasKegiatan($kegiatan, 'capaian', $localFullPath, namaBerkasOverride: $namaBerkas, subfolder: $subfolder);
-                        $berkas->update($hasilDrive);
+                        $berkas->setRelation('ref', $kegiatan)->unggahKeDrive();
                         $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti kegiatan', true);
                     } catch (\Throwable $e) {
                         Log::warning('Gagal mengunggah berkas ke Google Drive, disimpan lokal saja: '.$e->getMessage());
@@ -4158,6 +4206,11 @@ class PengisianKegiatan extends Component
                 continue;
             }
 
+            // Hanya poin RTL milik IKU & triwulan form ini — id dari browser tidak dipercaya.
+            if (! $this->rtlTriwulanBerjalan()->contains('id', (int) $rtlId)) {
+                continue;
+            }
+
             $poin = RtlEvaluasiModel::with(['periode', 'masterIku'])->findOrFail($rtlId);
             $namaBerkasDasar = 'Evaluasi RTL '.$poin->rtl_teks;
             $adaPerbaikanLainDiajukan = true;
@@ -4188,8 +4241,7 @@ class PengisianKegiatan extends Component
                 try {
                     $this->streamProgresUnggah($file->getClientOriginalName(), 'bukti evaluasi RTL');
                     $localFullPath = Storage::disk('local')->path($path);
-                    $hasilDrive = $folderService->unggahBerkasRtl($poin, $localFullPath, namaBerkasOverride: $namaBerkas);
-                    $berkas->update($hasilDrive);
+                    $berkas->setRelation('ref', $poin)->unggahKeDrive();
                     $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti evaluasi RTL', true);
                 } catch (\Throwable $e) {
                     Log::warning('Gagal mengunggah bukti evaluasi RTL ke Google Drive, disimpan lokal saja: '.$e->getMessage());
@@ -4296,7 +4348,11 @@ class PengisianKegiatan extends Component
                 }
 
                 if ($blok['id'] ?? null) {
-                    $poin = BagianKustomPoin::whereKey($blok['id'])->first();
+                    $poin = BagianKustomPoin::whereKey($blok['id'])
+                        ->where('bagian_kustom_id', $bagian->id)
+                        ->where('iku_id', $this->iku_id)
+                        ->where('periode_id', $periode->id)
+                        ->first();
 
                     if (! $poin) {
                         continue;
@@ -4336,8 +4392,7 @@ class PengisianKegiatan extends Component
                     try {
                         $this->streamProgresUnggah($file->getClientOriginalName(), "bukti {$bagian->nama}");
                         $localFullPath = Storage::disk('local')->path($path);
-                        $hasilDrive = $folderService->unggahBerkasBagianKustom($poin, $localFullPath, namaBerkasOverride: $namaBerkas);
-                        $berkas->update($hasilDrive);
+                        $berkas->setRelation('ref', $poin)->unggahKeDrive();
                         $this->notifikasiHasilUnggah($file->getClientOriginalName(), "bukti {$bagian->nama}", true);
                     } catch (\Throwable $e) {
                         Log::warning("Gagal mengunggah bukti {$bagian->nama} ke Google Drive, disimpan lokal saja: ".$e->getMessage());

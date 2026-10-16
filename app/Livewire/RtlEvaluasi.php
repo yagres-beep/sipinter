@@ -7,10 +7,10 @@ use App\Models\Berkas;
 use App\Models\MasterIku;
 use App\Models\Periode;
 use App\Models\RtlEvaluasi as RtlEvaluasiModel;
-use App\Services\FolderStructureService;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
@@ -107,8 +107,11 @@ class RtlEvaluasi extends Component
     {
         $this->evaluasi = [];
 
+        // Form tetap terbuka selama realisasi belum diisi — bukti realisasi sudah
+        // langsung tersimpan begitu diunggah (unggahBuktiEvaluasi()), jadi adanya
+        // bukti saja belum berarti form ini selesai diisi.
         foreach ($this->rtlTriwulanSebelumnya() as $poin) {
-            if (! $poin->sudahDievaluasi()) {
+            if (blank($poin->realisasi)) {
                 $this->evaluasi[$poin->id] = ['realisasi' => '', 'status_cocok' => '', 'bukti' => []];
             }
         }
@@ -270,6 +273,12 @@ class RtlEvaluasi extends Component
      */
     public function updatedEvaluasi($value, $key): void
     {
+        if (preg_match('/^(\d+)\.bukti/', (string) $key, $cocok)) {
+            $this->unggahBuktiEvaluasi((int) $cocok[1]);
+
+            return;
+        }
+
         if (! str_ends_with($key, '.realisasi')) {
             return;
         }
@@ -293,40 +302,77 @@ class RtlEvaluasi extends Component
             "evaluasi.{$rtlId}.status_cocok" => 'status kecocokan',
         ]);
 
-        $poin = RtlEvaluasiModel::with(['periode', 'masterIku'])->findOrFail($rtlId);
+        // Hanya poin RTL milik IKU & triwulan halaman ini — id dari browser tidak dipercaya begitu saja.
+        $poin = $this->rtlTriwulanSebelumnya()->firstWhere('id', $rtlId);
+
+        if (! $poin) {
+            return;
+        }
 
         $poin->update([
             'realisasi' => $this->evaluasi[$rtlId]['realisasi'],
             'status_cocok' => $this->evaluasi[$rtlId]['status_cocok'],
         ]);
 
-        $folderService = app(FolderStructureService::class);
+        // Bukti biasanya sudah tersimpan begitu dipilih (unggahBuktiEvaluasi()); ini
+        // hanya untuk sisa yang belum sempat diproses.
+        $this->simpanBerkasBukti($poin, $this->evaluasi[$rtlId]['bukti'] ?? []);
 
-        // RF-30: bukti realisasi bersifat OPSIONAL — boleh tidak ada sama sekali.
-        foreach ($this->evaluasi[$rtlId]['bukti'] as $file) {
-            $path = $file->store('bukti-evaluasi-rtl', 'local');
+        unset($this->evaluasi[$rtlId]);
 
+        session()->flash('status', 'Evaluasi RTL berhasil disimpan.');
+    }
+
+    /**
+     * Bukti realisasi LANGSUNG disimpan & diunggah ke Drive begitu dipilih (RF-30,
+     * opsional) — tidak menunggu "Simpan Evaluasi", supaya tidak hilang bila halaman
+     * ditinggalkan.
+     */
+    protected function unggahBuktiEvaluasi(int $rtlId): void
+    {
+        $daftar = array_values(array_filter(Arr::wrap($this->evaluasi[$rtlId]['bukti'] ?? [])));
+        $this->evaluasi[$rtlId]['bukti'] = [];
+
+        $poin = $this->rtlTriwulanSebelumnya()->firstWhere('id', $rtlId);
+
+        if (! $poin || $daftar === []) {
+            return;
+        }
+
+        $validator = Validator::make(['bukti' => $daftar], ['bukti.*' => ['file', 'mimes:pdf']], ['bukti.*.mimes' => 'Bukti realisasi harus berupa PDF.']);
+
+        if ($validator->fails()) {
+            $this->addError("evaluasi.{$rtlId}.bukti", $validator->errors()->first());
+
+            return;
+        }
+
+        $this->simpanBerkasBukti($poin, $daftar);
+    }
+
+    /**
+     * @param  array<int, mixed>  $daftar  berkas unggahan sementara Livewire.
+     */
+    protected function simpanBerkasBukti(RtlEvaluasiModel $poin, array $daftar): void
+    {
+        foreach ($daftar as $file) {
             $berkas = Berkas::create([
                 'ref_id' => $poin->id,
                 'ref_type' => RtlEvaluasiModel::class,
                 'kategori' => 'evaluasi_rtl',
                 'nama_file' => $file->getClientOriginalName(),
-                'path' => $path,
+                'path' => $file->store('bukti-evaluasi-rtl', 'local'),
                 'status_verifikasi' => 'menunggu',
             ]);
 
             try {
-                $localFullPath = Storage::disk('local')->path($path);
-                $hasilDrive = $folderService->unggahBerkasRtl($poin, $localFullPath);
-                $berkas->update($hasilDrive);
+                $berkas->setRelation('ref', $poin)->unggahKeDrive();
+                $this->dispatch('notify', type: 'success', message: "✅ {$file->getClientOriginalName()} tersimpan di Google Drive.");
             } catch (\Throwable $e) {
                 Log::warning('Gagal mengunggah bukti evaluasi RTL ke Google Drive, disimpan lokal saja: '.$e->getMessage());
+                $this->dispatch('notify', type: 'error', message: "⚠️ {$file->getClientOriginalName()} BELUM masuk Google Drive (".PengisianKegiatan::alasanGagalDrive($e->getMessage()).') — tersimpan sementara di server dan dicoba lagi otomatis.');
             }
         }
-
-        unset($this->evaluasi[$rtlId]);
-
-        session()->flash('status', 'Evaluasi RTL berhasil disimpan.');
     }
 
     public function render()

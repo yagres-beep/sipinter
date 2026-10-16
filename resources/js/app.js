@@ -52,6 +52,123 @@ document.addEventListener('alpine:init', () => {
         },
     }));
 
+    // Zona unggah drag-and-drop — markup-nya di <x-zona-unggah>. Berkas yang diseret
+    // dimasukkan ke <input type="file" wire:model> milik zona itu sendiri lalu dipicu
+    // event "change", jadi unggahannya diproses Livewire persis seperti dipilih lewat
+    // tombol (termasuk tujuan, validasi & simpan otomatis di server). Tiap zona punya
+    // input sendiri, jadi berkas selalu masuk ke kegiatan/folder tempat ia dilepas.
+    Alpine.data('zonaUnggah', ({ ekstensi = [], banyak = true } = {}) => ({
+        diseret: false,
+        sibuk: false,
+        progres: 0,
+        antrean: [],
+        terakhir: [],
+        ringkasan: '',
+        urut: 0,
+
+        pilih(e) {
+            if (e?.target === this.$refs.input || this.sibuk) return;
+            this.$refs.input.click();
+        },
+
+        adaBerkas(e) {
+            return Array.from(e.dataTransfer?.types || []).includes('Files');
+        },
+
+        masuk(e) {
+            if (! this.adaBerkas(e)) return;
+            this.diseret = true;
+            e.dataTransfer.dropEffect = this.sibuk ? 'none' : 'copy';
+        },
+
+        keluar(e) {
+            if (! this.$el.contains(e.relatedTarget)) this.diseret = false;
+        },
+
+        jatuhkan(e) {
+            this.diseret = false;
+            if (this.adaBerkas(e)) this.kirim(Array.from(e.dataTransfer.files));
+        },
+
+        sesuai(f) {
+            return ekstensi.length === 0 || ekstensi.includes((f.name.split('.').pop() || '').toLowerCase());
+        },
+
+        kirim(files) {
+            if (this.sibuk) {
+                this.ringkasan = 'Tunggu unggahan sebelumnya selesai dulu.';
+                return;
+            }
+            files.filter((f) => ! this.sesuai(f)).forEach((f) => this.tambah(f, 'ditolak'));
+            let sah = files.filter((f) => this.sesuai(f));
+            if (! banyak) sah = sah.slice(0, 1);
+            if (sah.length === 0) return;
+
+            const dt = new DataTransfer();
+            sah.forEach((f) => dt.items.add(f));
+            this.$refs.input.files = dt.files;
+            this.$refs.input.dispatchEvent(new Event('change', { bubbles: true }));
+        },
+
+        tambah(f, status) {
+            this.antrean.push({ id: ++this.urut, nama: f.name, ukuran: f.size, status });
+        },
+
+        mulai() {
+            this.terakhir = Array.from(this.$refs.input.files || []);
+            this.antrean = this.antrean.filter((b) => b.status !== 'gagal' && b.status !== 'dibatalkan');
+            this.terakhir.forEach((f) => this.tambah(f, 'mengunggah'));
+            this.sibuk = true;
+            this.progres = 0;
+            this.ringkasan = '';
+        },
+
+        ubahStatus(ke) {
+            this.antrean.forEach((b) => { if (b.status === 'mengunggah') b.status = ke; });
+            this.sibuk = false;
+            const n = (s) => this.antrean.filter((b) => b.status === s).length;
+            const bagian = [
+                n('tersimpan') && `${n('tersimpan')} terunggah`,
+                n('gagal') && `${n('gagal')} gagal`,
+                n('ditolak') && `${n('ditolak')} ditolak (bukan format yang diterima)`,
+            ].filter(Boolean);
+            this.ringkasan = bagian.length ? bagian.join(' · ') + (n('tersimpan') ? ' — status Google Drive tiap berkas tampil di daftar bukti.' : '') : '';
+        },
+
+        selesai() { this.progres = 100; this.ubahStatus('tersimpan'); },
+        gagal() { this.ubahStatus('gagal'); },
+        dibatalkan() { this.ubahStatus('dibatalkan'); },
+
+        batal() {
+            this.$wire.cancelUpload(this.$refs.input.getAttribute('wire:model'));
+        },
+
+        cobaLagi() {
+            const ulang = this.terakhir;
+            this.antrean = this.antrean.filter((b) => b.status !== 'gagal');
+            this.kirim(ulang);
+        },
+
+        buang(i) {
+            this.antrean.splice(i, 1);
+        },
+
+        ukuran(b) {
+            if (b >= 1024 * 1024) return (b / 1024 / 1024).toFixed(1).replace('.', ',') + ' MB';
+            return Math.max(1, Math.round(b / 1024)) + ' KB';
+        },
+
+        labelStatus(b) {
+            return {
+                mengunggah: 'mengunggah…',
+                tersimpan: '✓ terunggah',
+                gagal: '✗ gagal',
+                ditolak: '✗ format tidak diterima',
+                dibatalkan: 'dibatalkan',
+            }[b.status] ?? '';
+        },
+    }));
+
     // State dialog konfirmasi global — markup-nya di <x-dialog-konfirmasi> (layout).
     Alpine.store('dialog', {
         buka: false,
@@ -83,6 +200,15 @@ document.addEventListener('alpine:init', () => {
         },
     });
 });
+
+// Berkas yang terlanjur dilepas DI LUAR zona unggah jangan sampai dibuka browser
+// sebagai halaman baru (isian yang belum tersimpan bisa hilang) — cukup diabaikan.
+['dragover', 'drop'].forEach((jenis) => window.addEventListener(jenis, (e) => {
+    if (! Array.from(e.dataTransfer?.types || []).includes('Files')) return;
+    if (e.target.closest?.('[data-zona-unggah]')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'none';
+}));
 
 // Pengganti confirm() bawaan browser: tampil sebagai modal bertema SIPINTER (ikut
 // light/dark mode). Mengembalikan Promise<bool> — pakai dengan await.

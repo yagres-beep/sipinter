@@ -100,7 +100,11 @@ class StrukturFolderSesuaiPolaTest extends TestCase
         $this->mock(FolderStructureService::class)->shouldReceive('unggahBerkasRtl')->once()
             ->andReturn(['drive_file_id' => 'f1', 'storage_account_id' => null, 'nama_file' => 'besar.pdf']);
 
+        // Poin RTL TW III dievaluasi pada TW IV (Oktober).
         Livewire::test(RtlEvaluasiComponent::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 10)
+            ->set('iku_id', $poin->iku_id)
             ->set("evaluasi.{$poin->id}.realisasi", 'Sudah dilaksanakan')
             ->set("evaluasi.{$poin->id}.status_cocok", 'cocok')
             ->set("evaluasi.{$poin->id}.bukti", [UploadedFile::fake()->create('besar.pdf', 50 * 1024, 'application/pdf')])

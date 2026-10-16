@@ -78,7 +78,7 @@
                         </div>
                     </div>
 
-                    @if ($poin->sudahDievaluasi())
+                    @if (filled($poin->realisasi))
                         <div style="font-size:13px;margin-top:10px">
                             <b>Realisasi:</b> {{ $poin->realisasi }}
                             <x-badge-status :status="$poin->status_cocok" />
@@ -120,29 +120,21 @@
                         <div class="field">
                             <label>Bukti Realisasi (PDF, opsional)</label>
 
-                            @if (empty($evaluasi[$poin->id]['bukti']))
-                                <label class="upload" style="cursor:pointer;display:block;padding:10px">
-                                    <div style="font-weight:600;font-size:11.5px;color:var(--blue-600)">📤 Bukti realisasi (PDF) · opsional</div>
-                                    <input type="file" wire:model="evaluasi.{{ $poin->id }}.bukti" multiple accept="application/pdf" style="display:none"
-                                        @change="pendingBuktiRealisasiNames = Array.from($event.target.files).map(f => f.name)">
-                                </label>
-                            @else
-                                <div class="filechip-grid">
-                                    @foreach ($evaluasi[$poin->id]['bukti'] as $fi => $file)
+                            @if ($poin->berkas->isNotEmpty())
+                                <div class="filechip-grid" style="margin-bottom:8px">
+                                    @foreach ($poin->berkas as $file)
                                         <div class="filechip">
-                                            <span class="nm">📄 {{ $file->getClientOriginalName() }}</span>
+                                            <span class="nm"><x-nama-berkas :id="$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" :status="$file->status_verifikasi" /><x-belum-di-drive :di-drive="filled($file->drive_file_id) || blank($file->path)" /></span>
                                         </div>
                                     @endforeach
                                 </div>
                             @endif
 
-                            <div wire:loading wire:target="evaluasi.{{ $poin->id }}.bukti" style="font-size:11.5px;color:var(--muted);margin-top:6px">
-                                <template x-for="nama in pendingBuktiRealisasiNames" :key="nama">
-                                    <div>📄 <span x-text="nama"></span> — mengunggah…</div>
-                                </template>
-                                <div x-show="pendingBuktiRealisasiNames.length === 0">Mengunggah berkas…</div>
-                            </div>
+                            <x-zona-unggah :model="'evaluasi.'.$poin->id.'.bukti'" label="Seret PDF bukti realisasi ke sini atau klik untuk memilih" />
 
+                            @error("evaluasi.{$poin->id}.bukti")
+                                <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                            @enderror
                             @error("evaluasi.{$poin->id}.bukti.*")
                                 <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                             @enderror

@@ -51,20 +51,24 @@ class GoogleDriveService
      * @param  string  $localPath  Path berkas di disk lokal server (mis. hasil upload sementara Livewire).
      * @param  string  $filename  Nama berkas yang akan tersimpan di Drive (sudah di-slugify di pemanggil, lihat RF-17).
      * @param  string  $parentFolderId  ID folder Drive tujuan (hasil dari findOrCreateFolder()).
+     * @param  array<string, string>  $penanda  appProperties Drive (mis. ['sipinter_kode' => kode Berkas]) —
+     *                                         penanda tersembunyi supaya unggahan ulang bisa menemukan berkas yang
+     *                                         sebenarnya sudah masuk Drive (lihat cariBerkasBerpenanda()).
      * @return array{id: string, name: string, web_view_link: ?string, size_bytes: int} Metadata dari Drive,
      *              termasuk `size_bytes` asli di server Drive untuk dicatat lewat
      *              StorageAccount::tambahKuotaTerpakai() (RF-10c).
      */
-    public function uploadFile(string $localPath, string $filename, string $parentFolderId, string $mimeType = 'application/pdf'): array
+    public function uploadFile(string $localPath, string $filename, string $parentFolderId, string $mimeType = 'application/pdf', array $penanda = []): array
     {
         if (! is_file($localPath)) {
             throw new RuntimeException("Berkas lokal tidak ditemukan: {$localPath}");
         }
 
-        $metadata = new DriveFile([
+        $metadata = new DriveFile(array_filter([
             'name' => $filename,
             'parents' => [$parentFolderId],
-        ]);
+            'appProperties' => $penanda ?: null,
+        ]));
 
         /** @var DriveFile $uploaded */
         $uploaded = $this->panggilApi(
@@ -311,6 +315,33 @@ class GoogleDriveService
         ]), 'membaca isi folder');
 
         return array_map(fn (DriveFile $file) => $file->getName(), $hasil->getFiles());
+    }
+
+    /**
+     * Berkas (belum di Sampah) yang diunggah dengan penanda appProperties $kunci=$nilai
+     * — dipakai sebelum mengunggah ulang supaya berkas yang sebenarnya SUDAH masuk
+     * Drive (tapi database gagal mencatatnya) tidak diunggah dobel.
+     *
+     * @return array{id: string, name: string, web_view_link: ?string, size_bytes: int}|null
+     */
+    public function cariBerkasBerpenanda(string $kunci, string $nilai): ?array
+    {
+        $nilai = str_replace(["\\", "'"], ["\\\\", "\\'"], $nilai);
+
+        $hasil = $this->panggilApi(fn () => $this->drive()->files->listFiles([
+            'q' => "appProperties has { key='{$kunci}' and value='{$nilai}' } and trashed = false",
+            'fields' => 'files(id, name, webViewLink, size)',
+            'pageSize' => 1,
+        ]), 'mencari berkas');
+
+        $file = $hasil->getFiles()[0] ?? null;
+
+        return $file ? [
+            'id' => $file->getId(),
+            'name' => $file->getName(),
+            'web_view_link' => $file->getWebViewLink(),
+            'size_bytes' => (int) $file->getSize(),
+        ] : null;
     }
 
     /**

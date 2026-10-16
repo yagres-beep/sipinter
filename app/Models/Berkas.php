@@ -194,31 +194,64 @@ class Berkas extends Model
             return false;
         }
 
-        $ref = $this->ref;
-        if (! $ref) {
+        if (! $this->ref || ! in_array($this->ref::class, [Kegiatan::class, RtlEvaluasi::class, BagianKustomPoin::class], true)) {
             return false;
         }
 
+        // Unggahan sebelumnya bisa saja SUDAH masuk Drive tapi gagal tercatat di
+        // database (koneksi putus setelah Drive selesai) — pakai berkas itu, jangan
+        // unggah salinan kedua.
+        // Gagal mencari (mis. Drive sedang bermasalah) tidak menghentikan unggahan —
+        // unggahannya sendiri yang akan menentukan berhasil/gagal.
+        try {
+            $sudahAda = app(GoogleDriveService::class)->cariBerkasBerpenanda(FolderStructureService::PENANDA_KODE, $this->kode);
+        } catch (\Throwable) {
+            $sudahAda = null;
+        }
+
+        if ($sudahAda) {
+            $this->update([
+                'drive_file_id' => $sudahAda['id'],
+                'storage_account_id' => StorageAccount::aktif()?->id,
+                'nama_file' => $sudahAda['name'],
+            ]);
+
+            return true;
+        }
+
+        $this->unggahKeDrive();
+
+        return true;
+    }
+
+    /**
+     * Unggah salinan lokal berkas ini ke folder Drive pemiliknya (Kegiatan, poin
+     * evaluasi RTL, atau poin bagian kustom) memakai nama & subfolder yang tercatat
+     * di baris ini, lalu catat hasilnya. Diberi penanda kode berkas di Drive supaya
+     * unggahan ulang tidak dobel (lihat sinkronUlangKeDrive()). Melempar exception
+     * bila Drive gagal — baris tetap ada dengan drive_file_id kosong.
+     *
+     * @return array{drive_file_id: string, storage_account_id: ?int, nama_file: string}
+     */
+    public function unggahKeDrive(): array
+    {
+        $ref = $this->ref ?? throw new \RuntimeException('Data pemilik berkas ini sudah tidak ada.');
         $folderService = app(FolderStructureService::class);
         $localPath = Storage::disk('local')->path($this->path);
         $namaDasar = pathinfo($this->nama_file, PATHINFO_FILENAME);
 
         $hasil = match (true) {
             $ref instanceof Kegiatan => $folderService->unggahBerkasKegiatan(
-                $ref, $this->kategori, $localPath, namaBerkasOverride: $namaDasar, subfolder: $this->subfolder,
+                $ref, $this->kategori, $localPath, namaBerkasOverride: $namaDasar, subfolder: $this->subfolder, kodeBerkas: $this->kode,
             ),
-            $ref instanceof RtlEvaluasi => $folderService->unggahBerkasRtl($ref, $localPath, namaBerkasOverride: $namaDasar),
-            $ref instanceof BagianKustomPoin => $folderService->unggahBerkasBagianKustom($ref, $localPath, namaBerkasOverride: $namaDasar),
-            default => null,
+            $ref instanceof RtlEvaluasi => $folderService->unggahBerkasRtl($ref, $localPath, namaBerkasOverride: $namaDasar, kodeBerkas: $this->kode),
+            $ref instanceof BagianKustomPoin => $folderService->unggahBerkasBagianKustom($ref, $localPath, namaBerkasOverride: $namaDasar, kodeBerkas: $this->kode),
+            default => throw new \RuntimeException('Jenis berkas ini tidak bisa diunggah ke Drive dari sini.'),
         };
-
-        if ($hasil === null) {
-            return false;
-        }
 
         $this->update($hasil);
 
-        return true;
+        return $hasil;
     }
 
     /**

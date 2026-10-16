@@ -261,7 +261,7 @@
                             @forelse ($block['existing_bukti'] as $file)
                                 <div class="filechip {{ $file['status_verifikasi'] === 'terverifikasi' ? 'ok' : ($file['status_verifikasi'] === 'ditolak' ? 'no' : '') }}">
                                     <span class="nm">
-                                        <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" :status="$file['status_verifikasi'] ?? null" /><x-belum-di-drive :di-drive="$file['di_drive'] ?? true" />
+                                        <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" :status="$file['status_verifikasi'] ?? null" /><x-belum-di-drive :di-drive="$file['di_drive'] ?? true" :berkas-id="$file['id']" />
                                         @if (filled($file['subfolder'] ?? null))
                                             <span class="sub">📁 {{ $file['subfolder'] }}</span>
                                         @endif
@@ -528,7 +528,7 @@
                             @foreach ($block['existing_bukti'] as $file)
                                 <div class="filechip {{ $file['status_verifikasi'] === 'terverifikasi' ? 'ok' : ($file['status_verifikasi'] === 'ditolak' ? 'no' : '') }}">
                                     <span class="nm">
-                                        <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" :status="$file['status_verifikasi'] ?? null" /><x-belum-di-drive :di-drive="$file['di_drive'] ?? true" />
+                                        <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" :status="$file['status_verifikasi'] ?? null" /><x-belum-di-drive :di-drive="$file['di_drive'] ?? true" :berkas-id="$file['id']" />
                                         @if (filled($file['subfolder'] ?? null))
                                             <span class="sub">📁 {{ $file['subfolder'] }}</span>
                                         @endif
@@ -596,11 +596,6 @@
                                                     @else
                                                         <button type="button" class="btn-ubah-nama" title="Ganti nama folder" x-show="!ubahIni" @click="ubahIni = true; $nextTick(() => $refs.inputNamaIni.focus())">✏️</button>
                                                     @endif
-                                                    <label class="btn btn-ghost btn-sm" style="cursor:pointer;margin-left:auto">
-                                                        📤 Unggah ke folder ini
-                                                        <input type="file" wire:model="unggahFolder.{{ $i }}.{{ $grup['urutan'] }}.{{ $folder['urutan'] }}" multiple accept="application/pdf" style="display:none"
-                                                            @change="pendingBuktiNames = Array.from($event.target.files).map(f => f.name)">
-                                                    </label>
                                                 </div>
 
                                                 @if ($folderUtama)
@@ -665,22 +660,15 @@
                                                     @endforeach
                                                 </div>
                                             @endif
+
+                                            <x-zona-unggah :model="'unggahFolder.'.$i.'.'.$grup['urutan'].'.'.$folder['urutan']" :ringkas="true"
+                                                label="Seret PDF ke folder ini atau klik untuk memilih" style="margin-top:6px;margin-left:18px" />
                                         </div>
                                     @endforeach
                                 </div>
                             @endforeach
                         </div>
-                        <div class="fhint">Klik "📤 Unggah ke folder ini" pada folder tujuan — PDF, boleh lebih dari satu berkas per folder.</div>
-                    </div>
-
-                    {{-- Nama berkas dipilih langsung tampil di sisi klien (dari File API
-                         browser) begitu dipilih — tidak menunggu unggahan ke server
-                         selesai dulu baru terlihat namanya. --}}
-                    <div wire:loading wire:target="unggahFolder" style="font-size:11.5px;color:var(--muted);margin-top:6px">
-                        <template x-for="nama in pendingBuktiNames" :key="nama">
-                            <div>📄 <span x-text="nama"></span> — mengunggah…</div>
-                        </template>
-                        <div x-show="pendingBuktiNames.length === 0">Mengunggah berkas…</div>
+                        <div class="fhint">Seret berkas PDF dari komputer ke kotak folder tujuan, atau klik kotaknya untuk memilih — boleh banyak berkas sekaligus dan boleh ditambah bertahap. Berkas langsung tersimpan ke Google Drive.</div>
                     </div>
 
                     @error("blocks.{$i}.bukti")
@@ -875,7 +863,7 @@
                             @foreach ($poin->berkas as $file)
                                 <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}">
                                     <span class="nm">
-                                        <x-nama-berkas :id="$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" :status="$file->status_verifikasi" /><x-belum-di-drive :di-drive="filled($file->drive_file_id) || blank($file->path)" />
+                                        <x-nama-berkas :id="$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" :status="$file->status_verifikasi" /><x-belum-di-drive :di-drive="filled($file->drive_file_id) || blank($file->path)" :berkas-id="$file->id" />
                                         @if ($file->status_verifikasi === 'ditolak' && $file->catatan)
                                             <span class="sub" style="color:var(--red)">{{ $file->catatan }}</span>
                                         @endif
@@ -907,18 +895,12 @@
                         @if ($evaluasiBolehBuktiSusulan)
                             @include('livewire.partials._bukti-susulan', ['kunciSusulan' => 'rtl-'.$poin->id])
                         @elseif (! $evaluasiTerkunci)
-                        <label class="upload" style="cursor:pointer;display:block;padding:10px;margin-top:8px">
-                            <div style="font-weight:600;font-size:11.5px;color:var(--blue-600)">📤 Tambah bukti realisasi (PDF) — boleh lebih dari satu</div>
-                            <input type="file" wire:model="evaluasi.{{ $poin->id }}.bukti" multiple accept="application/pdf" style="display:none"
-                                @change="pendingBuktiRealisasiNames = Array.from($event.target.files).map(f => f.name)">
-                        </label>
+                            <x-zona-unggah :model="'evaluasi.'.$poin->id.'.bukti'" label="Seret PDF bukti realisasi ke sini atau klik untuk memilih" style="margin-top:8px" />
                         @endif
 
-                        <div wire:loading wire:target="evaluasi.{{ $poin->id }}.bukti" style="font-size:11.5px;color:var(--muted);margin-top:6px">
-                            <template x-for="nama in pendingBuktiRealisasiNames" :key="nama">
-                                <div>📄 <span x-text="nama"></span> — mengunggah…</div>
-                            </template>
-                        </div>
+                        @error("evaluasi.{$poin->id}.bukti")
+                            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                        @enderror
 
                         @error("evaluasi.{$poin->id}.bukti.*")
                             <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
@@ -1096,7 +1078,7 @@
                                                          bisa mengganti/menghapus berkas "Tidak Sesuai" dari sini. --}}
                                                     <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}">
                                                         <span class="nm">
-                                                            <x-nama-berkas :id="$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" :status="$file->status_verifikasi" /><x-belum-di-drive :di-drive="filled($file->drive_file_id) || blank($file->path)" />
+                                                            <x-nama-berkas :id="$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" :status="$file->status_verifikasi" /><x-belum-di-drive :di-drive="filled($file->drive_file_id) || blank($file->path)" :berkas-id="$file->id" />
                                                             @if ($file->status_verifikasi === 'ditolak' && $file->catatan)
                                                                 <span class="sub" style="color:var(--red)">{{ $file->catatan }}</span>
                                                             @endif
@@ -1157,7 +1139,7 @@
                                     @foreach ($blok['existing_bukti'] as $file)
                                         <div class="filechip {{ $file['status_verifikasi'] === 'terverifikasi' ? 'ok' : ($file['status_verifikasi'] === 'ditolak' ? 'no' : '') }}">
                                             <span class="nm">
-                                                <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" :status="$file['status_verifikasi'] ?? null" /><x-belum-di-drive :di-drive="$file['di_drive'] ?? true" />
+                                                <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" :status="$file['status_verifikasi'] ?? null" /><x-belum-di-drive :di-drive="$file['di_drive'] ?? true" :berkas-id="$file['id']" />
                                                 @if ($file['status_verifikasi'] === 'ditolak' && $file['catatan'])
                                                     <span class="sub" style="color:var(--red)">{{ $file['catatan'] }}</span>
                                                 @endif
@@ -1173,14 +1155,7 @@
                                 </div>
                             @endif
 
-                            @if (empty($blok['bukti']))
-                                <label class="upload" style="cursor:pointer;display:block">
-                                    <div class="big">📤</div>
-                                    Klik untuk unggah bukti dukung (PDF) — boleh lebih dari satu berkas
-                                    <input type="file" wire:model="bagianKustomBlocks.{{ $bagian->id }}.{{ $i }}.bukti" multiple accept="application/pdf" style="display:none"
-                                        @change="pendingBuktiBagianNames = Array.from($event.target.files).map(f => f.name)">
-                                </label>
-                            @else
+                            @if (! empty($blok['bukti']))
                                 <x-mode-nama-berkas :mode="$modeNamaBerkas" />
                                 <div class="filechip-grid">
                                     @foreach ($blok['bukti'] as $fi => $file)
@@ -1199,18 +1174,8 @@
                                         </div>
                                     @endforeach
                                 </div>
-                                <label class="btn btn-ghost btn-sm" style="margin-top:8px;cursor:pointer">
-                                    ＋ Tambah Bukti
-                                    <input type="file" wire:model="bagianKustomBlocks.{{ $bagian->id }}.{{ $i }}.bukti" multiple accept="application/pdf" style="display:none"
-                                        @change="pendingBuktiBagianNames = Array.from($event.target.files).map(f => f.name)">
-                                </label>
                             @endif
-                            <div wire:loading wire:target="bagianKustomBlocks.{{ $bagian->id }}.{{ $i }}.bukti" style="font-size:11.5px;color:var(--muted);margin-top:6px">
-                                <template x-for="nama in pendingBuktiBagianNames" :key="nama">
-                                    <div>📄 <span x-text="nama"></span> — mengunggah…</div>
-                                </template>
-                                <div x-show="pendingBuktiBagianNames.length === 0">Mengunggah berkas…</div>
-                            </div>
+                            <x-zona-unggah :model="'bagianKustomBlocks.'.$bagian->id.'.'.$i.'.bukti'" label="Seret PDF bukti dukung ke sini atau klik untuk memilih" style="margin-top:8px" />
                             @error("bagianKustomBlocks.{$bagian->id}.{$i}.bukti")
                                 <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                             @enderror
