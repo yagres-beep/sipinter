@@ -4,10 +4,14 @@
     $terakhirDisimpan (?string jam "HH:MM"), lihat PengisianKegiatan & VerifikasiCapaian.
 
     Dua lapis deteksi:
-    - $wire.adaPerubahan  : perubahan yang SUDAH terkirim ke server (kolom ditinggalkan /
+    - $wire.adaPerubahan  : perubahan yang SUDAH diterima server (kolom ditinggalkan /
                             berkas dipilih) tapi BELUM disimpan ke database.
-    - mengetik (Alpine)   : sedang mengetik di sebuah kolom, belum ditinggalkan — belum
-                            sampai ke server sama sekali.
+    - mengetik (Alpine)   : kolom yang diubah tapi BELUM dikonfirmasi server — sedang
+                            diketik, atau sudah ditinggalkan dan request-nya masih jalan,
+                            atau berkasnya masih diunggah. Baru dilepas setelah request
+                            yang membawanya sukses (hook "commit" di resources/js/app.js),
+                            jadi langsung klik menu setelah mengetik uraian tidak lolos
+                            dari konfirmasi.
     Selama salah satunya aktif: bilah bawah tampil dan elemen ini diberi atribut
     data-kotor, yang dibaca penjaga global di resources/js/app.js — pindah menu, tautan,
     Keluar, maupun F5/Ctrl+R meminta konfirmasi lewat dialog bertema SIPINTER dulu.
@@ -18,6 +22,8 @@
     'aksi' => null,
     'labelAksi' => '💾 Simpan sekarang',
     'pesanBelum' => 'Ada perubahan yang belum disimpan ke database.',
+    // Isi dialog konfirmasi saat halaman hendak ditinggalkan (null = pesan umum di app.js).
+    'pesanKeluar' => null,
 ])
 
 <div
@@ -26,15 +32,42 @@
         get kotor() { return $wire.adaPerubahan || this.mengetik },
         init() {
             const akar = this.$el.closest('[wire\\:id]') ?? document;
+            const kotor = new Set();    // kolom/berkas yang belum dikonfirmasi server
+            const terkirim = new Set(); // ...yang sudah ditinggalkan, ikut request berikutnya
+            const segarkan = () => { this.mengetik = kotor.size > 0; };
+            const diabaikan = (el) => el.closest?.('[data-abaikan-perubahan]');
+            const lepas = (el) => { kotor.delete(el); terkirim.delete(el); segarkan(); };
+
             akar.addEventListener('input', (e) => {
-                if (! e.target.closest('[data-abaikan-perubahan]')) this.mengetik = true;
+                if (diabaikan(e.target) || e.target.type === 'file') return;
+                kotor.add(e.target);
+                terkirim.delete(e.target);
+                segarkan();
             });
-            akar.addEventListener('focusout', () => { this.mengetik = false; });
+            akar.addEventListener('focusout', (e) => { if (kotor.has(e.target)) terkirim.add(e.target); });
+            akar.addEventListener('change', (e) => { if (kotor.has(e.target)) terkirim.add(e.target); });
+            akar.addEventListener('livewire-upload-start', (e) => {
+                if (! diabaikan(e.target)) { kotor.add(e.target); segarkan(); }
+            });
+            ['livewire-upload-finish', 'livewire-upload-error', 'livewire-upload-cancel']
+                .forEach((jenis) => akar.addEventListener(jenis, (e) => lepas(e.target)));
+
+            // Dipanggil hook 'commit' Livewire (app.js) tiap request komponen ini.
+            this.komitMulai = (succeed) => {
+                const ikut = [...terkirim];
+                if (ikut.length === 0) return;
+                succeed(() => {
+                    ikut.forEach((el) => { if (terkirim.delete(el)) kotor.delete(el); });
+                    segarkan();
+                });
+            };
+            this.lupakan = () => { kotor.clear(); terkirim.clear(); segarkan(); };
         },
     }"
     x-bind:data-kotor="kotor ? 'ya' : false"
-    x-on:perubahan-tersimpan.window="mengetik = false"
+    x-on:perubahan-tersimpan.window="lupakan()"
     class="status-simpan"
+    @if ($pesanKeluar) data-pesan-keluar="{{ $pesanKeluar }}" @endif
     style="position:sticky;bottom:10px;z-index:30;margin-top:14px"
 >
     <div x-show="kotor" x-cloak

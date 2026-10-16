@@ -226,7 +226,9 @@ let lewatiPenjaga = false;
 const adaPerubahan = () => ! lewatiPenjaga && document.querySelector('.status-simpan[data-kotor]') !== null;
 const tanyaTinggalkan = () => window.sipinterKonfirmasi({
     judul: 'Tinggalkan Halaman?',
-    pesan: 'Ada perubahan yang belum disimpan. Bila halaman ini ditinggalkan, perubahan tersebut akan hilang.\nKlik "Simpan Draft" dulu bila ingin menyimpannya.',
+    // Pesan khusus halaman lewat <x-status-simpan pesan-keluar="…">.
+    pesan: document.querySelector('.status-simpan[data-kotor]')?.dataset.pesanKeluar
+        || 'Ada perubahan yang belum disimpan. Bila halaman ini ditinggalkan, perubahan tersebut akan hilang.\nKlik "Simpan Draft" dulu bila ingin menyimpannya.',
     labelOk: 'Tinggalkan',
     labelBatal: 'Tetap di sini',
     bahaya: true,
@@ -237,12 +239,34 @@ const tinggalkan = (aksi) => tanyaTinggalkan().then((ok) => {
     aksi();
 });
 
+// Kolom yang baru ditinggalkan baru dianggap "sampai" setelah request Livewire yang
+// membawanya sukses — lihat komitMulai() di <x-status-simpan>.
+const pasangHookKomit = () => window.Livewire.hook('commit', ({ component, succeed }) => {
+    component.el?.querySelectorAll('.status-simpan').forEach((el) => window.Alpine.$data(el)?.komitMulai?.(succeed));
+});
+window.Livewire ? pasangHookKomit() : document.addEventListener('livewire:init', pasangHookKomit);
+
+// Alamat & state riwayat halaman yang sedang tampil — dipakai mengembalikan tombol
+// Back/Forward browser bila pengguna memilih "Tetap di sini".
+let halamanSekarang = { url: window.location.href, state: window.history.state };
+const catatHalaman = () => { halamanSekarang = { url: window.location.href, state: window.history.state }; };
+
 document.addEventListener('livewire:navigate', (e) => {
     if (! adaPerubahan()) return;
     e.preventDefault();
-    tinggalkan(() => window.Livewire.navigate(e.detail.url.toString()));
+
+    if (! e.detail.history) {
+        tinggalkan(() => window.Livewire.navigate(e.detail.url.toString()));
+        return;
+    }
+
+    // Back/Forward: alamat di browser SUDAH berganti saat event ini datang, jadi
+    // kembalikan dulu ke halaman ini; bila jadi ditinggalkan, muat ulang alamat tujuan.
+    const tujuan = e.detail.url.toString();
+    window.history.pushState(halamanSekarang.state, '', halamanSekarang.url);
+    tinggalkan(() => { window.location.href = tujuan; });
 });
-document.addEventListener('livewire:navigated', () => { lewatiPenjaga = false; });
+document.addEventListener('livewire:navigated', () => { lewatiPenjaga = false; catatHalaman(); });
 
 document.addEventListener('keydown', (e) => {
     const muatUlang = e.key === 'F5' || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'r');

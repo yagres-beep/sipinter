@@ -1296,6 +1296,7 @@
 
     @if ($iku_id && ! $formTerkunciDisetujui && ! $formTerkunciSedangDitangani)
         <x-status-simpan aksi="simpanDraft" label-aksi="💾 Simpan Draft sekarang"
-            pesan-belum="Ada perubahan yang belum disimpan — klik Simpan Draft (atau Ajukan ke Tim SAKIP) supaya tidak hilang saat halaman ditutup/berpindah." />
+            pesan-belum="Ada perubahan yang belum disimpan — klik Simpan Draft (atau Ajukan ke Tim SAKIP) supaya tidak hilang saat halaman ditutup/berpindah."
+            :pesan-keluar="'Ada isian yang belum disimpan — termasuk kegiatan dan susunan folder bukti yang baru dibentuk. Bila halaman ini ditinggalkan sekarang, semuanya akan hilang.'.chr(10).'Klik “Simpan Draft” (atau “Ajukan ke Tim SAKIP”) dulu bila ingin menyimpannya.'" />
     @endif
 </div>
