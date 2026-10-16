@@ -246,6 +246,28 @@ const pasangHookKomit = () => window.Livewire.hook('commit', ({ component, succe
 });
 window.Livewire ? pasangHookKomit() : document.addEventListener('livewire:init', pasangHookKomit);
 
+// Respons Livewire yang baru tiba SETELAH halamannya ditinggalkan lewat wire:navigate
+// (mis. kolom uraian diketik lalu langsung pindah menu, server lambat) tidak lagi
+// di-morph ke komponen lama: pohon Alpine-nya sudah dibongkar saat navigasi, jadi
+// morph itu memicu "ikuDipilih / pendingHapus / kotor is not defined" dan membangun
+// ulang elemen yang sudah tidak tampil. Request-nya sendiri tetap selesai diproses di
+// server — hanya pembaruan tampilan untuk halaman yang sudah ditutup yang dilewati.
+// Request bisa saja baru terkirim SETELAH navigasi dimulai (wire:model.live.blur
+// terpicu oleh klik menu), jadi yang diperiksa keadaan komponennya saat respons tiba.
+const pasangPenjagaRespons = () => window.Livewire.interceptMessage(({ message, cancel, onSuccess }) => {
+    onSuccess(({ payload }) => {
+        const { component } = message;
+        if (component.el.isConnected || window.Livewire.find(component.id)) return;
+        // Server memang sudah sukses memproses request ini, jadi janji (promise) aksinya
+        // diselesaikan dengan nilai balik dari server lebih dulu. Tanpa ini cancel()
+        // MENOLAK janji tersebut, dan pembungkus async $wire.$commit()/$wire.set() milik
+        // halaman yang sudah ditinggalkan berakhir sebagai "Uncaught (in promise)".
+        message.resolveActionPromises(payload.effects?.returns ?? [], payload.effects?.returnsMeta ?? {});
+        cancel();
+    });
+});
+window.Livewire ? pasangPenjagaRespons() : document.addEventListener('livewire:init', pasangPenjagaRespons);
+
 // Alamat & state riwayat halaman yang sedang tampil — dipakai mengembalikan tombol
 // Back/Forward browser bila pengguna memilih "Tetap di sini".
 let halamanSekarang = { url: window.location.href, state: window.history.state };
