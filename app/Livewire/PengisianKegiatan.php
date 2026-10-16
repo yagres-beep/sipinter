@@ -529,6 +529,14 @@ class PengisianKegiatan extends Component
 
         $this->resetErrorBag("blocks.{$index}.bukti");
         $this->adaPerubahan = true;
+
+        if (trim((string) ($block['uraian_kegiatan'] ?? '')) === '') {
+            $this->addError("blocks.{$index}.uraian_kegiatan", 'Isi uraian kegiatan dulu — berkas baru bisa tersimpan ke Google Drive setelah uraian diisi.');
+
+            return;
+        }
+
+        $this->simpanOtomatisSetelahUnggah();
     }
 
     /**
@@ -664,6 +672,71 @@ class PengisianKegiatan extends Component
         if (in_array(Str::before($property, '.'), self::PROPERTI_ISIAN, true)) {
             $this->adaPerubahan = true;
         }
+
+        // Bukti evaluasi RTL & bagian kustom terikat langsung lewat wire:model —
+        // begitu selesai terunggah, langsung disimpan ke Drive (lihat simpanOtomatisSetelahUnggah()).
+        if (preg_match('/^(evaluasi\.\d+|bagianKustomBlocks\.\d+\.\d+)\.bukti(\.\d+)?$/', $property, $cocok)) {
+            $this->unggahLangsung($cocok[1]);
+        }
+
+        // Berkas yang tertahan karena uraian kegiatan/teks poin masih kosong langsung
+        // diunggah begitu uraiannya diisi.
+        if (preg_match('/^(blocks\.\d+)\.uraian_kegiatan$|^(bagianKustomBlocks\.\d+\.\d+)\.teks$/', $property, $cocok)) {
+            $jalur = $cocok[1] ?: $cocok[2];
+            $teks = data_get($this, $jalur.($cocok[1] ? '.uraian_kegiatan' : '.teks'));
+
+            if (trim((string) $teks) !== '' && ! empty(data_get($this, "{$jalur}.bukti"))) {
+                $this->simpanOtomatisSetelahUnggah();
+            }
+        }
+    }
+
+    /**
+     * Bukti evaluasi RTL/bagian kustom yang baru terunggah ke $jalur (mis. "evaluasi.5")
+     * diperiksa formatnya, lalu langsung disimpan ke Drive.
+     */
+    protected function unggahLangsung(string $jalur): void
+    {
+        $daftarBerkas = array_values(array_filter((array) data_get($this, "{$jalur}.bukti", [])));
+
+        if ($daftarBerkas === []) {
+            return;
+        }
+
+        $validator = \Illuminate\Support\Facades\Validator::make(
+            ['bukti' => $daftarBerkas],
+            ['bukti.*' => ['file', 'mimes:pdf']],
+            ['bukti.*.mimes' => 'Bukti harus berupa PDF.']
+        );
+
+        if ($validator->fails()) {
+            data_set($this, "{$jalur}.bukti", []);
+            $this->addError("{$jalur}.bukti", $validator->errors()->first());
+
+            return;
+        }
+
+        if (str_starts_with($jalur, 'bagianKustomBlocks.') && trim((string) data_get($this, "{$jalur}.teks", '')) === '') {
+            $this->addError("{$jalur}.teks", 'Isi poinnya dulu — berkas baru bisa tersimpan ke Google Drive setelah poin ini diisi.');
+
+            return;
+        }
+
+        $this->simpanOtomatisSetelahUnggah();
+    }
+
+    /**
+     * Berkas bukti yang baru dipilih LANGSUNG diunggah ke Google Drive tanpa menunggu
+     * klik "Simpan Draft"/"Ajukan" — supaya bukti tidak hilang bila halaman ditutup,
+     * sesi habis, atau pengguna lupa menyimpan. Caranya menjalankan Simpan Draft
+     * biasa (isian lain ikut tersimpan sebagai draf, status tidak berubah), karena
+     * berkas harus menempel ke baris Kegiatan/poin yang tersimpan di database.
+     * Bila isian belum lengkap (validasi draf gagal), berkas tetap menunggu di form
+     * dan ikut terunggah saat Simpan Draft berikutnya.
+     */
+    protected function simpanOtomatisSetelahUnggah(): void
+    {
+        $this->simpanDraft(otomatis: true);
     }
 
     /**
@@ -1749,6 +1822,135 @@ class PengisianKegiatan extends Component
 
         unset($this->rtlBaru[$index]);
         $this->rtlBaru = array_values($this->rtlBaru);
+    }
+
+    /**
+     * Muat ulang seluruh isian dari database, sama seperti mount() setelah Simpan
+     * Draft me-reload halaman — dipakai simpan otomatis setelah unggah.
+     */
+    /**
+     * Ganti aturan "blocks.*.…" menjadi per indeks, hanya untuk blok yang uraian
+     * kegiatannya sudah diisi.
+     */
+    protected function aturanBlokTerisiSaja(array $aturan): array
+    {
+        $hasil = [];
+        $ganti = fn ($nilai, int $i) => is_string($nilai) ? str_replace('blocks.*.', "blocks.{$i}.", $nilai) : $nilai;
+
+        foreach ($aturan as $kunci => $rule) {
+            if (! str_starts_with($kunci, 'blocks.*.')) {
+                $hasil[$kunci] = $rule;
+
+                continue;
+            }
+
+            foreach ($this->blocks as $i => $block) {
+                if (trim($block['uraian_kegiatan'] ?? '') !== '') {
+                    $hasil[$ganti($kunci, $i)] = is_array($rule) ? array_map(fn ($r) => $ganti($r, $i), $rule) : $ganti($rule, $i);
+                }
+            }
+        }
+
+        return $hasil;
+    }
+
+    /**
+     * Isian di layar yang TIDAK ikut tersimpan oleh Simpan Draft, dicatat SEBELUM
+     * disimpan (simpanBagianIsian() mengosongkan tahapan tambahan) supaya dipasang
+     * lagi oleh muatUlangForm():
+     *  - susunan subfolder yang belum berisi berkas (per kegiatan+tahapan),
+     *  - blok kegiatan/poin bagian kustom yang uraiannya masih kosong (mis. berkas
+     *    yang menunggu uraian diisi, lihat updatedUnggahFolder()).
+     *
+     * @return array{folder: array<string, array{0: bool, 1: list<string>}>, blocks: list<array>, bagian: array<int, list<array>>}
+     */
+    protected function catatIsianBelumTersimpan(): array
+    {
+        $susunan = [];
+        foreach ($this->blocks as $block) {
+            foreach ($this->tahapanDipilih($block) ?: [null] as $tahapan) {
+                $susunan[$this->kunciSusunanSimpan($block['uraian_kegiatan'] ?? '', $tahapan)] = [
+                    $this->pakaiSubfolder($block, $tahapan),
+                    $this->daftarSubfolder($block, $tahapan),
+                ];
+            }
+        }
+
+        $kosong = $this->emptyBlock();
+        $kosongBagian = $this->emptyBagianKustomBlock();
+
+        return [
+            'folder' => $susunan,
+            'blocks' => array_values(array_filter(
+                $this->blocks,
+                fn ($b) => trim($b['uraian_kegiatan'] ?? '') === '' && $b != $kosong
+            )),
+            'bagian' => array_map(fn ($daftar) => array_values(array_filter(
+                $daftar,
+                fn ($b) => trim($b['teks'] ?? '') === '' && $b != $kosongBagian
+            )), $this->bagianKustomBlocks),
+        ];
+    }
+
+    /**
+     * @param  array{folder?: array, blocks?: list<array>, bagian?: array<int, list<array>>}  $belumTersimpan  hasil catatIsianBelumTersimpan().
+     */
+    protected function muatUlangForm(array $belumTersimpan = []): void
+    {
+        $susunanFolder = $belumTersimpan['folder'] ?? [];
+        // Cache per-request di bawah masih berisi keadaan SEBELUM disimpan (mis.
+        // periode yang baru saja dibuat simpanDraft() masih tercatat null).
+        $this->cacheRtlBerjalan = $this->cacheRtlBerikutnyaDitolak = $this->cacheRtlBerikutnyaAktif = $this->cacheKendalaAktif = null;
+        $this->cacheRtlBerikutnyaSudahAda = $this->cacheFormLengkap = null;
+        $this->cacheKekuranganPengajuan = null;
+        $this->cachePeriodeSaatIni = null;
+        $this->cachePeriodeSaatIniDihitung = false;
+
+        $this->blocks = [$this->emptyBlock()];
+        $this->kendalaBlocks = [$this->emptyKendalaBlock()];
+        $this->rtlBaru = [$this->emptyRtlBlock()];
+        $this->bagianKustomBlocks = [];
+        foreach ($this->bagianKustomAktif() as $bagian) {
+            $this->bagianKustomBlocks[$bagian->id] = [$this->emptyBagianKustomBlock()];
+        }
+        $this->muatFormEvaluasi();
+        $this->muatBlocksKegiatan();
+        $this->muatKendalaBlocks();
+        $this->muatBagianKustomBlocks();
+        $this->pilihPicOtomatis();
+        $this->muatRtlBaruBlocks();
+
+        foreach ($this->blocks as $i => $block) {
+            $tahapan = filled($block['tahapan_survei'] ?? '') ? $block['tahapan_survei'] : null;
+            [$pakai, $daftar] = $susunanFolder[$this->kunciSusunanSimpan($block['uraian_kegiatan'] ?? '', $tahapan)] ?? [false, []];
+
+            if ($daftar !== []) {
+                $this->simpanSusunanFolder($i, $tahapan, $pakai || $this->pakaiSubfolder($block, $tahapan), array_values(array_unique([...$daftar, ...$this->daftarSubfolder($block, $tahapan)])));
+            }
+        }
+
+        if ($belumTersimpan['blocks'] ?? []) {
+            $this->blocks = [...$this->tanpaBlokKosong($this->blocks, $this->emptyBlock()), ...$belumTersimpan['blocks']];
+        }
+        foreach ($belumTersimpan['bagian'] ?? [] as $bagianId => $daftar) {
+            if ($daftar !== [] && isset($this->bagianKustomBlocks[$bagianId])) {
+                $this->bagianKustomBlocks[$bagianId] = [...$this->tanpaBlokKosong($this->bagianKustomBlocks[$bagianId], $this->emptyBagianKustomBlock()), ...$daftar];
+            }
+        }
+
+        // Masih ada isian yang belum tersimpan (blok yang dipasang lagi di atas).
+        $this->adaPerubahan = ($belumTersimpan['blocks'] ?? []) !== [] || array_filter($belumTersimpan['bagian'] ?? []) !== [];
+    }
+
+    /** Buang blok kosong bawaan (placeholder) sebelum blok yang belum tersimpan dipasang lagi. */
+    protected function tanpaBlokKosong(array $daftar, array $kosong): array
+    {
+        return array_values(array_filter($daftar, fn ($b) => $b != $kosong));
+    }
+
+    protected function kunciSusunanSimpan(string $uraian, ?string $tahapan): string
+    {
+        return mb_strtolower(trim($uraian)).'|'.($tahapan ?? '');
     }
 
     public function updatedIkuId(): void
@@ -3575,7 +3777,11 @@ class PengisianKegiatan extends Component
      * dengan status "draft" (belum diajukan ke Tim SAKIP); kendala-solusi, evaluasi
      * RTL, dan RTL baru baru divalidasi & disimpan saat benar-benar "Ajukan ke Tim SAKIP".
      */
-    public function simpanDraft(): void
+    /**
+     * @param  bool  $otomatis  true bila dipicu simpanOtomatisSetelahUnggah() — hanya
+     *                          membedakan pesan yang tampil ke pengguna.
+     */
+    public function simpanDraft(bool $otomatis = false): void
     {
         if ($this->formTerkunciDisetujuiFresh()) {
             $this->dispatch('notify', type: 'error', message: 'Isian ini sudah disetujui dan terkunci — hubungi Tim SAKIP untuk membuka kembali bila perlu revisi.');
@@ -3589,22 +3795,29 @@ class PengisianKegiatan extends Component
             return;
         }
 
+        $aturan = [
+            'tahun' => ['required', 'integer', 'min:2020', 'max:2100'],
+            'bulan' => ['required', 'integer', 'min:1', 'max:12'],
+            'iku_id' => ['required', $this->aturanIkuValid()],
+            'blocks.*.uraian_kegiatan' => ['required', 'string', 'max:1000'],
+            'blocks.*.jenis' => ['required', 'in:bukan_survei_sensus,survei_sensus'],
+            'blocks.*.tahapan_survei' => [
+                'nullable',
+                'required_if:blocks.*.jenis,survei_sensus',
+                $this->aturanTahapanTidakGanda(),
+            ],
+            'blocks.*.nama_folder' => ['nullable', 'string', 'max:150'],
+        ] + $this->aturanTahapanDanSubfolder();
+
         try {
-            $this->validate([
-                'tahun' => ['required', 'integer', 'min:2020', 'max:2100'],
-                'bulan' => ['required', 'integer', 'min:1', 'max:12'],
-                'iku_id' => ['required', $this->aturanIkuValid()],
-                'blocks.*.uraian_kegiatan' => ['required', 'string', 'max:1000'],
-                'blocks.*.jenis' => ['required', 'in:bukan_survei_sensus,survei_sensus'],
-                'blocks.*.tahapan_survei' => [
-                    'nullable',
-                    'required_if:blocks.*.jenis,survei_sensus',
-                    $this->aturanTahapanTidakGanda(),
-                ],
-                'blocks.*.nama_folder' => ['nullable', 'string', 'max:150'],
-            ] + $this->aturanTahapanDanSubfolder(), $this->messages(), $this->validationAttributes());
+            // Simpan otomatis setelah unggah tidak boleh gagal hanya karena ada blok
+            // lain yang uraiannya belum diisi — blok seperti itu memang dilewati
+            // simpanBagianIsian() dan dipasang lagi di layar oleh muatUlangForm().
+            $this->validate($otomatis ? $this->aturanBlokTerisiSaja($aturan) : $aturan, $this->messages(), $this->validationAttributes());
         } catch (ValidationException $e) {
-            $this->dispatch('notify', type: 'error', message: 'Draf gagal disimpan — lengkapi data yang wajib diisi lebih dulu.');
+            $this->dispatch('notify', type: 'error', message: $otomatis
+                ? 'Berkas belum terunggah ke Google Drive — lengkapi isian yang ditandai merah, lalu klik "Simpan Draft".'
+                : 'Draf gagal disimpan — lengkapi data yang wajib diisi lebih dulu.');
 
             throw $e;
         }
@@ -3624,10 +3837,27 @@ class PengisianKegiatan extends Component
         // Diisi setiap kali satu berkas GAGAL disinkron ke Drive — sama seperti
         // ajukanIsian(), lihat catatan di sana.
         $driveGagal = [];
+        $belumTersimpan = $otomatis ? $this->catatIsianBelumTersimpan() : [];
 
         DB::transaction(function () use ($periode, $iku, $folderService, &$driveGagal) {
             $this->simpanBagianIsian($periode, $iku, $folderService, $driveGagal, ajukan: false);
         });
+
+        if ($otomatis) {
+            // Tanpa reload halaman — pengguna sedang mengisi; form dimuat ulang dari
+            // database di tempat supaya berkas tadi tampil sebagai bukti tersimpan.
+            $this->lupakanCachePeriodeIku();
+            $this->muatUlangForm($belumTersimpan);
+            $this->terakhirDisimpan = now()->format('H:i');
+
+            if ($driveGagal === []) {
+                $this->dispatch('notify', type: 'success', message: 'Berkas sudah tersimpan ke Google Drive — isian di halaman ini ikut disimpan sebagai draf.');
+            } else {
+                $this->dispatch('notify', type: 'warning', message: 'Isian tersimpan sebagai draf, tetapi '.count($driveGagal).' berkas belum berhasil masuk Google Drive ('.($this->alasanDriveGagal ?? 'gangguan koneksi').') — otomatis dicoba lagi setiap kali Anda menyimpan.');
+            }
+
+            return;
+        }
 
         session()->flash('status', $this->pengajuanBisaDiedit()
             ? 'Perubahan pada pengajuan berhasil disimpan — isian tetap berstatus diajukan. Kegiatan BARU yang ditambahkan baru terkirim ke Tim SAKIP setelah "Ajukan ke Tim SAKIP" diklik.'
@@ -4060,9 +4290,33 @@ class PengisianKegiatan extends Component
         // balik ke "diajukan", bukan cuma perbaikan pada Kegiatan. Hanya dilakukan saat
         // benar-benar mengajukan ($ajukan) — draft TIDAK boleh memindahkan status
         // capaian/kegiatan keluar dari "draft"/"dikembalikan".
+        // Bukti perbaikan bisa sudah tersimpan LEBIH DULU lewat simpan otomatis setelah
+        // unggah (lihat simpanOtomatisSetelahUnggah()), jadi di request "Ajukan" ini tidak
+        // ada lagi berkas baru — tetap dihitung sebagai perbaikan bila diunggah setelah
+        // isian dikembalikan.
+        if ($ajukan && ! $adaKegiatanDiajukan && ! $adaPerbaikanLainDiajukan && $capaian->status === Capaian::STATUS_DIKEMBALIKAN) {
+            $sejak = $capaian->riwayatStatus()->latest('id')->value('created_at') ?? $capaian->updated_at;
+            $adaPerbaikanLainDiajukan = $this->adaBuktiPerbaikanSejak($sejak, $periode);
+        }
+
         if ($ajukan && ($adaKegiatanDiajukan || $adaPerbaikanLainDiajukan)) {
             $capaian->catatStatus(Kegiatan::STATUS_DIAJUKAN, auth()->user());
         }
+    }
+
+    /**
+     * Ada bukti evaluasi RTL/bagian kustom IKU & periode ini yang diunggah sejak $sejak?
+     */
+    protected function adaBuktiPerbaikanSejak($sejak, Periode $periode): bool
+    {
+        $rtlIds = $this->rtlTriwulanBerjalan()->pluck('id');
+        $poinIds = BagianKustomPoin::where('iku_id', $this->iku_id)->where('periode_id', $periode->id)->pluck('id');
+
+        return Berkas::where('created_at', '>=', $sejak)
+            ->where(fn ($q) => $q
+                ->where(fn ($q) => $q->where('ref_type', RtlEvaluasiModel::class)->whereIn('ref_id', $rtlIds))
+                ->orWhere(fn ($q) => $q->where('ref_type', BagianKustomPoin::class)->whereIn('ref_id', $poinIds)))
+            ->exists();
     }
 
     /**

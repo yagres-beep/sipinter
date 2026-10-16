@@ -61,7 +61,7 @@
         },
     }"
     x-on:livewire-upload-start.window="$dispatch('notify', { type: 'info', message: 'Mengunggah berkas ke server…' })"
-    x-on:livewire-upload-finish.window="$dispatch('notify', { type: 'success', message: 'Berkas dipilih & tersimpan sementara di server — akan disalin ke Google Drive saat diajukan.' })"
+    x-on:livewire-upload-finish.window="$dispatch('notify', { type: 'success', message: 'Berkas terunggah — sedang disimpan ke Google Drive…' })"
     x-on:livewire-upload-error.window="$dispatch('notify', { type: 'error', message: 'Gagal mengunggah berkas — periksa koneksi dan format berkas (harus PDF), lalu coba lagi.' })"
 >
     <div class="page-head">
@@ -217,7 +217,7 @@
         <div wire:loading wire:target="iku_id,bulan,tahun" class="info">⏳ Memuat kegiatan yang sudah pernah diisi untuk IKU &amp; periode ini, kalau ada…</div>
 
         <div wire:loading.remove wire:target="iku_id,bulan,tahun">
-        <div class="info">ℹ️ Isi tiap kolom berurutan dari atas — uraian kegiatan dulu, baru pembentukan folder kegiatan bisa dipilih. Nama folder Drive direkomendasikan otomatis dari tahapan dan uraian kegiatan (bisa diganti lewat ✏️). Bukti capaian wajib diunggah tiap kegiatan; bila lebih dari satu berkas, nama bawaannya diberi nomor urut di belakang dan tetap bisa diganti lewat ✏️.</div>
+        <div class="info">ℹ️ Isi tiap kolom berurutan dari atas — uraian kegiatan dulu, baru pembentukan folder kegiatan bisa dipilih. Nama folder Drive direkomendasikan otomatis dari tahapan dan uraian kegiatan (bisa diganti lewat ✏️). Bukti capaian wajib diunggah tiap kegiatan dan langsung tersimpan ke Google Drive begitu dipilih (isian ikut tersimpan sebagai draf); bila lebih dari satu berkas, nama bawaannya diberi nomor urut di belakang dan tetap bisa diganti lewat ✏️.</div>
 
         @foreach ($blocks as $i => $block)
             @php $terkunci = $this->blokTerkunci($block['status_dokumen']); @endphp

@@ -1208,7 +1208,8 @@ class PengisianKegiatanTest extends TestCase
             ->call('ajukanIsian')
             ->assertHasErrors('evaluasi');
 
-        $this->assertDatabaseCount('kegiatan', 0);
+        // Bukti yang diunggah langsung tersimpan sebagai draf, tapi tidak ikut diajukan.
+        $this->assertDatabaseMissing('kegiatan', ['status_dokumen' => 'diajukan']);
     }
 
     public function test_bukti_evaluasi_rtl_lengkap_semua_boleh_diajukan_bulan_terakhir(): void

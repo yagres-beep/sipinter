@@ -127,24 +127,80 @@ class TahapanGandaDanSubfolderTest extends TestCase
     {
         $iku = $this->siapkan();
 
+        $unggahan = [];
+        $this->mock(FolderStructureService::class, function ($mock) use (&$unggahan) {
+            $mock->shouldReceive('unggahBerkasKegiatan')->andReturnUsing(function (Kegiatan $kegiatan, $kategori, $path, $ekstensi = '.pdf', $mime = 'application/pdf', $namaBerkasOverride = null, $subfolder = null) use (&$unggahan) {
+                $unggahan[] = [$kegiatan->tahapan_survei, $subfolder];
+
+                return ['drive_file_id' => 'x', 'storage_account_id' => null, 'nama_file' => 'x.pdf'];
+            });
+        });
+
         $test = $this->formSurvei($iku)
             ->call('toggleTahapan', 0, 'persiapan')
-            ->call('toggleTahapan', 0, 'pelaksanaan')
-            ->call('tambahSubfolder', 0, 'Surat Tugas', 'pelaksanaan')
-            // Tahapan ke-2 (Pelaksanaan), folder ke-1 (subfolder "Surat Tugas").
-            ->set('unggahFolder.0.1.1', [UploadedFile::fake()->create('st.pdf', 10, 'application/pdf')])
-            // Tahapan ke-1 (Persiapan), langsung di folder tahapan.
-            ->set('unggahFolder.0.0.0', [UploadedFile::fake()->create('rapat.pdf', 10, 'application/pdf')]);
+            ->call('tambahSubfolder', 0, 'Surat Tugas', 'persiapan')
+            // Tahapan ke-1 (Persiapan), folder ke-1 (subfolder "Surat Tugas") — langsung
+            // tersimpan ke Drive tanpa klik Simpan Draft.
+            ->set('unggahFolder.0.0.1', [UploadedFile::fake()->create('st.pdf', 10, 'application/pdf')])
+            ->assertHasNoErrors();
 
-        $komponen = $test->instance();
-        [$st, $rapat] = $test->get('blocks.0.bukti');
-        $block = $komponen->blocks[0];
-
-        $this->assertSame('pelaksanaan', $komponen->tahapanBerkasBaru($block, $st));
-        $this->assertSame('Surat Tugas', $komponen->subfolderBerkasBaru($block, $st));
-        $this->assertSame('persiapan', $komponen->tahapanBerkasBaru($block, $rapat));
-        $this->assertSame('', $komponen->subfolderBerkasBaru($block, $rapat));
+        $this->assertSame([['persiapan', 'Surat Tugas']], $unggahan);
         $this->assertSame([], $test->get('unggahFolder'));
+        $this->assertSame([], $test->get('blocks.0.bukti'));
+        $this->assertCount(1, $test->get('blocks.0.existing_bukti'));
+        $this->assertSame(Kegiatan::STATUS_DRAFT, Kegiatan::sole()->status_dokumen);
+    }
+
+    public function test_unggahan_tertahan_sampai_uraian_kegiatan_diisi(): void
+    {
+        $iku = $this->siapkan();
+
+        $this->mock(FolderStructureService::class, function ($mock) {
+            $mock->shouldReceive('unggahBerkasKegiatan')->once()->andReturn(['drive_file_id' => 'x', 'storage_account_id' => null, 'nama_file' => 'x.pdf']);
+        });
+
+        $test = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $iku->id)
+            ->set('blocks.0.jenis', 'bukan_survei_sensus')
+            ->set('unggahFolder.0.0.0', [UploadedFile::fake()->create('a.pdf', 10, 'application/pdf')])
+            ->assertHasErrors('blocks.0.uraian_kegiatan');
+
+        $this->assertCount(1, $test->get('blocks.0.bukti'));
+        $this->assertSame(0, Berkas::count());
+
+        $test->set('blocks.0.uraian_kegiatan', 'Rapat koordinasi');
+
+        $this->assertSame(1, Berkas::count());
+        $this->assertSame([], $test->get('blocks.0.bukti'));
+    }
+
+    public function test_simpan_otomatis_tidak_membuang_blok_yang_belum_diisi(): void
+    {
+        $iku = $this->siapkan();
+
+        $this->mock(FolderStructureService::class, function ($mock) {
+            $mock->shouldReceive('unggahBerkasKegiatan')->andReturn(['drive_file_id' => 'x', 'storage_account_id' => null, 'nama_file' => 'x.pdf']);
+        });
+
+        $test = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $iku->id)
+            ->set('blocks.0.jenis', 'bukan_survei_sensus')
+            ->call('addBlock')
+            ->set('blocks.1.jenis', 'bukan_survei_sensus')
+            // Blok 1 menunggu uraian — berkasnya tertahan.
+            ->set('unggahFolder.1.0.0', [UploadedFile::fake()->create('tertahan.pdf', 10, 'application/pdf')])
+            ->set('blocks.0.uraian_kegiatan', 'Rapat koordinasi')
+            ->set('unggahFolder.0.0.0', [UploadedFile::fake()->create('a.pdf', 10, 'application/pdf')]);
+
+        $this->assertSame(1, Kegiatan::count());
+        $this->assertCount(2, $test->get('blocks'));
+        $this->assertSame('', $test->get('blocks.1.uraian_kegiatan'));
+        $this->assertCount(1, $test->get('blocks.1.bukti'));
+        $this->assertTrue($test->get('adaPerubahan'));
     }
 
     public function test_susunan_subfolder_diatur_terpisah_per_tahapan(): void
@@ -188,10 +244,14 @@ class TahapanGandaDanSubfolderTest extends TestCase
             ->assertSet('blocks.0.tahapan_kustom', ['Pelatihan Petugas'])
             ->assertSet('blocks.0.tahapan_tambahan', ['Pelatihan Petugas', 'pelaksanaan'])
             ->call('tambahSubfolder', 0, 'Daftar Hadir', 'Pelatihan Petugas')
+            // Unggahan pertama langsung menyimpan draf — tiap tahapan jadi blok sendiri
+            // (0 Persiapan, 1 Pelatihan Petugas, 2 Pelaksanaan), subfolder yang belum
+            // berisi berkas tetap terbawa.
             ->set('unggahFolder.0.0.0', [UploadedFile::fake()->create('a.pdf', 10, 'application/pdf')])
-            ->set('unggahFolder.0.1.1', [UploadedFile::fake()->create('b.pdf', 10, 'application/pdf')])
-            ->set('unggahFolder.0.2.0', [UploadedFile::fake()->create('c.pdf', 10, 'application/pdf')])
-            ->call('simpanDraft')
+            ->assertSet('blocks.1.tahapan_survei', 'Pelatihan Petugas')
+            ->assertSet('blocks.1.subfolders_tahapan', ['Pelatihan Petugas' => ['Daftar Hadir']])
+            ->set('unggahFolder.1.0.1', [UploadedFile::fake()->create('b.pdf', 10, 'application/pdf')])
+            ->set('unggahFolder.2.0.0', [UploadedFile::fake()->create('c.pdf', 10, 'application/pdf')])
             ->assertHasNoErrors();
 
         $pelatihan = Kegiatan::where('tahapan_survei', 'Pelatihan Petugas')->firstOrFail();
