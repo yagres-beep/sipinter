@@ -1240,6 +1240,42 @@ class NotulaDownloadTest extends TestCase
     }
 
     /**
+     * Nama bulan Batas Waktu Tindak Lanjut HARUS bahasa Indonesia walau APP_LOCALE 'en'
+     * (production) -- "Desember 2026", bukan "December 2026".
+     */
+    public function test_docx_bagian1_batas_waktu_rtl_berbahasa_indonesia(): void
+    {
+        app()->setLocale('en');
+        $this->loginSebagai('Tim SAKIP');
+
+        $iku = MasterIku::create([
+            'kode' => '3005', 'indikator' => 'Indikator Uji Bulan Indonesia', 'tim' => 'Uji',
+            'penanggung_jawab' => 'Uji', 'sasaran' => 'Sasaran Uji Bulan Indonesia',
+        ]);
+
+        // Notula Triwulan III 2026 -> RTL berikutnya untuk TW IV, akhir triwulannya Desember 2026.
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $periodeBerikutnya = Periode::create(['tahun' => 2026, 'bulan' => 10, 'triwulan' => 4, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $this->verifikasiCapaian($iku, $periode);
+
+        RtlEvaluasi::create([
+            'iku_id' => $iku->id,
+            'periode_id' => $periodeBerikutnya->id,
+            'rtl_teks' => 'RTL uji bulan Indonesia',
+            'pic' => 'Uji',
+            'batas_waktu' => '2026-12-31',
+            'status_dokumen' => RtlEvaluasi::STATUS_DIAJUKAN,
+        ]);
+
+        $notula = Notula::create(['periode_id' => $periode->id]);
+
+        $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
+
+        $this->assertStringContainsString('Desember 2026', $xml);
+        $this->assertStringNotContainsString('December 2026', $xml);
+    }
+
+    /**
      * Header rapat (hari/waktu/tempat/pimpinan) harus benar-benar tercetak di .docx
      * begitu diisi lewat Detail Rapat -- bukan cuma "…". Tabel TTD (Mengetahui/Kepala/
      * Notulis) SENGAJA tidak tercetak SAMA SEKALI di sini (notula masih draft, belum

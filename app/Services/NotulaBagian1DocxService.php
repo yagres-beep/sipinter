@@ -670,7 +670,9 @@ class NotulaBagian1DocxService
      */
     private function akhirTriwulan(int $tahun, int $triwulan): Carbon
     {
-        return Carbon::create($tahun, $triwulan * 3, 1)->endOfMonth();
+        // locale('id') eksplisit: APP_LOCALE production 'en', jadi translatedFormat()
+        // tanpa ini mencetak "December 2026", bukan "Desember 2026".
+        return Carbon::create($tahun, $triwulan * 3, 1)->endOfMonth()->locale('id');
     }
 
     /**
