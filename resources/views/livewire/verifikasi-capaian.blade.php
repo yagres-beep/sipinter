@@ -195,7 +195,7 @@
                     <tr class="muted">
                         <td title="Otomatis dihitung, BUKAN input — jumlah Realisasi X TW I s.d. TW ini (Realisasi X per TW dijumlahkan aplikasi), dibagi Realisasi Y × 100">↳ Realisasi Kumulatif (%) <span class="muted" style="font-weight:400">— otomatis, = (Σ Realisasi X s.d. TW ini) ÷ Y × 100</span></td>
                         @for ($tw = 1; $tw <= 4; $tw++)
-                            <td style="text-align:center">{{ \App\Models\PengaturanCapaian::formatAngka($capaianTahunan->realisasiKumulatif($tw)) }}</td>
+                            <td style="text-align:center">{{ \App\Models\PengaturanCapaian::formatRealisasiKumulatif($capaianTahunan->realisasiKumulatifPresisi($tw)) }}</td>
                         @endfor
                     </tr>
                 @else

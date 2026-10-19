@@ -79,6 +79,21 @@ class PengaturanCapaian extends Model
     }
 
     /**
+     * Khusus baris "Realisasi Kumulatif (%)" IKU 'rasio' (Verifikasi Capaian & kolom
+     * Realisasi notula) -- format Indonesia, TEPAT 5 angka di belakang koma
+     * (66,66667 / 62,50000 / 0,00000). Null (belum ada data) tetap "-". Angka lain
+     * di aplikasi tetap memakai formatAngka()/formatPersen().
+     */
+    public static function formatRealisasiKumulatif(?float $nilai): string
+    {
+        if ($nilai === null) {
+            return '-';
+        }
+
+        return number_format($nilai, 5, ',', '.');
+    }
+
+    /**
      * Sama seperti formatAngka(), ditambah sufiks "%" — dipakai untuk kolom Capaian %.
      */
     public static function formatPersen(mixed $nilai): string

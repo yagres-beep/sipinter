@@ -72,6 +72,24 @@ class CapaianTahunanTest extends TestCase
         $this->assertEqualsWithDelta(66.67, $capaian->realisasiKumulatif(2), 0.01);
     }
 
+    public function test_realisasi_kumulatif_presisi_hanya_untuk_tampilan_rumus_tetap(): void
+    {
+        $capaian = $this->buatCapaianRasio([
+            'x_realisasi_tw1' => 1, 'x_realisasi_tw2' => 1,
+            'y_realisasi_tw1' => 3, 'y_realisasi_tw2' => 3,
+            'x_alokasi_tw2' => 2, 'y_alokasi_tw2' => 3,
+        ]);
+
+        // Nilai untuk tampilan TIDAK dibulatkan; nilai perhitungan tetap 66.67
+        // dan capaian yang dihitung darinya tidak berubah.
+        $this->assertEqualsWithDelta(200 / 3, $capaian->realisasiKumulatifPresisi(2), 1e-9);
+        $this->assertSame(66.67, $capaian->realisasiKumulatif(2));
+        $this->assertSame(100.0, $capaian->capaianTriwulanan(2));
+
+        $langsung = $this->buatCapaianRasio(['realisasi_tw2' => 7.5], MasterIku::METODE_LANGSUNG);
+        $this->assertSame($langsung->realisasiKumulatif(2), $langsung->realisasiKumulatifPresisi(2));
+    }
+
     public function test_realisasi_kumulatif_rasio_nol_bila_penyebut_masih_kosong(): void
     {
         $capaian = $this->buatCapaianRasio(['x_realisasi_tw1' => 5]);

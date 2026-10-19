@@ -1432,6 +1432,52 @@ class VerifikasiCapaianTest extends TestCase
         $this->assertEqualsWithDelta(33.33, $capaianTahunan->realisasiKumulatif(3), 0.01);
     }
 
+    /**
+     * Baris "Realisasi Kumulatif (%)" (X kumulatif 2 ÷ Y 3 × 100) tampil 66,66667 --
+     * tepat 5 desimal -- di Verifikasi Capaian DAN di kolom Realisasi notula, dari
+     * nilai yang sama; nilai perhitungan capaian tetap 66.67.
+     */
+    public function test_realisasi_kumulatif_lima_desimal_sama_di_verifikasi_dan_notula(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+        $data['iku']->update(['metode_capaian' => 'rasio', 'satuan' => 'Persen', 'sasaran' => 'Sasaran Uji Lima Desimal']);
+
+        RincianN::create(['iku_id' => $data['iku']->id, 'tahun' => 2026, 'uraian' => 'Item TW I', 'triwulan_realisasi' => 1]);
+        RincianN::create(['iku_id' => $data['iku']->id, 'tahun' => 2026, 'uraian' => 'Item TW II', 'triwulan_realisasi' => 2]);
+        CapaianTahunan::create([
+            'iku_id' => $data['iku']->id, 'tahun' => 2026,
+            'x_realisasi_tw1' => 1, 'x_realisasi_tw2' => 1,
+            'y_realisasi_tw1' => 3, 'y_realisasi_tw2' => 3, 'y_realisasi_tw3' => 3, 'y_realisasi_tw4' => 3,
+            'x_alokasi_tw3' => 2, 'y_alokasi_tw3' => 3, 'y_alokasi_tw4' => 3,
+        ]);
+
+        Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']->fresh()])
+            ->assertSeeHtml('<td style="text-align:center">66,66667</td>');
+
+        $capaianTahunan = CapaianTahunan::where('iku_id', $data['iku']->id)->first();
+        $this->assertSame(66.67, $capaianTahunan->realisasiKumulatif(3));
+
+        $data['capaian']->update(['status' => Capaian::STATUS_DIVERIFIKASI]);
+        $notula = app(NotulaService::class)->untukTriwulan(2026, 3);
+        $path = tempnam(sys_get_temp_dir(), 'lima-desimal').'.docx';
+
+        try {
+            app(\App\Services\NotulaBagian1DocxService::class)->generate($notula, app(NotulaService::class)->kumpulkanDataBagianSatu($notula), $path);
+            $zip = new \ZipArchive;
+            $zip->open($path);
+            $xml = (string) $zip->getFromName('word/document.xml');
+            $zip->close();
+        } finally {
+            @unlink($path);
+        }
+
+        // Kolom Target (Alokasi Kumulatif) tetap 66.67 apa adanya -- hanya kolom
+        // Realisasi yang memakai format 5 desimal.
+        $this->assertStringContainsString('>66,66667<', $xml);
+        $this->assertStringContainsString('>66.67<', $xml);
+    }
+
     public function test_memilih_rincian_n_menentukan_realisasi_x_otomatis(): void
     {
         $this->actingAs($this->buatSakip());

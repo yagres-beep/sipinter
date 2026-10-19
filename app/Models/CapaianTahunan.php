@@ -143,9 +143,25 @@ class CapaianTahunan extends Model
     public function realisasiKumulatif(int $tw): float
     {
         if ($this->masterIku?->pakaiRasio()) {
+            return round($this->realisasiKumulatifPresisi($tw), 2);
+        }
+
+        return (float) ($this->{"realisasi_tw{$tw}"} ?? 0);
+    }
+
+    /**
+     * Sama seperti realisasiKumulatif() di atas, TANPA pembulatan 2 desimal untuk
+     * IKU 'rasio' -- HANYA untuk tampilan baris "Realisasi Kumulatif (%)" (Verifikasi
+     * Capaian & kolom Realisasi notula) lewat PengaturanCapaian::formatRealisasiKumulatif()
+     * yang membulatkannya ke 5 desimal. Perhitungan capaian tetap memakai
+     * realisasiKumulatif() yang sudah dibulatkan, tidak berubah.
+     */
+    public function realisasiKumulatifPresisi(int $tw): float
+    {
+        if ($this->masterIku?->pakaiRasio()) {
             $x = collect(range(1, $tw))->sum(fn ($n) => (float) ($this->{"x_realisasi_tw{$n}"} ?? 0));
 
-            return $this->rasioNilai($x, $this->{"y_realisasi_tw{$tw}"});
+            return CapaianCalculatorService::hitungPersentase($x, (float) ($this->{"y_realisasi_tw{$tw}"} ?? 0));
         }
 
         return (float) ($this->{"realisasi_tw{$tw}"} ?? 0);

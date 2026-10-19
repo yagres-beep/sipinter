@@ -531,6 +531,11 @@ class NotulaService
                 'target_pk' => $ct?->targetTahunan(),
                 'target_tw' => $ct?->alokasiKumulatif($tw),
                 'realisasi' => $ct ? (float) ($ct->{"realisasi_tw{$tw}"} ?? 0) : null,
+                // Kolom Realisasi IKU 'rasio' = Realisasi Kumulatif (%) yang SAMA dengan
+                // baris di Verifikasi Capaian (tanpa pembulatan; diformat 5 desimal oleh
+                // PengaturanCapaian::formatRealisasiKumulatif() saat dicetak). 'realisasi'
+                // di atas tetap apa adanya (dipakai penentuan tabel RO).
+                'realisasi_kumulatif_persen' => $ct && $iku->pakaiRasio() ? $ct->realisasiKumulatifPresisi($tw) : null,
                 'capaian_tw' => $ct?->capaianTriwulanan($tw),
                 'capaian_pk' => $ct?->capaianSetahun($tw),
                 // Untuk rumus "Dasar Hitung" IKU bersatuan Persen (lihat
