@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class RtlEvaluasi extends Model
@@ -82,31 +84,78 @@ class RtlEvaluasi extends Model
     }
 
     /**
-     * "Dievaluasi" sekarang berarti minimal satu bukti realisasi sudah diunggah —
-     * tidak lagi berdasarkan teks realisasi/status kecocokan (dihapus dari alur
-     * pengisian, poin cukup ditampilkan + tempat unggah bukti saja).
+     * Kegiatan (Bagian 2 Isian Kegiatan) yang melaksanakan poin RTL ini — tertaut lewat
+     * kegiatan.rtl_evaluasi_id saat uraian kegiatan dipilih dari dropdown RTL. Kegiatan
+     * yang dipisah ke beberapa tahapan tersimpan sebagai beberapa baris dengan
+     * rtl_evaluasi_id yang sama, jadi semua tahapannya ikut terbawa di sini.
      */
-    public function sudahDievaluasi(): bool
+    public function kegiatan(): HasMany
     {
-        return $this->relationLoaded('berkas') ? $this->berkas->isNotEmpty() : $this->berkas()->exists();
+        return $this->hasMany(Kegiatan::class, 'rtl_evaluasi_id')->orderBy('id');
     }
 
     /**
-     * Padanan query dari sudahDievaluasi() — poin yang sudah punya bukti realisasi.
-     * Teks realisasi lama (sebelum alur diganti jadi unggah bukti saja) tetap ikut
-     * dihitung supaya data lama tidak tiba-tiba hilang dari dasbor/daftar verifikasi.
-     * Sebelumnya dasbor & daftar verifikasi HANYA melihat teks realisasi, jadi poin
-     * yang sudah diberi bukti oleh Ketua Tim tidak pernah muncul untuk Tim SAKIP.
+     * Bukti capaian milik kegiatan yang tertaut ke poin ini (lihat kegiatan()) — inilah
+     * bukti realisasi RTL yang "tersinkron" dari Bagian 2: baris berkas & berkas Drive
+     * yang SAMA (ref tetap ke Kegiatan), bukan salinan, jadi diunggah/dihapus sekali
+     * saja dan tampil di kedua bagian.
+     */
+    public function buktiKegiatan(): HasManyThrough
+    {
+        return $this->hasManyThrough(Berkas::class, Kegiatan::class, 'rtl_evaluasi_id', 'ref_id')
+            ->where('berkas.ref_type', Kegiatan::class);
+    }
+
+    /**
+     * Seluruh bukti capaian kegiatan tertaut (lihat buktiKegiatan()) dari relasi
+     * kegiatan.berkas, berpasangan dengan kegiatannya supaya tampilan bisa menyebut
+     * tahapan/folder asal tiap berkas.
+     *
+     * @return \Illuminate\Support\Collection<int, array{berkas: Berkas, kegiatan: Kegiatan}>
+     */
+    public function buktiDariKegiatan()
+    {
+        return $this->kegiatan
+            ->flatMap(fn (Kegiatan $k) => $k->berkas->map(fn (Berkas $b) => ['berkas' => $b, 'kegiatan' => $k]))
+            ->values();
+    }
+
+    /**
+     * "Dievaluasi" berarti minimal satu bukti realisasi sudah ada — diunggah langsung
+     * di Evaluasi RTL, ATAU bukti capaian kegiatan yang tertaut ke poin ini (lihat
+     * buktiKegiatan()), supaya bukti yang sama tidak perlu diunggah dua kali. Tidak
+     * lagi berdasarkan teks realisasi/status kecocokan.
+     */
+    public function sudahDievaluasi(): bool
+    {
+        $adaBuktiSendiri = $this->relationLoaded('berkas') ? $this->berkas->isNotEmpty() : $this->berkas()->exists();
+
+        if ($adaBuktiSendiri) {
+            return true;
+        }
+
+        return $this->relationLoaded('kegiatan')
+            ? $this->kegiatan->contains(fn (Kegiatan $k) => $k->relationLoaded('berkas') ? $k->berkas->isNotEmpty() : $k->berkas()->exists())
+            : $this->buktiKegiatan()->exists();
+    }
+
+    /**
+     * Padanan query dari sudahDievaluasi() — poin yang sudah punya bukti realisasi
+     * (sendiri atau dari kegiatan tertaut). Teks realisasi lama (sebelum alur diganti
+     * jadi unggah bukti saja) tetap ikut dihitung supaya data lama tidak tiba-tiba
+     * hilang dari dasbor/daftar verifikasi.
      */
     public function scopeYangSudahDievaluasi(Builder $query): Builder
     {
         return $query->where(fn ($q) => $q->whereHas('berkas')
+            ->orWhereHas('buktiKegiatan')
             ->orWhere(fn ($q2) => $q2->whereNotNull('realisasi')->where('realisasi', '!=', '')));
     }
 
     public function scopeYangBelumDievaluasi(Builder $query): Builder
     {
         return $query->whereDoesntHave('berkas')
+            ->whereDoesntHave('buktiKegiatan')
             ->where(fn ($q) => $q->whereNull('realisasi')->orWhere('realisasi', ''));
     }
 

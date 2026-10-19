@@ -121,29 +121,36 @@ class Kegiatan extends Model
     }
 
     /**
-     * Nama capaian kegiatan untuk ditampilkan = nama folder kegiatannya: survei/sensus
-     * "<Tahapan> <uraian>" (mis. "Persiapan Survei Sakernas", satu baris per tahapan),
-     * selain itu nama folder kegiatan. Keduanya mengikuti nama yang diganti pengguna.
-     * Nama otomatis lama berformat "[Persiapan] ..." ikut dirapikan tanpa kurung siku.
+     * Nama kegiatan untuk ditampilkan = Uraian Kegiatan apa adanya, baik "1 folder"
+     * maupun "pisah ke beberapa tahapan". Tahapan hanya menentukan susunan folder
+     * Drive (tiap tahapan tersimpan sebagai baris sendiri dengan uraian yang sama) —
+     * bukan identitas kegiatan, jadi nama folder tahapan tidak pernah menggantikan
+     * uraian. Keterangan tahapan tersedia terpisah lewat labelTahapan().
      */
     public function uraianTampil(): string
     {
-        return (string) preg_replace('/^\[([^\]]+)\]\s*/u', '$1 ', $this->namaFolder());
+        return (string) $this->uraian_kegiatan;
     }
 
     /**
-     * Nama capaian di notula: kegiatan yang dipisah ke beberapa tahapan dicatat per
-     * tahapan dengan nama folder tahapannya ("<Tahapan> <kegiatan>", atau nama yang
-     * diganti pengguna) — kegiatan induknya sendiri tidak ikut tercatat. Kegiatan
-     * "1 folder" tetap memakai uraian kegiatannya.
+     * Nama capaian di notula — sama dengan uraianTampil(): seluruh tahapan satu
+     * kegiatan tercatat atas nama Uraian Kegiatan induknya (pemanggil cukup
+     * ->unique() supaya kegiatan bertahapan tidak tercatat berulang).
      */
     public function namaCapaian(): string
     {
-        if ($this->jenis === 'survei_sensus' && filled($this->tahapan_survei)) {
-            return $this->uraianTampil();
-        }
+        return $this->uraianTampil();
+    }
 
-        return (string) $this->uraian_kegiatan;
+    /**
+     * Label tahapan baris ini (mis. "Persiapan") bila kegiatannya dipisah ke beberapa
+     * tahapan, selain itu null — keterangan tambahan di samping uraian kegiatan.
+     */
+    public function labelTahapan(): ?string
+    {
+        return $this->jenis === 'survei_sensus' && filled($this->tahapan_survei)
+            ? \App\Livewire\PengisianKegiatan::labelTahapan($this->tahapan_survei)
+            : null;
     }
 
     /**

@@ -889,7 +889,9 @@ class VerifikasiCapaian extends Component
 
         $periode = $this->capaian->periode;
 
-        return $this->cacheRtlSebelumnya = RtlEvaluasi::with('berkas')
+        // kegiatan.berkas = bukti capaian kegiatan yang tertaut ke poin ini — ikut
+        // terhitung sebagai bukti realisasi (lihat RtlEvaluasi::sudahDievaluasi()).
+        return $this->cacheRtlSebelumnya = RtlEvaluasi::with(['berkas', 'kegiatan.berkas'])
             ->where('iku_id', $this->capaian->iku_id)
             ->whereHas('periode', fn ($q) => $q->where('tahun', $periode->tahun)->where('triwulan', $periode->triwulan))
             ->get();

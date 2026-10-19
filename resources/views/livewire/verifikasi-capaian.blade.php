@@ -275,9 +275,6 @@
                         {{ $kegiatan->jenis === 'survei_sensus' ? 'Pisah ke beberapa tahapan' : '1 folder (kegiatan)' }}{{ $kegiatan->tahapan_survei ? ' · Tahapan '.\App\Livewire\PengisianKegiatan::labelTahapan($kegiatan->tahapan_survei) : '' }}
                     </span>
                 </div>
-                @if ($kegiatan->jenis === 'survei_sensus' && $kegiatan->tahapan_survei)
-                    <div style="font-size:12px;margin-bottom:4px">Capaian: <b>{{ $kegiatan->uraianTampil() }}</b></div>
-                @endif
                 <textarea class="inp filled" style="height:auto;display:block;font-style:italic" rows="2" wire:model.live.blur="koreksiKegiatan.{{ $kegiatan->id }}" @readonly(!$bisaDikoreksi)></textarea>
                 @error("koreksiKegiatan.{$kegiatan->id}")
                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
@@ -887,7 +884,16 @@
                             wire:model.live.blur="koreksiRtlRealisasi.{{ $poin->id }}" placeholder="{{ $poin->sudahDievaluasi() ? '— tanpa keterangan teks, periksa bukti realisasi di bawah —' : '— belum dilaporkan —' }}"></textarea>
 
                         @if ($poin->sudahDievaluasi())
-                            <div style="font-size:11.5px;margin-top:6px;color:var(--teal)">📎 {{ $poin->berkas->count() }} bukti realisasi diunggah Ketua Tim{{ $poin->berkas->where('status_verifikasi', 'menunggu')->isNotEmpty() ? ' — '.$poin->berkas->where('status_verifikasi', 'menunggu')->count().' belum diperiksa (klik 🔍 Periksa)' : '' }}</div>
+                            @if ($poin->berkas->isNotEmpty())
+                                <div style="font-size:11.5px;margin-top:6px;color:var(--teal)">📎 {{ $poin->berkas->count() }} bukti realisasi diunggah Ketua Tim{{ $poin->berkas->where('status_verifikasi', 'menunggu')->isNotEmpty() ? ' — '.$poin->berkas->where('status_verifikasi', 'menunggu')->count().' belum diperiksa (klik 🔍 Periksa)' : '' }}</div>
+                            @endif
+                            @php
+                                $buktiKegiatanRtl = $poin->buktiDariKegiatan();
+                                $tahapanRtl = $buktiKegiatanRtl->map(fn ($t) => $t['kegiatan']->labelTahapan())->filter()->unique();
+                            @endphp
+                            @if ($buktiKegiatanRtl->isNotEmpty())
+                                <div style="font-size:11.5px;margin-top:6px;color:var(--teal)">🔗 {{ $buktiKegiatanRtl->count() }} bukti capaian dari kegiatan yang melaksanakan RTL ini{{ $tahapanRtl->isNotEmpty() ? ' (tahapan '.$tahapanRtl->join(', ').')' : '' }} — berkasnya sama dengan bukti kegiatan dan diperiksa di sana: {{ $buktiKegiatanRtl->pluck('berkas.nama_file')->join(', ') }}</div>
+                            @endif
                         @else
                             <div style="font-size:11.5px;margin-top:6px;color:var(--muted)">Belum ada bukti realisasi diunggah Ketua Tim — belum bisa diverifikasi.</div>
                         @endif

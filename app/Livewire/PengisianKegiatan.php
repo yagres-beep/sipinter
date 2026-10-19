@@ -587,25 +587,19 @@ class PengisianKegiatan extends Component
     }
 
     /**
-     * Nama tampil/akhir satu berkas bukti BARU di blok kegiatan — penomoran nama
-     * default dihitung per tahapan tujuannya, sama persis dengan yang disimpan.
+     * Nama tampil/akhir satu berkas bukti BARU di blok kegiatan, sama persis dengan
+     * yang disimpan. Nama bawaan selalu atas nama Uraian Kegiatan induk ("Kegiatan
+     * <uraian>"), juga bila berkasnya masuk folder salah satu tahapan — tahapan cuma
+     * menentukan folder tujuan, bukan nama bukti. Nomor urut berlanjut di seluruh blok.
      */
     public function namaBuktiBaruKegiatan(array $block, $file): string
     {
-        $tahapan = $this->tahapanBerkasBaru($block, $file);
-        $satuKelompok = array_values(array_filter(
-            $block['bukti'] ?? [],
-            fn ($f) => $this->tahapanBerkasBaru($block, $f) === $tahapan
+        $semua = array_values($block['bukti'] ?? []);
+        $urutan = (int) array_search($this->kunciBuktiBaru($file), array_map(fn ($f) => $this->kunciBuktiBaru($f), $semua), true);
+
+        return $this->namaBuktiBaruAtauDefault($file, $this->namaDefaultBuktiBaru(
+            'Kegiatan '.$block['uraian_kegiatan'], count($block['existing_bukti'] ?? []), $urutan, count($semua)
         ));
-        $urutan = (int) array_search($this->kunciBuktiBaru($file), array_map(fn ($f) => $this->kunciBuktiBaru($f), $satuKelompok), true);
-        $utama = $tahapan === null || $tahapan === ($this->tahapanDipilih($block)[0] ?? null);
-        $jumlahLama = $utama ? count($block['existing_bukti'] ?? []) : 0;
-
-        $namaDasar = $tahapan !== null
-            ? self::uraianDenganTahapan($block['uraian_kegiatan'], $tahapan)
-            : 'Kegiatan '.$block['uraian_kegiatan'];
-
-        return $this->namaBuktiBaruAtauDefault($file, $this->namaDefaultBuktiBaru($namaDasar, $jumlahLama, $urutan, count($satuKelompok)));
     }
 
     /**
@@ -1375,6 +1369,10 @@ class PengisianKegiatan extends Component
             ->reject(fn ($file) => $file['id'] === $berkasId)
             ->values()
             ->all();
+
+        // Bukti yang sama juga tampil di Evaluasi RTL bila kegiatannya tertaut RTL.
+        $this->cacheRtlBerjalan = null;
+        Cache::forget($this->cacheKeyPeriodeIku('rtl-berjalan'));
     }
 
     /**
@@ -1645,7 +1643,8 @@ class PengisianKegiatan extends Component
             }
         }
 
-        if ($ref instanceof RtlEvaluasiModel) {
+        // Bukti kegiatan tertaut RTL ikut tampil di Evaluasi RTL (Bagian 4).
+        if ($ref instanceof RtlEvaluasiModel || $ref instanceof Kegiatan) {
             $this->cacheRtlBerjalan = null;
             Cache::forget($this->cacheKeyPeriodeIku('rtl-berjalan'));
         }
@@ -1775,10 +1774,9 @@ class PengisianKegiatan extends Component
             }
         }
 
-        if ($kategori === 'evaluasi_rtl') {
-            $this->cacheRtlBerjalan = null;
-            Cache::forget($this->cacheKeyPeriodeIku('rtl-berjalan'));
-        }
+        // Bukti kegiatan tertaut RTL juga tampil di Evaluasi RTL (Bagian 4).
+        $this->cacheRtlBerjalan = null;
+        Cache::forget($this->cacheKeyPeriodeIku('rtl-berjalan'));
 
         Cache::forget($this->kunciCacheLinkFolderIku());
         $this->resetErrorBag("buktiSusulan.{$kunci}");
@@ -2140,6 +2138,7 @@ class PengisianKegiatan extends Component
             Cache::forget($this->cacheKeyPeriodeIku($bagian));
         }
         Cache::forget($this->kunciCacheLinkFolderIku());
+        $this->cacheRtlBerjalan = null;
 
         foreach ($this->bagianKustomAktif() as $bagian) {
             Cache::forget($this->cacheKeyPeriodeIku("riwayat-bagian-{$bagian->id}"));
@@ -2480,6 +2479,10 @@ class PengisianKegiatan extends Component
      */
     protected function setelahNamaBerkasDiubah(int $berkasId, string $namaFile): void
     {
+        // Bukti kegiatan tertaut RTL juga tampil di Evaluasi RTL (Bagian 4).
+        $this->cacheRtlBerjalan = null;
+        Cache::forget($this->cacheKeyPeriodeIku('rtl-berjalan'));
+
         foreach ($this->blocks as &$block) {
             foreach ($block['existing_bukti'] ?? [] as $i => $file) {
                 if ($file['id'] === $berkasId) {
@@ -2831,6 +2834,27 @@ class PengisianKegiatan extends Component
         }
     }
 
+    /**
+     * Poin RTL ini dilaksanakan oleh kegiatan (Bagian 2)? Tersimpan di database —
+     * kegiatan bulan mana pun di triwulan ini — ATAU baru dipilih lewat dropdown RTL di
+     * form ini. Bukti realisasinya lalu cukup diunggah sebagai bukti capaian kegiatan
+     * itu (tampil otomatis di Bagian 4), jadi kotak unggah terpisah di Bagian 4 tidak
+     * ditawarkan lagi supaya bukti yang sama tidak diunggah dua kali.
+     */
+    public function poinRtlTertautKegiatan(RtlEvaluasiModel $poin): bool
+    {
+        return $poin->kegiatan->isNotEmpty()
+            || collect($this->blocks)->contains(fn ($b) => (int) ($b['rtl_evaluasi_id'] ?? 0) === (int) $poin->id);
+    }
+
+    /** Indeks blok form ini yang memuat baris Kegiatan $kegiatanId (null = bulan lain). */
+    public function indeksBlokKegiatan(int $kegiatanId): ?int
+    {
+        $index = collect($this->blocks)->search(fn ($b) => (int) ($b['id'] ?? 0) === $kegiatanId);
+
+        return $index === false ? null : (int) $index;
+    }
+
     public function removeBuktiEvaluasi(int $rtlId, int $fileIndex): void
     {
         unset($this->evaluasi[$rtlId]['bukti'][$fileIndex]);
@@ -2859,7 +2883,10 @@ class PengisianKegiatan extends Component
             function () {
                 $triwulanSekarang = $this->triwulanDari($this->bulan);
 
-                return RtlEvaluasiModel::with(['periode', 'berkas'])
+                // kegiatan.berkas = bukti capaian kegiatan yang tertaut ke poin ini
+                // (Bagian 2) — ikut tampil sebagai bukti realisasi, lihat
+                // RtlEvaluasi::buktiDariKegiatan().
+                return RtlEvaluasiModel::with(['periode', 'berkas', 'kegiatan.berkas', 'kegiatan.periode'])
                     ->where('iku_id', $this->iku_id)
                     ->whereHas('periode', fn ($q) => $q->where('tahun', $this->tahun)->where('triwulan', $triwulanSekarang))
                     ->get();
@@ -2870,12 +2897,32 @@ class PengisianKegiatan extends Component
         // IKU+periode berjalan (lihat VerifikasiCapaian::rtlEvaluasiSebelumnya()) —
         // masking di sini SETELAH Cache::remember (bukan di dalamnya) supaya nilai asli
         // tetap disimpan ke cache, sama seperti pola di riwayatBagianKustom() di atas.
-        if (! $this->verifikasiTerlihat()) {
-            foreach ($rtlBerjalan as $poin) {
-                foreach ($poin->berkas as $berkas) {
-                    $berkas->status_verifikasi = 'menunggu';
-                    $berkas->catatan = null;
+        // Bukti kegiatan tertaut mengikuti siklus verifikasi bulan kegiatannya sendiri.
+        $terlihat = $this->verifikasiTerlihat();
+        $periodeSaatIni = $this->periodeSaatIni();
+        $periodeLain = $rtlBerjalan->flatMap(fn ($poin) => $poin->kegiatan->pluck('periode_id'))
+            ->reject(fn ($id) => (int) $id === (int) $periodeSaatIni?->id)
+            ->unique()->values();
+        $statusBulanLain = $periodeLain->isEmpty() ? collect() : Capaian::where('iku_id', $this->iku_id)
+            ->whereIn('periode_id', $periodeLain)->pluck('status', 'periode_id');
+        $statusTerlihat = [Capaian::STATUS_DIKEMBALIKAN, Capaian::STATUS_DIVERIFIKASI, Capaian::STATUS_DISETUJUI];
+
+        foreach ($rtlBerjalan as $poin) {
+            $daftar = $terlihat ? collect() : $poin->berkas;
+
+            foreach ($poin->kegiatan as $kegiatan) {
+                $kegiatanTerlihat = (int) $kegiatan->periode_id === (int) $periodeSaatIni?->id
+                    ? $terlihat
+                    : in_array($statusBulanLain[$kegiatan->periode_id] ?? null, $statusTerlihat, true);
+
+                if (! $kegiatanTerlihat) {
+                    $daftar = $daftar->concat($kegiatan->berkas);
                 }
+            }
+
+            foreach ($daftar as $berkas) {
+                $berkas->status_verifikasi = 'menunggu';
+                $berkas->catatan = null;
             }
         }
 
@@ -3154,40 +3201,20 @@ class PengisianKegiatan extends Component
     }
 
     /**
-     * Cari poin RTL triwulan berjalan yang teksnya cocok persis (case-insensitive) dengan
-     * uraian kegiatan — jaring pengaman untuk kegiatan lama yang uraiannya diketik ulang
-     * sama persis dengan RTL tanpa lewat dropdown (lihat rtlEvaluasiIdUntukBlock()).
-     */
-    protected function cariRtlBerjalanCocok(string $uraianKegiatan): ?int
-    {
-        $uraian = trim(mb_strtolower($uraianKegiatan));
-
-        foreach ($this->rtlTriwulanBerjalan() as $poin) {
-            if (trim(mb_strtolower($poin->rtl_teks)) === $uraian) {
-                return $poin->id;
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * rtl_evaluasi_id final untuk sebuah blok kegiatan saat disimpan — utamakan pilihan
+     * rtl_evaluasi_id final untuk sebuah blok kegiatan saat disimpan — HANYA pilihan
      * eksplisit dari dropdown RTL (blocks.*.rtl_evaluasi_id, diisi lewat pilihRtlUntukBlock()
-     * dan TETAP tertaut walau uraian kegiatan-nya lalu disunting), baru jatuh ke pencocokan
-     * teks persis sebagai jaring pengaman bila field itu kosong. ID yang tersimpan divalidasi
-     * ulang terhadap rtlTriwulanBerjalan() supaya tidak ada ID basi/di luar triwulan berjalan
-     * yang lolos tersimpan.
+     * dan TETAP tertaut walau uraian kegiatan-nya lalu disunting; kegiatan lama dimuat
+     * beserta tautannya dari database). Tidak ada lagi pencocokan teks: tautan ini kini
+     * juga membuat bukti capaian kegiatan tampil sebagai bukti realisasi RTL (lihat
+     * RtlEvaluasi::buktiKegiatan()), jadi kegiatan "Ketik bebas" yang kebetulan berteks
+     * sama tidak boleh ikut tertaut diam-diam. ID divalidasi ulang terhadap
+     * rtlTriwulanBerjalan() supaya tidak ada ID basi/di luar triwulan berjalan yang lolos.
      */
     protected function rtlEvaluasiIdUntukBlock(array $block): ?int
     {
         $idTerpilih = $block['rtl_evaluasi_id'] ?? null;
 
-        if ($idTerpilih && $this->rtlTriwulanBerjalan()->contains('id', $idTerpilih)) {
-            return (int) $idTerpilih;
-        }
-
-        return $this->cariRtlBerjalanCocok($block['uraian_kegiatan']);
+        return $idTerpilih && $this->rtlTriwulanBerjalan()->contains('id', $idTerpilih) ? (int) $idTerpilih : null;
     }
 
     /**
@@ -3227,7 +3254,7 @@ class PengisianKegiatan extends Component
         return Carbon::create($target['tahun'], $bulanTerakhir, 1)->endOfMonth();
     }
 
-    protected function namaBulanIndo(int $bulan): string
+    public function namaBulanIndo(int $bulan): string
     {
         return Carbon::create(2000, $bulan, 1)->locale('id')->translatedFormat('F');
     }
@@ -3653,8 +3680,13 @@ class PengisianKegiatan extends Component
             if ($this->bulanKeDari($this->bulan) === 3) {
                 $poinTanpaBukti = $this->rtlTriwulanBerjalan()->reject(function ($poin) {
                     $buktiBaru = $this->evaluasi[$poin->id]['bukti'] ?? [];
+                    // Bukti capaian baru di blok kegiatan yang tertaut ke poin ini juga
+                    // dihitung (tampil sebagai bukti realisasinya, tanpa unggah ulang).
+                    $buktiKegiatanBaru = collect($this->blocks)->contains(
+                        fn ($b) => (int) ($b['rtl_evaluasi_id'] ?? 0) === (int) $poin->id && ! empty($b['bukti'])
+                    );
 
-                    return $poin->sudahDievaluasi() || ! empty($buktiBaru);
+                    return $poin->sudahDievaluasi() || ! empty($buktiBaru) || $buktiKegiatanBaru;
                 });
 
                 if ($poinTanpaBukti->isNotEmpty()) {
@@ -3884,6 +3916,36 @@ class PengisianKegiatan extends Component
         $uraian = trim($this->blocks[$index]['uraian_kegiatan'] ?? '');
 
         return 'Kegiatan #'.($index + 1).($uraian !== '' ? ' ("'.Str::limit($uraian, 40).'")' : '');
+    }
+
+    /**
+     * Judul blok di form: "Kegiatan N", dengan N dihitung per KEGIATAN, bukan per baris —
+     * tahapan lain dari kegiatan yang sama (poin RTL sama atau uraian sama, lihat
+     * kegiatanSama()) yang tersimpan sebagai blok sendiri memakai nomor kegiatan
+     * induknya + keterangan tahapannya, mis. "Kegiatan 1 · Tahapan Pelaksanaan".
+     */
+    public function judulBlokKegiatan(int $index): string
+    {
+        $nomor = 0;
+        $induk = [];
+
+        foreach ($this->blocks as $j => $blok) {
+            $sama = ($blok['jenis'] ?? '') === 'survei_sensus' && filled($blok['id'] ?? null)
+                ? collect($induk)->first(fn ($n, $k) => ($this->blocks[$k]['jenis'] ?? '') === 'survei_sensus' && $this->kegiatanSama($this->blocks[$k], $blok))
+                : null;
+            $induk[$j] = $sama ?? ++$nomor;
+
+            if ($j === $index) {
+                break;
+            }
+        }
+
+        $block = $this->blocks[$index] ?? [];
+        $tahapan = ($block['jenis'] ?? '') === 'survei_sensus' && filled($block['id'] ?? null) && filled($block['tahapan_survei'] ?? null)
+            ? ' · Tahapan '.self::labelTahapan($block['tahapan_survei'])
+            : '';
+
+        return 'Kegiatan '.($induk[$index] ?? $index + 1).$tahapan;
     }
 
     /**

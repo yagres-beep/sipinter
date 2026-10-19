@@ -1080,7 +1080,12 @@ class PengisianKegiatanTest extends TestCase
             ->assertSee('Menunggu Verifikasi Tim SAKIP');
     }
 
-    public function test_kegiatan_yang_cocok_dengan_rtl_berjalan_menautkan_rtl_evaluasi_id(): void
+    /**
+     * Skenario 4: kegiatan "Ketik bebas" yang teksnya kebetulan sama dengan poin RTL
+     * TIDAK ikut tertaut — tautan (dan sinkronisasi bukti ke Evaluasi RTL) hanya lewat
+     * pilihan dropdown RTL, bukan pencocokan teks.
+     */
+    public function test_kegiatan_ketik_bebas_berteks_sama_dengan_rtl_tidak_tertaut(): void
     {
         $peranKetua = Role::create(['nama' => 'Ketua Tim']);
         $ketua = User::create([
@@ -1128,7 +1133,9 @@ class PengisianKegiatanTest extends TestCase
             ->assertHasNoErrors();
 
         $kegiatan = Kegiatan::first();
-        $this->assertSame($poinRtl->id, $kegiatan->rtl_evaluasi_id);
+        $this->assertNull($kegiatan->rtl_evaluasi_id);
+        // Bukti capaian kegiatan tidak terhitung sebagai bukti realisasi RTL.
+        $this->assertSame(0, $poinRtl->refresh()->buktiKegiatan()->count());
     }
 
     protected function siapkanIkuDanRtlSebelumnya(string $emailKetua): array

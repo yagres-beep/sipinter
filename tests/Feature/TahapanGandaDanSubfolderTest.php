@@ -107,7 +107,10 @@ class TahapanGandaDanSubfolderTest extends TestCase
         $this->assertSame(2, Kegiatan::count());
         $this->assertSame('Persiapan Survei Sakernas', $persiapan->nama_folder_auto);
         $this->assertSame('Pelaksanaan Survei Sakernas', $pelaksanaan->nama_folder_auto);
-        $this->assertSame('Persiapan Survei Sakernas', $persiapan->uraianTampil());
+        // Folder tahapan boleh bernama tahapan, tapi identitas kegiatan tetap uraiannya.
+        $this->assertSame('Survei Sakernas', $persiapan->uraianTampil());
+        $this->assertSame('Survei Sakernas', $pelaksanaan->namaCapaian());
+        $this->assertSame('Persiapan', $persiapan->labelTahapan());
 
         $berkasPersiapan = Berkas::where('ref_id', $persiapan->id)->sole();
         $this->assertSame('undangan.pdf', $berkasPersiapan->nama_file);
@@ -301,8 +304,9 @@ class TahapanGandaDanSubfolderTest extends TestCase
 
         $pelaksanaan = Kegiatan::where('tahapan_survei', 'pelaksanaan')->firstOrFail();
         $this->assertSame('Lapangan Sakernas', $pelaksanaan->namaFolder());
-        $this->assertSame('Lapangan Sakernas', $pelaksanaan->uraianTampil());
-        $this->assertSame('Persiapan Survei Sakernas', Kegiatan::where('tahapan_survei', 'persiapan')->firstOrFail()->uraianTampil());
+        // Mengganti nama folder tahapan tidak mengganti nama kegiatan.
+        $this->assertSame('Survei Sakernas', $pelaksanaan->uraianTampil());
+        $this->assertSame('Survei Sakernas', Kegiatan::where('tahapan_survei', 'persiapan')->firstOrFail()->uraianTampil());
     }
 
     public function test_tiap_tahapan_wajib_punya_bukti_sebelum_diajukan(): void

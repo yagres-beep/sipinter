@@ -163,7 +163,7 @@
                             <div style="display:flex;align-items:center;gap:10px;justify-content:space-between;padding:9px 13px;font-size:12.5px;border-bottom:1px solid var(--line2)">
                                 <div>
                                     <b>{{ $kegiatan->masterIku?->kode }}</b>
-                                    <span class="muted">— {{ \Illuminate\Support\Str::limit($kegiatan->uraianTampil(), 70) }}</span>
+                                    <span class="muted">— {{ \Illuminate\Support\Str::limit($kegiatan->uraianTampil(), 70) }}@if ($kegiatan->labelTahapan()) · Tahapan {{ $kegiatan->labelTahapan() }}@endif</span>
                                 </div>
                                 <span class="badge {{ $badgeStatus[$kegiatan->status_dokumen] }}" style="flex:none">{{ $labelStatus[$kegiatan->status_dokumen] }}</span>
                             </div>

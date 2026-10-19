@@ -224,7 +224,7 @@
             @if ($terkunci)
                 <div class="keg" wire:key="block-{{ $i }}" style="opacity:.8">
                     <div class="keg-head">
-                        <span class="t">Kegiatan {{ $i + 1 }}</span>
+                        <span class="t">{{ $this->judulBlokKegiatan($i) }}</span>
                         <x-badge-status :status="$block['status_dokumen']" />
                     </div>
                     @php $bolehSusulan = $this->kegiatanBolehBuktiSusulan($block); @endphp
@@ -273,7 +273,7 @@
                                     {{-- Kegiatan terkunci: berkas "Tidak Sesuai" tetap bisa diganti/dihapus. --}}
                                     @if ($this->buktiLamaBisaDikelola($file['status_verifikasi'], true))
                                         @include('livewire.partials._ganti-berkas', ['berkasId' => $file['id']])
-                                        <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLama', args: [{{ $i }}, {{ $file['id'] }}] }" wire:loading.class="btn-busy" wire:target="hapusBuktiLama({{ $i }}, {{ $file['id'] }})">🗑️</span>
+                                        <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLama', args: [{{ $i }}, {{ $file['id'] }}], tertaut: @js(filled($block['rtl_evaluasi_id'] ?? null)) }" wire:loading.class="btn-busy" wire:target="hapusBuktiLama({{ $i }}, {{ $file['id'] }})">🗑️</span>
                                     @endif
                                 </div>
                             @empty
@@ -328,7 +328,7 @@
                     }
                 }">
                 <div class="keg-head">
-                    <span class="t">Kegiatan {{ $i + 1 }}</span>
+                    <span class="t">{{ $this->judulBlokKegiatan($i) }}</span>
                     @if ($block['status_dokumen'])
                         <x-badge-status :status="$block['status_dokumen']" />
                     @endif
@@ -437,7 +437,7 @@
                         <button type="button" class="btn btn-ghost btn-sm" style="white-space:nowrap" @click="if (namaTahapan.trim()) { $wire.tambahTahapan({{ $i }}, namaTahapan); namaTahapan = '' }">＋ Tambah Tahapan</button>
                     </div>
                     @if (count($tahapanBlok) > 1)
-                        <div class="fhint">🗂️ {{ count($tahapanBlok) }} tahapan dipilih — saat disimpan, tiap tahapan tercatat sebagai kegiatan sendiri (diverifikasi terpisah oleh Tim SAKIP) dengan folder masing-masing di dalam folder kegiatan. Unggah bukti lewat tombol di folder tiap tahapan di bawah.</div>
+                        <div class="fhint">🗂️ {{ count($tahapanBlok) }} tahapan dipilih — tiap tahapan mendapat folder sendiri di dalam folder kegiatan (buktinya diperiksa per tahapan oleh Tim SAKIP), tetapi tetap tercatat sebagai SATU kegiatan atas nama uraian kegiatan di atas. Unggah bukti ke folder tiap tahapan di bawah.</div>
                     @endif
                     @if ($tahapanTerpakai)
                         <div class="fhint">🔁 Kegiatan ini sudah tercatat pada tahapan {{ collect($tahapanTerpakai)->map(fn ($t) => \App\Livewire\PengisianKegiatan::labelTahapan($t))->join(', ', ' dan ') }} di triwulan ini — pilih tahapan lain.</div>
@@ -541,7 +541,7 @@
                                         @include('livewire.partials._ganti-berkas', ['berkasId' => $file['id']])
                                     @endif
                                     @if ($file['status_verifikasi'] !== 'terverifikasi')
-                                        <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLama', args: [{{ $i }}, {{ $file['id'] }}] }" wire:loading.class="btn-busy" wire:target="hapusBuktiLama({{ $i }}, {{ $file['id'] }})">🗑️</span>
+                                        <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLama', args: [{{ $i }}, {{ $file['id'] }}], tertaut: @js(filled($block['rtl_evaluasi_id'] ?? null)) }" wire:loading.class="btn-busy" wire:target="hapusBuktiLama({{ $i }}, {{ $file['id'] }})">🗑️</span>
                                     @endif
                                 </div>
                             @endforeach
@@ -628,15 +628,6 @@
                                                     </div>
                                                 @endif
 
-                                                @if ($folderInduk)
-                                                    <div class="fhint" style="margin-top:2px">Capaian:
-                                                        @if ($folderUtama)
-                                                            <b x-text="namaFolder.trim() !== '' ? namaFolder.trim() : folderPreview">{{ $grup['label'] }}</b>
-                                                        @else
-                                                            <b>{{ $grup['label'] }}</b>
-                                                        @endif
-                                                    </div>
-                                                @endif
                                             </div>
 
                                             @if ($berkasFolder->isNotEmpty())
@@ -669,6 +660,11 @@
                             @endforeach
                         </div>
                         <div class="fhint">Seret berkas PDF dari komputer ke kotak folder tujuan, atau klik kotaknya untuk memilih — boleh banyak berkas sekaligus dan boleh ditambah bertahap. Berkas langsung tersimpan ke Google Drive.</div>
+                        <div class="fhint">Kegiatan: <b x-text="uraianTeks">{{ $block['uraian_kegiatan'] }}</b>@if ($survei) — folder tahapan hanya memisahkan tempat penyimpanan; seluruh bukti dari semua tahapan tetap tercatat atas nama kegiatan ini.@endif
+                            @if (filled($block['rtl_evaluasi_id'] ?? null))
+                                <br>🔗 Tertaut ke poin RTL triwulan ini — bukti yang diunggah di sini otomatis tampil sebagai Bukti Realisasi poin tersebut di Bagian 4 (tanpa unggah ulang).
+                            @endif
+                        </div>
                     </div>
 
                     @error("blocks.{$i}.bukti")
@@ -811,7 +807,7 @@
             <div wire:loading wire:target="iku_id,bulan,tahun" class="info">⏳ Memuat data RTL &amp; evaluasi untuk IKU ini…</div>
 
             <div wire:loading.remove wire:target="iku_id,bulan,tahun">
-            <div class="info teal">✅ Poin di bawah adalah RTL yang ditetapkan pada triwulan sebelumnya untuk dilaksanakan triwulan ini — sama dengan yang muncul sebagai pilihan dropdown uraian kegiatan di Bagian 2. Lampirkan bukti realisasinya (boleh lebih dari satu berkas) — {{ $bulanKe === 3 ? 'WAJIB semua poin sudah punya bukti sebelum bisa diajukan pada bulan terakhir triwulan ini.' : 'opsional untuk bulan ini, tapi wajib sudah lengkap semua sebelum bulan terakhir triwulan.' }}</div>
+            <div class="info teal">✅ Poin di bawah adalah RTL yang ditetapkan pada triwulan sebelumnya untuk dilaksanakan triwulan ini — sama dengan yang muncul sebagai pilihan dropdown uraian kegiatan di Bagian 2. Poin yang dipilih sebagai kegiatan di Bagian 2 otomatis memakai bukti capaian kegiatan itu sebagai bukti realisasinya (tanpa unggah ulang); poin lain dilampiri bukti realisasinya di sini (boleh lebih dari satu berkas) —{{ $bulanKe === 3 ? 'WAJIB semua poin sudah punya bukti sebelum bisa diajukan pada bulan terakhir triwulan ini.' : 'opsional untuk bulan ini, tapi wajib sudah lengkap semua sebelum bulan terakhir triwulan.' }}</div>
 
             @if ($rtlSebelumnya->isEmpty())
                 <p style="color:var(--muted);font-size:13px">Tidak ada poin RTL triwulan sebelumnya untuk IKU ini.</p>
@@ -859,6 +855,47 @@
                             <x-mode-nama-berkas :mode="$modeNamaBerkas" />
                         @endif
 
+                        @php
+                            $tertautKegiatan = $this->poinRtlTertautKegiatan($poin);
+                            $buktiKegiatanTertaut = $poin->buktiDariKegiatan();
+                        @endphp
+
+                        {{-- Bukti capaian kegiatan yang melaksanakan poin ini (Bagian 2) — berkas
+                             yang SAMA (satu baris berkas, satu berkas Drive), hanya ditampilkan
+                             ulang di sini; tidak disalin. Folder/tahapan asal ikut disebut. --}}
+                        @if ($buktiKegiatanTertaut->isNotEmpty())
+                            <div style="font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.4px;margin:2px 0 6px">🔗 Dari Bukti Capaian Kegiatan (Bagian 2)</div>
+                            <div class="filechip-grid" style="margin-bottom:8px">
+                                @foreach ($buktiKegiatanTertaut as $tertaut)
+                                    @php
+                                        $file = $tertaut['berkas'];
+                                        $kegiatanAsal = $tertaut['kegiatan'];
+                                        $indeksBlok = $this->indeksBlokKegiatan($kegiatanAsal->id);
+                                        $bulanLain = $indeksBlok === null;
+                                        $bisaHapus = ! $bulanLain && $this->buktiLamaBisaDikelola($file->status_verifikasi, $this->blokTerkunci($blocks[$indeksBlok]['status_dokumen'] ?? null));
+                                    @endphp
+                                    <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}" wire:key="rtl-{{ $poin->id }}-keg-berkas-{{ $file->id }}">
+                                        <span class="nm">
+                                            {{-- Ganti nama cukup di Bagian 2 (satu tempat); id beda supaya wire:key tidak bentrok dengan chip yang sama di sana. --}}
+                                            <x-nama-berkas :id="'rtl'.$poin->id.'-'.$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" :status="$file->status_verifikasi" :bisa-ubah="false" /><x-belum-di-drive :di-drive="filled($file->drive_file_id) || blank($file->path)" :berkas-id="$bulanLain ? null : $file->id" />
+                                            <span class="sub">
+                                                Kegiatan: {{ \Illuminate\Support\Str::limit($kegiatanAsal->uraianTampil(), 80) }}@if ($kegiatanAsal->labelTahapan()) · Tahapan {{ $kegiatanAsal->labelTahapan() }}@endif
+                                                · 📁 {{ $kegiatanAsal->namaFolder() }}@if (filled($file->subfolder)) / {{ $file->subfolder }}@endif
+                                                @if ($bulanLain && $kegiatanAsal->periode) · diunggah di isian bulan {{ $this->namaBulanIndo((int) $kegiatanAsal->periode->bulan) }} (kelola dari sana)@endif
+                                            </span>
+                                            @if ($file->status_verifikasi === 'ditolak' && $file->catatan)
+                                                <span class="sub" style="color:var(--red)">{{ $file->catatan }}</span>
+                                            @endif
+                                        </span>
+                                        <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file->id }}">🔍 Lihat</button>
+                                        @if ($bisaHapus)
+                                            <span class="x" style="cursor:pointer" title="Hapus bukti ini (dari Kegiatan sekaligus Evaluasi RTL)" @click="pendingHapus = { method: 'hapusBuktiLama', args: [{{ $indeksBlok }}, {{ $file->id }}], tertaut: true }" wire:loading.class="btn-busy" wire:target="hapusBuktiLama({{ $indeksBlok }}, {{ $file->id }})">🗑️</span>
+                                        @endif
+                                    </div>
+                                @endforeach
+                            </div>
+                        @endif
+
                         <div class="filechip-grid">
                             @foreach ($poin->berkas as $file)
                                 <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}">
@@ -892,7 +929,11 @@
                             @endforeach
                         </div>
 
-                        @if ($evaluasiBolehBuktiSusulan)
+                        @if ($tertautKegiatan && ! $evaluasiBolehBuktiSusulan)
+                            {{-- Satu jalur unggah: bukti realisasi poin yang sudah dilaksanakan
+                                 kegiatan cukup diunggah sebagai bukti capaian kegiatannya. --}}
+                            <div class="fhint" style="margin-top:8px">🔗 Poin ini dilaksanakan oleh kegiatan di Bagian 2 — unggah bukti realisasinya sebagai <b>Bukti Capaian</b> kegiatan tersebut; berkasnya otomatis tampil di sini tanpa perlu diunggah ulang.@if ($buktiKegiatanTertaut->isEmpty()) <span style="color:var(--amber)">Belum ada bukti capaian yang diunggah untuk kegiatan itu.</span>@endif</div>
+                        @elseif ($evaluasiBolehBuktiSusulan)
                             @include('livewire.partials._bukti-susulan', ['kunciSusulan' => 'rtl-'.$poin->id])
                         @elseif (! $evaluasiTerkunci)
                             <x-zona-unggah :model="'evaluasi.'.$poin->id.'.bukti'" label="Seret PDF bukti realisasi ke sini atau klik untuk memilih" style="margin-top:8px" />
@@ -1236,7 +1277,12 @@
     --}}
     <div wire:stream="progres-unggah" wire:loading wire:target="ajukanIsian" class="progres-unggah" style="margin-top:10px"></div>
 
-    @php $semuaBerkasKegiatan = collect($blocks)->flatMap(fn ($b) => $b['existing_bukti'])->unique('id'); @endphp
+    {{-- Termasuk bukti kegiatan bulan lain triwulan ini yang tampil di Evaluasi RTL (Bagian 4). --}}
+    @php
+        $semuaBerkasKegiatan = collect($blocks)->flatMap(fn ($b) => $b['existing_bukti'])
+            ->concat($rtlSebelumnya->flatMap(fn ($p) => $p->buktiDariKegiatan())->map(fn ($t) => ['id' => $t['berkas']->id, 'kode' => $t['berkas']->kode, 'nama_file' => $t['berkas']->nama_file]))
+            ->unique('id');
+    @endphp
     @foreach ($semuaBerkasKegiatan as $file)
         <div class="modal-overlay" x-show="modalBerkas === {{ $file['id'] }}" x-cloak style="display:none" @click.self="modalBerkas = null" wire:key="modal-berkas-{{ $file['id'] }}">
             <div class="modal">
@@ -1275,7 +1321,10 @@
                     ganti: 'Setelah berkas pengganti dipilih, bukti lama akan dihapus permanen dari SIPINTER dan dari Google Drive.',
                 }[pendingHapus?.method] ?? 'Bukti ini akan dihapus permanen dari SIPINTER dan dari Google Drive. Pastikan untuk mengunggah bukti pengganti bila memang masih diperlukan.'"></p>
                 <div x-show="pendingHapus?.method === 'removeBlock' && pendingHapus?.rtl" style="font-size:12.5px;line-height:1.5;padding:10px 12px;border-radius:8px;background:var(--amber-soft);color:var(--amber)">
-                    📌 Kegiatan ini <b>tertaut ke poin RTL</b> triwulan ini. Bila dihapus, kegiatan tidak lagi dihitung sebagai pelaksanaan RTL tersebut.
+                    📌 Kegiatan ini <b>tertaut ke poin RTL</b> triwulan ini. Bila dihapus, kegiatan tidak lagi dihitung sebagai pelaksanaan RTL tersebut, dan bukti capaiannya ikut hilang dari Bukti Realisasi RTL di Bagian 4.
+                </div>
+                <div x-show="pendingHapus?.tertaut" style="font-size:12.5px;line-height:1.5;padding:10px 12px;border-radius:8px;background:var(--amber-soft);color:var(--amber)">
+                    🔗 Bukti ini milik kegiatan yang <b>tertaut ke poin RTL</b>, jadi juga tampil sebagai Bukti Realisasi di Evaluasi RTL (Bagian 4). Berkasnya satu dan sama — bila dihapus, bukti hilang dari <b>Kegiatan sekaligus Evaluasi RTL</b>.
                 </div>
                 <div x-show="pendingHapus?.method !== 'removeBlock'" style="font-size:12.5px;line-height:1.5;padding:10px 12px;border-radius:8px;background:var(--red-soft);color:var(--red)">
                     ⚠️ Berkas <b>tidak masuk Sampah</b> Google Drive dan <b>tidak bisa dikembalikan</b>.
