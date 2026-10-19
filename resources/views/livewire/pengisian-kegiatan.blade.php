@@ -13,8 +13,17 @@
         // baru yang baru dirender belum selesai reflow), jadi satu
         // requestAnimationFrame saja kadang masih kebobolan sekejap sebelum posisi
         // scroll dikoreksi balik.
-        koreksiScroll(y) {
-            const kunci = function () {
+        //
+        // Koreksi DILEWATI bila pengguna sendiri sudah menggulir sejak request dikirim
+        // (sejak). Simpan otomatis setelah unggah bisa makan belasan detik (berkas
+        // dikirim ke Google Drive dulu); selama itu pengguna sering sudah turun ke
+        // bagian lain untuk mengunggah berkas berikutnya. Tanpa pengecualian ini,
+        // begitu unggahan pertama selesai halaman ditarik balik ke posisi lama —
+        // pengguna harus menggulir lagi dan rawan mengunggah ke bagian yang salah.
+        gulirPengguna: 0,
+        koreksiScroll(y, sejak = performance.now()) {
+            const kunci = () => {
+                if (this.gulirPengguna >= sejak) return;
                 if (1 < Math.abs(window.scrollY - y)) window.scrollTo(0, y);
             };
             requestAnimationFrame(function () {
@@ -30,6 +39,7 @@
         // DOM selesai diperbarui.
         jagaScroll(aksi) {
             const y = window.scrollY;
+            const sejak = performance.now();
 
             // Lepas fokus dari tombol yang baru diklik SEBELUM DOM diperbarui — tombol
             // 'Tambah ...' ada di BAWAH daftar blok yang baru bertambah, jadi begitu blok
@@ -42,7 +52,7 @@
                 document.activeElement.blur();
             }
 
-            aksi().then(() => this.koreksiScroll(y));
+            aksi().then(() => this.koreksiScroll(y, sejak));
         },
 
         // Field lain (mis. textarea 'Rencana kegiatan', input 'Batas Waktu') pakai
@@ -56,10 +66,26 @@
             Livewire.hook('commit', ({ component, respond }) => {
                 if (component !== this.$wire.__instance) return;
                 const y = window.scrollY;
-                respond(() => this.koreksiScroll(y));
+                const sejak = performance.now();
+                respond(() => this.koreksiScroll(y, sejak));
             });
         },
+
+        // Tanda pengguna menggulir sendiri (roda mouse, sentuh, tombol navigasi, seret
+        // scrollbar, tombol 'Kembali ke atas') — bukan geseran akibat DOM di-morph.
+        tandaiGulir(e) {
+            if (e.type === 'keydown') {
+                if (e.target.closest?.('input, textarea, select, [contenteditable]')) return;
+                if (! ['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(e.key)) return;
+            }
+            if (e.type === 'pointerdown' && e.clientX < document.documentElement.clientWidth && ! e.target.closest?.('[title=\'Kembali ke atas\']')) return;
+            this.gulirPengguna = performance.now();
+        },
     }"
+    x-on:wheel.window.passive="tandaiGulir($event)"
+    x-on:touchmove.window.passive="tandaiGulir($event)"
+    x-on:keydown.window="tandaiGulir($event)"
+    x-on:pointerdown.window="tandaiGulir($event)"
     x-on:livewire-upload-start.window="$dispatch('notify', { type: 'info', message: 'Mengunggah berkas ke server…' })"
     x-on:livewire-upload-finish.window="$dispatch('notify', { type: 'success', message: 'Berkas terunggah — sedang disimpan ke Google Drive…' })"
     x-on:livewire-upload-error.window="$dispatch('notify', { type: 'error', message: 'Gagal mengunggah berkas — periksa koneksi dan format berkas (harus PDF), lalu coba lagi.' })"

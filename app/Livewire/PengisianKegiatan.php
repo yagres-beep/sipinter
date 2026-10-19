@@ -4197,7 +4197,7 @@ class PengisianKegiatan extends Component
                     try {
                         $this->streamProgresUnggah($file->getClientOriginalName(), 'bukti kegiatan');
                         $localFullPath = Storage::disk('local')->path($path);
-                        $berkas->setRelation('ref', $kegiatan)->unggahKeDrive();
+                        $this->dalamSavepoint(fn () => $berkas->setRelation('ref', $kegiatan)->unggahKeDrive());
                         $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti kegiatan', true);
                     } catch (\Throwable $e) {
                         Log::warning('Gagal mengunggah berkas ke Google Drive, disimpan lokal saja: '.$e->getMessage());
@@ -4303,7 +4303,7 @@ class PengisianKegiatan extends Component
                 try {
                     $this->streamProgresUnggah($file->getClientOriginalName(), 'bukti evaluasi RTL');
                     $localFullPath = Storage::disk('local')->path($path);
-                    $berkas->setRelation('ref', $poin)->unggahKeDrive();
+                    $this->dalamSavepoint(fn () => $berkas->setRelation('ref', $poin)->unggahKeDrive());
                     $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti evaluasi RTL', true);
                 } catch (\Throwable $e) {
                     Log::warning('Gagal mengunggah bukti evaluasi RTL ke Google Drive, disimpan lokal saja: '.$e->getMessage());
@@ -4454,7 +4454,7 @@ class PengisianKegiatan extends Component
                     try {
                         $this->streamProgresUnggah($file->getClientOriginalName(), "bukti {$bagian->nama}");
                         $localFullPath = Storage::disk('local')->path($path);
-                        $berkas->setRelation('ref', $poin)->unggahKeDrive();
+                        $this->dalamSavepoint(fn () => $berkas->setRelation('ref', $poin)->unggahKeDrive());
                         $this->notifikasiHasilUnggah($file->getClientOriginalName(), "bukti {$bagian->nama}", true);
                     } catch (\Throwable $e) {
                         Log::warning("Gagal mengunggah bukti {$bagian->nama} ke Google Drive, disimpan lokal saja: ".$e->getMessage());
@@ -4582,6 +4582,19 @@ class PengisianKegiatan extends Component
      * ditunda sampai isiannya diajukan. Perintah berkas:sinkron-drive juga mencobanya
      * berkala di latar belakang.
      */
+    /**
+     * Unggahan ke Drive di dalam transaksi simpan (simpanDraft()/ajukanIsian()) yang
+     * gagalnya sengaja "ditelan" (berkas tetap tersimpan lokal) dijalankan di savepoint
+     * sendiri. Di PostgreSQL, SATU query yang gagal di tengah transaksi membuat SELURUH
+     * transaksi batal — semua query sesudahnya ditolak ("current transaction is
+     * aborted") dan simpanan berakhir sebagai halaman 500, padahal kegagalannya cuma
+     * Drive. Savepoint mengembalikan transaksi ke kondisi sebelum unggahan ini saja.
+     */
+    protected function dalamSavepoint(callable $aksi): mixed
+    {
+        return DB::transaction(fn () => $aksi());
+    }
+
     protected function susulkanBerkasBelumDiDrive(array &$driveGagal): void
     {
         if (! auth()->id()) {
@@ -4590,7 +4603,7 @@ class PengisianKegiatan extends Component
 
         foreach (Berkas::belumDiDrive()->where('diunggah_oleh', auth()->id())->get() as $berkas) {
             try {
-                if ($berkas->sinkronUlangKeDrive()) {
+                if ($this->dalamSavepoint(fn () => $berkas->sinkronUlangKeDrive())) {
                     $this->notifikasiHasilUnggah($berkas->nama_file, 'simpanan sebelumnya', true);
                 }
             } catch (\Throwable $e) {

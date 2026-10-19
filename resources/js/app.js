@@ -268,6 +268,23 @@ const pasangPenjagaRespons = () => window.Livewire.interceptMessage(({ message, 
 });
 window.Livewire ? pasangPenjagaRespons() : document.addEventListener('livewire:init', pasangPenjagaRespons);
 
+// Galat server (5xx) pada request Livewire bawaannya tampil sebagai jendela "500 |
+// SERVER ERROR" kosong yang menutupi seluruh halaman — pengguna mengira isiannya
+// hilang. Di produksi diganti notifikasi saja: halaman & isian di layar tetap utuh,
+// pengguna cukup mengulang aksinya. (Saat pengembangan jendela bawaan tetap tampil
+// karena berisi detail galat.)
+const pasangPenanganGalatServer = () => window.Livewire.interceptRequest(({ onError }) => {
+    onError(({ response, preventDefault }) => {
+        if (! import.meta.env.PROD || response.status < 500) return;
+        preventDefault();
+        window.dispatchEvent(new CustomEvent('notify', { detail: {
+            type: 'error',
+            message: `Server gagal memproses aksi terakhir (kode ${response.status}). Isian di layar tidak hilang — tunggu sebentar lalu ulangi; bila sedang mengunggah, periksa apakah berkasnya sudah tampil di daftar bukti tersimpan.`,
+        } }));
+    });
+});
+window.Livewire ? pasangPenanganGalatServer() : document.addEventListener('livewire:init', pasangPenanganGalatServer);
+
 // Alamat & state riwayat halaman yang sedang tampil — dipakai mengembalikan tombol
 // Back/Forward browser bila pengguna memilih "Tetap di sini".
 let halamanSekarang = { url: window.location.href, state: window.history.state };
