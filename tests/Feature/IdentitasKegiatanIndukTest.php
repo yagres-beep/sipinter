@@ -168,9 +168,9 @@ class IdentitasKegiatanIndukTest extends TestCase
         $this->assertSame(['Survei Angkatan Kerja Nasional'], $this->namaNotula());
         foreach ([false, true] as $pratinjau) {
             $xml = $this->xmlBagianSatu($pratinjau);
-            $this->assertStringContainsString('1. Survei Angkatan Kerja Nasional', $xml);
-            $this->assertStringNotContainsString('. Survei Sakernas', $xml);
-            $this->assertStringNotContainsString('2. Survei', $xml);
+            // Daftar kegiatan memakai penomoran Word (w:numPr), bukan teks "1. ".
+            $this->assertSame(1, substr_count($xml, '>Survei Angkatan Kerja Nasional<'));
+            $this->assertStringNotContainsString('>Survei Sakernas<', $xml);
         }
     }
 

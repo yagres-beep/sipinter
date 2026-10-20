@@ -140,10 +140,9 @@ class NamaKegiatanUtamaTampilanTest extends TestCase
             ->call('toggleTahapan', 0, 'persiapan')
             ->call('toggleTahapan', 0, 'pelaksanaan')
             ->assertSeeHtml('Capaian: <b x-text="uraianTeks.trim()">Survei Sakernas</b>')
-            ->assertSeeHtml('tahapan <b>Persiapan</b>')
-            ->assertSeeHtml('tahapan <b>Pelaksanaan</b>')
-            // Pratinjau tujuan unggah = folder tahapan yang tombolnya diklik.
-            ->assertSeeHtml("pendingFolderUnggah = 'Pelaksanaan Survei Sakernas'")
+            // Nama folder tahapan hanya tampil sebagai folder tujuan unggah.
+            ->assertSee('Persiapan Survei Sakernas')
+            ->assertSee('Pelaksanaan Survei Sakernas')
             ->assertDontSeeHtml('Capaian: <b>Pelaksanaan Survei Sakernas</b>');
     }
 
