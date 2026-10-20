@@ -4,10 +4,12 @@ namespace App\Models;
 
 use App\Services\FolderStructureService;
 use App\Services\GoogleDriveService;
+use App\Services\SinkronBuktiRtlService;
 use App\Support\KodeAcak;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -27,6 +29,12 @@ class Berkas extends Model
         // Subfolder khusus di dalam folder kegiatan (mis. "Undangan"); null = langsung
         // di folder kegiatan. Lihat FolderStructureService::unggahBerkas().
         'subfolder',
+        // Tahapan tujuan bukti realisasi RTL yang diunggah mandiri (folder
+        // Evaluasi-RTL/<poin>/<tahapan>/<subfolder>); null untuk bukti lain.
+        'tahapan',
+        // Bulan isian tempat bukti realisasi RTL diunggah mandiri (folder Bulan);
+        // null = periode poin RTL (bukti lama). Lihat FolderStructureService::unggahBerkasRtl().
+        'periode_id',
         'path',
         // drive_file_id  = ID unik berkas ini di Google Drive.
         // storage_account_id = akun Gmail institusi TEMPAT berkas ini fisik tersimpan.
@@ -101,6 +109,48 @@ class Berkas extends Model
     }
 
     /**
+     * Salinan fisik bukti kegiatan ini di folder Evaluasi-RTL poin RTL yang
+     * dilaksanakan kegiatannya (lihat App\Services\SinkronBuktiRtlService).
+     */
+    public function salinanRtl(): HasMany
+    {
+        return $this->hasMany(SalinanBuktiRtl::class);
+    }
+
+    public function riwayatVerifikasi(): HasMany
+    {
+        return $this->hasMany(RiwayatVerifikasiBerkas::class)->latest('id');
+    }
+
+    /**
+     * Tandai berkas ini Sesuai ('terverifikasi') / Tidak Sesuai ('ditolak') dan catat
+     * perubahannya ke riwayat_verifikasi_berkas — satu-satunya pintu perubahan status
+     * berkas oleh Tim SAKIP, jadi status di Kegiatan & Evaluasi RTL (yang membaca
+     * berkas yang sama) selalu bisa ditelusuri asalnya. Tidak mencatat apa pun bila
+     * status & catatannya tidak berubah.
+     */
+    public function catatVerifikasi(string $status, ?string $catatan, ?User $oleh): void
+    {
+        $statusLama = $this->status_verifikasi;
+
+        if ($statusLama === $status && $this->catatan === $catatan) {
+            return;
+        }
+
+        $this->update(['status_verifikasi' => $status, 'catatan' => $catatan]);
+
+        RiwayatVerifikasiBerkas::create([
+            'berkas_id' => $this->id,
+            'berkas_kode' => $this->kode,
+            'nama_file' => $this->nama_file,
+            'status_lama' => $statusLama,
+            'status_baru' => $status,
+            'catatan' => $catatan,
+            'user_id' => $oleh?->id,
+        ]);
+    }
+
+    /**
      * Nama berkas boleh diubah oleh Tim SAKIP atau pengunggahnya sendiri. Berkas
      * lama (sebelum kolom diunggah_oleh ada) tidak tahu siapa pengunggahnya, jadi
      * untuk itu dipakai penanggung jawab IKU pemilik berkas sebagai gantinya.
@@ -167,6 +217,11 @@ class Berkas extends Model
 
         $this->update(['nama_file' => $namaFile]);
 
+        // Salinan di Evaluasi-RTL tetap bernama sama dengan berkas sumbernya.
+        if ($this->drive_file_id && $this->ref_type === Kegiatan::class) {
+            app(SinkronBuktiRtlService::class)->gantiNamaSalinan($this, $namaFile);
+        }
+
         return ['nama_file' => $namaFile, 'peringatan' => $peringatan];
     }
 
@@ -215,6 +270,7 @@ class Berkas extends Model
                 'storage_account_id' => StorageAccount::aktif()?->id,
                 'nama_file' => $sudahAda['name'],
             ]);
+            $this->sinkronkanSalinanRtl();
 
             return true;
         }
@@ -222,6 +278,18 @@ class Berkas extends Model
         $this->unggahKeDrive();
 
         return true;
+    }
+
+    /**
+     * Bukti kegiatan yang tertaut ke poin RTL ikut disalin ke folder Evaluasi-RTL
+     * begitu sumbernya ada di Drive. Gagal menyalin tidak menggagalkan apa pun (lihat
+     * SinkronBuktiRtlService).
+     */
+    protected function sinkronkanSalinanRtl(): void
+    {
+        if ($this->ref_type === Kegiatan::class) {
+            app(SinkronBuktiRtlService::class)->sinkronkanBerkas($this);
+        }
     }
 
     /**
@@ -244,12 +312,13 @@ class Berkas extends Model
             $ref instanceof Kegiatan => $folderService->unggahBerkasKegiatan(
                 $ref, $this->kategori, $localPath, namaBerkasOverride: $namaDasar, subfolder: $this->subfolder, kodeBerkas: $this->kode,
             ),
-            $ref instanceof RtlEvaluasi => $folderService->unggahBerkasRtl($ref, $localPath, namaBerkasOverride: $namaDasar, kodeBerkas: $this->kode),
+            $ref instanceof RtlEvaluasi => $folderService->unggahBerkasRtl($ref, $localPath, namaBerkasOverride: $namaDasar, kodeBerkas: $this->kode, tahapan: $this->tahapan, subfolder: $this->subfolder, periode: $this->periode_id ? Periode::find($this->periode_id) : null),
             $ref instanceof BagianKustomPoin => $folderService->unggahBerkasBagianKustom($ref, $localPath, namaBerkasOverride: $namaDasar, kodeBerkas: $this->kode),
             default => throw new \RuntimeException('Jenis berkas ini tidak bisa diunggah ke Drive dari sini.'),
         };
 
         $this->update($hasil);
+        $this->sinkronkanSalinanRtl();
 
         return $hasil;
     }
@@ -289,6 +358,12 @@ class Berkas extends Model
      */
     public function buangSalinan(bool $keSampah = false): void
     {
+        // Salinan di Evaluasi-RTL dibuang LEBIH DULU (cara yang sama: permanen atau ke
+        // Sampah) — bila gagal, exception diteruskan dan berkas sumber tetap utuh.
+        if ($this->ref_type === Kegiatan::class) {
+            app(SinkronBuktiRtlService::class)->buangSalinanBerkas($this, $keSampah);
+        }
+
         if ($this->drive_file_id) {
             try {
                 $drive = app(GoogleDriveService::class);

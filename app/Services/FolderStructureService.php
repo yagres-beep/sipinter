@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\BagianKustomPoin;
+use App\Models\Berkas;
 use App\Models\FolderConfig;
 use App\Models\IkuFolderConfig;
 use App\Models\Kegiatan;
@@ -473,54 +474,13 @@ class FolderStructureService
      *                                 diatur Tim SAKIP dengan subfolder per kegiatan.
      * @return array{drive_file_id: string, storage_account_id: ?int, nama_file: string}
      */
-    public function unggahBerkas(Periode $periode, MasterIku $iku, string $kategoriEnum, string $localPath, ?Kegiatan $kegiatan = null, string $ekstensi = '.pdf', string $mimeType = 'application/pdf', ?string $namaFolderOverride = null, ?string $namaBerkasOverride = null, ?string $subfolder = null, ?string $namaItem = null, ?string $kodeBerkas = null): array
+    public function unggahBerkas(Periode $periode, MasterIku $iku, string $kategoriEnum, string $localPath, ?Kegiatan $kegiatan = null, string $ekstensi = '.pdf', string $mimeType = 'application/pdf', ?string $namaFolderOverride = null, ?string $namaBerkasOverride = null, ?string $subfolder = null, ?string $namaItem = null, ?string $kodeBerkas = null, ?string $tahapan = null): array
     {
         $namaKategori = $namaFolderOverride
             ?? self::KATEGORI_KE_FOLDER[$kategoriEnum]
             ?? throw new RuntimeException("Kategori berkas tidak dikenal: {$kategoriEnum}");
 
-        $kategoriFolderId = $this->resolveKategoriFolder($periode, $iku, $namaKategori);
-
-        $config = $this->configUntukIku($iku);
-        $tujuanFolderId = $kategoriFolderId;
-
-        $pakaiSubfolderBulan = $config->kategoriPakai($namaKategori, 'subfolder_per_bulan');
-        $kegiatanDulu = $pakaiSubfolderBulan && $config->kategoriUrutanBulanKegiatan($namaKategori) === 'kegiatan_dulu';
-        $namaItem = self::namaOtomatis((string) $namaItem, 150);
-
-        // "Subfolder per kegiatan" yang diatur Tim SAKIP di menu Struktur Folder berlaku
-        // untuk SEMUA kategori, bukan hanya Capaian: bukti Kegiatan memakai folder
-        // kegiatannya (resolveKegiatanFolder), sedangkan bukti yang tidak terikat ke
-        // satu Kegiatan (poin Evaluasi RTL, poin bagian kustom) memakai folder bernama
-        // $namaItem — mis. teks RTL-nya — supaya tidak tercampur langsung di kategori.
-        $pakaiFolderItem = $config->kategoriPakai($namaKategori, 'subfolder_per_kegiatan')
-            && ($kegiatan || $namaItem !== '');
-
-        if ($pakaiFolderItem) {
-            // Folder kegiatan dipakai bersama lintas bulan triwulan ini KECUALI kategori
-            // ini dipecah ke folder Bulan lebih dulu (Kategori/Bulan/Kegiatan) — di
-            // situ tiap bulan memang punya induk sendiri.
-            $tujuanFolderId = $kegiatan
-                ? $this->resolveKegiatanFolder($kegiatan, $kategoriFolderId, gabungBulanLain: ! $pakaiSubfolderBulan || $kegiatanDulu)
-                : $this->findOrCreateFolderCached($namaItem, $kategoriFolderId);
-        }
-
-        // Urutan 'kegiatan_dulu': folder Bulan SENGAJA belum dibuat oleh
-        // resolveKategoriFolder() di atas — dibuat di sini, DI DALAM folder kegiatan
-        // (Kategori/Kegiatan/Bulan), atau langsung di kategori bila berkas ini tidak
-        // punya folder kegiatan sama sekali.
-        if ($kegiatanDulu && $config->kategoriPakai($namaKategori, 'subfolder_per_kegiatan')) {
-            $tujuanFolderId = $this->findOrCreateFolderCached($this->namaBulan($periode), $tujuanFolderId);
-        }
-
-        if ($pakaiFolderItem) {
-            // Subfolder khusus pilihan Ketua Tim di dalam folder kegiatan (mis.
-            // "Undangan", "Dokumentasi"); kosong = langsung di folder kegiatan.
-            $namaSubfolder = self::namaOtomatis((string) $subfolder, 100);
-            if ($namaSubfolder !== '') {
-                $tujuanFolderId = $this->findOrCreateFolderCached($namaSubfolder, $tujuanFolderId);
-            }
-        }
+        $tujuanFolderId = $this->resolveFolderTujuan($periode, $iku, $namaKategori, $kegiatan, $namaItem, $tahapan, $subfolder);
 
         // RF-17: "nama berkas capaian mengikuti nama kegiatan/capaian-nya" — identitas
         // kegiatan sudah terwakili oleh folder di atas (lihat resolveKegiatanFolder),
@@ -560,6 +520,78 @@ class FolderStructureService
     }
 
     /**
+     * Folder tujuan satu berkas menurut pola Struktur Folder Drive yang berlaku untuk
+     * IKU ini (RF-11 s.d. RF-14) — dipakai bersama oleh unggahBerkas() & penyalinan
+     * bukti kegiatan ke Evaluasi-RTL (salinBerkasKeRtl()), supaya keduanya tidak
+     * punya aturan folder sendiri-sendiri:
+     *
+     *   Kategori[/Bulan]/<kegiatan atau item>[/Bulan]/<tahapan>/<subfolder>
+     *
+     * Folder Bulan hanya bila kategori memakai "subfolder per bulan" (posisinya
+     * mengikuti urutan_bulan_kegiatan); folder kegiatan/item, tahapan, dan subfolder
+     * hanya bila kategori memakai "subfolder per kegiatan" — tanpa itu berkas
+     * langsung masuk folder kategori (atau Bulan), tidak dipaksakan struktur tambahan.
+     * $tahapan khusus berkas yang TIDAK terikat ke satu Kegiatan (poin RTL); tahapan
+     * kegiatan sudah terwakili folder kegiatannya sendiri.
+     */
+    protected function resolveFolderTujuan(Periode $periode, MasterIku $iku, string $namaKategori, ?Kegiatan $kegiatan, ?string $namaItem, ?string $tahapan, ?string $subfolder): string
+    {
+        $kategoriFolderId = $this->resolveKategoriFolder($periode, $iku, $namaKategori);
+
+        $config = $this->configUntukIku($iku);
+        $tujuanFolderId = $kategoriFolderId;
+
+        $pakaiSubfolderBulan = $config->kategoriPakai($namaKategori, 'subfolder_per_bulan');
+        $kegiatanDulu = $pakaiSubfolderBulan && $config->kategoriUrutanBulanKegiatan($namaKategori) === 'kegiatan_dulu';
+        $namaItem = self::namaOtomatis((string) $namaItem, 150);
+
+        // "Subfolder per kegiatan" yang diatur Tim SAKIP di menu Struktur Folder berlaku
+        // untuk SEMUA kategori, bukan hanya Capaian: bukti Kegiatan memakai folder
+        // kegiatannya (resolveKegiatanFolder), sedangkan bukti yang tidak terikat ke
+        // satu Kegiatan (poin Evaluasi RTL, poin bagian kustom) memakai folder bernama
+        // $namaItem — mis. teks RTL-nya — supaya tidak tercampur langsung di kategori.
+        $pakaiFolderItem = $config->kategoriPakai($namaKategori, 'subfolder_per_kegiatan')
+            && ($kegiatan || $namaItem !== '');
+
+        if ($pakaiFolderItem) {
+            // Folder kegiatan dipakai bersama lintas bulan triwulan ini KECUALI kategori
+            // ini dipecah ke folder Bulan lebih dulu (Kategori/Bulan/Kegiatan) — di
+            // situ tiap bulan memang punya induk sendiri.
+            $tujuanFolderId = $kegiatan
+                ? $this->resolveKegiatanFolder($kegiatan, $kategoriFolderId, gabungBulanLain: ! $pakaiSubfolderBulan || $kegiatanDulu)
+                : $this->findOrCreateFolderCached($namaItem, $kategoriFolderId);
+        }
+
+        // Urutan 'kegiatan_dulu': folder Bulan SENGAJA belum dibuat oleh
+        // resolveKategoriFolder() di atas — dibuat di sini, DI DALAM folder kegiatan
+        // (Kategori/Kegiatan/Bulan), atau langsung di kategori bila berkas ini tidak
+        // punya folder kegiatan sama sekali.
+        if ($kegiatanDulu && $config->kategoriPakai($namaKategori, 'subfolder_per_kegiatan')) {
+            $tujuanFolderId = $this->findOrCreateFolderCached($this->namaBulan($periode), $tujuanFolderId);
+        }
+
+        if ($pakaiFolderItem) {
+            // Folder tahapan (mis. "Tahapan 1") di dalam folder item — hanya bila
+            // pengguna memang memilih memisah bukti ke beberapa tahapan.
+            // 150 = batas nama folder kegiatan/tahapan (lihat resolveKegiatanFolder()),
+            // supaya folder tahapan salinan tidak terpotong beda dari aslinya.
+            $namaTahapan = $kegiatan ? '' : self::namaOtomatis((string) $tahapan, 150);
+            if ($namaTahapan !== '') {
+                $tujuanFolderId = $this->findOrCreateFolderCached($namaTahapan, $tujuanFolderId);
+            }
+
+            // Subfolder khusus pilihan Ketua Tim di dalam folder kegiatan (mis.
+            // "Undangan", "Dokumentasi"); kosong = langsung di folder kegiatan.
+            $namaSubfolder = self::namaOtomatis((string) $subfolder, 100);
+            if ($namaSubfolder !== '') {
+                $tujuanFolderId = $this->findOrCreateFolderCached($namaSubfolder, $tujuanFolderId);
+            }
+        }
+
+        return $tujuanFolderId;
+    }
+
+    /**
      * Alias nyaman untuk unggahan kategori "Capaian" yang SELALU terikat ke satu
      * kegiatan — dipakai oleh PengisianKegiatan.
      */
@@ -572,9 +604,94 @@ class FolderStructureService
      * Unggah bukti evaluasi satu poin RTL ke kategori Evaluasi-RTL — dalam folder
      * bernama teks RTL-nya bila Tim SAKIP mengaktifkan subfolder per kegiatan di kategori itu.
      */
-    public function unggahBerkasRtl(RtlEvaluasi $poin, string $localPath, ?string $namaBerkasOverride = null, ?string $kodeBerkas = null): array
+    public function unggahBerkasRtl(RtlEvaluasi $poin, string $localPath, ?string $namaBerkasOverride = null, ?string $kodeBerkas = null, ?string $tahapan = null, ?string $subfolder = null, ?Periode $periode = null): array
     {
-        return $this->unggahBerkas($poin->periode, $poin->masterIku, 'evaluasi_rtl', $localPath, namaBerkasOverride: $namaBerkasOverride, namaItem: $poin->rtl_teks, kodeBerkas: $kodeBerkas);
+        // $periode = bulan isian tempat bukti diunggah (folder Bulan bila kategori
+        // memakai subfolder per bulan) — sama dengan salinan dari Kegiatan yang memakai
+        // bulan kegiatannya. Bukti lama tanpa catatan bulan tetap memakai periode poin.
+        return $this->unggahBerkas($periode ?? $poin->periode, $poin->masterIku, 'evaluasi_rtl', $localPath, namaBerkasOverride: $namaBerkasOverride, namaItem: $poin->rtl_teks, kodeBerkas: $kodeBerkas, tahapan: $tahapan, subfolder: $subfolder);
+    }
+
+    /**
+     * Salin SATU bukti capaian kegiatan ($sumber, sudah ada di Drive) ke folder
+     * Evaluasi-RTL poin $poin yang dilaksanakan kegiatan itu, mengikuti pola folder
+     * kategori Evaluasi-RTL (resolveFolderTujuan()) — periode Bulan mengikuti bulan
+     * kegiatannya, folder item = teks poin RTL, tahapan = folder tahapan kegiatan
+     * (survei/sensus), subfolder = subfolder berkas sumber. Nama salinan = nama
+     * berkas sumber. Salinan diberi penanda $penanda supaya percobaan ulang setelah
+     * gagal tercatat tidak membuat salinan kedua (lihat SinkronBuktiRtlService).
+     *
+     * @return array{drive_file_id: string, storage_account_id: ?int, nama_file: string}
+     */
+    public function salinBerkasKeRtl(Berkas $sumber, Kegiatan $kegiatan, RtlEvaluasi $poin, string $penanda): array
+    {
+        $folderId = $this->folderSalinanRtl($sumber, $kegiatan, $poin);
+
+        $ekstensi = pathinfo($sumber->nama_file, PATHINFO_EXTENSION);
+        $ekstensi = $ekstensi !== '' ? '.'.$ekstensi : '';
+        $namaBerkas = self::namaUnik(pathinfo($sumber->nama_file, PATHINFO_FILENAME), $this->namesInFolderCached($folderId), $ekstensi);
+        $this->tandaiNamaDipakai($folderId, $namaBerkas);
+
+        $hasil = $this->drive->copyFile($sumber->drive_file_id, $namaBerkas, $folderId, [self::PENANDA_KODE => $penanda]);
+
+        $akun = StorageAccount::aktif();
+        $akun?->tambahKuotaTerpakai($hasil['size_bytes']);
+
+        return [
+            'drive_file_id' => $hasil['id'],
+            'storage_account_id' => $akun?->id,
+            'nama_file' => $namaBerkas,
+        ];
+    }
+
+    /**
+     * Folder tujuan salinan satu bukti kegiatan di Evaluasi-RTL (lihat salinBerkasKeRtl()).
+     * Folder tahapan kegiatan survei/sensus dinamai SAMA PERSIS dengan nama folder
+     * tahapan kegiatan di Drive saat ini (bukan nama yang dihitung ulang dari
+     * database, yang bisa berbeda bila tahapan/nama folder pernah diganti), supaya
+     * susunan kedua lokasi tetap identik.
+     */
+    public function folderSalinanRtl(Berkas $sumber, Kegiatan $kegiatan, RtlEvaluasi $poin): string
+    {
+        $tahapan = null;
+
+        if ($kegiatan->jenis === 'survei_sensus' && filled($kegiatan->tahapan_survei)) {
+            try {
+                $tahapan = $kegiatan->drive_folder_id ? $this->drive->namaFile($kegiatan->drive_folder_id) : null;
+            } catch (RuntimeException) {
+                $tahapan = null;
+            }
+
+            $tahapan = filled($tahapan) ? $tahapan : self::namaOtomatis($kegiatan->namaFolder(), 150);
+        }
+
+        return $this->resolveFolderTujuan(
+            $kegiatan->periode, $poin->masterIku, self::KATEGORI_KE_FOLDER['evaluasi_rtl'], null, $poin->rtl_teks, $tahapan, $sumber->subfolder,
+        );
+    }
+
+    /**
+     * Pratinjau susunan folder Evaluasi-RTL (tanpa menyentuh Drive) untuk ditampilkan
+     * di form, supaya Ketua Tim tahu persis ke mana bukti realisasi poin RTL tersimpan:
+     * daftar nama folder dari kategori ke bawah, mis. ["Evaluasi-RTL", "<poin RTL>"].
+     *
+     * @return array{jalur: list<string>, per_kegiatan: bool, per_bulan: bool}
+     */
+    public static function polaFolderRtl(MasterIku $iku, string $teksRtl, ?Periode $periode = null): array
+    {
+        // Murni baca konfigurasi (statis, tanpa Drive) — aman dipanggil dari tampilan.
+        $config = IkuFolderConfig::where('iku_id', $iku->id)->first() ?? FolderConfig::current();
+        $kategori = self::KATEGORI_KE_FOLDER['evaluasi_rtl'];
+        $perKegiatan = $config->kategoriPakai($kategori, 'subfolder_per_kegiatan');
+        $perBulan = $config->kategoriPakai($kategori, 'subfolder_per_bulan');
+        $bulan = $perBulan ? ($periode ? Carbon::create($periode->tahun, $periode->bulan, 1)->locale('id')->translatedFormat('F') : 'Bulan') : null;
+        $item = $perKegiatan ? self::namaOtomatis($teksRtl, 150) : null;
+
+        $jalur = $perBulan && $perKegiatan && $config->kategoriUrutanBulanKegiatan($kategori) === 'kegiatan_dulu'
+            ? [$kategori, $item, $bulan]
+            : [$kategori, $bulan, $item];
+
+        return ['jalur' => array_values(array_filter($jalur)), 'per_kegiatan' => $perKegiatan, 'per_bulan' => $perBulan];
     }
 
     /**

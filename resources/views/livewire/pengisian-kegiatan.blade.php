@@ -504,38 +504,16 @@
                             @if ($tahapanSusunan !== null)
                                 <div class="foldername" style="margin-bottom:6px">📁 {{ $namaFolderTahapan }}</div>
                             @endif
-                            <div class="pills">
-                                <span class="pill {{ $pakaiSubfolder ? '' : 'on' }}" wire:click="aturSusunanFolder({{ $i }}, false, {{ $argTahapan }})">1 folder (bawaan)</span>
-                                <span class="pill {{ $pakaiSubfolder ? 'on' : '' }}" wire:click="aturSusunanFolder({{ $i }}, true, {{ $argTahapan }})">Pisah ke beberapa subfolder</span>
-                            </div>
-                            @if ($pakaiSubfolder)
-                                {{-- Nama folder bebas diketik sendiri; daftar "Saran" hanya pintasan. --}}
-                                <div x-data="{ namaSub: '' }" style="margin-top:8px;display:flex;gap:6px">
-                                    <input type="text" class="inp" maxlength="100" x-model="namaSub" placeholder="Ketik nama folder sendiri, mis. Surat Tugas, Bahan Paparan…" data-abaikan-perubahan
-                                        @keydown.enter.prevent="if (namaSub.trim()) { $wire.tambahSubfolder({{ $i }}, namaSub, {{ $argTahapan }}); namaSub = '' }">
-                                    <button type="button" class="btn btn-ghost btn-sm" style="white-space:nowrap" @click="if (namaSub.trim()) { $wire.tambahSubfolder({{ $i }}, namaSub, {{ $argTahapan }}); namaSub = '' }">＋ Tambah Folder</button>
-                                </div>
-                                @if ($daftarSub !== [])
-                                    <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-                                        @foreach ($daftarSub as $si => $namaSub)
-                                            <span class="pill on" wire:key="subfolder-{{ $i }}-{{ md5((string) $tahapanSusunan) }}-{{ md5($namaSub) }}">📁 {{ $namaSub }}
-                                                <span style="cursor:pointer;margin-left:4px" title="Hapus folder" wire:click="hapusSubfolder({{ $i }}, {{ $si }}, {{ $argTahapan }})">✕</span>
-                                            </span>
-                                        @endforeach
-                                    </div>
-                                @endif
-                                <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-                                    <span style="color:var(--muted);font-size:11.5px">Saran:</span>
-                                    @foreach (\App\Livewire\PengisianKegiatan::saranSubfolder($tahapanSusunan) as $saran)
-                                        @if (! in_array(mb_strtolower($saran), array_map('mb_strtolower', $daftarSub), true))
-                                            <span class="pill" style="border-style:dashed" wire:click="tambahSubfolder({{ $i }}, @js($saran), {{ $argTahapan }})">＋ {{ $saran }}</span>
-                                        @endif
-                                    @endforeach
-                                </div>
-                                <div class="fhint">Folder dibuat di dalam folder {{ $tahapanSusunan !== null ? '"'.$namaFolderTahapan.'"' : 'kegiatan' }}. Tiap folder punya tombol unggah sendiri di bawah.</div>
-                            @else
-                                <div class="fhint">Semua bukti masuk langsung ke folder {{ $tahapanSusunan !== null ? '"'.$namaFolderTahapan.'"' : 'kegiatan' }}. Pilih "Pisah ke beberapa subfolder" untuk membuat folder sendiri (mis. Undangan, Dokumentasi).</div>
-                            @endif
+                            @include('livewire.partials._susunan-subfolder', [
+                                'metode' => ['atur' => 'aturSusunanFolder', 'tambah' => 'tambahSubfolder', 'hapus' => 'hapusSubfolder'],
+                                'argId' => $i,
+                                'argTahapan' => $argTahapan,
+                                'kunci' => 'subfolder-'.$i.'-'.md5((string) $tahapanSusunan),
+                                'pakai' => $pakaiSubfolder,
+                                'daftar' => $daftarSub,
+                                'saran' => \App\Livewire\PengisianKegiatan::saranSubfolder($tahapanSusunan),
+                                'tempat' => $tahapanSusunan !== null ? '"'.$namaFolderTahapan.'"' : 'kegiatan',
+                            ])
                         </div>
                     @endforeach
                 </div>
@@ -884,11 +862,13 @@
                         @php
                             $tertautKegiatan = $this->poinRtlTertautKegiatan($poin);
                             $buktiKegiatanTertaut = $poin->buktiDariKegiatan();
+                            $salinanPerBerkas = $poin->salinanBukti->keyBy('berkas_id');
+                            $polaRtl = $this->polaFolderRtl($poin);
                         @endphp
 
-                        {{-- Bukti capaian kegiatan yang melaksanakan poin ini (Bagian 2) — berkas
-                             yang SAMA (satu baris berkas, satu berkas Drive), hanya ditampilkan
-                             ulang di sini; tidak disalin. Folder/tahapan asal ikut disebut. --}}
+                        {{-- Bukti capaian kegiatan yang melaksanakan poin ini (Bagian 2) — SATU
+                             baris berkas (satu status verifikasi), dengan salinan fisik di folder
+                             Evaluasi-RTL (salinan_bukti_rtl). Folder/tahapan asal ikut disebut. --}}
                         @if ($buktiKegiatanTertaut->isNotEmpty())
                             <div style="font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.4px;margin:2px 0 6px">🔗 Dari Bukti Capaian Kegiatan (Bagian 2)</div>
                             <div class="filechip-grid" style="margin-bottom:8px">
@@ -909,24 +889,40 @@
                                                 · 📁 {{ $kegiatanAsal->namaFolder() }}@if (filled($file->subfolder)) / {{ $file->subfolder }}@endif
                                                 @if ($bulanLain && $kegiatanAsal->periode) · diunggah di isian bulan {{ $this->namaBulanIndo((int) $kegiatanAsal->periode->bulan) }} (kelola dari sana)@endif
                                             </span>
+                                            @php $salinan = $salinanPerBerkas->get($file->id); @endphp
+                                            @if ($salinan?->mutakhir($file))
+                                                <span class="sub" style="color:var(--teal)">📂 Tersalin juga di folder {{ implode(' / ', $this->polaFolderRtl($poin, $kegiatanAsal->periode)['jalur']) }}</span>
+                                            @elseif ($salinan?->status === \App\Models\SalinanBuktiRtl::STATUS_GAGAL)
+                                                <span class="sub" style="color:var(--amber)">⚠️ Belum tersalin ke folder Evaluasi-RTL (dicoba lagi otomatis)
+                                                    <button type="button" class="btn-ubah-nama" style="font-size:11px" wire:click="cobaLagiSalinanRtl({{ $file->id }})" wire:loading.attr="disabled" wire:target="cobaLagiSalinanRtl({{ $file->id }})">↻ Coba lagi</button>
+                                                </span>
+                                            @elseif (filled($file->drive_file_id))
+                                                <span class="sub" style="color:var(--muted)">⏳ Menunggu disalin ke folder Evaluasi-RTL</span>
+                                            @endif
                                             @if ($file->status_verifikasi === 'ditolak' && $file->catatan)
                                                 <span class="sub" style="color:var(--red)">{{ $file->catatan }}</span>
                                             @endif
                                         </span>
                                         <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file->id }}">🔍 Lihat</button>
                                         @if ($bisaHapus)
-                                            <span class="x" style="cursor:pointer" title="Hapus bukti ini (dari Kegiatan sekaligus Evaluasi RTL)" @click="pendingHapus = { method: 'hapusBuktiLama', args: [{{ $indeksBlok }}, {{ $file->id }}], tertaut: true }" wire:loading.class="btn-busy" wire:target="hapusBuktiLama({{ $indeksBlok }}, {{ $file->id }})">🗑️</span>
+                                            <span class="x" style="cursor:pointer" title="Hapus bukti ini (dari folder Kegiatan sekaligus salinannya di Evaluasi-RTL)" @click="pendingHapus = { method: 'hapusBuktiLama', args: [{{ $indeksBlok }}, {{ $file->id }}], tertaut: true }" wire:loading.class="btn-busy" wire:target="hapusBuktiLama({{ $indeksBlok }}, {{ $file->id }})">🗑️</span>
                                         @endif
                                     </div>
                                 @endforeach
                             </div>
                         @endif
 
+                        @if ($poin->berkas->isNotEmpty())
+                            <div style="font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.4px;margin:2px 0 6px">📤 Unggahan Mandiri Evaluasi RTL</div>
+                        @endif
                         <div class="filechip-grid">
                             @foreach ($poin->berkas as $file)
                                 <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}">
                                     <span class="nm">
                                         <x-nama-berkas :id="$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" :status="$file->status_verifikasi" /><x-belum-di-drive :di-drive="filled($file->drive_file_id) || blank($file->path)" :berkas-id="$file->id" />
+                                        @if (filled($file->tahapan) || filled($file->subfolder))
+                                            <span class="sub">📁 {{ collect([$file->tahapan, $file->subfolder])->filter()->join(' / ') }}</span>
+                                        @endif
                                         @if ($file->status_verifikasi === 'ditolak' && $file->catatan)
                                             <span class="sub" style="color:var(--red)">{{ $file->catatan }}</span>
                                         @endif
@@ -939,30 +935,123 @@
                                     @endif
                                 </div>
                             @endforeach
-
-                            @foreach ($evaluasi[$poin->id]['bukti'] ?? [] as $fi => $file)
-                                @php
-                                    $kunciBaru = $this->kunciBuktiBaru($file);
-                                    $namaTampil = $this->namaBuktiBaruAtauDefault($file, $this->namaDefaultBuktiBaru('Evaluasi RTL '.$poin->rtl_teks, $poin->berkas->count(), $loop->index, count($evaluasi[$poin->id]['bukti'])));
-                                @endphp
-                                <div class="filechip" wire:key="bukti-baru-{{ $kunciBaru }}">
-                                    <span class="nm">
-                                        <x-nama-berkas :id="$kunciBaru" :nama="$namaTampil.'.pdf'" aksi="aturNamaBuktiBaru" :bisa-ubah="true" />
-                                        <span class="sub">Berkas asli: {{ $file->getClientOriginalName() }}</span>
-                                    </span>
-                                    <span class="x" style="cursor:pointer" title="Hapus bukti" wire:click="removeBuktiEvaluasi({{ $poin->id }}, {{ $fi }})" wire:loading.class="btn-busy" wire:target="removeBuktiEvaluasi({{ $poin->id }}, {{ $fi }})">🗑️</span>
-                                </div>
-                            @endforeach
                         </div>
 
                         @if ($tertautKegiatan && ! $evaluasiBolehBuktiSusulan)
                             {{-- Satu jalur unggah: bukti realisasi poin yang sudah dilaksanakan
                                  kegiatan cukup diunggah sebagai bukti capaian kegiatannya. --}}
-                            <div class="fhint" style="margin-top:8px">🔗 Poin ini dilaksanakan oleh kegiatan di Bagian 2 — unggah bukti realisasinya sebagai <b>Bukti Capaian</b> kegiatan tersebut; berkasnya otomatis tampil di sini tanpa perlu diunggah ulang.@if ($buktiKegiatanTertaut->isEmpty()) <span style="color:var(--amber)">Belum ada bukti capaian yang diunggah untuk kegiatan itu.</span>@endif</div>
+                            <div class="fhint" style="margin-top:8px">🔗 Poin ini dilaksanakan oleh kegiatan di Bagian 2 — unggah bukti realisasinya sebagai <b>Bukti Capaian</b> kegiatan tersebut; berkasnya otomatis tampil di sini dan disalin ke folder {{ implode(' / ', $polaRtl['jalur']) }} tanpa perlu diunggah ulang.@if ($buktiKegiatanTertaut->isEmpty()) <span style="color:var(--amber)">Belum ada bukti capaian yang diunggah untuk kegiatan itu.</span>@endif</div>
                         @elseif ($evaluasiBolehBuktiSusulan)
                             @include('livewire.partials._bukti-susulan', ['kunciSusulan' => 'rtl-'.$poin->id])
                         @elseif (! $evaluasiTerkunci)
-                            <x-zona-unggah :model="'evaluasi.'.$poin->id.'.bukti'" label="Seret PDF bukti realisasi ke sini atau klik untuk memilih" style="margin-top:8px" />
+                            {{-- Unggahan mandiri — pembentukan folder sama dengan Kegiatan (Bagian 2),
+                                 mengikuti Struktur Folder Drive kategori Evaluasi-RTL. --}}
+                            @php
+                                $dataRtl = $evaluasi[$poin->id] ?? [];
+                                $tahapanRtl = $this->tahapanRtlDipilih($poin->id);
+                                $pisahTahapan = ! empty($dataRtl['pisah_tahapan']);
+                            @endphp
+                            <div class="fhint" style="margin:8px 0 4px">📁 Disimpan ke: <b>{{ implode(' / ', $polaRtl['jalur']) }}</b>@if ($polaRtl['per_kegiatan'] && $pisahTahapan) / <i>tahapan</i>@endif</div>
+
+                            @if ($polaRtl['per_kegiatan'])
+                                <div style="border:1.5px dashed var(--line);border-radius:10px;padding:10px 12px;margin-top:6px" wire:key="susunan-rtl-{{ $poin->id }}">
+                                    <label style="font-size:12px;font-weight:600">Pembentukan Folder Bukti</label>
+                                    <div class="pills" style="margin-top:6px">
+                                        <span class="pill {{ $pisahTahapan ? '' : 'on' }}" wire:click="aturTahapanRtl({{ $poin->id }}, false)">1 folder untuk seluruh bukti</span>
+                                        <span class="pill {{ $pisahTahapan ? 'on' : '' }}" wire:click="aturTahapanRtl({{ $poin->id }}, true)">Pisah ke beberapa tahapan</span>
+                                    </div>
+
+                                    @if ($pisahTahapan)
+                                        <div x-data="{ namaTahapan: '' }" style="margin-top:8px;display:flex;gap:6px">
+                                            <input type="text" class="inp" maxlength="100" x-model="namaTahapan" placeholder="Ketik nama tahapan, mis. Tahapan 1, Persiapan…" data-abaikan-perubahan
+                                                @keydown.enter.prevent="if (namaTahapan.trim()) { $wire.tambahTahapanRtl({{ $poin->id }}, namaTahapan); namaTahapan = '' }">
+                                            <button type="button" class="btn btn-ghost btn-sm" style="white-space:nowrap" @click="if (namaTahapan.trim()) { $wire.tambahTahapanRtl({{ $poin->id }}, namaTahapan); namaTahapan = '' }">＋ Tambah Tahapan</button>
+                                        </div>
+                                        <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+                                            @foreach ($tahapanRtl as $t)
+                                                <span class="pill on" wire:key="tahapan-rtl-{{ $poin->id }}-{{ md5($t) }}">📁 {{ $t }}
+                                                    <span style="cursor:pointer;margin-left:4px" title="Hapus tahapan" wire:click="hapusTahapanRtl({{ $poin->id }}, @js($t))">✕</span>
+                                                </span>
+                                            @endforeach
+                                            <span style="color:var(--muted);font-size:11.5px">Saran:</span>
+                                            @foreach (\App\Livewire\PengisianKegiatan::SARAN_TAHAPAN_RTL as $saran)
+                                                @if (! in_array(mb_strtolower($saran), array_map('mb_strtolower', $tahapanRtl), true))
+                                                    <span class="pill" style="border-style:dashed" wire:click="tambahTahapanRtl({{ $poin->id }}, @js($saran))">＋ {{ $saran }}</span>
+                                                @endif
+                                            @endforeach
+                                        </div>
+                                        @if ($tahapanRtl === [])
+                                            <div class="fhint">Tambahkan minimal satu tahapan — tiap tahapan menjadi folder sendiri di dalam folder poin RTL ini.</div>
+                                        @endif
+                                    @endif
+
+                                    @foreach ($pisahTahapan ? $tahapanRtl : [null] as $tahapanSusunan)
+                                        <div wire:key="susunan-rtl-{{ $poin->id }}-{{ md5((string) $tahapanSusunan) }}"
+                                            style="margin-top:8px;{{ $tahapanSusunan !== null ? 'border:1.5px dashed var(--line);border-radius:10px;padding:10px 12px' : '' }}">
+                                            @if ($tahapanSusunan !== null)
+                                                <div class="foldername" style="margin-bottom:6px">📁 {{ $tahapanSusunan }}</div>
+                                            @endif
+                                            @include('livewire.partials._susunan-subfolder', [
+                                                'metode' => ['atur' => 'aturSusunanFolderRtl', 'tambah' => 'tambahSubfolderRtl', 'hapus' => 'hapusSubfolderRtl'],
+                                                'argId' => $poin->id,
+                                                'argTahapan' => \Illuminate\Support\Js::from($tahapanSusunan),
+                                                'kunci' => 'subfolder-rtl-'.$poin->id.'-'.md5((string) $tahapanSusunan),
+                                                'pakai' => $this->pakaiSubfolder($dataRtl, $tahapanSusunan),
+                                                'daftar' => $this->daftarSubfolder($dataRtl, $tahapanSusunan),
+                                                'saran' => \App\Livewire\PengisianKegiatan::SARAN_SUBFOLDER,
+                                                'tempat' => $tahapanSusunan !== null ? '"'.$tahapanSusunan.'"' : 'poin RTL ini',
+                                            ])
+                                        </div>
+                                    @endforeach
+                                </div>
+                            @else
+                                <div class="fhint">Struktur Folder Drive saat ini menyimpan bukti Evaluasi RTL langsung di folder kategori (tanpa folder per poin). Pemisahan tahapan &amp; subfolder tersedia bila Tim SAKIP mengaktifkan <b>Subfolder per kegiatan</b> untuk kategori Evaluasi-RTL di menu Struktur Folder Drive.</div>
+                            @endif
+
+                            @if (! empty($dataRtl['bukti']))
+                                <x-mode-nama-berkas :mode="$modeNamaBerkas" />
+                            @endif
+
+                            <div style="border:1.5px dashed var(--line);border-radius:10px;padding:10px 12px;margin-top:6px">
+                                <div class="foldername">📁 {{ \Illuminate\Support\Str::limit(end($polaRtl['jalur']), 90) }}</div>
+                                @foreach ($polaRtl['per_kegiatan'] ? $this->folderUnggahRtl($poin->id) : [['urutan' => 0, 'tahapan' => null, 'label' => '', 'folder' => [['urutan' => 0, 'subfolder' => '', 'label' => '']]]] as $grup)
+                                    <div wire:key="grup-unggah-rtl-{{ $poin->id }}-{{ md5((string) $grup['tahapan']) }}" style="margin-left:18px;margin-top:8px">
+                                        @foreach ($grup['folder'] as $folder)
+                                            @php
+                                                $berkasFolder = collect($dataRtl['bukti'] ?? [])->filter(fn ($f) => ! $polaRtl['per_kegiatan']
+                                                    || ($this->tahapanBerkasBaruRtl($poin->id, $f) === $grup['tahapan'] && $this->subfolderBerkasBaruRtl($poin->id, $f) === $folder['subfolder']));
+                                            @endphp
+                                            <div wire:key="folder-unggah-rtl-{{ $poin->id }}-{{ $grup['urutan'] }}-{{ $folder['urutan'] }}" style="{{ $folder['urutan'] > 0 ? 'margin-left:18px;' : '' }}margin-top:6px">
+                                                @if ($grup['tahapan'] !== null || $folder['urutan'] > 0)
+                                                    <div class="foldername">↳ 📁 {{ $folder['urutan'] > 0 ? $folder['subfolder'] : $grup['label'] }}</div>
+                                                @endif
+
+                                                @if ($berkasFolder->isNotEmpty())
+                                                    <div class="filechip-grid" style="margin-top:6px;margin-left:18px">
+                                                        @foreach ($berkasFolder as $fi => $file)
+                                                            @php
+                                                                $kunciBaru = $this->kunciBuktiBaru($file);
+                                                                $namaTampil = $this->namaBuktiBaruAtauDefault($file, $this->namaDefaultBuktiBaru('Evaluasi RTL '.$poin->rtl_teks, $poin->berkas->count(), $fi, count($dataRtl['bukti'])));
+                                                            @endphp
+                                                            <div class="filechip" wire:key="bukti-baru-{{ $kunciBaru }}">
+                                                                <span class="nm">
+                                                                    <x-nama-berkas :id="$kunciBaru" :nama="$namaTampil.'.pdf'" aksi="aturNamaBuktiBaru" :bisa-ubah="true" />
+                                                                    <span class="sub">Berkas asli: {{ $file->getClientOriginalName() }}</span>
+                                                                </span>
+                                                                <span class="x" style="cursor:pointer" title="Hapus bukti" wire:click="removeBuktiEvaluasi({{ $poin->id }}, {{ $fi }})" wire:loading.class="btn-busy" wire:target="removeBuktiEvaluasi({{ $poin->id }}, {{ $fi }})">🗑️</span>
+                                                            </div>
+                                                        @endforeach
+                                                    </div>
+                                                @endif
+
+                                                <x-zona-unggah :model="'unggahRtl.'.$poin->id.'.'.$grup['urutan'].'.'.$folder['urutan']" :ringkas="true"
+                                                    label="Seret PDF bukti realisasi ke folder ini atau klik untuk memilih" style="margin-top:6px;margin-left:18px" />
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                @endforeach
+                            </div>
+                            <div class="fhint">Seret berkas PDF ke kotak folder tujuan, atau klik kotaknya — boleh banyak berkas sekaligus. Berkas langsung tersimpan ke Google Drive.</div>
                         @endif
 
                         @error("evaluasi.{$poin->id}.bukti")
@@ -1347,10 +1436,10 @@
                     ganti: 'Setelah berkas pengganti dipilih, bukti lama akan dihapus permanen dari SIPINTER dan dari Google Drive.',
                 }[pendingHapus?.method] ?? 'Bukti ini akan dihapus permanen dari SIPINTER dan dari Google Drive. Pastikan untuk mengunggah bukti pengganti bila memang masih diperlukan.'"></p>
                 <div x-show="pendingHapus?.method === 'removeBlock' && pendingHapus?.rtl" style="font-size:12.5px;line-height:1.5;padding:10px 12px;border-radius:8px;background:var(--amber-soft);color:var(--amber)">
-                    📌 Kegiatan ini <b>tertaut ke poin RTL</b> triwulan ini. Bila dihapus, kegiatan tidak lagi dihitung sebagai pelaksanaan RTL tersebut, dan bukti capaiannya ikut hilang dari Bukti Realisasi RTL di Bagian 4.
+                    📌 Kegiatan ini <b>tertaut ke poin RTL</b> triwulan ini. Bila dihapus, kegiatan tidak lagi dihitung sebagai pelaksanaan RTL tersebut, dan bukti capaiannya ikut hilang dari Bukti Realisasi RTL di Bagian 4 — salinannya di folder Evaluasi-RTL ikut dipindahkan ke Sampah.
                 </div>
                 <div x-show="pendingHapus?.tertaut" style="font-size:12.5px;line-height:1.5;padding:10px 12px;border-radius:8px;background:var(--amber-soft);color:var(--amber)">
-                    🔗 Bukti ini milik kegiatan yang <b>tertaut ke poin RTL</b>, jadi juga tampil sebagai Bukti Realisasi di Evaluasi RTL (Bagian 4). Berkasnya satu dan sama — bila dihapus, bukti hilang dari <b>Kegiatan sekaligus Evaluasi RTL</b>.
+                    🔗 Bukti ini milik kegiatan yang <b>tertaut ke poin RTL</b>, jadi juga tampil sebagai Bukti Realisasi di Evaluasi RTL (Bagian 4) dan punya salinan di folder Evaluasi-RTL Google Drive. Bila dihapus, berkas di <b>folder Kegiatan sekaligus salinannya di folder Evaluasi-RTL</b> ikut terhapus permanen.
                 </div>
                 <div x-show="pendingHapus?.method !== 'removeBlock'" style="font-size:12.5px;line-height:1.5;padding:10px 12px;border-radius:8px;background:var(--red-soft);color:var(--red)">
                     ⚠️ Berkas <b>tidak masuk Sampah</b> Google Drive dan <b>tidak bisa dikembalikan</b>.

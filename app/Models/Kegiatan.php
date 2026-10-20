@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Exceptions\InvalidStatusTransitionException;
 use App\Services\FolderStructureService;
 use App\Services\GoogleDriveService;
+use App\Services\SinkronBuktiRtlService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -195,10 +196,18 @@ class Kegiatan extends Model
         // yang SAMA (lihat FolderStructureService::resolveKegiatanFolder()) — nama
         // foldernya ikut disamakan supaya tampilan & notula tidak berbeda.
         if ($this->drive_folder_id && $namaBerlaku !== $namaLama) {
-            static::where('drive_folder_id', $this->drive_folder_id)->whereKeyNot($this->id)->get()
-                ->each(fn (Kegiatan $lain) => $lain->update([
-                    'nama_folder_kustom' => $namaBerlaku === $lain->nama_folder_auto ? null : $namaBerlaku,
-                ]));
+            $pemakaiFolder = static::where('drive_folder_id', $this->drive_folder_id)->whereKeyNot($this->id)->get();
+
+            $pemakaiFolder->each(fn (Kegiatan $lain) => $lain->update([
+                'nama_folder_kustom' => $namaBerlaku === $lain->nama_folder_auto ? null : $namaBerlaku,
+            ]));
+
+            // Folder tahapan salinannya di Evaluasi-RTL ikut bernama baru (hanya bila
+            // folder Drive-nya memang berhasil diganti nama).
+            if ($peringatan === null) {
+                $sinkron = app(SinkronBuktiRtlService::class);
+                $pemakaiFolder->prepend($this)->each(fn (Kegiatan $k) => $sinkron->pindahkanSalinanKegiatan($k));
+            }
         }
 
         return ['nama_folder' => $namaBerlaku, 'peringatan' => $peringatan];

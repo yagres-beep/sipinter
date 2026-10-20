@@ -40,3 +40,6 @@ Schedule::command('whatsapp:proses-antrean')->everyMinute()->withoutOverlapping(
 // Berkas yang gagal terunggah ke Drive hanya tersimpan di disk lokal, yang ikut
 // terhapus tiap deploy ulang — disusulkan ke Drive secepatnya (lihat perintahnya).
 Schedule::command('berkas:sinkron-drive')->everyFiveMinutes()->withoutOverlapping(30)->runInBackground();
+
+// Salinan bukti kegiatan di folder Evaluasi-RTL yang gagal/tertunda dicoba lagi.
+Schedule::command('bukti:sinkron-rtl')->everyFiveMinutes()->withoutOverlapping(30)->runInBackground();

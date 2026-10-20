@@ -628,12 +628,6 @@
         </div>
     @endif
 
-    @php
-        $semuaBerkas = collect($berkasPerKegiatan)->flatten(1)
-            ->concat($rtlSebelumnya->flatMap->berkas)
-            ->concat(collect($berkasPerBagianKustom)->flatten(1));
-    @endphp
-
     @foreach ($semuaBerkas as $file)
         <div class="modal-overlay" x-show="modalBerkas === {{ $file->id }}" x-cloak style="display:none" @click.self="modalBerkas = null" wire:key="modal-berkas-{{ $file->id }}">
             <div class="modal">
@@ -670,6 +664,10 @@
                     </div>
                     <div class="verify-panel" x-data="{ pendingMark: null }">
                         <div class="vp-t">Verifikasi Berkas</div>
+                        @php $tautanRtl = $rtlPerBerkas[$file->id] ?? null; @endphp
+                        @if ($tautanRtl)
+                            <div style="font-size:11px;line-height:1.5;color:var(--teal);margin-bottom:8px">🔗 Bukti kegiatan ini juga menjadi bukti realisasi RTL "{{ \Illuminate\Support\Str::limit($tautanRtl['poin']->rtl_teks, 70) }}" — satu berkas, satu status: hasil pemeriksaan di sini otomatis berlaku di Evaluasi RTL.</div>
+                        @endif
                         @if ($this->berkasBisaDiverifikasi($file->id))
                             {{-- pendingMark = pilihan terakhir yg DIKLIK, ditampilkan LANGSUNG (optimistic)
                                 tanpa menunggu balasan server (Supabase remote ~400ms/query) — supaya
@@ -733,7 +731,9 @@
                             </div>
                         @else
                             <span class="mark {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}" style="cursor:default">{{ $file->status_verifikasi === 'terverifikasi' ? '✓ Sesuai' : ($file->status_verifikasi === 'ditolak' ? '✕ Tidak Sesuai' : '… Menunggu') }}</span>
-                            @if ($bisaDiverifikasi)
+                            @if ($tautanRtl && (int) $tautanRtl['kegiatan']->periode_id !== (int) $capaian->periode_id)
+                                <div style="font-size:11px;color:var(--muted);margin-top:6px">🔒 Bukti kegiatan bulan {{ $tautanRtl['kegiatan']->periode ? \Illuminate\Support\Carbon::create(null, $tautanRtl['kegiatan']->periode->bulan, 1)->locale('id')->translatedFormat('F') : 'lain' }} — diperiksa pada verifikasi isian bulan itu; statusnya dipakai apa adanya di sini.</div>
+                            @elseif ($bisaDiverifikasi)
                                 <div style="font-size:11px;color:var(--muted);margin-top:6px">🔒 Milik kegiatan yang sudah diproses sebelumnya.</div>
                             @endif
                             @if ($file->catatan)
@@ -742,6 +742,15 @@
                                     <p style="font-size:12.5px;color:var(--muted);margin:0">{{ $file->catatan }}</p>
                                 </div>
                             @endif
+                        @endif
+
+                        @if (($riwayatVerifikasiBerkas[$file->id] ?? collect())->isNotEmpty())
+                            <div style="margin-top:14px;font-size:11px;color:var(--muted);line-height:1.6">
+                                <div style="font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Riwayat Verifikasi</div>
+                                @foreach ($riwayatVerifikasiBerkas[$file->id]->take(5) as $r)
+                                    <div wire:key="riwayat-berkas-{{ $r->id }}">{{ $r->created_at?->translatedFormat('d M Y H:i') }} · {{ $r->status_baru === 'terverifikasi' ? 'Sesuai' : 'Tidak Sesuai' }}{{ $r->user ? ' oleh '.$r->user->nama : '' }}{{ $r->catatan ? ' — '.\Illuminate\Support\Str::limit($r->catatan, 60) : '' }}</div>
+                                @endforeach
+                            </div>
                         @endif
                     </div>
                 </div>
@@ -876,27 +885,95 @@
 
             @foreach ($rtlSebelumnya as $poin)
                 <div class="match-row" wire:key="rtl-check-{{ $poin->id }}">
-                    <div class="match-col"><div class="mc-lbl">RTL Direncanakan</div><div class="mc-txt">{{ $poin->rtl_teks }}</div></div>
+                    <div class="match-col">
+                        <div class="mc-lbl">RTL Direncanakan</div><div class="mc-txt">{{ $poin->rtl_teks }}</div>
+                        {{-- Rencana ditetapkan & diajukan pada triwulan sebelumnya — hanya referensi,
+                             tidak bisa disunting dari verifikasi triwulan berjalan. --}}
+                        <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5">
+                            {{ $poin->berlaku_bulan }}@if ($poin->pic) · PIC: {{ $poin->pic }}@endif @if ($poin->batas_waktu) · Batas waktu: {{ $poin->batas_waktu->translatedFormat('d F Y') }}@endif
+                            <br>🔒 Ditetapkan pada triwulan sebelumnya — referensi, tidak diubah oleh isian triwulan ini.
+                        </div>
+                    </div>
                     <div class="match-badge {{ $poin->sudahDievaluasi() ? 'mb-ok' : 'mb-warn' }}">{{ $poin->sudahDievaluasi() ? '✓' : '…' }}</div>
                     <div class="match-col">
                         <div class="mc-lbl">Realisasi Dilaporkan</div>
                         <textarea class="inp filled" style="height:auto;display:block;font-style:italic;font-size:12px" rows="2"
                             wire:model.live.blur="koreksiRtlRealisasi.{{ $poin->id }}" placeholder="{{ $poin->sudahDievaluasi() ? '— tanpa keterangan teks, periksa bukti realisasi di bawah —' : '— belum dilaporkan —' }}"></textarea>
 
-                        @if ($poin->sudahDievaluasi())
-                            @if ($poin->berkas->isNotEmpty())
-                                <div style="font-size:11.5px;margin-top:6px;color:var(--teal)">📎 {{ $poin->berkas->count() }} bukti realisasi diunggah Ketua Tim{{ $poin->berkas->where('status_verifikasi', 'menunggu')->isNotEmpty() ? ' — '.$poin->berkas->where('status_verifikasi', 'menunggu')->count().' belum diperiksa (klik 🔍 Periksa)' : '' }}</div>
-                            @endif
-                            @php
-                                $buktiKegiatanRtl = $poin->buktiDariKegiatan();
-                                $tahapanRtl = $buktiKegiatanRtl->map(fn ($t) => $t['kegiatan']->labelTahapan())->filter()->unique();
-                            @endphp
-                            @if ($buktiKegiatanRtl->isNotEmpty())
-                                <div style="font-size:11.5px;margin-top:6px;color:var(--teal)">🔗 {{ $buktiKegiatanRtl->count() }} bukti capaian dari kegiatan yang melaksanakan RTL ini{{ $tahapanRtl->isNotEmpty() ? ' (tahapan '.$tahapanRtl->join(', ').')' : '' }} — berkasnya sama dengan bukti kegiatan dan diperiksa di sana: {{ $buktiKegiatanRtl->pluck('berkas.nama_file')->join(', ') }}</div>
-                            @endif
-                        @else
+                        @php
+                            $buktiKegiatanRtl = $poin->buktiDariKegiatan();
+                            $kesesuaianBukti = \App\Models\RtlEvaluasi::kesesuaianBukti($buktiKegiatanRtl->pluck('berkas')->concat($poin->berkas));
+                            $salinanRtl = $poin->salinanBukti->keyBy('berkas_id');
+                            $labelKesesuaian = [
+                                'sesuai' => ['disetujui', 'Semua bukti Sesuai'],
+                                'tidak_sesuai' => ['dikembalikan', 'Ada bukti Tidak Sesuai'],
+                                'menunggu' => ['diajukan', 'Ada bukti belum diperiksa'],
+                                'kosong' => ['draft', 'Belum ada bukti'],
+                            ][$kesesuaianBukti];
+                        @endphp
+
+                        {{-- Kesesuaian BUKTI (dari status tiap berkas, satu sumber dengan
+                             Kegiatan) — terpisah dari penilaian realisasi RTL di bawah. --}}
+                        <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap">
+                            <span style="font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.4px">Kesesuaian Bukti</span>
+                            <x-badge-status :status="$labelKesesuaian[0]" :label="$labelKesesuaian[1]" />
+                        </div>
+
+                        @if ($buktiKegiatanRtl->isNotEmpty())
+                            <div style="font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.4px;margin:10px 0 2px">🔗 Dari Bukti Kegiatan</div>
+                            <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Berkas yang sama dengan bukti capaian kegiatan — statusnya mengikuti hasil pemeriksaan bukti kegiatan itu, tidak perlu diperiksa dua kali.</div>
+                            @foreach ($buktiKegiatanRtl as $tertaut)
+                                @php
+                                    $file = $tertaut['berkas'];
+                                    $kegiatanAsal = $tertaut['kegiatan'];
+                                    $salinan = $salinanRtl->get($file->id);
+                                @endphp
+                                <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}" style="margin-top:6px" wire:key="rtl-{{ $poin->id }}-keg-berkas-{{ $file->id }}">
+                                    <span class="nm">
+                                        <x-nama-berkas :id="'rtl'.$poin->id.'-'.$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" :status="$file->status_verifikasi" :bisa-ubah="false" />
+                                        <span class="sub">
+                                            Sumber: Kegiatan "{{ \Illuminate\Support\Str::limit($kegiatanAsal->uraianTampil(), 70) }}"@if ($kegiatanAsal->labelTahapan()) · Tahapan {{ $kegiatanAsal->labelTahapan() }}@endif
+                                            · 📁 {{ $kegiatanAsal->namaFolder() }}@if (filled($file->subfolder)) / {{ $file->subfolder }}@endif
+                                            @if ($kegiatanAsal->periode && (int) $kegiatanAsal->periode_id !== (int) $capaian->periode_id) · isian bulan {{ \Illuminate\Support\Carbon::create(null, $kegiatanAsal->periode->bulan, 1)->locale('id')->translatedFormat('F') }}@endif
+                                        </span>
+                                        <span class="sub" style="color:{{ $file->status_verifikasi === 'terverifikasi' ? 'var(--teal)' : ($file->status_verifikasi === 'ditolak' ? 'var(--red)' : 'var(--muted)') }}">
+                                            Status bukti: {{ $file->status_verifikasi === 'terverifikasi' ? '✓ Sesuai' : ($file->status_verifikasi === 'ditolak' ? '✕ Tidak Sesuai' : '… Belum diperiksa') }}
+                                            @if ($salinan?->mutakhir($file)) · 📂 tersalin di folder Evaluasi-RTL @elseif ($salinan?->status === \App\Models\SalinanBuktiRtl::STATUS_GAGAL) · ⚠️ salinan Evaluasi-RTL belum tersedia @endif
+                                        </span>
+                                    </span>
+                                    <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file->id }}">🔍 Periksa</button>
+                                </div>
+                            @endforeach
+                        @endif
+
+                        @if ($poin->berkas->isNotEmpty())
+                            <div style="font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.4px;margin:10px 0 2px">📤 Unggahan Mandiri Evaluasi RTL</div>
+                            <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Diperiksa tersendiri.{{ $poin->berkas->where('status_verifikasi', 'menunggu')->isNotEmpty() ? ' '.$poin->berkas->where('status_verifikasi', 'menunggu')->count().' belum diperiksa (klik 🔍 Periksa).' : '' }}</div>
+                            @foreach ($poin->berkas as $file)
+                                <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}" style="margin-top:6px" wire:key="berkas-{{ $file->id }}">
+                                    <span class="nm">
+                                        <x-nama-berkas :id="$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" :status="$file->status_verifikasi" />
+                                        @if (filled($file->tahapan) || filled($file->subfolder))
+                                            <span class="sub">📁 {{ collect([$file->tahapan, $file->subfolder])->filter()->join(' / ') }}</span>
+                                        @endif
+                                        @if ($file->status_verifikasi === 'ditolak')
+                                            <span class="sub" style="color:var(--red)">Tidak Sesuai</span>
+                                        @endif
+                                    </span>
+                                    <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file->id }}">🔍 Periksa</button>
+                                </div>
+                            @endforeach
+                        @endif
+
+                        @if (! $poin->sudahDievaluasi())
                             <div style="font-size:11.5px;margin-top:6px;color:var(--muted)">Belum ada bukti realisasi diunggah Ketua Tim — belum bisa diverifikasi.</div>
                         @endif
+
+                        @if ($poin->status_verifikasi === 'terverifikasi' && $kesesuaianBukti === \App\Models\RtlEvaluasi::KESESUAIAN_TIDAK_SESUAI)
+                            <div class="info red" style="margin-top:8px;font-size:11.5px">⚠️ Realisasi RTL ini sebelumnya dinilai Sesuai, tetapi kini ada bukti yang berstatus Tidak Sesuai — tinjau kembali penilaian realisasinya.</div>
+                        @endif
+
+                        <div class="mc-lbl" style="margin-top:12px">Penilaian Realisasi RTL</div>
 
                         @if ($this->rtlBisaDiverifikasi($poin->id))
                             <div x-data="{ pendingMark: null }" style="margin-top:8px">
@@ -950,21 +1027,9 @@
 
                         @if ($poin->catatan_bukti_dihapus)
                             <div class="info red" style="margin-top:8px;font-size:11.5px">
-                                🗑️ <b>Ketua Tim menghapus bukti sebelumnya</b> — alasan penolakan sebelumnya: "{{ $poin->catatan_bukti_dihapus }}". Periksa apakah bukti pengganti di bawah sudah memperbaikinya.
+                                🗑️ <b>Ketua Tim menghapus bukti sebelumnya</b> — alasan penolakan sebelumnya: "{{ $poin->catatan_bukti_dihapus }}". Periksa apakah bukti pengganti di atas sudah memperbaikinya.
                             </div>
                         @endif
-
-                        @foreach ($poin->berkas as $file)
-                            <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}" style="margin-top:10px" wire:key="berkas-{{ $file->id }}">
-                                <span class="nm">
-                                    <x-nama-berkas :id="$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" :status="$file->status_verifikasi" />
-                                    @if ($file->status_verifikasi === 'ditolak')
-                                        <span class="sub" style="color:var(--red)">Tidak Sesuai</span>
-                                    @endif
-                                </span>
-                                <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file->id }}">🔍 Periksa</button>
-                            </div>
-                        @endforeach
                     </div>
                 </div>
             @endforeach

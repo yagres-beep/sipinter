@@ -216,6 +216,67 @@ class GoogleDriveService
     }
 
     /**
+     * Salin berkas Drive $fileId ke folder $parentFolderId bernama $filename — salinan
+     * dibuat di sisi Google (isinya identik, tanpa mengunduh/mengunggah ulang dari
+     * server). $penanda menimpa appProperties bawaan berkas asal supaya salinan bisa
+     * ditemukan kembali sebagai salinan, bukan dikira berkas aslinya.
+     *
+     * @param  array<string, string>  $penanda
+     * @return array{id: string, name: string, web_view_link: ?string, size_bytes: int}
+     */
+    public function copyFile(string $fileId, string $filename, string $parentFolderId, array $penanda = []): array
+    {
+        $metadata = new DriveFile(array_filter([
+            'name' => $filename,
+            'parents' => [$parentFolderId],
+            'appProperties' => $penanda ?: null,
+        ]));
+
+        /** @var DriveFile $salinan */
+        $salinan = $this->panggilApi(
+            fn () => $this->drive()->files->copy($fileId, $metadata, ['fields' => 'id, name, webViewLink, size']),
+            "menyalin berkas \"{$filename}\""
+        );
+
+        return [
+            'id' => $salinan->getId(),
+            'name' => $salinan->getName(),
+            'web_view_link' => $salinan->getWebViewLink(),
+            'size_bytes' => (int) $salinan->getSize(),
+        ];
+    }
+
+    /** Nama sebuah berkas/folder Drive saat ini. */
+    public function namaFile(string $fileId): string
+    {
+        /** @var DriveFile $file */
+        $file = $this->panggilApi(fn () => $this->drive()->files->get($fileId, ['fields' => 'name']), 'membaca nama berkas');
+
+        return (string) $file->getName();
+    }
+
+    /**
+     * Pindahkan berkas ke folder $parentFolderId (ID berkas tetap sama, tautan lama
+     * tidak rusak) — induk lamanya dilepas.
+     */
+    public function moveFile(string $fileId, string $parentFolderId): void
+    {
+        /** @var DriveFile $file */
+        $file = $this->panggilApi(fn () => $this->drive()->files->get($fileId, ['fields' => 'parents']), 'membaca letak berkas');
+        $indukLama = implode(',', $file->getParents() ?? []);
+
+        if ($indukLama === $parentFolderId) {
+            return;
+        }
+
+        $this->panggilApi(fn () => $this->drive()->files->update($fileId, new DriveFile, array_filter([
+            'addParents' => $parentFolderId,
+            'removeParents' => $indukLama ?: null,
+            'fields' => 'id',
+        ])), 'memindahkan berkas');
+    }
+
+    /**
      * Ganti nama sebuah berkas/folder Drive yang sudah ada (ID-nya tetap sama,
      * jadi tautan lama tidak rusak). Dipakai untuk mengganti nama berkas bukti dari
      * web (Berkas::gantiNama()) & merapikan nama folder IKU lama.

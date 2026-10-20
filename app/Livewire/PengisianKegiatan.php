@@ -13,7 +13,9 @@ use App\Models\MasterIku;
 use App\Models\Periode;
 use App\Models\RiwayatStatusCapaian;
 use App\Models\RtlEvaluasi as RtlEvaluasiModel;
+use App\Models\SalinanBuktiRtl;
 use App\Services\FolderStructureService;
+use App\Services\SinkronBuktiRtlService;
 use Illuminate\Contracts\Cache\Lock;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Arr;
@@ -316,13 +318,14 @@ class PengisianKegiatan extends Component
      * mis. Persiapan dipisah ke Undangan & Notula, Pengolahan cukup satu folder.
      * Kegiatan satu folder (tanpa tahapan) memakai blocks.*.pakai_subfolder &
      * blocks.*.subfolders; tiap tahapan memakai blocks.*.pakai_subfolder_tahapan.<t>
-     * & blocks.*.subfolders_tahapan.<t>.
+     * & blocks.*.subfolders_tahapan.<t>. Poin Evaluasi RTL (evaluasi.<id>) memakai
+     * susunan yang sama persis, dengan pisah_tahapan menggantikan jenis survei/sensus.
      *
      * @return array{0: string, 1: string} [kunci pakai, kunci daftar] relatif ke blok
      */
     protected function kunciSusunanFolder(array $block, ?string $tahapan): array
     {
-        return ($block['jenis'] ?? '') === 'survei_sensus' && filled($tahapan)
+        return (($block['jenis'] ?? '') === 'survei_sensus' || ! empty($block['pisah_tahapan'])) && filled($tahapan)
             ? ["pakai_subfolder_tahapan.{$tahapan}", "subfolders_tahapan.{$tahapan}"]
             : ['pakai_subfolder', 'subfolders'];
     }
@@ -600,6 +603,300 @@ class PengisianKegiatan extends Component
         return $this->namaBuktiBaruAtauDefault($file, $this->namaDefaultBuktiBaru(
             'Kegiatan '.$block['uraian_kegiatan'], count($block['existing_bukti'] ?? []), $urutan, count($semua)
         ));
+    }
+
+    // ================================================================
+    // Evaluasi RTL — susunan folder bukti realisasi unggahan mandiri, sama
+    // dengan Kegiatan: satu folder untuk seluruh bukti atau pisah ke beberapa
+    // tahapan, dan tiap folder bisa "1 folder" atau dipisah ke subfolder.
+    // Susunannya disimpan di evaluasi.<id> (pisah_tahapan, tahapan,
+    // pakai_subfolder[_tahapan], subfolders[_tahapan]) dan dipakai helper yang
+    // sama dengan Kegiatan (pakaiSubfolder(), daftarSubfolder(), subfolderBlok()).
+    // ================================================================
+
+    /** Saran nama tahapan poin RTL (bebas diketik sendiri). */
+    public const SARAN_TAHAPAN_RTL = ['Tahapan 1', 'Tahapan 2', 'Persiapan', 'Pelaksanaan', 'Pelaporan'];
+
+    /**
+     * Penampung unggahan tombol "Unggah" per folder poin RTL — kunci
+     * "<id poin>.<urutan tahapan>.<urutan folder>", pola sama dengan $unggahFolder.
+     *
+     * @var array<int|string, mixed>
+     */
+    public array $unggahRtl = [];
+
+    protected function evaluasiKosong(): array
+    {
+        return [
+            'bukti' => [],
+            'pisah_tahapan' => false,
+            'tahapan' => [],
+            'pakai_subfolder' => false,
+            'subfolders' => [],
+            'pakai_subfolder_tahapan' => [],
+            'subfolders_tahapan' => [],
+        ];
+    }
+
+    /** Poin RTL triwulan berjalan yang buktinya masih boleh diunggah mandiri dari form ini. */
+    protected function poinRtlBisaDiunggah(int $rtlId): bool
+    {
+        $poin = $this->rtlTriwulanBerjalan()->firstWhere('id', $rtlId);
+
+        return $poin !== null && ! $this->capaianTerkunci() && ! $this->formTerkunciSedangDitangani() && ! $this->poinRtlTertautKegiatan($poin);
+    }
+
+    /** @return list<string> tahapan poin RTL ini (kosong bila satu folder untuk seluruh bukti). */
+    public function tahapanRtlDipilih(int $rtlId): array
+    {
+        $data = $this->evaluasi[$rtlId] ?? [];
+
+        return ! empty($data['pisah_tahapan']) ? array_values($data['tahapan'] ?? []) : [];
+    }
+
+    /** "Satu folder untuk seluruh bukti" ($pisah = false) atau "Pisah ke beberapa tahapan". */
+    public function aturTahapanRtl(int $rtlId, bool $pisah): void
+    {
+        if (! $this->poinRtlBisaDiunggah($rtlId)) {
+            return;
+        }
+
+        $this->evaluasi[$rtlId] = array_merge($this->evaluasiKosong(), $this->evaluasi[$rtlId] ?? [], ['pisah_tahapan' => $pisah]);
+        $this->adaPerubahan = true;
+    }
+
+    public function tambahTahapanRtl(int $rtlId, string $nama): void
+    {
+        // Titik dibuang: nama tahapan dipakai sebagai kunci array bertitik (lihat tambahTahapan()).
+        $nama = FolderStructureService::namaOtomatis(str_replace('.', ' ', $nama), 100);
+
+        if ($nama === '' || ! $this->poinRtlBisaDiunggah($rtlId)) {
+            return;
+        }
+
+        $data = array_merge($this->evaluasiKosong(), $this->evaluasi[$rtlId] ?? []);
+
+        if (! in_array(mb_strtolower($nama), array_map('mb_strtolower', $data['tahapan']), true)) {
+            $data['tahapan'][] = $nama;
+        }
+
+        $data['pisah_tahapan'] = true;
+        $this->evaluasi[$rtlId] = $data;
+        $this->adaPerubahan = true;
+    }
+
+    public function hapusTahapanRtl(int $rtlId, string $nama): void
+    {
+        if (! $this->poinRtlBisaDiunggah($rtlId)) {
+            return;
+        }
+
+        $data = array_merge($this->evaluasiKosong(), $this->evaluasi[$rtlId] ?? []);
+        $data['tahapan'] = array_values(array_diff($data['tahapan'], [$nama]));
+        unset($data['pakai_subfolder_tahapan'][$nama], $data['subfolders_tahapan'][$nama]);
+        $this->evaluasi[$rtlId] = $data;
+        $this->adaPerubahan = true;
+    }
+
+    public function aturSusunanFolderRtl(int $rtlId, bool $pakai, ?string $tahapan = null): void
+    {
+        $this->simpanSusunanFolderRtl($rtlId, $tahapan, $pakai, null);
+    }
+
+    public function tambahSubfolderRtl(int $rtlId, string $nama, ?string $tahapan = null): void
+    {
+        $nama = FolderStructureService::namaOtomatis($nama, 100);
+        $daftar = $this->daftarSubfolder($this->evaluasi[$rtlId] ?? [], $tahapan);
+
+        if ($nama === '' || in_array(mb_strtolower($nama), array_map('mb_strtolower', $daftar), true)) {
+            return;
+        }
+
+        $this->simpanSusunanFolderRtl($rtlId, $tahapan, true, [...$daftar, $nama]);
+    }
+
+    public function hapusSubfolderRtl(int $rtlId, int $urutan, ?string $tahapan = null): void
+    {
+        $daftar = $this->daftarSubfolder($this->evaluasi[$rtlId] ?? [], $tahapan);
+
+        if (! isset($daftar[$urutan])) {
+            return;
+        }
+
+        unset($daftar[$urutan]);
+        $this->simpanSusunanFolderRtl($rtlId, $tahapan, null, $daftar);
+    }
+
+    protected function simpanSusunanFolderRtl(int $rtlId, ?string $tahapan, ?bool $pakai, ?array $daftar): void
+    {
+        if (! $this->poinRtlBisaDiunggah($rtlId)) {
+            return;
+        }
+
+        if ($tahapan !== null && ! in_array($tahapan, $this->tahapanRtlDipilih($rtlId), true)) {
+            return;
+        }
+
+        $data = array_merge($this->evaluasiKosong(), $this->evaluasi[$rtlId] ?? []);
+        [$kunciPakai, $kunciDaftar] = $this->kunciSusunanFolder($data, $tahapan);
+
+        if ($pakai !== null) {
+            data_set($data, $kunciPakai, $pakai);
+        }
+        if ($daftar !== null) {
+            data_set($data, $kunciDaftar, array_values($daftar));
+        }
+
+        $this->evaluasi[$rtlId] = $data;
+        $this->adaPerubahan = true;
+    }
+
+    /**
+     * Folder tujuan unggahan mandiri satu poin RTL, bentuk sama dengan folderUnggahBlok():
+     * tiap tahapan (atau satu folder poin bila tidak dipisah), masing-masing berisi
+     * folder langsung + subfolder khusus.
+     *
+     * @return list<array{urutan: int, tahapan: ?string, label: string, folder: list<array{urutan: int, subfolder: string, label: string}>}>
+     */
+    public function folderUnggahRtl(int $rtlId): array
+    {
+        $data = $this->evaluasi[$rtlId] ?? $this->evaluasiKosong();
+        $hasil = [];
+
+        foreach ($this->tahapanRtlDipilih($rtlId) ?: [null] as $ti => $tahapan) {
+            $label = $tahapan ?? 'Folder poin RTL';
+            $folder = [['urutan' => 0, 'subfolder' => '', 'label' => $label]];
+
+            foreach ($this->subfolderBlok($data, $tahapan) as $si => $namaSub) {
+                $folder[] = ['urutan' => $si + 1, 'subfolder' => $namaSub, 'label' => $label.' / '.$namaSub];
+            }
+
+            $hasil[] = ['urutan' => $ti, 'tahapan' => $tahapan, 'label' => $label, 'folder' => $folder];
+        }
+
+        return $hasil;
+    }
+
+    /** Tahapan tujuan satu berkas baru poin RTL (null = tidak dipisah tahapan). */
+    public function tahapanBerkasBaruRtl(int $rtlId, $file): ?string
+    {
+        $dipilih = $this->tahapanRtlDipilih($rtlId);
+
+        if ($dipilih === []) {
+            return null;
+        }
+
+        $pilihan = $this->tahapanBuktiBaru[$this->kunciBuktiBaru($file)] ?? '';
+
+        return in_array($pilihan, $dipilih, true) ? $pilihan : $dipilih[0];
+    }
+
+    /** Subfolder tujuan satu berkas baru poin RTL ('' = langsung di folder tahapan/poin). */
+    public function subfolderBerkasBaruRtl(int $rtlId, $file): string
+    {
+        $daftar = $this->subfolderBlok($this->evaluasi[$rtlId] ?? [], $this->tahapanBerkasBaruRtl($rtlId, $file));
+        $pilihan = $this->subfolderBuktiBaru[$this->kunciBuktiBaru($file)] ?? '';
+
+        return in_array($pilihan, $daftar, true) ? $pilihan : '';
+    }
+
+    public function updatedUnggahRtl($nilai, ?string $kunci = null): void
+    {
+        $bagian = explode('.', (string) $kunci);
+
+        if (count($bagian) < 3) {
+            return;
+        }
+
+        [$rtlId, $urutanTahapan, $urutanFolder] = array_map('intval', array_slice($bagian, 0, 3));
+        unset($this->unggahRtl[$rtlId]);
+
+        if (! $this->poinRtlBisaDiunggah($rtlId)) {
+            return;
+        }
+
+        $daftarBerkas = array_values(array_filter(is_array($nilai) ? $nilai : [$nilai]));
+
+        $validator = \Illuminate\Support\Facades\Validator::make(
+            ['bukti' => $daftarBerkas],
+            ['bukti.*' => ['file', 'mimes:pdf']],
+            ['bukti.*.mimes' => 'Bukti harus berupa PDF.']
+        );
+
+        if ($validator->fails()) {
+            $this->addError("evaluasi.{$rtlId}.bukti", $validator->errors()->first());
+
+            return;
+        }
+
+        $data = array_merge($this->evaluasiKosong(), $this->evaluasi[$rtlId] ?? []);
+        $tahapan = $this->tahapanRtlDipilih($rtlId)[$urutanTahapan] ?? null;
+        $subfolder = $urutanFolder > 0 ? ($this->subfolderBlok($data, $tahapan)[$urutanFolder - 1] ?? '') : '';
+
+        foreach ($daftarBerkas as $berkas) {
+            $data['bukti'][] = $berkas;
+            $kunciBerkas = $this->kunciBuktiBaru($berkas);
+
+            if ($tahapan) {
+                $this->tahapanBuktiBaru[$kunciBerkas] = $tahapan;
+            }
+            if ($subfolder !== '') {
+                $this->subfolderBuktiBaru[$kunciBerkas] = $subfolder;
+            }
+        }
+
+        $this->evaluasi[$rtlId] = $data;
+        $this->resetErrorBag("evaluasi.{$rtlId}.bukti");
+        $this->adaPerubahan = true;
+
+        $this->simpanOtomatisSetelahUnggah();
+    }
+
+    /**
+     * Pratinjau letak folder Evaluasi-RTL satu poin menurut Struktur Folder Drive
+     * yang berlaku untuk IKU ini (tanpa menyentuh Drive).
+     *
+     * @return array{jalur: list<string>, per_kegiatan: bool, per_bulan: bool}
+     */
+    public function polaFolderRtl(RtlEvaluasiModel $poin, ?Periode $periode = null): array
+    {
+        $iku = $this->ikuTerpilih();
+        // Unggahan mandiri tersimpan di folder bulan isian ini; salinan dari Kegiatan
+        // di folder bulan kegiatannya ($periode).
+        $periode ??= $this->periodeSaatIni() ?? $poin->periode;
+
+        return $this->cachePolaRtl[$poin->id.'|'.$periode?->id] ??= $iku
+            ? FolderStructureService::polaFolderRtl($iku, (string) $poin->rtl_teks, $periode)
+            : ['jalur' => [FolderStructureService::KATEGORI_KE_FOLDER['evaluasi_rtl']], 'per_kegiatan' => false, 'per_bulan' => false];
+    }
+
+    /** Memoisasi per request polaFolderRtl() — dipanggil berulang saat render. */
+    protected array $cachePolaRtl = [];
+
+    /**
+     * Coba lagi salinan Evaluasi-RTL satu bukti kegiatan yang gagal tersalin (tombol
+     * "Coba lagi salin" di Bagian 4). Hanya bukti kegiatan tertaut ke poin RTL form ini.
+     */
+    public function cobaLagiSalinanRtl(int $berkasId): void
+    {
+        $berkas = Berkas::where('ref_type', Kegiatan::class)->find($berkasId);
+        $kegiatan = $berkas?->ref;
+
+        if (! $kegiatan instanceof Kegiatan || ! $this->rtlTriwulanBerjalan()->contains('id', (int) $kegiatan->rtl_evaluasi_id)) {
+            return;
+        }
+
+        $sinkron = app(SinkronBuktiRtlService::class);
+        $sinkron->sinkronkanBerkas($berkas);
+        $sinkron->cobaLagi(berkasId: $berkas->id);
+        $tersalin = SalinanBuktiRtl::where('berkas_id', $berkas->id)->where('status', SalinanBuktiRtl::STATUS_TERSALIN)->exists();
+
+        $this->cacheRtlBerjalan = null;
+        Cache::forget($this->cacheKeyPeriodeIku('rtl-berjalan'));
+
+        $this->dispatch('notify', type: $tersalin ? 'success' : 'error', message: $tersalin
+            ? "✅ \"{$berkas->nama_file}\" sudah tersalin ke folder Evaluasi-RTL."
+            : "\"{$berkas->nama_file}\" masih GAGAL disalin ke folder Evaluasi-RTL — berkas di folder Kegiatan tetap aman; coba lagi nanti.");
     }
 
     /**
@@ -1578,6 +1875,9 @@ class PengisianKegiatan extends Component
             'kategori' => $lama->kategori,
             'nama_file' => $namaBerkas.'.pdf',
             'subfolder' => $lama->subfolder,
+            // Berkas pengganti menempati folder yang sama dengan berkas yang diganti.
+            'tahapan' => $lama->tahapan,
+            'periode_id' => $lama->periode_id,
             'path' => $path,
             'status_verifikasi' => 'menunggu',
         ]);
@@ -1745,6 +2045,7 @@ class PengisianKegiatan extends Component
                 'ref_type' => $ref::class,
                 'kategori' => $kategori,
                 'nama_file' => $namaBerkas.'.pdf',
+                'periode_id' => $kategori === 'evaluasi_rtl' ? $periode->id : null,
                 'path' => $path,
                 'status_verifikasi' => 'menunggu',
             ]);
@@ -1994,6 +2295,8 @@ class PengisianKegiatan extends Component
 
         return [
             'folder' => $susunan,
+            // Susunan folder Evaluasi RTL (tahapan/subfolder yang belum berisi berkas).
+            'rtl' => array_map(fn ($data) => Arr::except($data, ['bukti']), $this->evaluasi),
             'blocks' => array_values(array_filter(
                 $this->blocks,
                 fn ($b) => trim($b['uraian_kegiatan'] ?? '') === '' && $b != $kosong
@@ -2040,6 +2343,27 @@ class PengisianKegiatan extends Component
             if ($daftar !== []) {
                 $this->simpanSusunanFolder($i, $tahapan, $pakai || $this->pakaiSubfolder($block, $tahapan), array_values(array_unique([...$daftar, ...$this->daftarSubfolder($block, $tahapan)])));
             }
+        }
+
+        // Gabungkan susunan Evaluasi RTL yang tersimpan (dari berkas) dengan susunan di
+        // layar yang belum berisi berkas, supaya tahapan/subfolder kosong tidak hilang.
+        foreach ($belumTersimpan['rtl'] ?? [] as $rtlId => $lama) {
+            if (! isset($this->evaluasi[$rtlId])) {
+                continue;
+            }
+
+            $data = $this->evaluasi[$rtlId];
+            $data['pisah_tahapan'] = ! empty($data['pisah_tahapan']) || ! empty($lama['pisah_tahapan']);
+            $data['tahapan'] = array_values(array_unique([...($lama['tahapan'] ?? []), ...$data['tahapan']]));
+            $data['pakai_subfolder'] = $data['pakai_subfolder'] || ! empty($lama['pakai_subfolder']);
+            $data['subfolders'] = array_values(array_unique([...($lama['subfolders'] ?? []), ...$data['subfolders']]));
+
+            foreach ($data['tahapan'] as $t) {
+                $data['pakai_subfolder_tahapan'][$t] = ! empty($data['pakai_subfolder_tahapan'][$t]) || ! empty($lama['pakai_subfolder_tahapan'][$t]);
+                $data['subfolders_tahapan'][$t] = array_values(array_unique([...($lama['subfolders_tahapan'][$t] ?? []), ...($data['subfolders_tahapan'][$t] ?? [])]));
+            }
+
+            $this->evaluasi[$rtlId] = $data;
         }
 
         if ($belumTersimpan['blocks'] ?? []) {
@@ -2370,8 +2694,25 @@ class PengisianKegiatan extends Component
     {
         $this->evaluasi = [];
 
+        // Susunan folder dibaca ulang dari bukti yang sudah tersimpan (tahapan &
+        // subfolder tiap berkas), sama seperti muatBlocksKegiatan() — tidak ada kolom
+        // susunan tersendiri, jadi tidak pernah berbeda dari isi Drive-nya.
         foreach ($this->rtlTriwulanBerjalan() as $poin) {
-            $this->evaluasi[$poin->id] = ['bukti' => []];
+            $data = $this->evaluasiKosong();
+            $tahapan = $poin->berkas->pluck('tahapan')->filter()->unique()->values();
+
+            $data['pisah_tahapan'] = $tahapan->isNotEmpty();
+            $data['tahapan'] = $tahapan->all();
+            $data['subfolders'] = $poin->berkas->whereNull('tahapan')->pluck('subfolder')->filter()->unique()->values()->all();
+            $data['pakai_subfolder'] = $data['subfolders'] !== [];
+
+            foreach ($tahapan as $t) {
+                $sub = $poin->berkas->where('tahapan', $t)->pluck('subfolder')->filter()->unique()->values()->all();
+                $data['subfolders_tahapan'][$t] = $sub;
+                $data['pakai_subfolder_tahapan'][$t] = $sub !== [];
+            }
+
+            $this->evaluasi[$poin->id] = $data;
         }
     }
 
@@ -2886,7 +3227,7 @@ class PengisianKegiatan extends Component
                 // kegiatan.berkas = bukti capaian kegiatan yang tertaut ke poin ini
                 // (Bagian 2) — ikut tampil sebagai bukti realisasi, lihat
                 // RtlEvaluasi::buktiDariKegiatan().
-                return RtlEvaluasiModel::with(['periode', 'berkas', 'kegiatan.berkas', 'kegiatan.periode'])
+                return RtlEvaluasiModel::with(['periode', 'berkas', 'kegiatan.berkas', 'kegiatan.periode', 'salinanBukti'])
                     ->where('iku_id', $this->iku_id)
                     ->whereHas('periode', fn ($q) => $q->where('tahun', $this->tahun)->where('triwulan', $triwulanSekarang))
                     ->get();
@@ -4140,6 +4481,12 @@ class PengisianKegiatan extends Component
                         'tahapan_survei' => $tahapan,
                         'nama_folder_auto' => $namaFolderAuto,
                     ]);
+
+                    // Tautan RTL berubah/dilepas: salinan bukti lama di Evaluasi-RTL poin
+                    // sebelumnya dibuang ke Sampah, lalu disalin ke poin yang baru (bila ada).
+                    if ($kegiatan->wasChanged('rtl_evaluasi_id')) {
+                        app(SinkronBuktiRtlService::class)->sinkronkanKegiatan($kegiatan);
+                    }
                 } else {
                     $kegiatan = Kegiatan::create([
                         'iku_id' => $this->iku_id,
@@ -4290,12 +4637,18 @@ class PengisianKegiatan extends Component
             foreach (array_values($data['bukti']) as $fi => $file) {
                 $namaBerkas = $this->namaBuktiBaruAtauDefault($file, $this->namaDefaultBuktiBaru($namaBerkasDasar, $jumlahBuktiLama, $fi, count($data['bukti'])));
                 $path = $file->store('bukti-evaluasi-rtl', 'local');
+                $subfolder = $this->subfolderBerkasBaruRtl((int) $rtlId, $file);
 
                 $berkas = Berkas::create([
                     'ref_id' => $poin->id,
                     'ref_type' => RtlEvaluasiModel::class,
                     'kategori' => 'evaluasi_rtl',
                     'nama_file' => $namaBerkas.'.pdf',
+                    // Tahapan & subfolder tujuan (Evaluasi-RTL/<poin>/<tahapan>/<subfolder>),
+                    // dibaca ulang Berkas::unggahKeDrive() — juga saat dicoba lagi.
+                    'tahapan' => $this->tahapanBerkasBaruRtl((int) $rtlId, $file),
+                    'subfolder' => $subfolder !== '' ? $subfolder : null,
+                    'periode_id' => $periode->id,
                     'path' => $path,
                     'status_verifikasi' => 'menunggu',
                 ]);

@@ -20,7 +20,9 @@ use Tests\TestCase;
 /**
  * Bukti capaian kegiatan (Bagian 2) yang tertaut ke poin RTL tampil sebagai bukti
  * realisasi poin itu di Evaluasi RTL (Bagian 4) lewat relasi kegiatan.rtl_evaluasi_id —
- * berkas yang SAMA, bukan salinan — dan tahapan tidak pernah menggantikan nama kegiatan.
+ * baris berkas yang SAMA (satu status verifikasi); salinan fisiknya di folder
+ * Evaluasi-RTL dicatat terpisah di salinan_bukti_rtl (lihat SalinanBuktiRtlTest) —
+ * dan tahapan tidak pernah menggantikan nama kegiatan.
  */
 class SinkronBuktiKegiatanRtlTest extends TestCase
 {
@@ -113,8 +115,8 @@ class SinkronBuktiKegiatanRtlTest extends TestCase
             ->assertSee('Dari Bukti Capaian Kegiatan (Bagian 2)')
             ->assertSee('undangan.pdf')
             ->assertSee('daftar hadir.pdf')
-            ->assertDontSeeHtml('wire:model="evaluasi.'.$this->poin->id.'.bukti"')
-            ->assertSeeHtml('wire:model="evaluasi.'.$this->poinLain->id.'.bukti"');
+            ->assertDontSeeHtml('wire:model="unggahRtl.'.$this->poin->id.'.0.0"')
+            ->assertSeeHtml('wire:model="unggahRtl.'.$this->poinLain->id.'.0.0"');
 
         $this->assertSame(2, Berkas::count());
     }
@@ -175,7 +177,7 @@ class SinkronBuktiKegiatanRtlTest extends TestCase
         $this->form(8)
             ->assertSee('bukti juli.pdf')
             ->assertSee('diunggah di isian bulan Juli')
-            ->assertDontSeeHtml('wire:model="evaluasi.'.$this->poin->id.'.bukti"');
+            ->assertDontSeeHtml('wire:model="unggahRtl.'.$this->poin->id.'.0.0"');
     }
 
     /** Skenario 3 — uraian disunting: tautan RTL (berbasis ID) tidak putus. */
@@ -210,7 +212,7 @@ class SinkronBuktiKegiatanRtlTest extends TestCase
         $this->assertSame(0, $this->poinLain->buktiKegiatan()->count());
         $this->assertFalse($this->poinLain->sudahDievaluasi());
 
-        $this->form()->assertSeeHtml('wire:model="evaluasi.'.$this->poinLain->id.'.bukti"');
+        $this->form()->assertSeeHtml('wire:model="unggahRtl.'.$this->poinLain->id.'.0.0"');
     }
 
     /** Skenario 5 — unggah di Bagian 4 untuk poin yang tidak tertaut tetap milik poin RTL saja. */

@@ -121,6 +121,45 @@ class RtlEvaluasi extends Model
     }
 
     /**
+     * Letak salinan fisik bukti kegiatan tertaut di folder Evaluasi-RTL poin ini
+     * (lihat App\Services\SinkronBuktiRtlService) — hanya letak, bukan status.
+     */
+    public function salinanBukti(): HasMany
+    {
+        return $this->hasMany(SalinanBuktiRtl::class);
+    }
+
+    public const KESESUAIAN_KOSONG = 'kosong';
+
+    public const KESESUAIAN_SESUAI = 'sesuai';
+
+    public const KESESUAIAN_TIDAK_SESUAI = 'tidak_sesuai';
+
+    public const KESESUAIAN_MENUNGGU = 'menunggu';
+
+    /**
+     * Ringkasan kesesuaian sekumpulan bukti realisasi, dibaca langsung dari
+     * status_verifikasi tiap berkas (satu sumber status — bukti dari kegiatan memakai
+     * status berkas kegiatannya): "sesuai" hanya bila SEMUA sudah Sesuai, "tidak
+     * sesuai" bila ada satu saja yang Tidak Sesuai, selain itu "menunggu". TERPISAH
+     * dari status_verifikasi poin RTL (penilaian realisasi oleh Tim SAKIP) — bukti
+     * Sesuai tidak pernah otomatis membuat RTL-nya Sesuai.
+     *
+     * @param  iterable<Berkas>  $berkas
+     */
+    public static function kesesuaianBukti(iterable $berkas): string
+    {
+        $status = collect($berkas)->pluck('status_verifikasi');
+
+        return match (true) {
+            $status->isEmpty() => self::KESESUAIAN_KOSONG,
+            $status->contains('ditolak') => self::KESESUAIAN_TIDAK_SESUAI,
+            $status->every(fn ($s) => $s === 'terverifikasi') => self::KESESUAIAN_SESUAI,
+            default => self::KESESUAIAN_MENUNGGU,
+        };
+    }
+
+    /**
      * "Dievaluasi" berarti minimal satu bukti realisasi sudah ada — diunggah langsung
      * di Evaluasi RTL, ATAU bukti capaian kegiatan yang tertaut ke poin ini (lihat
      * buktiKegiatan()), supaya bukti yang sama tidak perlu diunggah dua kali. Tidak

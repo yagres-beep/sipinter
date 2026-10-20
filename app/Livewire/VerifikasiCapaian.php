@@ -14,6 +14,7 @@ use App\Models\KendalaSolusi;
 use App\Models\MasterIku;
 use App\Models\RincianN;
 use App\Models\RincianOutput;
+use App\Models\RiwayatVerifikasiBerkas;
 use App\Models\RtlEvaluasi;
 use App\Services\NotulaService;
 use Illuminate\Support\Collection;
@@ -890,8 +891,17 @@ class VerifikasiCapaian extends Component
         $periode = $this->capaian->periode;
 
         // kegiatan.berkas = bukti capaian kegiatan yang tertaut ke poin ini — ikut
-        // terhitung sebagai bukti realisasi (lihat RtlEvaluasi::sudahDievaluasi()).
-        return $this->cacheRtlSebelumnya = RtlEvaluasi::with(['berkas', 'kegiatan.berkas'])
+        // terhitung sebagai bukti realisasi (lihat RtlEvaluasi::sudahDievaluasi()),
+        // dengan status verifikasi berkas kegiatannya sendiri (satu sumber status).
+        // Kegiatan "draft" belum pernah diajukan, jadi buktinya belum boleh terlihat
+        // di sini — sama seperti kegiatanList().
+        return $this->cacheRtlSebelumnya = RtlEvaluasi::with([
+            'berkas',
+            'kegiatan' => fn ($q) => $q->where('status_dokumen', '!=', Kegiatan::STATUS_DRAFT),
+            'kegiatan.berkas',
+            'kegiatan.periode',
+            'salinanBukti',
+        ])
             ->where('iku_id', $this->capaian->iku_id)
             ->whereHas('periode', fn ($q) => $q->where('tahun', $periode->tahun)->where('triwulan', $periode->triwulan))
             ->get();
@@ -997,7 +1007,14 @@ class VerifikasiCapaian extends Component
 
         $berkas = $this->berkasList()->firstWhere('id', $berkasId);
 
-        if (! $berkas || $berkas->ref_type !== Kegiatan::class) {
+        // Hanya berkas milik isian IKU+periode ini — id dari browser tidak dipercaya.
+        // Bukti kegiatan bulan lain yang tampil di Evaluasi RTL diperiksa di verifikasi
+        // bulannya sendiri (statusnya tetap satu, milik berkas itu).
+        if (! $berkas) {
+            return false;
+        }
+
+        if ($berkas->ref_type !== Kegiatan::class) {
             return true;
         }
 
@@ -1024,13 +1041,19 @@ class VerifikasiCapaian extends Component
 
         $this->tandaiSedangDitangani();
 
-        Berkas::whereKey($berkasId)->update([
-            'status_verifikasi' => 'terverifikasi',
-            'catatan' => null,
-        ]);
+        // Satu baris berkas = satu status: bukti kegiatan yang juga tampil di Evaluasi
+        // RTL ikut berstatus sama di sana tanpa ditandai dua kali.
+        $this->berkasList()->firstWhere('id', $berkasId)->catatVerifikasi('terverifikasi', null, auth()->user());
 
+        $this->lupakanCacheBerkas();
+    }
+
+    /** Status berkas dibaca ulang di semua bagian (Kegiatan, Evaluasi RTL, Bagian Kustom). */
+    protected function lupakanCacheBerkas(): void
+    {
         $this->cacheBerkasKegiatan = null;
         $this->cacheBerkasBagianKustom = null;
+        $this->cacheRtlSebelumnya = null;
     }
 
     public function tandaiTolak(int $berkasId): void
@@ -1052,13 +1075,9 @@ class VerifikasiCapaian extends Component
 
         $this->tandaiSedangDitangani();
 
-        Berkas::whereKey($berkasId)->update([
-            'status_verifikasi' => 'ditolak',
-            'catatan' => $catatan,
-        ]);
+        $this->berkasList()->firstWhere('id', $berkasId)->catatVerifikasi('ditolak', $catatan, auth()->user());
 
-        $this->cacheBerkasKegiatan = null;
-        $this->cacheBerkasBagianKustom = null;
+        $this->lupakanCacheBerkas();
     }
 
     /**
@@ -2315,16 +2334,45 @@ class VerifikasiCapaian extends Component
         $kendalaSolusiList = $this->kendalaSolusiList();
 
         $bagianKustomList = $this->bagianKustomList();
+        $rtlSebelumnya = $this->rtlEvaluasiSebelumnya();
+        $berkasPerKegiatan = $kegiatanList->mapWithKeys(fn ($k) => [$k->id => $this->berkasUntukKegiatan($k->id)]);
+        $berkasPerBagianKustom = $bagianKustomList->mapWithKeys(fn ($p) => [$p->id => $this->berkasUntukBagianKustom($p->id)]);
+
+        // Satu modal pratinjau per berkas — termasuk bukti kegiatan BULAN LAIN yang
+        // tampil di Evaluasi RTL (hanya-lihat di sini), tanpa modal kembar untuk
+        // berkas yang sama yang tampil di dua bagian.
+        $semuaBerkas = $berkasPerKegiatan->flatten(1)
+            ->concat($rtlSebelumnya->flatMap->berkas)
+            ->concat($berkasPerBagianKustom->flatten(1))
+            ->concat($rtlSebelumnya->flatMap(fn ($poin) => $poin->buktiDariKegiatan()->pluck('berkas')))
+            ->unique('id')
+            ->values();
+
+        // berkas id => [poin RTL, kegiatan asal] untuk bukti kegiatan yang juga menjadi
+        // bukti realisasi RTL — keterangan di modal & dasar status hanya-lihat.
+        $rtlPerBerkas = [];
+        foreach ($rtlSebelumnya as $poin) {
+            foreach ($poin->buktiDariKegiatan() as $tertaut) {
+                $rtlPerBerkas[$tertaut['berkas']->id] = ['poin' => $poin, 'kegiatan' => $tertaut['kegiatan']];
+            }
+        }
 
         return view('livewire.verifikasi-capaian', [
+            'rtlPerBerkas' => $rtlPerBerkas,
             'kegiatanList' => $kegiatanList,
             'kendalaSolusiList' => $kendalaSolusiList,
-            'rtlSebelumnya' => $this->rtlEvaluasiSebelumnya(),
+            'rtlSebelumnya' => $rtlSebelumnya,
             'rtlBerikutnya' => $this->rtlBerikutnyaBaruDitetapkan(),
             'daftarTimPic' => MasterIku::daftarTimGabungan(),
-            'berkasPerKegiatan' => $kegiatanList->mapWithKeys(fn ($k) => [$k->id => $this->berkasUntukKegiatan($k->id)]),
+            'berkasPerKegiatan' => $berkasPerKegiatan,
+            'semuaBerkas' => $semuaBerkas,
+            'riwayatVerifikasiBerkas' => RiwayatVerifikasiBerkas::with('user')
+                ->whereIn('berkas_id', $semuaBerkas->pluck('id'))
+                ->latest('id')
+                ->get()
+                ->groupBy('berkas_id'),
             'bagianKustomList' => $bagianKustomList,
-            'berkasPerBagianKustom' => $bagianKustomList->mapWithKeys(fn ($p) => [$p->id => $this->berkasUntukBagianKustom($p->id)]),
+            'berkasPerBagianKustom' => $berkasPerBagianKustom,
             'bisaDiverifikasi' => $this->bisaDiverifikasi(),
             'bisaDibukaKembali' => $this->bisaDibukaKembali(),
             'adaYangDitolak' => $this->adaYangDitolak(),
