@@ -191,7 +191,7 @@ class NamaCapaianNotulaTest extends TestCase
         // RO tanpa uraian milik kegiatan beruraian kosong jatuh ke penanda "…", tidak kosong.
         $xml = $this->xmlBagianSatu(false);
         $this->assertStringContainsString('2 laporan', $xml);
-        $this->assertStringContainsString('1. Survei Sakernas', $xml);
+        $this->assertNotNull($this->poinDaftar($xml, 'Survei Sakernas'));
     }
 
     public function test_docx_unduhan_dan_jalur_pratinjau_menampilkan_daftar_capaian_yang_sama(): void
@@ -203,11 +203,22 @@ class NamaCapaianNotulaTest extends TestCase
         foreach ([false, true] as $pratinjau) {
             $xml = $this->xmlBagianSatu($pratinjau);
 
-            $this->assertStringContainsString('1. Survei Sakernas', $xml);
-            $this->assertStringContainsString('2. Rapat koordinasi', $xml);
-            $this->assertSame(1, substr_count($xml, '. Survei Sakernas'), 'Kegiatan bertahapan harus tercatat sekali saja.');
+            // Poin ke-1 dan ke-2 satu daftar bernomor Word (numId sama, berurutan).
+            $pertama = $this->poinDaftar($xml, 'Survei Sakernas');
+            $this->assertNotNull($pertama);
+            $this->assertSame($pertama, $this->poinDaftar($xml, 'Rapat koordinasi'));
+            $this->assertLessThan(strpos($xml, '>Rapat koordinasi</w:t>'), strpos($xml, '>Survei Sakernas</w:t>'));
+            $this->assertSame(1, substr_count($xml, '>Survei Sakernas</w:t>'), 'Kegiatan bertahapan harus tercatat sekali saja.');
             $this->assertStringNotContainsString('Persiapan Survei Sakernas', $xml);
             $this->assertStringNotContainsString('Folder Persiapan Versi Saya', $xml);
         }
+    }
+
+    /** numId paragraf daftar bernomor yang berisi persis $teks, null bila bukan poin daftar. */
+    private function poinDaftar(string $xml, string $teks): ?int
+    {
+        return preg_match('/<w:numId w:val="(\d+)"\/><\/w:numPr>(?:(?!<\/w:p>).)*<w:t xml:space="preserve">'.preg_quote($teks, '/').'<\/w:t>/s', $xml, $m)
+            ? (int) $m[1]
+            : null;
     }
 }
