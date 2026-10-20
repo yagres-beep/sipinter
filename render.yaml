@@ -38,6 +38,8 @@ services:
         sync: false
       - key: SESSION_DRIVER
         value: database
+      - key: SESSION_LIFETIME
+        value: "480"
       - key: SESSION_SECURE_COOKIE
         value: "true"
       - key: CACHE_STORE

@@ -51,4 +51,22 @@ class PengaturanCapaianFormatTest extends TestCase
         $this->assertSame('75', PengaturanCapaian::formatAngka(75));
         $this->assertSame('75%', PengaturanCapaian::formatPersen(75));
     }
+
+    public function test_realisasi_kumulatif_selalu_lima_desimal_format_indonesia(): void
+    {
+        $this->assertSame('66,66667', PengaturanCapaian::formatRealisasiKumulatif(200 / 3));
+        $this->assertSame('62,50000', PengaturanCapaian::formatRealisasiKumulatif(62.5));
+        $this->assertSame('8,00000', PengaturanCapaian::formatRealisasiKumulatif(8));
+        $this->assertSame('100,00000', PengaturanCapaian::formatRealisasiKumulatif(100));
+        $this->assertSame('0,00000', PengaturanCapaian::formatRealisasiKumulatif(0));
+        $this->assertSame('-', PengaturanCapaian::formatRealisasiKumulatif(null));
+    }
+
+    public function test_format_angka_lain_tidak_ikut_berubah(): void
+    {
+        $this->assertSame('62.5', PengaturanCapaian::formatAngka(62.5));
+        $this->assertSame('8.00', PengaturanCapaian::formatAngka('8.00'));
+        $this->assertSame('100', PengaturanCapaian::formatAngka(100.0));
+        $this->assertSame('62.5%', PengaturanCapaian::formatPersen(62.5));
+    }
 }

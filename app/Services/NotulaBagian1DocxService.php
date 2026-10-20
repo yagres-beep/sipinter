@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\FolderConfig;
+use App\Models\Kegiatan;
 use App\Models\MasterIku;
 use App\Models\Notula;
 use App\Models\PengaturanCapaian;
@@ -568,7 +569,9 @@ class NotulaBagian1DocxService
         $this->set($sub, 'sasaran', $iku->sasaran);
         $this->set($sub, 'target_pk', PengaturanCapaian::formatAngka($rekap['target_pk'] ?? null));
         $this->set($sub, 'target_tw', PengaturanCapaian::formatAngka($rekap['target_tw'] ?? null));
-        $this->set($sub, 'realisasi_tw', PengaturanCapaian::formatAngka($rekap['realisasi'] ?? null));
+        $this->set($sub, 'realisasi_tw', PengaturanCapaian::formatRealisasiKumulatif($iku->pakaiRasio()
+            ? ($rekap['realisasi_kumulatif_persen'] ?? null)
+            : ($rekap['realisasi'] ?? null)));
         $this->set($sub, 'capaian_tw', PengaturanCapaian::formatPersen($rekap['capaian_tw'] ?? null));
         $this->set($sub, 'capaian_pk', PengaturanCapaian::formatPersen($rekap['capaian_pk'] ?? null));
 
@@ -579,7 +582,9 @@ class NotulaBagian1DocxService
         // (termasuk BerAKHLAK & yang punya proksi) -- kotak "Analisis Capaian Kinerja"
         // tidak lagi dirangkap jadi pertanyaan proksi seperti versi template lama.
         $analisis = trim((string) $capaian?->analisis_capaian);
-        $daftarKegiatan = $this->daftarBernomor($kegiatanIku->map(fn ($k) => $k->namaCapaian())->filter()->unique()->values());
+        // Nama kegiatan utama, satu kali per kegiatan walau dipisah ke beberapa tahapan
+        // (lihat Kegiatan::daftarNamaCapaian()) -- bukan nama folder tahapannya.
+        $daftarKegiatan = $this->daftarBernomor(Kegiatan::daftarNamaCapaian($kegiatanIku));
         // $daftarKegiatan SUDAH diawali "\n" sendiri (lihat daftarBernomor()) -- pemisahnya
         // cukup SATU "\n" lagi di sini supaya total ada baris kosong di antara narasi dan
         // daftar (bukan dua "\n\n" + "\n" bawaan yang bikin tiga baris kosong).

@@ -195,7 +195,7 @@
                     <tr class="muted">
                         <td title="Otomatis dihitung, BUKAN input — jumlah Realisasi X TW I s.d. TW ini (Realisasi X per TW dijumlahkan aplikasi), dibagi Realisasi Y × 100">↳ Realisasi Kumulatif (%) <span class="muted" style="font-weight:400">— otomatis, = (Σ Realisasi X s.d. TW ini) ÷ Y × 100</span></td>
                         @for ($tw = 1; $tw <= 4; $tw++)
-                            <td style="text-align:center">{{ \App\Models\PengaturanCapaian::formatAngka($capaianTahunan->realisasiKumulatif($tw)) }}</td>
+                            <td style="text-align:center">{{ \App\Models\PengaturanCapaian::formatRealisasiKumulatif($capaianTahunan->realisasiKumulatifPresisi($tw)) }}</td>
                         @endfor
                     </tr>
                 @else
@@ -223,7 +223,7 @@
                         <td>Realisasi <span class="muted" style="font-weight:400">(kumulatif s.d. TW ini)</span></td>
                         @for ($tw = 1; $tw <= 4; $tw++)
                             <td style="text-align:center">
-                                <input type="number" step="0.01" class="inp filled" style="width:100px;text-align:center" wire:model.live.debounce.400ms="realisasi_tw{{ $tw }}" title="Ketik angka KUMULATIF s.d. TW ini, bukan kontribusi TW ini saja — TW sesudahnya otomatis ikut disamakan (minimal sama dengan TW ini)">
+                                <input type="number" step="0.00001" class="inp filled" style="width:110px;text-align:center" wire:model.live.debounce.400ms="realisasi_tw{{ $tw }}" title="Ketik angka KUMULATIF s.d. TW ini, bukan kontribusi TW ini saja — TW sesudahnya otomatis ikut disamakan (minimal sama dengan TW ini)">
                                 @error("realisasi_tw{$tw}")
                                     <div style="color:var(--red);font-size:10.5px">{{ $message }}</div>
                                 @enderror
