@@ -7,7 +7,7 @@
         <div class="page-title">Detail Verifikasi — {{ $capaian->masterIku->kode }}</div>
         <div class="page-sub">
             {{ $capaian->masterIku->indikator }} · {{ $namaBulan[$capaian->periode->bulan - 1] }} {{ $capaian->periode->tahun }} ·
-            {{ $kegiatanList->count() }} kegiatan pendukung
+            {{ $kegiatanIndukList->count() }} kegiatan pendukung
         </div>
     </div>
 
@@ -312,29 +312,36 @@
             <div class="info">ℹ️ Uraian kegiatan bisa disunting bila ada salah ketik, lalu tandai sesuai/tidak sesuai. Klik tiap berkas untuk memeriksa &amp; menandai sesuai/tidak sesuai.</div>
         @endif
 
-        @php $infoInduk = $this->infoKegiatanInduk(); @endphp
-        @forelse ($kegiatanList as $kegiatan)
+        @forelse ($kegiatanIndukList as $induk)
             @php
-                $berkasKegiatan = $berkasPerKegiatan[$kegiatan->id] ?? collect();
+                // Satu kartu per kegiatan INDUK (VerifikasiCapaian::kegiatanIndukList()) —
+                // sama dengan daftar kegiatan di notula. Uraian ditandai sekali untuk
+                // seluruh tahapan (kunci isian = baris wakil); berkas & lokasi bukti
+                // dukung tetap per tahapan di bawahnya.
+                $kegiatan = $induk['wakil'];
+                $statusUraian = $induk['status_uraian'];
                 $bisaDikoreksi = $this->kegiatanBisaDikoreksi($kegiatan);
-                $induk = $infoInduk[$kegiatan->id] ?? null;
+                $statusDokumen = $induk['tahapan']->pluck('status_dokumen')->unique();
+                $perTahapan = $kegiatan->jenis === 'survei_sensus' || $induk['tahapan']->count() > 1;
             @endphp
             <div class="keg" wire:key="keg-{{ $kegiatan->id }}" @if (!$bisaDikoreksi) style="opacity:.8" @endif>
-                {{-- Nomor = kegiatan INDUK (Kegiatan::kelompokInduk()): tahapan-tahapan satu
-                     kegiatan berbagi nomor yang sama seperti di Isian Kegiatan, tahapannya
-                     tampil sebagai keterangan sekunder. Verifikasi tetap per baris tahapan. --}}
+                {{-- Nomor = kegiatan INDUK (Kegiatan::kelompokInduk()), sama seperti di Isian
+                     Kegiatan; tahapannya tampil sebagai keterangan sekunder. --}}
                 <div class="keg-head">
-                    <span class="t">Kegiatan {{ $induk['nomor'] ?? $loop->iteration }}</span>
-                    @if ($kegiatan->jenis === 'survei_sensus')
-                        <x-tahapan-kegiatan :tahapan="$kegiatan->tahapan_survei" />
+                    <span class="t">Kegiatan {{ $induk['nomor'] ?: $loop->iteration }}</span>
+                    @if ($statusDokumen->count() === 1)
+                        <x-badge-status :status="$statusDokumen->first()" />
                     @endif
-                    <x-badge-status :status="$kegiatan->status_dokumen" />
                     <span style="color:var(--muted);font-size:11.5px">
-                        {{ $kegiatan->jenis === 'survei_sensus' ? 'Pisah ke beberapa tahapan' : '1 folder (kegiatan)' }}
+                        @if ($kegiatan->jenis === 'survei_sensus')
+                            {{ $induk['tahapan']->count() > 1 ? $induk['tahapan']->count().' tahapan' : 'Pisah ke beberapa tahapan' }}
+                        @else
+                            1 folder (kegiatan)
+                        @endif
                     </span>
                 </div>
-                @if ($induk && $induk['uraian_berbeda'])
-                    <div class="fhint" style="margin:0 0 6px">ℹ️ Uraian tahapan-tahapan kegiatan ini berbeda. Di notula kegiatan ini tetap dicatat satu kali sebagai <b>{{ $induk['nama_utama'] }}</b>.</div>
+                @if ($induk['uraian_berbeda'])
+                    <div class="fhint" style="margin:0 0 6px">ℹ️ Uraian tahapan-tahapan kegiatan ini berbeda. Di notula kegiatan ini tetap dicatat satu kali sebagai <b>{{ $induk['nama_utama'] }}</b>. Uraian yang disunting di sini berlaku untuk semua tahapannya.</div>
                 @endif
                 {{-- Nama capaian = uraian kegiatan (Kegiatan::namaCapaian()), sama untuk semua
                      tahapan satu kegiatan; nama folder tahapan di bawahnya hanya lokasi bukti. --}}
@@ -343,23 +350,22 @@
                 @error("koreksiKegiatan.{$kegiatan->id}")
                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                 @enderror
-                <div style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-                    <span style="font-size:11.5px;color:var(--muted)">Lokasi bukti dukung:</span>
-                    <x-nama-folder :id="$kegiatan->id" :nama="$kegiatan->namaFolder()" :kustom="filled($kegiatan->nama_folder_kustom)" />
-                </div>
 
                 @if ($this->uraianBisaDiverifikasi($kegiatan->id))
-                    <div x-data="{ pendingMark: null }" style="margin-top:8px">
+                    {{-- data-tersimpan = status yang SUDAH tersimpan (bukan pendingMark) —
+                         dibaca CSS untuk membedakan pilihan sementara vs tersimpan dan
+                         memberi aksen "belum diverifikasi" pada kartu (lihat sipinter.css). --}}
+                    <div x-data="{ pendingMark: null }" style="margin-top:8px" data-tersimpan="{{ $statusUraian }}">
                         <div style="display:flex;gap:8px">
                             <button type="button" class="mark"
-                                :class="{ ok: pendingMark === 'ok' || (pendingMark === null && {{ $kegiatan->status_verifikasi_uraian === 'terverifikasi' ? 'true' : 'false' }}) }"
+                                :class="{ ok: pendingMark === 'ok' || (pendingMark === null && {{ $statusUraian === 'terverifikasi' ? 'true' : 'false' }}) }"
                                 @click="pendingMark = 'ok'"
                                 wire:click="tandaiUraianSesuai({{ $kegiatan->id }})" wire:loading.attr="disabled" wire:target="tandaiUraianSesuai({{ $kegiatan->id }}),tandaiUraianTolak({{ $kegiatan->id }})">
                                 <span wire:loading.remove wire:target="tandaiUraianSesuai({{ $kegiatan->id }})">✓ Sesuai</span>
                                 <span wire:loading wire:target="tandaiUraianSesuai({{ $kegiatan->id }})"><i class="spin"></i></span>
                             </button>
                             <button type="button" class="mark"
-                                :class="{ no: pendingMark === 'no' || (pendingMark === null && {{ $kegiatan->status_verifikasi_uraian === 'ditolak' ? 'true' : 'false' }}) }"
+                                :class="{ no: pendingMark === 'no' || (pendingMark === null && {{ $statusUraian === 'ditolak' ? 'true' : 'false' }}) }"
                                 @click="pendingMark = 'no'"
                                 wire:click="tandaiUraianTolak({{ $kegiatan->id }})" wire:loading.attr="disabled" wire:target="tandaiUraianSesuai({{ $kegiatan->id }}),tandaiUraianTolak({{ $kegiatan->id }})">
                                 <span wire:loading.remove wire:target="tandaiUraianTolak({{ $kegiatan->id }})">✕ Tidak Sesuai</span>
@@ -367,55 +373,74 @@
                             </button>
                         </div>
                         <div class="field" style="margin-top:10px;margin-bottom:0" x-cloak
-                            x-show="pendingMark === 'no' || (pendingMark === null && {{ $kegiatan->status_verifikasi_uraian === 'ditolak' ? 'true' : 'false' }})">
+                            x-show="pendingMark === 'no' || (pendingMark === null && {{ $statusUraian === 'ditolak' ? 'true' : 'false' }})">
                             <label style="font-size:11.5px">Catatan (wajib bila tidak sesuai)</label>
-                            <textarea class="inp filled" style="height:auto;display:block;font-size:11.5px" rows="2"
+                            <textarea class="inp filled wajib @error('catatanUraian.'.$kegiatan->id) is-invalid @enderror" aria-required="true" style="height:auto;display:block;font-size:11.5px" rows="2"
                                 wire:model="catatanUraian.{{ $kegiatan->id }}" placeholder="mis. Uraian belum menjelaskan output yang dihasilkan"
-                                x-on:blur="if (pendingMark === 'no' || (pendingMark === null && {{ $kegiatan->status_verifikasi_uraian === 'ditolak' ? 'true' : 'false' }})) $wire.tandaiUraianTolak({{ $kegiatan->id }})"></textarea>
+                                x-on:blur="if (pendingMark === 'no' || (pendingMark === null && {{ $statusUraian === 'ditolak' ? 'true' : 'false' }})) $wire.tandaiUraianTolak({{ $kegiatan->id }})"></textarea>
                             @error('catatanUraian.'.$kegiatan->id)
                                 <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                             @enderror
                         </div>
 
                         <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"
-                            x-show="pendingMark !== null || {{ $kegiatan->status_verifikasi_uraian !== 'menunggu' ? 'true' : 'false' }}">
+                            x-show="pendingMark !== null || {{ $statusUraian !== 'menunggu' ? 'true' : 'false' }}">
                             <button type="button" class="btn btn-ghost btn-sm"
-                                x-on:click="(pendingMark === 'no' || (pendingMark === null && {{ $kegiatan->status_verifikasi_uraian === 'ditolak' ? 'true' : 'false' }})) ? $wire.tandaiUraianTolak({{ $kegiatan->id }}) : $wire.tandaiUraianSesuai({{ $kegiatan->id }})"
+                                x-on:click="(pendingMark === 'no' || (pendingMark === null && {{ $statusUraian === 'ditolak' ? 'true' : 'false' }})) ? $wire.tandaiUraianTolak({{ $kegiatan->id }}) : $wire.tandaiUraianSesuai({{ $kegiatan->id }})"
                                 wire:loading.attr="disabled" wire:target="tandaiUraianSesuai({{ $kegiatan->id }}),tandaiUraianTolak({{ $kegiatan->id }})">
                                 <span wire:loading.remove wire:target="tandaiUraianSesuai({{ $kegiatan->id }}),tandaiUraianTolak({{ $kegiatan->id }})">💾 Simpan Verifikasi</span>
                                 <span wire:loading wire:target="tandaiUraianSesuai({{ $kegiatan->id }}),tandaiUraianTolak({{ $kegiatan->id }})"><i class="spin"></i> Menyimpan…</span>
                             </button>
-                            @if ($kegiatan->status_verifikasi_uraian !== 'menunggu' && !$errors->has('catatanUraian.'.$kegiatan->id))
-                                <span style="color:#16a34a;font-size:11.5px">✓ Tersimpan</span>
+                            @if ($statusUraian !== 'menunggu' && !$errors->has('catatanUraian.'.$kegiatan->id))
+                                <span style="color:var(--green);font-size:11.5px;font-weight:600">✓ Tersimpan</span>
                             @endif
                         </div>
                     </div>
-                @elseif ($kegiatan->catatan_uraian)
+                @elseif ($induk['catatan_uraian'])
                     <div class="field" style="margin-top:6px;margin-bottom:0">
                         <label style="font-size:11.5px">Catatan</label>
-                        <p style="font-size:12.5px;color:var(--muted);margin:0">{{ $kegiatan->catatan_uraian }}</p>
+                        <p style="font-size:12.5px;color:var(--muted);margin:0">{{ $induk['catatan_uraian'] }}</p>
                     </div>
                 @endif
 
-                @if ($kegiatan->catatan_bukti_dihapus)
-                    <div class="info red" style="margin-top:8px;font-size:11.5px">
-                        🗑️ <b>Ketua Tim menghapus bukti sebelumnya</b> — alasan penolakan sebelumnya: "{{ $kegiatan->catatan_bukti_dihapus }}". Periksa apakah bukti pengganti di bawah sudah memperbaikinya.
-                    </div>
-                @endif
+                {{-- Bukti dukung per baris tahapan: folder Drive, berkas & riwayat
+                     penghapusan bukti tetap milik tahapannya masing-masing. --}}
+                @foreach ($induk['tahapan'] as $tahap)
+                    <div wire:key="keg-tahap-{{ $tahap->id }}" @if ($perTahapan) style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)" @endif>
+                        @if ($perTahapan)
+                            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                                <x-tahapan-kegiatan :tahapan="$tahap->tahapan_survei" />
+                                @if ($statusDokumen->count() > 1)
+                                    <x-badge-status :status="$tahap->status_dokumen" />
+                                @endif
+                            </div>
+                        @endif
+                        <div style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                            <span style="font-size:11.5px;color:var(--muted)">Lokasi bukti dukung:</span>
+                            <x-nama-folder :id="$tahap->id" :nama="$tahap->namaFolder()" :kustom="filled($tahap->nama_folder_kustom)" />
+                        </div>
 
-                @forelse ($berkasKegiatan as $file)
-                    <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}" style="margin-top:8px" wire:key="berkas-{{ $file->id }}">
-                        <span class="nm">
-                            <x-nama-berkas :id="$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" :status="$file->status_verifikasi" />
-                            @if ($file->status_verifikasi === 'ditolak')
-                                <span class="sub" style="color:var(--red)">Tidak Sesuai</span>
-                            @endif
-                        </span>
-                        <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file->id }}">🔍 Periksa</button>
+                        @if ($tahap->catatan_bukti_dihapus)
+                            <div class="info red" style="margin-top:8px;font-size:11.5px">
+                                🗑️ <b>Ketua Tim menghapus bukti sebelumnya</b> — alasan penolakan sebelumnya: "{{ $tahap->catatan_bukti_dihapus }}". Periksa apakah bukti pengganti di bawah sudah memperbaikinya.
+                            </div>
+                        @endif
+
+                        @forelse ($berkasPerKegiatan[$tahap->id] ?? collect() as $file)
+                            <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}" style="margin-top:8px" wire:key="berkas-{{ $file->id }}">
+                                <span class="nm">
+                                    <x-nama-berkas :id="$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" :status="$file->status_verifikasi" />
+                                    @if ($file->status_verifikasi === 'ditolak')
+                                        <span class="sub" style="color:var(--red)">Tidak Sesuai</span>
+                                    @endif
+                                </span>
+                                <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file->id }}">🔍 Periksa</button>
+                            </div>
+                        @empty
+                            <p style="color:var(--muted);font-size:12.5px;margin-top:8px">Belum ada bukti diunggah.</p>
+                        @endforelse
                     </div>
-                @empty
-                    <p style="color:var(--muted);font-size:12.5px;margin-top:8px">Belum ada bukti diunggah.</p>
-                @endforelse
+                @endforeach
             </div>
         @empty
             <p style="color:var(--muted);font-size:13px">Belum ada kegiatan.</p>
@@ -543,16 +568,16 @@
                             wire:click="hapusKendala({{ $ks->id }})" wire:confirm="Hapus pasangan kendala & solusi ini?"
                             wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="hapusKendala({{ $ks->id }})">🗑</button>
                     @endif
-                    <x-badge-status style="position:absolute;top:-9px;right:12px" :status="$ks->status_verifikasi === 'terverifikasi' ? 'diverifikasi' : ($ks->status_verifikasi === 'ditolak' ? 'dikembalikan' : 'diajukan')" :label="$ks->status_verifikasi === 'terverifikasi' ? 'Sesuai' : ($ks->status_verifikasi === 'ditolak' ? 'Tidak Sesuai' : 'Menunggu')" />
+                    <x-badge-status style="position:absolute;top:-9px;right:12px" :status="$ks->status_verifikasi === 'terverifikasi' ? 'diverifikasi' : ($ks->status_verifikasi === 'ditolak' ? 'dikembalikan' : 'menunggu')" :label="$ks->status_verifikasi === 'terverifikasi' ? '✓ Sesuai' : ($ks->status_verifikasi === 'ditolak' ? '✕ Tidak Sesuai' : '⏳ Belum Diverifikasi')" />
 
                     <div class="field" style="margin-bottom:0">
                         <label style="font-size:11.5px">Kendala</label>
-                        <textarea class="inp filled" style="height:auto;display:block;font-style:italic" rows="2" wire:model.live.blur="koreksiKendala.{{ $ks->id }}.kendala"></textarea>
+                        <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model.live.blur="koreksiKendala.{{ $ks->id }}.kendala"></textarea>
                     </div>
                     @if ($ks->solusi || $bisaDiverifikasi)
                         <div class="field" style="margin-bottom:0">
                             <label style="font-size:11.5px">Solusi</label>
-                            <textarea class="inp filled" style="height:auto;display:block;font-style:italic" rows="2" wire:model.live.blur="koreksiKendala.{{ $ks->id }}.solusi"></textarea>
+                            <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model.live.blur="koreksiKendala.{{ $ks->id }}.solusi"></textarea>
                         </div>
                     @endif
 
@@ -562,7 +587,7 @@
                             tidak terasa perlu diklik berkali-kali sebelum berubah warna. Begitu respons
                             server datang, render ulang dari status_verifikasi tetap jadi sumber
                             kebenaran akhir (fallback saat pendingMark masih null, mis. buka modal baru). --}}
-                        <div style="grid-column:1/-1" x-data="{ pendingMark: null }">
+                        <div style="grid-column:1/-1" x-data="{ pendingMark: null }" data-tersimpan="{{ $ks->status_verifikasi }}">
                             <div style="display:flex;gap:8px;margin-top:6px">
                                 <button type="button" class="mark"
                                     :class="{ ok: pendingMark === 'ok' || (pendingMark === null && {{ $ks->status_verifikasi === 'terverifikasi' ? 'true' : 'false' }}) }"
@@ -586,7 +611,7 @@
                                     diisi (lihat catatan yang sama pada catatanBerkas di atas) — tanpa ini
                                     klik "Tidak Sesuai" saat catatan kosong tampak "berhasil" (tombolnya
                                     sudah merah lewat pendingMark optimistic) padahal belum tersimpan. --}}
-                                <textarea class="inp filled" style="height:auto;display:block;font-size:11.5px" rows="2"
+                                <textarea class="inp filled wajib @error('catatanKendala.'.$ks->id) is-invalid @enderror" aria-required="true" style="height:auto;display:block;font-size:11.5px" rows="2"
                                     wire:model="catatanKendala.{{ $ks->id }}" placeholder="mis. Solusi belum konkret / tidak relevan dengan kendala"
                                     x-on:blur="if (pendingMark === 'no' || (pendingMark === null && {{ $ks->status_verifikasi === 'ditolak' ? 'true' : 'false' }})) $wire.tandaiKendalaTolak({{ $ks->id }})"></textarea>
                                 @error('catatanKendala.'.$ks->id)
@@ -603,7 +628,7 @@
                                     <span wire:loading wire:target="tandaiKendalaSesuai({{ $ks->id }}),tandaiKendalaTolak({{ $ks->id }})"><i class="spin"></i> Menyimpan…</span>
                                 </button>
                                 @if ($ks->status_verifikasi !== 'menunggu' && !$errors->has('catatanKendala.'.$ks->id))
-                                    <span style="color:#16a34a;font-size:11.5px">✓ Tersimpan</span>
+                                    <span style="color:var(--green);font-size:11.5px;font-weight:600">✓ Tersimpan</span>
                                 @endif
                             </div>
                         </div>
@@ -664,7 +689,7 @@
                         @endforeach
 
                         @if ($this->bagianKustomBisaDiverifikasi($poin->id))
-                            <div x-data="{ pendingMark: null }" style="margin-bottom:10px">
+                            <div x-data="{ pendingMark: null }" style="margin-bottom:10px" data-tersimpan="{{ $poin->status_verifikasi }}">
                                 <div style="display:flex;gap:8px">
                                     <button type="button" class="mark"
                                         :class="{ ok: pendingMark === 'ok' || (pendingMark === null && {{ $poin->status_verifikasi === 'terverifikasi' ? 'true' : 'false' }}) }"
@@ -684,7 +709,7 @@
                                 <div class="field" style="margin-top:10px;margin-bottom:0" x-cloak
                                     x-show="pendingMark === 'no' || (pendingMark === null && {{ $poin->status_verifikasi === 'ditolak' ? 'true' : 'false' }})">
                                     <label style="font-size:11.5px">Catatan (wajib bila tidak sesuai)</label>
-                                    <textarea class="inp filled" style="height:auto;display:block;font-size:11.5px" rows="2"
+                                    <textarea class="inp filled wajib @error('catatanBagianKustom.'.$poin->id) is-invalid @enderror" aria-required="true" style="height:auto;display:block;font-size:11.5px" rows="2"
                                         wire:model="catatanBagianKustom.{{ $poin->id }}" placeholder="mis. Narasi belum menjelaskan tindak lanjut yang dilakukan"
                                         x-on:blur="if (pendingMark === 'no' || (pendingMark === null && {{ $poin->status_verifikasi === 'ditolak' ? 'true' : 'false' }})) $wire.tandaiBagianKustomTolak({{ $poin->id }})"></textarea>
                                     @error('catatanBagianKustom.'.$poin->id)
@@ -701,7 +726,7 @@
                                         <span wire:loading wire:target="tandaiBagianKustomSesuai({{ $poin->id }}),tandaiBagianKustomTolak({{ $poin->id }})"><i class="spin"></i> Menyimpan…</span>
                                     </button>
                                     @if ($poin->status_verifikasi !== 'menunggu' && !$errors->has('catatanBagianKustom.'.$poin->id))
-                                        <span style="color:#16a34a;font-size:11.5px">✓ Tersimpan</span>
+                                        <span style="color:var(--green);font-size:11.5px;font-weight:600">✓ Tersimpan</span>
                                     @endif
                                 </div>
                             </div>
@@ -772,7 +797,7 @@
                         ></iframe>
                         <a href="{{ route('berkas.show', $file) }}" target="_blank" class="btn btn-ghost btn-sm" style="margin-top:10px;align-self:flex-start">🔗 Buka di tab baru / layar penuh</a>
                     </div>
-                    <div class="verify-panel" x-data="{ pendingMark: null }">
+                    <div class="verify-panel" x-data="{ pendingMark: null }" data-tersimpan="{{ $file->status_verifikasi }}">
                         <div class="vp-t">Verifikasi Berkas</div>
                         @if ($this->berkasBisaDiverifikasi($file->id))
                             {{-- pendingMark = pilihan terakhir yg DIKLIK, ditampilkan LANGSUNG (optimistic)
@@ -804,7 +829,7 @@
                                     penandaannya sudah tersimpan padahal belum. @blur di sini menyusulkan
                                     ulang tandaiTolak() begitu catatan selesai diisi (fokus pindah, termasuk
                                     saat modal ditutup) supaya tidak perlu klik "Tidak Sesuai" dua kali. --}}
-                                <textarea class="inp filled" style="height:auto;display:block;min-height:56px;font-size:11.5px" rows="3"
+                                <textarea class="inp filled wajib @error('catatanBerkas.'.$file->id) is-invalid @enderror" aria-required="true" style="height:auto;display:block;min-height:56px;font-size:11.5px" rows="3"
                                     wire:model="catatanBerkas.{{ $file->id }}" placeholder="mis. Bukti belum menunjukkan tanggal pelaksanaan…"
                                     :style="pendingMark === 'no' && {{ $file->status_verifikasi !== 'ditolak' ? 'true' : 'false' }} ? 'border-color:var(--red)' : ''"
                                     x-on:blur="if (pendingMark === 'no' || (pendingMark === null && {{ $file->status_verifikasi === 'ditolak' ? 'true' : 'false' }})) $wire.tandaiTolak({{ $file->id }})"></textarea>
@@ -832,7 +857,7 @@
                                     <span wire:loading wire:target="tandaiSesuai({{ $file->id }}),tandaiTolak({{ $file->id }})"><i class="spin"></i> Menyimpan…</span>
                                 </button>
                                 @if ($file->status_verifikasi !== 'menunggu' && !$errors->has('catatanBerkas.'.$file->id))
-                                    <span style="color:#16a34a;font-size:11.5px">✓ Tersimpan</span>
+                                    <span style="color:var(--green);font-size:11.5px;font-weight:600">✓ Tersimpan</span>
                                 @endif
                             </div>
                         @else
@@ -912,16 +937,16 @@
 
                     <div class="field" style="margin-bottom:10px">
                         <label>Rencana Kegiatan</label>
-                        <textarea class="inp filled" style="height:auto;display:block;font-style:italic" rows="2" wire:model.live.blur="koreksiRtlBerikutnya.{{ $poin->id }}">{{ $this->koreksiRtlBerikutnya[$poin->id] ?? $poin->rtl_teks }}</textarea>
+                        <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model.live.blur="koreksiRtlBerikutnya.{{ $poin->id }}">{{ $this->koreksiRtlBerikutnya[$poin->id] ?? $poin->rtl_teks }}</textarea>
                         @error("koreksiRtlBerikutnya.{$poin->id}")
                             <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                         @enderror
                     </div>
 
-                    <x-badge-status :status="$poin->status_verifikasi === 'terverifikasi' ? 'disetujui' : ($poin->status_verifikasi === 'ditolak' ? 'dikembalikan' : 'diajukan')" :label="$poin->status_verifikasi === 'terverifikasi' ? 'Sesuai' : ($poin->status_verifikasi === 'ditolak' ? 'Tidak Sesuai' : 'Menunggu')" />
+                    <x-badge-status :status="$poin->status_verifikasi === 'terverifikasi' ? 'disetujui' : ($poin->status_verifikasi === 'ditolak' ? 'dikembalikan' : 'menunggu')" :label="$poin->status_verifikasi === 'terverifikasi' ? '✓ Sesuai' : ($poin->status_verifikasi === 'ditolak' ? '✕ Tidak Sesuai' : '⏳ Belum Diverifikasi')" />
 
                     @if ($this->rtlBerikutnyaBisaDiverifikasi($poin->id))
-                        <div x-data="{ pendingMark: null }" style="margin-top:10px">
+                        <div x-data="{ pendingMark: null }" style="margin-top:10px" data-tersimpan="{{ $poin->status_verifikasi }}">
                             <div style="display:flex;gap:8px">
                                 <button type="button" class="mark"
                                     :class="{ ok: pendingMark === 'ok' || (pendingMark === null && {{ $poin->status_verifikasi === 'terverifikasi' ? 'true' : 'false' }}) }"
@@ -942,7 +967,7 @@
                             <div class="field" style="margin-top:10px;margin-bottom:0" x-cloak
                                 x-show="pendingMark === 'no' || (pendingMark === null && {{ $poin->status_verifikasi === 'ditolak' ? 'true' : 'false' }})">
                                 <label style="font-size:11.5px">Catatan (wajib bila tidak sesuai)</label>
-                                <textarea class="inp filled" style="height:auto;display:block;font-size:11.5px" rows="2"
+                                <textarea class="inp filled wajib @error('catatanRtlBerikutnya.'.$poin->id) is-invalid @enderror" aria-required="true" style="height:auto;display:block;font-size:11.5px" rows="2"
                                     wire:model="catatanRtlBerikutnya.{{ $poin->id }}" placeholder="mis. Rencana belum spesifik/tidak jelas PIC-nya"
                                     x-on:blur="if (pendingMark === 'no' || (pendingMark === null && {{ $poin->status_verifikasi === 'ditolak' ? 'true' : 'false' }})) $wire.tandaiRtlBerikutnyaTolak({{ $poin->id }})"></textarea>
                                 @error('catatanRtlBerikutnya.'.$poin->id)
@@ -959,7 +984,7 @@
                                     <span wire:loading wire:target="tandaiRtlBerikutnyaSesuai({{ $poin->id }}),tandaiRtlBerikutnyaTolak({{ $poin->id }})"><i class="spin"></i> Menyimpan…</span>
                                 </button>
                                 @if ($poin->status_verifikasi !== 'menunggu' && !$errors->has('catatanRtlBerikutnya.'.$poin->id))
-                                    <span style="color:#16a34a;font-size:11.5px">✓ Tersimpan</span>
+                                    <span style="color:var(--green);font-size:11.5px;font-weight:600">✓ Tersimpan</span>
                                 @endif
                             </div>
                         </div>
@@ -1003,7 +1028,7 @@
                     <div class="match-badge {{ $poin->sudahDievaluasi() ? 'mb-ok' : 'mb-warn' }}">{{ $poin->sudahDievaluasi() ? '✓' : '…' }}</div>
                     <div class="match-col">
                         <div class="mc-lbl">Realisasi Dilaporkan</div>
-                        <textarea class="inp filled" style="height:auto;display:block;font-style:italic;font-size:12px" rows="2"
+                        <textarea class="inp filled" style="height:auto;display:block;font-size:12px" rows="2"
                             wire:model.live.blur="koreksiRtlRealisasi.{{ $poin->id }}" placeholder="{{ $poin->sudahDievaluasi() ? '— tanpa keterangan teks, periksa bukti realisasi di bawah —' : '— belum dilaporkan —' }}"></textarea>
 
                         @if ($poin->sudahDievaluasi())
@@ -1013,7 +1038,7 @@
                         @endif
 
                         @if ($this->rtlBisaDiverifikasi($poin->id))
-                            <div x-data="{ pendingMark: null }" style="margin-top:8px">
+                            <div x-data="{ pendingMark: null }" style="margin-top:8px" data-tersimpan="{{ $poin->status_verifikasi }}">
                                 <div style="display:flex;gap:8px">
                                     <button type="button" class="mark"
                                         :class="{ ok: pendingMark === 'ok' || (pendingMark === null && {{ $poin->status_verifikasi === 'terverifikasi' ? 'true' : 'false' }}) }"
@@ -1034,7 +1059,7 @@
                                 <div class="field" style="margin-top:10px;margin-bottom:0" x-cloak
                                     x-show="pendingMark === 'no' || (pendingMark === null && {{ $poin->status_verifikasi === 'ditolak' ? 'true' : 'false' }})">
                                     <label style="font-size:11.5px">Catatan (wajib bila tidak sesuai)</label>
-                                    <textarea class="inp filled" style="height:auto;display:block;font-size:11.5px" rows="2"
+                                    <textarea class="inp filled wajib @error('catatanRtl.'.$poin->id) is-invalid @enderror" aria-required="true" style="height:auto;display:block;font-size:11.5px" rows="2"
                                         wire:model="catatanRtl.{{ $poin->id }}" placeholder="mis. Realisasi belum sesuai dengan RTL yang direncanakan"
                                         x-on:blur="if (pendingMark === 'no' || (pendingMark === null && {{ $poin->status_verifikasi === 'ditolak' ? 'true' : 'false' }})) $wire.tandaiRtlTolak({{ $poin->id }})"></textarea>
                                     @error('catatanRtl.'.$poin->id)
@@ -1051,7 +1076,7 @@
                                         <span wire:loading wire:target="tandaiRtlSesuai({{ $poin->id }}),tandaiRtlTolak({{ $poin->id }})"><i class="spin"></i> Menyimpan…</span>
                                     </button>
                                     @if ($poin->status_verifikasi !== 'menunggu' && !$errors->has('catatanRtl.'.$poin->id))
-                                        <span style="color:#16a34a;font-size:11.5px">✓ Tersimpan</span>
+                                        <span style="color:var(--green);font-size:11.5px;font-weight:600">✓ Tersimpan</span>
                                     @endif
                                 </div>
                             </div>

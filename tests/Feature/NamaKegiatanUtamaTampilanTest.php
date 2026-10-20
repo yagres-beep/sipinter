@@ -95,12 +95,14 @@ class NamaKegiatanUtamaTampilanTest extends TestCase
             ->assertDontSeeHtml('Capaian: <b>Lapangan Sakernas</b>')
             ->assertSeeInOrder(['Tahapan Persiapan', 'Tahapan Pelaksanaan', 'Tahapan Pengolahan']);
 
-        // Verifikasi tetap per baris tahapan: menandai satu tidak mengubah yang lain.
+        // Uraian = nama kegiatan induk: ditandai sekali untuk semua tahapan. Berkas
+        // tiap tahapan tetap ditandai sendiri-sendiri.
         $test->call('tandaiUraianSesuai', $kegiatan['pelaksanaan']->id)->assertHasNoErrors();
 
-        $this->assertSame('terverifikasi', $kegiatan['pelaksanaan']->fresh()->status_verifikasi_uraian);
-        $this->assertNotSame('terverifikasi', $kegiatan['persiapan']->fresh()->status_verifikasi_uraian);
-        $this->assertNotSame('terverifikasi', $kegiatan['pengolahan']->fresh()->status_verifikasi_uraian);
+        foreach ($kegiatan as $k) {
+            $this->assertSame('terverifikasi', $k->fresh()->status_verifikasi_uraian);
+        }
+        $this->assertSame(3, Berkas::where('status_verifikasi', 'menunggu')->count());
 
         // Data lama tidak diubah: record, nama folder, folder Drive, dan berkas tetap.
         $this->assertSame(3, Kegiatan::count());
