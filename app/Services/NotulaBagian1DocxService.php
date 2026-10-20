@@ -73,6 +73,29 @@ class NotulaBagian1DocxService
     private bool $untukPratinjauHtml = false;
 
     /**
+     * abstractNum penomoran Word yang ditambahkan ke numbering.xml (lihat
+     * tambahDefinisiPenomoran()) -- ID tinggi supaya tidak bentrok dengan penomoran
+     * bawaan template. Tiap daftar bernomor memakai <w:num> sendiri (numId mulai
+     * NUM_ID_AWAL) supaya nomornya mulai dari 1 lagi; daftar butir cukup satu numId.
+     */
+    private const ABSTRAK_ANGKA = 900;
+
+    private const ABSTRAK_BUTIR = 901;
+
+    private const NUM_ID_BUTIR = 900;
+
+    private const NUM_ID_AWAL = 901;
+
+    /**
+     * Daftar bernomor yang dipakai di generate() TERAKHIR: numId => nomor awal.
+     *
+     * @var array<int, int>
+     */
+    private array $daftarAngka = [];
+
+    private bool $adaDaftarButir = false;
+
+    /**
      * Teks penanda rumus ke-$i -- TANPA spasi supaya tidak dipatahkan LibreOffice
      * saat membungkus baris HTML hasil ekspornya.
      */
@@ -128,6 +151,8 @@ class NotulaBagian1DocxService
     {
         $this->formulaUrutan = [];
         $this->untukPratinjauHtml = $untukPratinjauHtml;
+        $this->daftarAngka = [];
+        $this->adaDaftarButir = false;
 
         $templatePath = $this->resolveTemplatePath();
 
@@ -162,6 +187,7 @@ class NotulaBagian1DocxService
             // berupa arsip ZIP (.docx) yang utuh.
             try {
                 $processor->saveAs($outputPath);
+                $this->tambahDefinisiPenomoran($outputPath);
             } catch (Throwable $e) {
                 throw new RuntimeException('Berkas Bagian I (.docx) gagal ditulis: '.$e->getMessage(), 0, $e);
             }
@@ -385,6 +411,222 @@ class NotulaBagian1DocxService
     }
 
     /**
+     * Seperti set(), tapi baris "1. ..." dan "• ..." dicetak sebagai DAFTAR WORD
+     * SUNGGUHAN (paragraf bernomor/berbutir dengan indentasi gantung, <w:numPr>) --
+     * bukan teks "1. " biasa dipisah <w:br/>, yang baris lanjutannya tidak menjorok
+     * sejajar teks poinnya. Paragraf tempat macro berada dipecah: teks sebelum macro
+     * (mis. label "Kendala :") tetap di paragraf pertama, tiap baris nilai jadi
+     * paragrafnya sendiri dengan pPr/rPr paragraf & run macro aslinya. Nilai tanpa
+     * satu pun baris daftar jatuh ke set() biasa (perilaku lama).
+     */
+    private function setBerdaftar(TemplateProcessor $p, string $nama, ?string $nilai): void
+    {
+        $bersih = $nilai !== null ? rtrim($nilai) : '';
+        $baris = $bersih !== '' ? preg_split('/\R/u', $bersih) : [];
+        if (! collect($baris)->contains(fn (string $b) => $this->jenisBaris($b) !== null)) {
+            $this->set($p, $nama, $nilai);
+
+            return;
+        }
+
+        $macro = '{{'.$nama.'}}';
+        $xml = $this->getMainPart($p);
+        $offset = 0;
+        while (($pos = strpos($xml, $macro, $offset)) !== false) {
+            [$awal, $akhir] = $this->elementBounds($xml, $pos, 'p');
+            $baru = $this->pecahParagrafDaftar(substr($xml, $awal, $akhir - $awal), $macro, $baris);
+            $xml = substr($xml, 0, $awal).$baru.substr($xml, $akhir);
+            $offset = $awal + strlen($baru);
+        }
+        $this->setMainPart($p, $xml);
+    }
+
+    /**
+     * ['angka', teks, nomor] untuk "3. teks", ['butir', teks, 0] untuk "• teks",
+     * null untuk baris biasa.
+     *
+     * @return array{0: string, 1: string, 2: int}|null
+     */
+    private function jenisBaris(string $baris): ?array
+    {
+        if (preg_match('/^\s*(\d{1,3})[.)]\s+(\S.*)$/u', $baris, $m)) {
+            return ['angka', trim($m[2]), (int) $m[1]];
+        }
+        if (preg_match('/^\s*[•●▪◦]\s*(\S.*)$/u', $baris, $m)) {
+            return ['butir', trim($m[1]), 0];
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  list<string>  $baris
+     */
+    private function pecahParagrafDaftar(string $pXml, string $macro, array $baris): string
+    {
+        preg_match('#^<w:p\b[^>]*>(<w:pPr>.*?</w:pPr>|<w:pPr/>)?(.*)</w:p>$#s', $pXml, $m);
+        $pPr = $m[1] ?? '';
+        $isi = $m[2] ?? '';
+
+        $posMacro = strpos($isi, $macro);
+        $runAwal = $this->posisiTagTerakhir(substr($isi, 0, $posMacro), 'w:r') ?? 0;
+        $runAkhir = strpos($isi, '</w:r>', $posMacro);
+        $runAkhir = $runAkhir === false ? strlen($isi) : $runAkhir + strlen('</w:r>');
+        $run = substr($isi, $runAwal, $runAkhir - $runAwal);
+        $rPr = preg_match('#^<w:r\b[^>]*>(<w:rPr>.*?</w:rPr>)#s', $run, $r) ? $r[1] : '';
+        $posDiRun = strpos($run, $macro);
+
+        // Sama seperti setFormula(): run macro "diputus" di posisi macro.
+        $awalan = substr($isi, 0, $runAwal).substr($run, 0, $posDiRun).'</w:t></w:r>';
+        $akhiran = '<w:r>'.$rPr.'<w:t xml:space="preserve">'.substr($run, $posDiRun + strlen($macro)).substr($isi, $runAkhir);
+        $awalanKosong = trim(html_entity_decode(strip_tags($awalan), ENT_QUOTES | ENT_XML1)) === '';
+
+        $teksRun = fn (string $teks) => '<w:r>'.$rPr.'<w:t xml:space="preserve">'.htmlspecialchars($teks, ENT_QUOTES | ENT_XML1).'</w:t></w:r>';
+
+        $paragraf = [];
+        $numAktif = null;
+        foreach ($baris as $i => $teks) {
+            $jenis = $this->jenisBaris($teks);
+
+            if ($i === 0 && $jenis === null) {
+                // "\n" pembuka daftarBernomor() tanpa label di depannya tidak perlu
+                // jadi baris kosong -- daftarnya sudah paragraf tersendiri.
+                if (trim($teks) !== '' || ! $awalanKosong) {
+                    $paragraf[] = [$pPr, $awalan.$teksRun(rtrim($teks))];
+                }
+
+                continue;
+            }
+            if ($i === 0 && ! $awalanKosong) {
+                $paragraf[] = [$pPr, $awalan];
+            }
+
+            if ($jenis === null) {
+                $numAktif = null;
+                $paragraf[] = [$pPr, rtrim($teks) !== '' ? $teksRun(rtrim($teks)) : ''];
+
+                continue;
+            }
+
+            [$tipe, $isiPoin, $nomor] = $jenis;
+            if ($tipe === 'butir') {
+                $this->adaDaftarButir = true;
+                $numId = self::NUM_ID_BUTIR;
+                $numAktif = null;
+            } else {
+                if ($numAktif === null) {
+                    $numAktif = self::NUM_ID_AWAL + count($this->daftarAngka);
+                    $this->daftarAngka[$numAktif] = max(1, $nomor);
+                }
+                $numId = $numAktif;
+            }
+            $paragraf[] = [$this->pPrDaftar($pPr, $numId), $teksRun($isiPoin)];
+        }
+
+        if ($paragraf === []) {
+            $paragraf[] = [$pPr, $awalan];
+        }
+        $paragraf[array_key_last($paragraf)][1] .= $akhiran;
+
+        return collect($paragraf)->map(fn (array $p) => '<w:p>'.$p[0].$p[1].'</w:p>')->implode('');
+    }
+
+    /**
+     * pPr paragraf macro + <w:numPr> (indentasi diambil dari definisi penomoran, jadi
+     * <w:ind> bawaan paragraf dibuang). numPr ditaruh setelah elemen pPr yang menurut
+     * skema OOXML harus mendahuluinya.
+     */
+    private function pPrDaftar(string $pPr, int $numId): string
+    {
+        $numPr = '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="'.$numId.'"/></w:numPr>';
+
+        if ($pPr === '' || $pPr === '<w:pPr/>') {
+            return '<w:pPr>'.$numPr.'</w:pPr>';
+        }
+
+        $pPr = preg_replace(['#<w:numPr>.*?</w:numPr>#s', '#<w:ind\b[^>]*/>#'], '', $pPr);
+
+        return preg_replace(
+            '#^<w:pPr>((?:<w:(?:pStyle|keepNext|keepLines|pageBreakBefore|framePr|widowControl)\b[^>]*/>)*)#',
+            '<w:pPr>$1'.$numPr,
+            $pPr,
+            1
+        );
+    }
+
+    /**
+     * Tambahkan definisi penomoran yang dirujuk daftar setBerdaftar() ke numbering.xml
+     * berkas hasil (dibuat bila template belum punya, lengkap dengan relasi & content
+     * type-nya). Bernomor: "1." rata kiri, teks menjorok 0,25"; butir: "•" menjorok
+     * 0,25", teks 0,5" -- seperti contoh notula resmi.
+     */
+    private function tambahDefinisiPenomoran(string $path): void
+    {
+        if ($this->daftarAngka === [] && ! $this->adaDaftarButir) {
+            return;
+        }
+
+        $zip = new \ZipArchive;
+        if ($zip->open($path) !== true) {
+            throw new RuntimeException('Berkas Bagian I tidak bisa dibuka untuk menambahkan penomoran daftar.');
+        }
+
+        $numbering = $zip->getFromName('word/numbering.xml');
+        if ($numbering === false) {
+            $numbering = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                .'<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"></w:numbering>';
+
+            $rels = (string) $zip->getFromName('word/_rels/document.xml.rels');
+            if (! str_contains($rels, 'relationships/numbering"')) {
+                $zip->addFromString('word/_rels/document.xml.rels', str_replace('</Relationships>',
+                    '<Relationship Id="rIdSipinterPenomoran" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/></Relationships>', $rels));
+            }
+            $ct = (string) $zip->getFromName('[Content_Types].xml');
+            if (! str_contains($ct, '/word/numbering.xml')) {
+                $zip->addFromString('[Content_Types].xml', str_replace('</Types>',
+                    '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/></Types>', $ct));
+            }
+        }
+        $numbering = preg_replace('#<w:numbering\b([^>]*)/>#', '<w:numbering$1></w:numbering>', $numbering, 1);
+
+        $level = fn (string $format, string $teks, int $kiri, string $rPr = '') => '<w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="'.$format.'"/>'
+            .'<w:lvlText w:val="'.$teks.'"/><w:lvlJc w:val="left"/><w:pPr><w:ind w:left="'.$kiri.'" w:hanging="360"/></w:pPr>'.$rPr.'</w:lvl>';
+        $abstrak = '<w:abstractNum w:abstractNumId="'.self::ABSTRAK_ANGKA.'"><w:multiLevelType w:val="singleLevel"/>'.$level('decimal', '%1.', 360).'</w:abstractNum>'
+            .'<w:abstractNum w:abstractNumId="'.self::ABSTRAK_BUTIR.'"><w:multiLevelType w:val="singleLevel"/>'
+            .$level('bullet', '•', 720, '<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial" w:hint="default"/></w:rPr>').'</w:abstractNum>';
+
+        $num = '<w:num w:numId="'.self::NUM_ID_BUTIR.'"><w:abstractNumId w:val="'.self::ABSTRAK_BUTIR.'"/></w:num>';
+        foreach ($this->daftarAngka as $numId => $mulai) {
+            $num .= '<w:num w:numId="'.$numId.'"><w:abstractNumId w:val="'.self::ABSTRAK_ANGKA.'"/>'
+                .'<w:lvlOverride w:ilvl="0"><w:startOverride w:val="'.$mulai.'"/></w:lvlOverride></w:num>';
+        }
+
+        // Urutan skema: numPicBullet*, abstractNum*, num*, numIdMacAtCleanup?
+        $numbering = preg_match('#<w:num[ >]#', $numbering, $mNum, PREG_OFFSET_CAPTURE)
+            ? substr_replace($numbering, $abstrak, $mNum[0][1], 0)
+            : $this->sisipSebelum($numbering, ['<w:numIdMacAtCleanup', '</w:numbering>'], $abstrak);
+        $numbering = $this->sisipSebelum($numbering, ['<w:numIdMacAtCleanup', '</w:numbering>'], $num);
+
+        $zip->addFromString('word/numbering.xml', $numbering);
+        if (! $zip->close()) {
+            throw new RuntimeException('Penomoran daftar gagal ditulis ke berkas Bagian I.');
+        }
+    }
+
+    /** Sisipkan $isi tepat sebelum penanda PERTAMA dari $penanda yang ditemukan. */
+    private function sisipSebelum(string $xml, array $penanda, string $isi): string
+    {
+        foreach ($penanda as $cari) {
+            $pos = strpos($xml, $cari);
+            if ($pos !== false) {
+                return substr_replace($xml, $isi, $pos, 0);
+            }
+        }
+
+        return $xml.$isi;
+    }
+
+    /**
      * Gabungkan daftar nama dengan "dan" -- TANPA koma bila cuma DUA nama ("A dan
      * B"), koma di antara SISANYA baru "dan" sebelum nama terakhir bila TIGA atau
      * lebih ("A, B, dan C"). Collection::join() bawaan Laravel selalu memakai
@@ -478,7 +720,8 @@ class NotulaBagian1DocxService
 
             foreach ($bagian->poin as $poin) {
                 $teks = ($poin->masterIku->kode ?? '').': '.$poin->teks;
-                $xml .= '<w:p><w:r><w:t xml:space="preserve">• '
+                $this->adaDaftarButir = true;
+                $xml .= '<w:p>'.$this->pPrDaftar('', self::NUM_ID_BUTIR).'<w:r><w:t xml:space="preserve">'
                     .htmlspecialchars($teks, ENT_QUOTES | ENT_XML1)
                     .'</w:t></w:r></w:p>';
             }
@@ -591,20 +834,20 @@ class NotulaBagian1DocxService
         $analisisLengkap = $analisis !== '' && $daftarKegiatan !== null
             ? $analisis."\n".$daftarKegiatan
             : ($analisis !== '' ? $analisis : $daftarKegiatan);
-        $this->set($sub, 'analisis_capaian', $analisisLengkap);
+        $this->setBerdaftar($sub, 'analisis_capaian', $analisisLengkap);
 
         // Kendala & Solusi sebagai DUA variabel terpisah (mengikuti dua baris terpisah
         // pada dokumen resmi), HANYA triwulan notula ini (tidak kumulatif), disusun sebagai
         // daftar bernomor per indikator -- sama seperti jalur PDF.
         $semuaKendalaSolusi = $kendalaSolusiTriwulan->flatten(1);
-        $this->set($sub, 'kendala', $this->daftarBernomor($semuaKendalaSolusi->pluck('kendala')->filter()));
-        $this->set($sub, 'solusi', $this->daftarBernomor($semuaKendalaSolusi->pluck('solusi')->filter()));
+        $this->setBerdaftar($sub, 'kendala', $this->daftarBernomor($semuaKendalaSolusi->pluck('kendala')->filter()));
+        $this->setBerdaftar($sub, 'solusi', $this->daftarBernomor($semuaKendalaSolusi->pluck('solusi')->filter()));
 
         $rtlTeks = $this->daftarBernomor($rtlIku->pluck('rtl_teks')->filter());
         // PIC Tindak Lanjut = tim (boleh lebih dari satu, digabung dengan "dan" --
         // lihat gabungDenganDan()) yang ditugaskan pada IKU ini di Master IKU
         // (App\Models\IkuTim), BUKAN nama orang yang diketik bebas per poin RTL.
-        $this->set($sub, 'rtl', $rtlTeks);
+        $this->setBerdaftar($sub, 'rtl', $rtlTeks);
         $this->set($sub, 'pic_rtl', $this->gabungDenganDan($iku->namaTimList()));
         // Batas Waktu Tindak Lanjut SELALU akhir bulan triwulan tsb (RF-34, sesuai
         // Kertas Kerja resmi -- satu batas waktu yang sama untuk SEMUA poin RTL
@@ -649,21 +892,21 @@ class NotulaBagian1DocxService
             ->implode("\n\n");
         $dasarHitungTeks = RumusMarkup::keTeksPolos($dasarHitungGabungan);
         $dasarHitung = trim(($dasarHitungTeks ?: '').($iku->basis_data ? ' Basis Data: '.$iku->basis_data : ''));
-        $this->set($sub, 'dasar_hitung', $dasarHitung !== '' ? $dasarHitung : null);
+        $this->setBerdaftar($sub, 'dasar_hitung', $dasarHitung !== '' ? $dasarHitung : null);
         $this->setTautan($sub, 'bukti_realisasi', $linkFolder);
         // Bagian 4 Isian Kegiatan (Evaluasi RTL): poin RTL yang DIRENCANAKAN untuk
         // triwulan notula ini -- isinya sama dengan {{rtl}}, nama terpisah supaya jelas
         // di template. Bagian 5 (RTL triwulan berikutnya, TW IV -> TW I tahun depan):
         // {{rtl_berikutnya}} + batas waktunya (akhir triwulan berikutnya).
         $rtlBerikutnyaIku = ($data['rtlBerikutnyaPerIku'] ?? collect())->get($iku->id, collect());
-        $this->set($sub, 'rtl_evaluasi', $rtlTeks);
+        $this->setBerdaftar($sub, 'rtl_evaluasi', $rtlTeks);
         $this->setTautan($sub, 'bukti_rtl_evaluasi', ($data['linkFolderEvaluasiRtlPerIku'] ?? collect())->get($iku->id));
-        $this->set($sub, 'rtl_berikutnya', $this->daftarBernomor($rtlBerikutnyaIku->pluck('rtl_teks')->filter()));
+        $this->setBerdaftar($sub, 'rtl_berikutnya', $this->daftarBernomor($rtlBerikutnyaIku->pluck('rtl_teks')->filter()));
         $this->set($sub, 'batas_waktu_rtl_berikutnya', $rtlBerikutnyaIku->isNotEmpty()
             ? $this->akhirTriwulan($data['tahunTwBerikutnya'], $data['twBerikutnya'])->translatedFormat('F Y')
             : null);
         $this->setTautan($sub, 'bukti_rtl_sebelumnya',$rtlSebelumnyaIku->isNotEmpty() ? $linkFolderTwSebelumnya : null);
-        $this->set($sub, 'penjelasan_lainnya', $capaian?->catatan);
+        $this->setBerdaftar($sub, 'penjelasan_lainnya', $capaian?->catatan);
 
         return $this->getMainPart($sub);
     }

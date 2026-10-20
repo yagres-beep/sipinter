@@ -34,12 +34,17 @@ class NotulaDownloadTest extends TestCase
      */
     protected function documentXmlDariRespons($response): string
     {
+        return $this->partDariRespons($response, 'word/document.xml');
+    }
+
+    protected function partDariRespons($response, string $part): string
+    {
         $tmpPath = tempnam(sys_get_temp_dir(), 'notula_test_');
         file_put_contents($tmpPath, $response->streamedContent());
 
         $zip = new ZipArchive;
         $zip->open($tmpPath);
-        $xml = $zip->getFromName('word/document.xml');
+        $xml = $zip->getFromName($part);
         $zip->close();
         unlink($tmpPath);
 
@@ -425,11 +430,49 @@ class NotulaDownloadTest extends TestCase
         $notula = Notula::create(['periode_id' => $periode->id]);
 
         $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
+        // "Kendala :" tetap di paragrafnya sendiri, poinnya paragraf daftar bernomor
+        // Word (<w:numPr>) berikutnya -- BUKAN "Kendala : 1. ..." di baris yang sama.
+        $poinBernomor = '<\/w:p><w:p><w:pPr><w:numPr><w:ilvl w:val="0"\/><w:numId w:val="(\d+)"\/><\/w:numPr><\/w:pPr><w:r>(?:<w:rPr>(?:(?!<\/w:r>).)*?<\/w:rPr>)?<w:t xml:space="preserve">';
+        $this->assertMatchesRegularExpression('/Kendala :(?:(?!<\/w:p>).)*'.$poinBernomor.'Kendala pertama uji<\/w:t>/s', $xml);
+        $this->assertMatchesRegularExpression('/Solusi :(?:(?!<\/w:p>).)*'.$poinBernomor.'Solusi pertama uji<\/w:t>/s', $xml);
+        $this->assertStringNotContainsString('1. Kendala pertama uji', $xml);
+    }
 
-        // "Kendala :" diikuti <w:br/> (pindah baris) baru "1. Kendala pertama uji" --
-        // BUKAN "Kendala : 1. Kendala pertama uji" menempel di baris yang sama.
-        $this->assertMatchesRegularExpression('/Kendala :(?:(?!<\/w:p>|1\. Kendala).)*<w:br\/><w:t>1\. Kendala pertama uji/s', $xml);
-        $this->assertMatchesRegularExpression('/Solusi :(?:(?!<\/w:p>|1\. Solusi).)*<w:br\/><w:t>1\. Solusi pertama uji/s', $xml);
+    /**
+     * Daftar bernomor & butir "n/N = ... mencakup" dicetak sebagai daftar Word sungguhan:
+     * tiap daftar bernomor punya <w:num> sendiri (mulai dari 1 lagi) di numbering.xml.
+     */
+    public function test_docx_bagian1_daftar_memakai_penomoran_word(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $iku = MasterIku::create([
+            'kode' => '2008', 'indikator' => 'Indikator Uji Daftar', 'tim' => 'Tim Uji', 'penanggung_jawab' => 'Uji', 'sasaran' => 'Sasaran Uji',
+            'dasar_hitung' => "Keterangan & catatan\n• Butir pertama\n• Butir kedua",
+        ]);
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]);
+        $this->verifikasiCapaian($iku, $periode);
+        KendalaSolusi::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'kendala' => 'Kendala A', 'solusi' => 'Solusi A']);
+        KendalaSolusi::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'kendala' => 'Kendala B', 'solusi' => 'Solusi B']);
+
+        $notula = Notula::create(['periode_id' => $periode->id]);
+        $respons = $this->get(route('notula.unduh-bagian1-docx', $notula));        $xml = $this->documentXmlDariRespons($respons);
+
+        preg_match('/<w:numId w:val="(\d+)"\/><\/w:numPr><\/w:pPr><w:r>(?:<w:rPr>(?:(?!<\/w:r>).)*?<\/w:rPr>)?<w:t xml:space="preserve">Kendala A/s', $xml, $kendala);
+        preg_match('/<w:numId w:val="(\d+)"\/><\/w:numPr><\/w:pPr><w:r>(?:<w:rPr>(?:(?!<\/w:r>).)*?<\/w:rPr>)?<w:t xml:space="preserve">Kendala B/s', $xml, $kendalaB);
+        preg_match('/<w:numId w:val="(\d+)"\/><\/w:numPr><\/w:pPr><w:r>(?:<w:rPr>(?:(?!<\/w:r>).)*?<\/w:rPr>)?<w:t xml:space="preserve">Solusi A/s', $xml, $solusi);
+        $this->assertNotEmpty($kendala);
+        $this->assertSame($kendala[1], $kendalaB[1], 'Poin satu daftar memakai numId yang sama.');
+        $this->assertNotSame($kendala[1], $solusi[1], 'Daftar Solusi mulai dari 1 lagi (numId sendiri).');
+
+        $this->assertStringContainsString('Keterangan &amp; catatan', $xml);
+        $this->assertMatchesRegularExpression('/<w:numId w:val="900"\/><\/w:numPr>(?:(?!<\/w:p>).)*<w:t xml:space="preserve">Butir pertama/s', $xml);
+
+        $numbering = $this->partDariRespons($respons, 'word/numbering.xml');
+        $this->assertStringContainsString('<w:num w:numId="'.$kendala[1].'"><w:abstractNumId w:val="900"/><w:lvlOverride w:ilvl="0"><w:startOverride w:val="1"/>', $numbering);
+        $this->assertStringContainsString('<w:num w:numId="900"><w:abstractNumId w:val="901"/></w:num>', $numbering);
+        // abstractNum harus mendahului semua <w:num> (urutan skema OOXML).
+        $this->assertLessThan(strpos($numbering, '<w:num w:numId='), strpos($numbering, '<w:abstractNum w:abstractNumId="900"'));
     }
 
     /**
