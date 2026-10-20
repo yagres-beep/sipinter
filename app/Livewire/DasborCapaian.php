@@ -226,7 +226,7 @@ class DasborCapaian extends Component
         // per triwulan di PHP — bukan 2 query x 4 triwulan (8 query terpisah).
         $kegiatanPerTriwulan = Kegiatan::with(['periode', 'masterIku'])
             ->whereHas('periode', fn ($q) => $q->where('tahun', $this->tahun))
-            ->get(['id', 'iku_id', 'periode_id', 'uraian_kegiatan', 'status_dokumen'])
+            ->get(['id', 'iku_id', 'periode_id', 'rtl_evaluasi_id', 'uraian_kegiatan', 'jenis', 'tahapan_survei', 'nama_folder_auto', 'drive_folder_id', 'status_dokumen'])
             ->groupBy(fn ($k) => $k->periode->triwulan);
 
         $hasil = [];
@@ -242,7 +242,12 @@ class DasborCapaian extends Component
                 'persen' => $total > 0 ? round(($selesai / $total) * 100, 1) : 0.0,
                 // Dipakai saat bar-nya diklik (lihatDetailTriwulan) — daftar kegiatan
                 // triwulan ini, supaya jelas mana yang sudah/belum tanpa query ulang.
-                'kegiatan' => $kegiatanTw->sortBy(fn ($k) => $k->masterIku?->kode)->values(),
+                // Nama utama = nama kegiatan induk (Kegiatan::terapkanNamaInduk()), dan
+                // tahapan-tahapan satu kegiatan diurutkan berdampingan.
+                'kegiatan' => Kegiatan::terapkanNamaInduk($kegiatanTw)
+                    ->sortBy(fn ($kelompok) => $kelompok->first()->masterIku?->kode)
+                    ->flatMap(fn ($kelompok) => $kelompok->values())
+                    ->values(),
             ];
         }
 

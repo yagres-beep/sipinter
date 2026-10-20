@@ -3359,6 +3359,36 @@ class PengisianKegiatan extends Component
     }
 
     /**
+     * Nomor "Kegiatan N" tiap blok (kunci = indeks blok). Blok yang sudah tersimpan
+     * dinilai dari baris DB-nya, urut id — sama persis dengan Verifikasi Capaian
+     * (VerifikasiCapaian::infoKegiatanInduk()) — sehingga tahapan-tahapan satu
+     * kegiatan induk (Kegiatan::kelompokInduk()) berbagi nomor yang sama di kedua
+     * menu. Blok baru yang belum tersimpan ikut dinilai dari isian form-nya.
+     *
+     * @return array<int, int>
+     */
+    public function nomorKegiatanBlok(): array
+    {
+        $ids = collect($this->blocks)->pluck('id')->filter()->all();
+        $tersimpan = $ids === [] ? collect() : Kegiatan::whereIn('id', $ids)->get()->keyBy('id');
+        $periodeId = $tersimpan->first()?->periode_id;
+
+        $baris = collect($this->blocks)->map(fn (array $block) => $tersimpan->get($block['id'] ?? 0) ?? new Kegiatan([
+            'iku_id' => $this->iku_id,
+            'periode_id' => $periodeId,
+            'rtl_evaluasi_id' => $block['rtl_evaluasi_id'] ?? null,
+            'uraian_kegiatan' => $block['uraian_kegiatan'] ?? '',
+            'jenis' => $block['jenis'] ?? null,
+            'tahapan_survei' => filled($block['tahapan_survei'] ?? null) ? $block['tahapan_survei'] : null,
+        ]));
+
+        $nomor = Kegiatan::nomorKegiatanInduk($baris->sortBy(fn (Kegiatan $k) => $k->id ?? PHP_INT_MAX));
+        ksort($nomor);
+
+        return $nomor;
+    }
+
+    /**
      * Dua blok dianggap kegiatan yang SAMA bila tertaut ke poin RTL yang sama, atau
      * uraiannya sama persis (abaikan besar/kecil huruf & spasi tepi).
      */

@@ -496,6 +496,11 @@ class NotulaService
             ->get()
             ->groupBy('iku_id');
 
+        // Nama kegiatan induk per baris tahapan (Kegiatan::namaKegiatanUtama()) — dipakai
+        // fallback nama RO di bawah, supaya koreksi uraian satu tahapan saja tidak
+        // memunculkan nama kegiatan yang berbeda untuk kegiatan yang sama.
+        $kegiatanPerIku->each(fn ($daftarKegiatan) => Kegiatan::terapkanNamaInduk($daftarKegiatan));
+
         // RF baru: satu Kegiatan boleh punya BANYAK RO (App\Models\RincianOutput),
         // jadi tabel "Realisasi Volume RO..." di notula sumbernya diratakan dari
         // SELURUH RO milik seluruh kegiatan IKU ini -- bukan satu baris per kegiatan

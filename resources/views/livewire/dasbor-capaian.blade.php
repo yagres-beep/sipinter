@@ -161,9 +161,14 @@
                     <div x-show="terbukaTw === {{ $tw }}" x-cloak style="margin:10px 0 16px;border:1.5px solid var(--line);border-radius:11px;max-height:320px;overflow-y:auto">
                         @forelse ($data['kegiatan'] as $kegiatan)
                             <div style="display:flex;align-items:center;gap:10px;justify-content:space-between;padding:9px 13px;font-size:12.5px;border-bottom:1px solid var(--line2)">
-                                <div>
+                                {{-- Nama utama = kegiatan induk (Kegiatan::namaKegiatanUtama()); tahapan
+                                     hanya keterangan sekunder di sampingnya (x-tahapan-kegiatan). --}}
+                                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0">
                                     <b>{{ $kegiatan->masterIku?->kode }}</b>
-                                    <span class="muted">— {{ \Illuminate\Support\Str::limit($kegiatan->uraianTampil(), 70) }}@if ($kegiatan->labelTahapan()) · Tahapan {{ $kegiatan->labelTahapan() }}@endif</span>
+                                    <span style="color:var(--ink)">— {{ \Illuminate\Support\Str::limit($kegiatan->namaKegiatanUtama(), 70) }}</span>
+                                    @if ($kegiatan->jenis === 'survei_sensus')
+                                        <x-tahapan-kegiatan :tahapan="$kegiatan->tahapan_survei" />
+                                    @endif
                                 </div>
                                 <span class="badge {{ $badgeStatus[$kegiatan->status_dokumen] }}" style="flex:none">{{ $labelStatus[$kegiatan->status_dokumen] }}</span>
                             </div>
