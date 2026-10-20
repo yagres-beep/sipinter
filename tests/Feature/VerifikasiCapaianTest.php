@@ -1930,4 +1930,62 @@ class VerifikasiCapaianTest extends TestCase
             ->call('tambahRtlBerikutnya')
             ->assertSet('rtlBerikutnyaTambahan', []);
     }
+
+    /**
+     * Tombol navigasi bagian (bilah lengket) diambil dari HTML: urutan data-bagian, dan
+     * tiap tombol harus menunjuk ke elemen id yang benar-benar dirender.
+     *
+     * @return array<int, string>
+     */
+    protected function navigasiBagian(string $html): array
+    {
+        preg_match_all('/data-bagian="([^"]+)"/', $html, $cocok);
+
+        foreach ($cocok[1] as $id) {
+            $this->assertStringContainsString('id="'.$id.'"', $html, "Tombol navigasi {$id} tidak punya bagian tujuan.");
+        }
+
+        return $cocok[1];
+    }
+
+    public function test_navigasi_bagian_verifikasi_mengikuti_bagian_yang_ada_di_pengajuan(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+        $poin = $this->siapkanBagianKustomPoin($data);
+
+        $html = $this->get(route('verifikasi.show', $data['capaian']))
+            ->assertOk()
+            ->assertSee('Periode Pengajuan')
+            ->assertSee('class="bilah-lengket"', false)
+            ->getContent();
+
+        // Bulan 8 bukan akhir triwulan & tidak ada RTL triwulan lalu: bagian RTL tidak tampil.
+        $this->assertSame([
+            'bagian-iku',
+            'bagian-kegiatan',
+            'bagian-kendala',
+            'bagian-kustom-'.$poin->bagian_kustom_id,
+            'bagian-tindakan',
+        ], $this->navigasiBagian($html));
+    }
+
+    public function test_navigasi_bagian_verifikasi_menyertakan_rtl_dan_menyembunyikan_bagian_kosong(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+        $data['capaian']->update(['status' => Capaian::STATUS_DISETUJUI]);
+        // Poin RTL yang ditetapkan triwulan lalu untuk dilaksanakan triwulan INI (periode sasaran).
+        RtlEvaluasi::create([
+            'iku_id' => $data['iku']->id, 'periode_id' => $data['periode']->id,
+            'rtl_teks' => 'RTL triwulan lalu', 'berlaku_bulan' => 'Juli, Agustus, dan September', 'pic' => 'PIC', 'batas_waktu' => '2026-09-30',
+        ]);
+
+        $nav = $this->navigasiBagian(Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']->fresh()])->html());
+
+        $this->assertContains('bagian-evaluasi-rtl', $nav);
+        // Tidak bisa diverifikasi & tidak ada kendala/bagian kustom: tombolnya tidak tampil.
+        $this->assertNotContains('bagian-kendala', $nav);
+        $this->assertEmpty(array_filter($nav, fn ($id) => str_starts_with($id, 'bagian-kustom-')));
+    }
 }
