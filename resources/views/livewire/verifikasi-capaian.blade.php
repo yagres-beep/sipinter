@@ -27,6 +27,56 @@
         <div class="info teal">📝 IKU ini sudah termuat di notula. Bila ada revisi/kesalahan, sunting langsung di halaman ini lalu klik "Simpan Perubahan" — Bagian I notula ikut diperbarui otomatis{{ $capaian->status === \App\Models\Capaian::STATUS_DISETUJUI ? ', dan notula yang sudah disetujui dibuka kembali sebagai versi baru untuk disetujui ulang Kepala' : '' }}. Tidak perlu mengembalikan isian ke Ketua Tim.</div>
     @endif
 
+    {{-- Banner periode pengajuan + tombol lompat ke tiap bagian pemeriksaan, lengket SATU
+         UNIT di bawah .page-head (pola yang sama dengan Isian Kegiatan — navigasiBagian di
+         app.js & .bilah-lengket di sipinter.css). Tombol disusun dari bagian yang BENAR-BENAR
+         dirender di bawah (kondisi @if-nya sama persis) dan sesuai urutan tampil, supaya
+         penanda bagian aktif bergerak searah gulir. Tombol hanya menggulir halaman — tidak
+         mengubah isian/tanda verifikasi apa pun. --}}
+    @php
+        $navBagian = [['id' => 'bagian-iku', 'n' => '1', 'label' => 'IKU', 'judul' => 'Angka Capaian IKU']];
+        $navBagian[] = ['id' => 'bagian-kegiatan', 'n' => '2', 'label' => 'Kegiatan', 'judul' => 'Verifikasi Bukti Capaian per Kegiatan'];
+        if ($kendalaSolusiList->isNotEmpty() || $bisaDiverifikasi) {
+            $navBagian[] = ['id' => 'bagian-kendala', 'n' => '3', 'label' => 'Kendala & Solusi', 'judul' => 'Kendala & Solusi'];
+        }
+        foreach ($bagianKustomList->groupBy('bagian_kustom_id') as $idBagianKustom => $poinPerBagian) {
+            $navBagian[] = ['id' => 'bagian-kustom-'.$idBagianKustom, 'n' => '🧩', 'label' => $poinPerBagian->first()->bagianKustom->nama, 'judul' => $poinPerBagian->first()->bagianKustom->nama, 'kustom' => true];
+        }
+        if ($rtlBerikutnya->isNotEmpty() || $rtlBerikutnyaTambahan !== [] || $rtlBerikutnyaBisaDitambah) {
+            $navBagian[] = ['id' => 'bagian-rtl', 'n' => '5', 'label' => 'Rencana Tindak Lanjut', 'judul' => 'Rencana Tindak Lanjut Triwulan Berikutnya'];
+        }
+        if ($rtlSebelumnya->isNotEmpty()) {
+            $navBagian[] = ['id' => 'bagian-evaluasi-rtl', 'n' => '4', 'label' => 'Evaluasi RTL', 'judul' => 'Pengecekan Realisasi RTL Triwulan Sebelumnya'];
+        }
+        if ($bisaDiverifikasi || $bisaDibukaKembali) {
+            $navBagian[] = ['id' => 'bagian-tindakan', 'n' => '✓', 'label' => 'Tindakan', 'judul' => $bisaDiverifikasi ? 'Verifikasi Selesai / Kembalikan ke Ketua Tim' : 'Buka Kembali Isian'];
+        }
+        $triwulanPengajuan = intdiv($capaian->periode->bulan - 1, 3);
+    @endphp
+    <div class="bilah-lengket" x-data="navigasiBagian" :class="{ menempel: menempel }">
+        <div class="period-banner">
+            <span class="pb-ico">📅</span>
+            <div style="min-width:0">
+                <div class="pb-lbl">Periode Pengajuan</div>
+                <div class="pb-val">
+                    <b>{{ $namaBulan[$capaian->periode->bulan - 1] }} {{ $capaian->periode->tahun }}</b>
+                    · Triwulan {{ ['I', 'II', 'III', 'IV'][$triwulanPengajuan] }} · {{ $capaian->masterIku->kode }}
+                </div>
+            </div>
+            <span style="margin-left:auto"><x-badge-status :status="$capaian->status" /></span>
+        </div>
+
+        <nav class="nav-bagian" x-ref="daftar" aria-label="Lompat ke bagian pemeriksaan">
+            @foreach ($navBagian as $nav)
+                <button type="button" class="nb-item" data-bagian="{{ $nav['id'] }}" title="{{ $nav['judul'] }}" wire:key="nav-{{ $nav['id'] }}"
+                    :class="{ on: aktif === '{{ $nav['id'] }}' }" :aria-current="aktif === '{{ $nav['id'] }}' ? 'true' : null"
+                    @click="lompatKe('{{ $nav['id'] }}')">
+                    <span class="nb-n">{{ $nav['n'] }}</span>@if ($nav['kustom'] ?? false)<span class="nb-teks">{{ $nav['label'] }}</span>@else{{ $nav['label'] }}@endif
+                </button>
+            @endforeach
+        </nav>
+    </div>
+
     @if ($riwayatStatus->isNotEmpty())
         <div class="card">
             <div class="sec"><span>Riwayat Status</span></div>
@@ -46,7 +96,7 @@
     @endif
 
     <div class="card">
-        <div class="sec"><span>Angka Capaian</span> <span class="badge b-tunggu">diisi Tim SAKIP</span></div>
+        <div class="sec" id="bagian-iku" style="scroll-margin-top:var(--offset-lengket, 200px)"><span>Angka Capaian</span> <span class="badge b-tunggu">diisi Tim SAKIP</span></div>
 
         <div class="field">
             <label>Analisis Capaian</label>
@@ -257,7 +307,7 @@
     </div>
 
     <div class="card">
-        <div class="sec"><span>Verifikasi Bukti Capaian per Kegiatan</span></div>
+        <div class="sec" id="bagian-kegiatan" style="scroll-margin-top:var(--offset-lengket, 200px)"><span>Verifikasi Bukti Capaian per Kegiatan</span></div>
         @if ($bisaDiverifikasi)
             <div class="info">ℹ️ Uraian kegiatan bisa disunting bila ada salah ketik, lalu tandai sesuai/tidak sesuai. Klik tiap berkas untuk memeriksa &amp; menandai sesuai/tidak sesuai.</div>
         @endif
@@ -472,7 +522,7 @@
 
     @if ($kendalaSolusiList->isNotEmpty() || $bisaDiverifikasi)
         <div class="card">
-            <div class="sec"><span>Kendala &amp; Solusi</span></div>
+            <div class="sec" id="bagian-kendala" style="scroll-margin-top:var(--offset-lengket, 200px)"><span>Kendala &amp; Solusi</span></div>
             @foreach ($kendalaSolusiList as $ks)
                 <div class="poin-row" wire:key="ks-{{ $ks->id }}">
                     <span class="k-num">Pasangan {{ $loop->iteration }}</span>
@@ -588,9 +638,9 @@
     @if ($bagianKustomList->isNotEmpty())
         <div class="card">
             <div class="sec"><span>Bagian Kustom</span></div>
-            @foreach ($bagianKustomList->groupBy('bagian_kustom_id') as $poinPerBagian)
+            @foreach ($bagianKustomList->groupBy('bagian_kustom_id') as $idBagianKustom => $poinPerBagian)
                 @php $namaBagian = $poinPerBagian->first()->bagianKustom->nama; @endphp
-                <div style="font-size:12px;font-weight:700;color:var(--blue-600);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">{{ $namaBagian }}</div>
+                <div id="bagian-kustom-{{ $idBagianKustom }}" style="scroll-margin-top:var(--offset-lengket, 200px);font-size:12px;font-weight:700;color:var(--blue-600);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">{{ $namaBagian }}</div>
                 @foreach ($poinPerBagian as $poin)
                     @php $berkasPoin = $berkasPerBagianKustom[$poin->id] ?? collect(); @endphp
                     <div class="keg" wire:key="bagian-kustom-{{ $poin->id }}">
@@ -794,7 +844,7 @@
     @php $adaRtlBerikutnya = $rtlBerikutnya->isNotEmpty() || $rtlBerikutnyaTambahan !== []; @endphp
     @if ($adaRtlBerikutnya || $rtlBerikutnyaBisaDitambah)
         <div class="card">
-            <div class="sec"><span>Rencana Tindak Lanjut Triwulan Berikutnya (Baru Ditetapkan)</span></div>
+            <div class="sec" id="bagian-rtl" style="scroll-margin-top:var(--offset-lengket, 200px)"><span>Rencana Tindak Lanjut Triwulan Berikutnya (Baru Ditetapkan)</span></div>
             <div class="info">ℹ️ Ketua Tim baru menetapkan rencana ini untuk triwulan berikutnya (belum berjalan, belum ada realisasi) — periksa kejelasan/kelayakan rencananya. Kalau ditandai "Tidak Sesuai", seluruh rencana IKU ini akan dibuka kembali untuk diperbaiki Ketua Tim.</div>
 
             {{-- PIC & Batas Waktu berlaku untuk SELURUH poin di bawah (satu nilai per
@@ -932,7 +982,7 @@
 
     @if ($rtlSebelumnya->isNotEmpty())
         <div class="card">
-            <div class="sec"><span>Pengecekan Realisasi RTL Triwulan Sebelumnya</span></div>
+            <div class="sec" id="bagian-evaluasi-rtl" style="scroll-margin-top:var(--offset-lengket, 200px)"><span>Pengecekan Realisasi RTL Triwulan Sebelumnya</span></div>
             <div class="info">ℹ️ RTL yang direncanakan pada triwulan sebelumnya ditampilkan berdampingan dengan realisasi yang dilaporkan ketua tim, beserta bukti bila ada. Cukup periksa kesesuaiannya — tanpa skor persentase.</div>
 
             @foreach ($rtlSebelumnya as $poin)
@@ -1024,6 +1074,8 @@
     @endif
 
     @if ($bisaDiverifikasi)
+        {{-- Sasaran tombol "Tindakan" di bilah navigasi bagian. --}}
+        <div id="bagian-tindakan" style="scroll-margin-top:var(--offset-lengket, 200px)"></div>
         {{-- Panel status: merinci PERSIS apa yang masih menghalangi "Verifikasi Selesai" /
              "Kembalikan ke Ketua Tim", supaya Tim SAKIP tidak perlu menyisir ulang halaman. --}}
         @if ($daftarBelumDitandai !== [] || $daftarDitolak !== [] || $syaratLain !== [])
@@ -1085,7 +1137,7 @@
         @endif
     @elseif ($bisaDibukaKembali)
         <div class="card">
-            <div class="sec"><span>Buka Kembali Isian</span></div>
+            <div class="sec" id="bagian-tindakan" style="scroll-margin-top:var(--offset-lengket, 200px)"><span>Buka Kembali Isian</span></div>
             <div class="info warn">⚠️ Isian ini sudah <b>disetujui</b> dan masuk notula final. Membuka kembali akan mengembalikannya ke Ketua Tim untuk ditambahkan kegiatan baru — kegiatan yang sudah disetujui sebelumnya TIDAK ikut berubah/terhapus. Untuk sekadar memperbaiki kesalahan, cukup sunting langsung di atas lalu "Simpan Perubahan" — tidak perlu dibuka kembali.</div>
             <div class="field" style="margin-top:10px">
                 <label style="font-size:11.5px">Alasan membuka kembali (opsional)</label>

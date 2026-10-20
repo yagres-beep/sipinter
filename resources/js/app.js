@@ -157,9 +157,11 @@ document.addEventListener('alpine:init', () => {
             // tidak menarik balik halaman — klik tombol ini bisa memicu blur pada field
             // wire:model.live.blur yang sedang fokus, yang mengirim request.
             this.$dispatch('lompat-bagian');
-            // scroll-margin-top (= --offset-lengket) menjaga judul bagian tidak tertutup
-            // bilah lengket.
-            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            // Posisi tujuan dihitung sendiri (judul tepat di bawah bilah lengket), bukan
+            // scrollIntoView + scroll-margin-top: pada pengujian di Chromium, scroll halus
+            // scrollIntoView bisa berhenti melewati batas itu sehingga judul tertutup.
+            const offset = this.atasLengket() + this.$el.offsetHeight + 12;
+            window.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top + window.scrollY - offset), behavior: 'smooth' });
             this.tungguScrollSelesai();
         },
 

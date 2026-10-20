@@ -95,6 +95,32 @@ class BagianKustomKonfigurasiTest extends TestCase
         $this->get(route('bagian-kustom.index'))->assertOk()->assertSee('Risiko Strategis');
     }
 
+    public function test_halaman_isian_bagian_kustom_punya_navigasi_bagian_lengket(): void
+    {
+        $this->actingAsPeran('Tim SAKIP');
+        $risiko = BagianKustom::create(['nama' => 'Risiko Strategis', 'aktif' => true, 'peran' => ['tim_sakip'], 'penempatan' => ['isian_bagian_kustom']]);
+        $inovasi = BagianKustom::create(['nama' => 'Inovasi Layanan', 'aktif' => true, 'peran' => ['tim_sakip'], 'penempatan' => ['isian_bagian_kustom']]);
+
+        $html = $this->get(route('bagian-kustom.index'))->assertOk()->assertSee('class="bilah-lengket"', false)->getContent();
+
+        preg_match_all('/data-bagian="([^"]+)"/', $html, $cocok);
+        $this->assertEqualsCanonicalizing(['bagian-kustom-'.$risiko->id, 'bagian-kustom-'.$inovasi->id], $cocok[1]);
+        foreach ($cocok[1] as $id) {
+            $this->assertStringContainsString('id="'.$id.'"', $html);
+        }
+    }
+
+    public function test_bagian_kustom_di_menu_lain_tidak_memasang_bilah_lengket(): void
+    {
+        $this->actingAsPeran('Kepala');
+        BagianKustom::create(['nama' => 'Catatan Pimpinan', 'aktif' => true, 'peran' => ['kepala'], 'penempatan' => ['persetujuan']]);
+
+        Livewire::test(IsianBagianKustom::class, ['menu' => 'persetujuan'])
+            ->assertSee('Catatan Pimpinan')
+            ->assertDontSee('bilah-lengket')
+            ->assertDontSee('data-bagian=', false);
+    }
+
     public function test_halaman_isian_bagian_kustom_ditolak_untuk_ketua_tim(): void
     {
         $this->actingAsPeran('Ketua Tim');

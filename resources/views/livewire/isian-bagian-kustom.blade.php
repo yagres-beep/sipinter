@@ -12,7 +12,18 @@
     @if ($bagianList->isEmpty() && $menu !== 'isian_bagian_kustom')
         {{-- Tidak ada bagian kustom yang ditempatkan di menu ini: tidak tampil apa pun. --}}
     @else
-    <div class="card" style="margin-bottom:16px">
+    @php $halamanSendiri = $menu === 'isian_bagian_kustom'; @endphp
+    {{-- Di halaman Isian Bagian Kustom sendiri, pemilih periode + tombol lompat ke tiap
+         bagian lengket SATU UNIT di bawah .page-head (pola Isian Kegiatan — navigasiBagian
+         di app.js & .bilah-lengket di sipinter.css). Saat disisipkan di bawah halaman menu
+         lain tetap tampil biasa (tidak lengket), supaya tidak bertumpuk dengan halaman itu. --}}
+    @if ($halamanSendiri)
+    <div class="bilah-lengket" x-data="navigasiBagian" :class="{ menempel: menempel }">
+    @endif
+    <div class="card" style="{{ $halamanSendiri ? 'margin-bottom:0;padding:10px 16px' : 'margin-bottom:16px' }}">
+        @if ($halamanSendiri)
+            <div class="pb-lbl" style="margin-bottom:6px">📅 Periode Pengisian</div>
+        @endif
         <div class="row2">
             <div class="field" style="margin-bottom:0">
                 <label>Tahun</label>
@@ -35,10 +46,24 @@
             <div class="info warn" style="margin-top:12px">⚠️ Periode {{ $namaBulan[$bulan] }} {{ $tahun }} belum tersedia di sistem, jadi isian belum bisa disimpan.</div>
         @endunless
     </div>
+    @if ($halamanSendiri)
+        @if ($bagianList->isNotEmpty())
+            <nav class="nav-bagian" x-ref="daftar" aria-label="Lompat ke bagian isian">
+                @foreach ($bagianList as $bagian)
+                    <button type="button" class="nb-item" data-bagian="bagian-kustom-{{ $bagian->id }}" title="{{ $bagian->nama }}" wire:key="nav-bagian-kustom-{{ $bagian->id }}"
+                        :class="{ on: aktif === 'bagian-kustom-{{ $bagian->id }}' }" :aria-current="aktif === 'bagian-kustom-{{ $bagian->id }}' ? 'true' : null"
+                        @click="lompatKe('bagian-kustom-{{ $bagian->id }}')">
+                        <span class="nb-n">{{ $loop->iteration }}</span><span class="nb-teks">{{ $bagian->nama }}</span>
+                    </button>
+                @endforeach
+            </nav>
+        @endif
+    </div>
+    @endif
 
     @forelse ($bagianList as $bagian)
         <div class="card" style="margin-bottom:16px" wire:key="bagian-{{ $bagian->id }}">
-            <div class="sec"><span class="n">🧩</span><span>{{ $bagian->nama }}</span></div>
+            <div class="sec" @if ($halamanSendiri) id="bagian-kustom-{{ $bagian->id }}" style="scroll-margin-top:var(--offset-lengket, 200px)" @endif><span class="n">🧩</span><span>{{ $bagian->nama }}</span></div>
             @if ($bagian->deskripsi)
                 <div class="info">ℹ️ {{ $bagian->deskripsi }}</div>
             @endif
