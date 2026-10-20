@@ -418,11 +418,46 @@ class Kegiatan extends Model
 
     /**
      * Nama folder Drive yang berlaku: nama pilihan pengguna (nama_folder_kustom)
-     * bila diisi, selain itu rekomendasi sistem (nama_folder_auto, RF-17).
+     * bila diisi, selain itu rekomendasi sistem (namaFolderRekomendasi()).
      */
     public function namaFolder(): string
     {
-        return $this->nama_folder_kustom ?: ($this->nama_folder_auto ?: $this->uraian_kegiatan);
+        return $this->nama_folder_kustom ?: $this->namaFolderRekomendasi();
+    }
+
+    /**
+     * Rekomendasi sistem untuk nama folder Drive. Kegiatan yang dipisah ke beberapa
+     * tahapan: folder tahapan sudah berada di dalam folder induk bernama uraian
+     * kegiatan (FolderStructureService::resolveKegiatanFolder()), jadi cukup bernama
+     * tahapannya saja, mis. "Kegiatan X/Persiapan/". Selain itu nama_folder_auto.
+     *
+     * nama_folder_auto sendiri tetap "<Tahapan> <uraian>" — kolom itu jejak uraian
+     * asal (uraianAsal()), bukan nama folder yang tampil.
+     */
+    public function namaFolderRekomendasi(): string
+    {
+        if (($tahapan = $this->kunciTahapan()) !== null) {
+            return PengisianKegiatan::labelTahapan($tahapan);
+        }
+
+        return (string) ($this->nama_folder_auto ?: $this->uraian_kegiatan);
+    }
+
+    /**
+     * nama_folder_kustom yang sebenarnya hanya nama otomatis format lama
+     * ("<Tahapan> <uraian>" atau "[Tahapan] <uraian>") — bukan pilihan pengguna,
+     * jadi ikut berganti ke rekomendasi baru (lihat perintah kegiatan:rapikan-folder-tahapan).
+     */
+    public function namaKustomFormatLama(): bool
+    {
+        if (blank($this->nama_folder_kustom) || $this->kunciTahapan() === null) {
+            return false;
+        }
+
+        $kustom = self::uraianNormal(preg_replace('/^\[([^\]]+)\]\s*/u', '$1 ', (string) $this->nama_folder_kustom));
+        $lama = self::uraianNormal(Str::limit(PengisianKegiatan::uraianDenganTahapan((string) $this->uraian_kegiatan, $this->kunciTahapan()), 150, ''));
+
+        return $kustom === $this->namaFolderAutoRapi() || $kustom === $lama;
     }
 
     /**
@@ -437,7 +472,7 @@ class Kegiatan extends Model
     public function gantiNamaFolder(?string $namaBaru): array
     {
         $nama = FolderStructureService::namaOtomatis((string) $namaBaru, 150);
-        $kustom = ($nama === '' || $nama === $this->nama_folder_auto) ? null : $nama;
+        $kustom = ($nama === '' || $nama === $this->namaFolderRekomendasi()) ? null : $nama;
 
         $namaLama = $this->namaFolder();
         $this->nama_folder_kustom = $kustom;
@@ -461,7 +496,7 @@ class Kegiatan extends Model
             $pemakaiFolder = static::where('drive_folder_id', $this->drive_folder_id)->whereKeyNot($this->id)->get();
 
             $pemakaiFolder->each(fn (Kegiatan $lain) => $lain->update([
-                'nama_folder_kustom' => $namaBerlaku === $lain->nama_folder_auto ? null : $namaBerlaku,
+                'nama_folder_kustom' => $namaBerlaku === $lain->namaFolderRekomendasi() ? null : $namaBerlaku,
             ]));
 
             // Folder tahapan salinannya di Evaluasi-RTL ikut bernama baru (hanya bila

@@ -87,10 +87,13 @@ class NamaKegiatanUtamaTampilanTest extends TestCase
         $test = Livewire::test(VerifikasiCapaian::class, ['capaian' => $capaian])
             ->assertSee('Nama kegiatan (capaian)')
             ->assertSee('Lokasi bukti dukung:')
-            // Folder tiap tahapan tetap terlihat untuk membedakan bukti dukungnya.
-            ->assertSee('[Persiapan] Survei Sakernas')
+            // Folder tiap tahapan tetap terlihat untuk membedakan bukti dukungnya —
+            // cukup nama tahapannya; nama pilihan pengguna tetap dipakai.
+            ->assertSeeHtml('>Persiapan</span>')
             ->assertSee('Lapangan Sakernas')
-            ->assertSee('Pengolahan Survei Sakernas')
+            ->assertSeeHtml('>Pengolahan</span>')
+            ->assertDontSee('[Persiapan] Survei Sakernas')
+            ->assertDontSee('Pengolahan Survei Sakernas')
             ->assertDontSeeHtml('Capaian: <b>Persiapan Survei Sakernas</b>')
             ->assertDontSeeHtml('Capaian: <b>Lapangan Sakernas</b>')
             ->assertSeeInOrder(['Tahapan Persiapan', 'Tahapan Pelaksanaan', 'Tahapan Pengolahan']);
@@ -140,10 +143,12 @@ class NamaKegiatanUtamaTampilanTest extends TestCase
             ->call('toggleTahapan', 0, 'persiapan')
             ->call('toggleTahapan', 0, 'pelaksanaan')
             ->assertSeeHtml('Capaian: <b x-text="uraianTeks.trim()">Survei Sakernas</b>')
-            // Nama folder tahapan hanya tampil sebagai folder tujuan unggah.
-            ->assertSee('Persiapan Survei Sakernas')
-            ->assertSee('Pelaksanaan Survei Sakernas')
-            ->assertDontSeeHtml('Capaian: <b>Pelaksanaan Survei Sakernas</b>');
+            // Nama folder tahapan hanya tampil sebagai folder tujuan unggah, cukup
+            // bernama tahapannya (sudah di dalam folder kegiatan).
+            ->assertSeeHtml('>Persiapan</span>')
+            ->assertSeeHtml('📁 Pelaksanaan')
+            ->assertDontSee('Persiapan Survei Sakernas')
+            ->assertDontSee('Pelaksanaan Survei Sakernas');
     }
 
     public function test_nama_capaian_notula_data_lama_satu_entri_per_kegiatan_utama(): void

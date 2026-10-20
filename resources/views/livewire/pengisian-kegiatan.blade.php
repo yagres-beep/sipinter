@@ -553,17 +553,17 @@
                     jenisTerpilih: '{{ $block['jenis'] }}',
                     tahapanTerisi: {{ filled($block['tahapan_survei'] ?? null) ? 'true' : 'false' }},
                     tahapanNilai: '{{ $block['tahapan_survei'] ?? '' }}',
+                    tahapanLabel: @js(filled($block['tahapan_survei'] ?? null) ? \App\Livewire\PengisianKegiatan::labelTahapan($block['tahapan_survei']) : ''),
                     namaFolder: @js($block['nama_folder'] ?? ''),
                     ubahFolder: false,
                     pendingBuktiNames: [],
                     pendingFolderUnggah: '',
+                    {{-- Sama dengan PengisianKegiatan::namaFolderRekomendasi(): folder
+                         tahapan cukup bernama tahapannya (sudah di dalam folder kegiatan). --}}
                     get folderPreview() {
                         if (! this.uraianTeks.trim()) return '';
-                        const prefix = (this.jenisTerpilih === 'survei_sensus' && this.tahapanNilai)
-                            ? this.tahapanNilai.charAt(0).toUpperCase() + this.tahapanNilai.slice(1) + ' '
-                            : '';
-                        const full = prefix + this.uraianTeks;
-                        return full.length > 100 ? full.slice(0, 100) : full;
+                        if (this.jenisTerpilih === 'survei_sensus' && this.tahapanNilai) return this.tahapanLabel;
+                        return this.uraianTeks.length > 100 ? this.uraianTeks.slice(0, 100) : this.uraianTeks;
                     }
                 }">
                 <div class="keg-head">

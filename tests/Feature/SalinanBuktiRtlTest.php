@@ -195,10 +195,10 @@ class SalinanBuktiRtlTest extends TestCase
         $test->set('unggahFolder.0.0.0', [$this->pdf('laporan.pdf')])->assertHasNoErrors();
 
         $this->assertSame([
-            self::AKAR.'/Capaian/Agustus/Rapat koordinasi mitra/Persiapan Rapat koordinasi mitra/Undangan/undangan.pdf',
-            self::AKAR.'/Capaian/Agustus/Rapat koordinasi mitra/Persiapan Rapat koordinasi mitra/laporan.pdf',
-            self::AKAR.'/Evaluasi-RTL/Rapat koordinasi mitra/Persiapan Rapat koordinasi mitra/Undangan/undangan.pdf',
-            self::AKAR.'/Evaluasi-RTL/Rapat koordinasi mitra/Persiapan Rapat koordinasi mitra/laporan.pdf',
+            self::AKAR.'/Capaian/Agustus/Rapat koordinasi mitra/Persiapan/Undangan/undangan.pdf',
+            self::AKAR.'/Capaian/Agustus/Rapat koordinasi mitra/Persiapan/laporan.pdf',
+            self::AKAR.'/Evaluasi-RTL/Rapat koordinasi mitra/Persiapan/Undangan/undangan.pdf',
+            self::AKAR.'/Evaluasi-RTL/Rapat koordinasi mitra/Persiapan/laporan.pdf',
         ], $this->drive->semuaBerkas());
     }
 

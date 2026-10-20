@@ -382,8 +382,8 @@ class FolderStructureService
         }
 
         // Kegiatan survei/sensus dikelompokkan dalam SATU folder induk bernama uraian
-        // kegiatannya, lalu tiap tahapan jadi subfolder di dalamnya (nama tetap memakai
-        // nama kegiatan, mis. "Sakernas/[Persiapan] Sakernas/", "Sakernas/[Pelaksanaan] Sakernas/"),
+        // kegiatannya, lalu tiap tahapan jadi subfolder di dalamnya bernama tahapannya
+        // saja (Kegiatan::namaFolderRekomendasi(), mis. "Sakernas/Persiapan/", "Sakernas/Pelaksanaan/"),
         // supaya beberapa tahapan dari kegiatan yang sama tidak tercecer sejajar.
         // Folder induk dicari lewat nama (findOrCreate) karena memang dipakai bersama
         // oleh semua tahapan kegiatan itu; folder tahapannya tetap milik satu baris.

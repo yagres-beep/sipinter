@@ -338,7 +338,8 @@ class TahapanGandaDanSubfolderTest extends TestCase
         $drive = $this->mock(GoogleDriveService::class);
         $drive->shouldReceive('findOrCreateFolder')->once()->with('Survei Sakernas', 'folder-capaian')->andReturn('folder-induk');
         $drive->shouldReceive('namesInFolder')->once()->with('folder-induk')->andReturn([]);
-        $drive->shouldReceive('createFolder')->once()->with('Persiapan Survei Sakernas', 'folder-induk')->andReturn('folder-persiapan');
+        // Folder tahapan cukup bernama tahapannya (sudah di dalam folder kegiatan).
+        $drive->shouldReceive('createFolder')->once()->with('Persiapan', 'folder-induk')->andReturn('folder-persiapan');
 
         $hasil = app(FolderStructureService::class)->resolveKegiatanFolder($kegiatan, 'folder-capaian');
 

@@ -263,8 +263,8 @@ class IdentitasKegiatanIndukTest extends TestCase
             'Kegiatan 1', 'Uraian Kegiatan', 'Survei Updating Direktori',
             'Pembentukan Folder Kegiatan', 'Pisah ke beberapa tahapan',
             'Tahapan', '☑ Persiapan', '☑ Pelaksanaan',
-            'Bukti Capaian (PDF)', 'Persiapan Survei Updating Direktori', 'bukti-persiapan.pdf',
-            'Pelaksanaan Survei Updating Direktori', 'bukti-pelaksanaan.pdf',
+            'Bukti Capaian (PDF)', 'Survei Updating Direktori', '>Persiapan<', 'bukti-persiapan.pdf',
+            '>Pelaksanaan<', 'bukti-pelaksanaan.pdf',
             'Kegiatan 2', 'Rapat koordinasi',
         ], new \Illuminate\Testing\Constraints\SeeInOrder($html));
 

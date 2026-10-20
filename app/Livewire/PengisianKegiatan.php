@@ -569,7 +569,7 @@ class PengisianKegiatan extends Component
             $labelInduk = match (true) {
                 $ti === 0 => $this->namaFolderBerlaku($index),
                 $kustomTahapan !== '' => FolderStructureService::namaOtomatis($kustomTahapan, 150),
-                default => $this->namaFolderOtomatis(array_merge($block, ['tahapan_survei' => $tahapan])),
+                default => $this->namaFolderRekomendasi(array_merge($block, ['tahapan_survei' => $tahapan])),
             };
 
             $folder = [['urutan' => 0, 'subfolder' => '', 'label' => $labelInduk]];
@@ -581,7 +581,7 @@ class PengisianKegiatan extends Component
                 'urutan' => $ti,
                 'tahapan' => $tahapan,
                 'label' => $labelInduk,
-                'otomatis' => $this->namaFolderOtomatis(array_merge($block, ['tahapan_survei' => $tahapan ?? ''])),
+                'otomatis' => $this->namaFolderRekomendasi(array_merge($block, ['tahapan_survei' => $tahapan ?? ''])),
                 'folder' => $folder,
             ];
         }
@@ -1310,20 +1310,31 @@ class PengisianKegiatan extends Component
             return '';
         }
 
-        return $this->namaFolderOtomatis($block);
+        return $this->namaFolderRekomendasi($block);
     }
 
     /**
-     * Rekomendasi sistem untuk nama folder Drive satu blok — sama persis dengan
-     * nama_folder_auto yang disimpan simpanBagianIsian().
+     * Rekomendasi sistem untuk nama folder Drive satu blok, sama dengan
+     * Kegiatan::namaFolderRekomendasi(): folder tahapan (di dalam folder induk bernama
+     * uraian kegiatan) cukup bernama tahapannya, mis. "Kegiatan X/Persiapan/";
+     * kegiatan 1 folder bernama uraian kegiatannya.
+     */
+    protected function namaFolderRekomendasi(array $block): string
+    {
+        $tahapan = ($block['jenis'] ?? '') === 'survei_sensus' ? ($block['tahapan_survei'] ?? '') : '';
+
+        return filled($tahapan) ? self::labelTahapan($tahapan) : $this->namaFolderOtomatis($block);
+    }
+
+    /**
+     * nama_folder_auto yang disimpan simpanBagianIsian(): "<Tahapan> <uraian>" tanpa
+     * kurung siku. Bukan lagi nama folder tahapan (lihat namaFolderRekomendasi()),
+     * tetapi tetap disimpan sebagai jejak uraian asal (Kegiatan::uraianAsal()).
      */
     protected function namaFolderOtomatis(array $block): string
     {
         $tahapan = $block['jenis'] === 'survei_sensus' ? $block['tahapan_survei'] : null;
 
-        // Survei/sensus: folder tahapan (di dalam folder induk bernama uraian kegiatan,
-        // lihat FolderStructureService::resolveKegiatanFolder()) bernama "<Tahapan>
-        // <uraian>" tanpa kurung siku, mis. "Kegiatan X/Persiapan Kegiatan X/".
         return Str::limit(self::uraianDenganTahapan($block['uraian_kegiatan'], $tahapan), 100, '');
     }
 
