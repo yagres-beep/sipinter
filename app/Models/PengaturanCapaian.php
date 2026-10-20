@@ -79,8 +79,10 @@ class PengaturanCapaian extends Model
     }
 
     /**
-     * Khusus baris "Realisasi Kumulatif (%)" IKU 'rasio' (Verifikasi Capaian & kolom
-     * Realisasi notula) -- format Indonesia, TEPAT 5 angka di belakang koma
+     * Khusus Realisasi kumulatif -- baris "Realisasi Kumulatif (%)" IKU 'rasio' di
+     * Verifikasi Capaian & kolom Realisasi notula (IKU 'rasio' maupun 'langsung';
+     * input Realisasi 'langsung' di Verifikasi juga 5 desimal, lihat cast decimal:5
+     * di App\Models\CapaianTahunan) -- format Indonesia, TEPAT 5 angka di belakang koma
      * (66,66667 / 62,50000 / 0,00000). Null (belum ada data) tetap "-". Angka lain
      * di aplikasi tetap memakai formatAngka()/formatPersen().
      */

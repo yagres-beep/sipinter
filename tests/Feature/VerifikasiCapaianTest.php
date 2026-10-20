@@ -1478,6 +1478,48 @@ class VerifikasiCapaianTest extends TestCase
         $this->assertStringContainsString('>66.67<', $xml);
     }
 
+    /**
+     * IKU 'langsung': Realisasi (kumulatif s.d. TW ini) yang diketik 5,55556 tersimpan
+     * utuh (bukan terpotong 5,56), tampil 5 desimal di input Verifikasi dan di kolom
+     * Realisasi notula.
+     */
+    public function test_realisasi_langsung_tersimpan_dan_tampil_lima_desimal(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+        $data['iku']->update(['metode_capaian' => 'langsung', 'satuan' => 'Poin', 'sasaran' => 'Sasaran Uji Langsung']);
+
+        Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']->fresh()])
+            ->set('alokasi_tw3', 10)
+            ->set('realisasi_tw3', '5.55556')
+            ->call('simpanPerubahan')
+            ->assertHasNoErrors();
+
+        $capaianTahunan = CapaianTahunan::where('iku_id', $data['iku']->id)->first();
+        $this->assertSame('5.55556', $capaianTahunan->realisasi_tw3);
+        $this->assertSame(5.55556, $capaianTahunan->realisasiKumulatif(3));
+
+        Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']->fresh()])
+            ->assertSet('realisasi_tw3', '5.55556')
+            ->assertSeeHtml('step="0.00001"');
+
+        $data['capaian']->update(['status' => Capaian::STATUS_DIVERIFIKASI]);
+        $notula = app(NotulaService::class)->untukTriwulan(2026, 3);
+        $path = tempnam(sys_get_temp_dir(), 'lima-desimal-langsung').'.docx';
+
+        try {
+            app(\App\Services\NotulaBagian1DocxService::class)->generate($notula, app(NotulaService::class)->kumpulkanDataBagianSatu($notula), $path);
+            $zip = new \ZipArchive;
+            $zip->open($path);
+            $xml = (string) $zip->getFromName('word/document.xml');
+            $zip->close();
+        } finally {
+            @unlink($path);
+        }
+
+        $this->assertStringContainsString('>5,55556<', $xml);
+    }
+
     public function test_memilih_rincian_n_menentukan_realisasi_x_otomatis(): void
     {
         $this->actingAs($this->buatSakip());

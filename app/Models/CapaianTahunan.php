@@ -79,14 +79,17 @@ class CapaianTahunan extends Model
         $decimal = [
             'target_tahunan', 'x_target', 'y_target',
             'alokasi_tw1', 'alokasi_tw2', 'alokasi_tw3', 'alokasi_tw4',
-            'realisasi_tw1', 'realisasi_tw2', 'realisasi_tw3', 'realisasi_tw4',
             'x_alokasi_tw1', 'x_alokasi_tw2', 'x_alokasi_tw3', 'x_alokasi_tw4',
             'y_alokasi_tw1', 'y_alokasi_tw2', 'y_alokasi_tw3', 'y_alokasi_tw4',
             'x_realisasi_tw1', 'x_realisasi_tw2', 'x_realisasi_tw3', 'x_realisasi_tw4',
             'y_realisasi_tw1', 'y_realisasi_tw2', 'y_realisasi_tw3', 'y_realisasi_tw4',
         ];
 
-        return array_fill_keys($decimal, 'decimal:2');
+        // Realisasi (kumulatif) IKU 'langsung' disimpan & ditampilkan 5 desimal
+        // (mis. 5,55556), lihat migration 2026_10_20_000001.
+        $limaDesimal = ['realisasi_tw1', 'realisasi_tw2', 'realisasi_tw3', 'realisasi_tw4'];
+
+        return array_fill_keys($decimal, 'decimal:2') + array_fill_keys($limaDesimal, 'decimal:5');
     }
 
     public function masterIku(): BelongsTo

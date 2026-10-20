@@ -568,9 +568,9 @@ class NotulaBagian1DocxService
         $this->set($sub, 'sasaran', $iku->sasaran);
         $this->set($sub, 'target_pk', PengaturanCapaian::formatAngka($rekap['target_pk'] ?? null));
         $this->set($sub, 'target_tw', PengaturanCapaian::formatAngka($rekap['target_tw'] ?? null));
-        $this->set($sub, 'realisasi_tw', $iku->pakaiRasio()
-            ? PengaturanCapaian::formatRealisasiKumulatif($rekap['realisasi_kumulatif_persen'] ?? null)
-            : PengaturanCapaian::formatAngka($rekap['realisasi'] ?? null));
+        $this->set($sub, 'realisasi_tw', PengaturanCapaian::formatRealisasiKumulatif($iku->pakaiRasio()
+            ? ($rekap['realisasi_kumulatif_persen'] ?? null)
+            : ($rekap['realisasi'] ?? null)));
         $this->set($sub, 'capaian_tw', PengaturanCapaian::formatPersen($rekap['capaian_tw'] ?? null));
         $this->set($sub, 'capaian_pk', PengaturanCapaian::formatPersen($rekap['capaian_pk'] ?? null));
 
