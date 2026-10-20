@@ -971,6 +971,10 @@ class PengisianKegiatan extends Component
             $this->unggahLangsung($cocok[1]);
         }
 
+        if (preg_match('/^blocks\.(\d+)\.uraian_kegiatan$/', $property, $cocok)) {
+            $this->samakanUraianTahapan((int) $cocok[1]);
+        }
+
         // Berkas yang tertahan karena uraian kegiatan/teks poin masih kosong langsung
         // diunggah begitu uraiannya diisi.
         if (preg_match('/^(blocks\.\d+)\.uraian_kegiatan$|^(bagianKustomBlocks\.\d+\.\d+)\.teks$/', $property, $cocok)) {
@@ -1606,6 +1610,49 @@ class PengisianKegiatan extends Component
         $this->blocks[$index]['rtl_evaluasi_id'] = $poin->id;
         $this->blocks[$index]['uraian_kegiatan'] = $poin->rtl_teks;
         $this->adaPerubahan = true;
+        $this->samakanUraianTahapan($index);
+    }
+
+    /**
+     * Indeks blok tersimpan lain yang masih bisa disunting dalam kartu kegiatan induk
+     * yang sama dengan blok $index (berdampingan, nomor Kegiatan N sama — lihat
+     * nomorKegiatanBlok(), yang menilai blok tersimpan dari baris DB-nya).
+     *
+     * @return list<int>
+     */
+    public function saudaraTahapanBlok(int $index): array
+    {
+        if (empty($this->blocks[$index]['id'])) {
+            return [];
+        }
+
+        $nomor = $this->nomorKegiatanBlok();
+        $saudara = [];
+
+        foreach ([-1, 1] as $arah) {
+            for ($j = $index + $arah; isset($this->blocks[$j]) && ($nomor[$j] ?? null) === ($nomor[$index] ?? null); $j += $arah) {
+                if (! empty($this->blocks[$j]['id']) && ! $this->blokTerkunci($this->blocks[$j]['status_dokumen'] ?? null)) {
+                    $saudara[] = $j;
+                }
+            }
+        }
+
+        sort($saudara);
+
+        return $saudara;
+    }
+
+    /**
+     * Uraian (dan poin RTL) adalah milik kegiatan INDUK, bukan per tahapan — diisi
+     * sekali di kartu "Kegiatan N", lalu disamakan ke tahapan-tahapan lain yang masih
+     * bisa disunting supaya satu kegiatan tidak terpecah jadi beberapa kegiatan.
+     */
+    protected function samakanUraianTahapan(int $index): void
+    {
+        foreach ($this->saudaraTahapanBlok($index) as $j) {
+            $this->blocks[$j]['uraian_kegiatan'] = $this->blocks[$index]['uraian_kegiatan'];
+            $this->blocks[$j]['rtl_evaluasi_id'] = $this->blocks[$index]['rtl_evaluasi_id'] ?? null;
+        }
     }
 
     public function removeBuktiKegiatan(int $blockIndex, int $fileIndex): void
@@ -2967,6 +3014,11 @@ class PengisianKegiatan extends Component
 
             return;
         }
+
+        // Tahapan-tahapan satu kegiatan induk dimuat berdampingan (kelompok urut
+        // anggota pertamanya) supaya blade bisa menampilkannya dalam SATU kartu
+        // "Kegiatan N" — bukan kartu terpisah per tahapan.
+        $kegiatanList = Kegiatan::kelompokInduk($kegiatanList)->flatMap(fn ($kelompok) => $kelompok->values())->values();
 
         $this->blocks = $kegiatanList->map(function (Kegiatan $kegiatan) {
             $subfolders = $kegiatan->berkas->pluck('subfolder')->filter()->unique()->values()->all();

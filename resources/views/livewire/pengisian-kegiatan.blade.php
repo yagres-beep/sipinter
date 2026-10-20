@@ -295,24 +295,68 @@
 
         {{-- Nomor kegiatan INDUK (PengisianKegiatan::nomorKegiatanBlok()): tahapan-tahapan
              satu kegiatan berbagi nomor, sama dengan Verifikasi Capaian; tahapannya tampil
-             sebagai keterangan sekunder bila nomornya dipakai lebih dari satu blok. --}}
+             sebagai keterangan sekunder bila nomornya dipakai lebih dari satu blok.
+             Blok berdampingan dengan nomor sama (muatBlocksKegiatan() memuatnya
+             berdampingan) digabung dalam SATU kartu "Kegiatan N": uraian tampil sekali,
+             tiap tahapan jadi sub-bagian (.keg-tahapan) berisi folder & buktinya. --}}
         @php
             $nomorKegiatan = $this->nomorKegiatanBlok();
             $jumlahPerNomor = array_count_values($nomorKegiatan);
+            $awalGrup = [];
+            $anggotaGrup = [];
+            $sebelumnya = null;
+            foreach (array_keys($blocks) as $k) {
+                $mulai = $sebelumnya !== null && ($nomorKegiatan[$k] ?? null) === ($nomorKegiatan[$sebelumnya] ?? null) ? $awalGrup[$sebelumnya] : $k;
+                $awalGrup[$k] = $mulai;
+                $anggotaGrup[$mulai][] = $k;
+                $sebelumnya = $k;
+            }
         @endphp
         @foreach ($blocks as $i => $block)
             @php
                 $terkunci = $this->blokTerkunci($block['status_dokumen']);
                 $nomorBlok = $nomorKegiatan[$i] ?? $i + 1;
-                $tahapanHead = ($jumlahPerNomor[$nomorBlok] ?? 0) > 1 && $block['jenis'] === 'survei_sensus' ? $this->tahapanDipilih($block) : [];
+                $anggota = $anggotaGrup[$awalGrup[$i] ?? $i] ?? [$i];
+                $dalamGrup = count($anggota) > 1;
+                $tahapanHead = ($dalamGrup || ($jumlahPerNomor[$nomorBlok] ?? 0) > 1) && $block['jenis'] === 'survei_sensus' ? $this->tahapanDipilih($block) : [];
             @endphp
-            @if ($terkunci)
-                <div class="keg" wire:key="block-{{ $i }}" style="opacity:.8">
+            @if ($dalamGrup && $anggota[0] === $i)
+                @php
+                    $blokUraianInduk = collect($anggota)->map(fn ($k) => $blocks[$k])->first(fn ($b) => $this->blokTerkunci($b['status_dokumen']));
+                @endphp
+                <div class="keg keg-induk" wire:key="induk-{{ $i }}-{{ $block['id'] ?? 'baru' }}">
                     <div class="keg-head">
                         <span class="t">Kegiatan {{ $nomorBlok }}</span>
-                        @foreach ($tahapanHead as $t)
-                            <x-tahapan-kegiatan :tahapan="$t" />
-                        @endforeach
+                        <span class="keg-induk-jml">{{ count($anggota) }} tahapan</span>
+                    </div>
+                    @if ($blokUraianInduk)
+                        <div class="field">
+                            <label>Uraian Kegiatan</label>
+                            <div class="inp filled" style="background:var(--ro-bg)">{{ $blokUraianInduk['uraian_kegiatan'] }}</div>
+                        </div>
+                        <div class="field">
+                            <label>Pembentukan Folder Kegiatan</label>
+                            <div class="inp filled" style="background:var(--ro-bg)">{{ $blokUraianInduk['jenis'] === 'survei_sensus' ? 'Pisah ke beberapa tahapan' : '1 folder (kegiatan)' }}</div>
+                        </div>
+                    @endif
+            @endif
+            @if ($terkunci)
+                <div class="{{ $dalamGrup ? 'keg-tahapan' : 'keg' }}" wire:key="block-{{ $i }}" style="opacity:.8">
+                    <div class="keg-head">
+                        @if ($dalamGrup)
+                            <span class="t">
+                                @forelse ($tahapanHead as $t)
+                                    <x-tahapan-kegiatan :tahapan="$t" />
+                                @empty
+                                    Kegiatan
+                                @endforelse
+                            </span>
+                        @else
+                            <span class="t">Kegiatan {{ $nomorBlok }}</span>
+                            @foreach ($tahapanHead as $t)
+                                <x-tahapan-kegiatan :tahapan="$t" />
+                            @endforeach
+                        @endif
                         <x-badge-status :status="$block['status_dokumen']" />
                     </div>
                     @php $bolehSusulan = $this->kegiatanBolehBuktiSusulan($block); @endphp
@@ -327,14 +371,20 @@
                         @endif
                     </div>
 
-                    <div class="field">
-                        <label>Uraian Kegiatan</label>
-                        <div class="inp filled" style="background:var(--ro-bg)">{{ $block['uraian_kegiatan'] }}</div>
-                    </div>
-                    <div class="field">
-                        <label>Pembentukan Folder Kegiatan</label>
-                        <div class="inp filled" style="background:var(--ro-bg)">{{ $block['jenis'] === 'survei_sensus' ? 'Pisah ke beberapa tahapan' : '1 folder (kegiatan)' }}@if ($block['tahapan_survei']) — {{ \App\Livewire\PengisianKegiatan::labelTahapan($block['tahapan_survei']) }}@endif</div>
-                    </div>
+                    {{-- Dalam kartu gabungan uraian sudah tampil sekali di atas; tampil lagi
+                         hanya bila uraian tahapan ini berbeda (mis. dikoreksi Tim SAKIP). --}}
+                    @if (! $dalamGrup || trim(mb_strtolower($block['uraian_kegiatan'])) !== trim(mb_strtolower($blokUraianInduk['uraian_kegiatan'] ?? '')))
+                        <div class="field">
+                            <label>Uraian Kegiatan</label>
+                            <div class="inp filled" style="background:var(--ro-bg)">{{ $block['uraian_kegiatan'] }}</div>
+                        </div>
+                    @endif
+                    @unless ($dalamGrup)
+                        <div class="field">
+                            <label>Pembentukan Folder Kegiatan</label>
+                            <div class="inp filled" style="background:var(--ro-bg)">{{ $block['jenis'] === 'survei_sensus' ? 'Pisah ke beberapa tahapan' : '1 folder (kegiatan)' }}@if ($block['tahapan_survei']) — {{ \App\Livewire\PengisianKegiatan::labelTahapan($block['tahapan_survei']) }}@endif</div>
+                        </div>
+                    @endunless
                     <div style="margin-bottom:10px">
                         @if ($block['id'] && ! $formTerkunciSedangDitangani)
                             <x-nama-folder :id="$block['id']" :nama="$this->namaFolderBerlaku($i)" :kustom="filled($block['nama_folder'] ?? '')" />
@@ -396,7 +446,14 @@
                 ini berhenti berfungsi di Livewire 4 — dikembalikan ke pendekatan
                 wire:key ini yang sudah terbukti aman.)
             --}}
-            <div class="keg" wire:key="block-{{ $i }}-{{ $block['id'] ?? 'baru' }}-{{ trim($block['uraian_kegiatan']) !== '' ? 1 : 0 }}-{{ $block['jenis'] }}-{{ $block['tahapan_survei'] ?? '' }}"
+            @php
+                // Tahapan yang uraiannya ikut tahapan lain di kartu yang sama: key ikut isi
+                // uraian supaya x-data (uraianTeks/pratinjau folder) dibuat ulang begitu
+                // uraian disamakan dari server.
+                $uraianIkutTahapanLain = $dalamGrup && ! empty($block['id']) && collect($anggota)
+                    ->first(fn ($k) => ! empty($blocks[$k]['id']) && ! $this->blokTerkunci($blocks[$k]['status_dokumen'])) !== $i;
+            @endphp
+            <div class="{{ $dalamGrup ? 'keg-tahapan' : 'keg' }}" wire:key="block-{{ $i }}-{{ $block['id'] ?? 'baru' }}-{{ trim($block['uraian_kegiatan']) !== '' ? 1 : 0 }}-{{ $block['jenis'] }}-{{ $block['tahapan_survei'] ?? '' }}{{ $uraianIkutTahapanLain ? '-'.md5($block['uraian_kegiatan']) : '' }}"
                 x-data="{
                     uraianTerisi: {{ trim($block['uraian_kegiatan']) !== '' ? 'true' : 'false' }},
                     uraianTeks: @js($block['uraian_kegiatan']),
@@ -417,10 +474,20 @@
                     }
                 }">
                 <div class="keg-head">
-                    <span class="t">Kegiatan {{ $nomorBlok }}</span>
-                    @foreach ($tahapanHead as $t)
-                        <x-tahapan-kegiatan :tahapan="$t" />
-                    @endforeach
+                    @if ($dalamGrup)
+                        <span class="t">
+                            @forelse ($tahapanHead as $t)
+                                <x-tahapan-kegiatan :tahapan="$t" />
+                            @empty
+                                Kegiatan
+                            @endforelse
+                        </span>
+                    @else
+                        <span class="t">Kegiatan {{ $nomorBlok }}</span>
+                        @foreach ($tahapanHead as $t)
+                            <x-tahapan-kegiatan :tahapan="$t" />
+                        @endforeach
+                    @endif
                     @if ($block['status_dokumen'])
                         <x-badge-status :status="$block['status_dokumen']" />
                     @endif
@@ -433,8 +500,10 @@
                     @endif
                 </div>
 
-                <div class="field">
-                    <label>Uraian Kegiatan <span class="req">*</span></label>
+                {{-- Kartu gabungan: uraian diisi sekali di tahapan pertama yang bisa
+                     disunting lalu disamakan ke tahapan lain (samakanUraianTahapan()). --}}
+                <div class="field" @if ($uraianIkutTahapanLain) style="display:none" @endif>
+                    <label>Uraian Kegiatan <span class="req">*</span>@if ($dalamGrup && ! empty($block['id'])) <span style="color:var(--muted);font-weight:500">— berlaku untuk semua tahapan kegiatan ini</span>@endif</label>
 
                     @if ($rtlBerjalanOptions->isNotEmpty())
                         <select class="inp filled" style="margin-bottom:8px"
@@ -749,6 +818,9 @@
                     @enderror
                 </div>
             </div>
+            @endif
+            @if ($dalamGrup && end($anggota) === $i)
+                </div>{{-- /.keg-induk --}}
             @endif
         @endforeach
 

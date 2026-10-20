@@ -222,17 +222,69 @@ class IdentitasKegiatanIndukTest extends TestCase
             ->assertSeeInOrder(['Kegiatan 1', 'Tahapan Persiapan', 'Kegiatan 2', 'Kegiatan 1', 'Tahapan Pelaksanaan']);
         $info = $verifikasi->instance()->infoKegiatanInduk();
 
+        // Isian: tahapan satu kegiatan dimuat berdampingan dalam SATU kartu "Kegiatan 1".
         $isian = Livewire::test(PengisianKegiatan::class)
             ->set('tahun', 2026)->set('bulan', 7)->set('iku_id', $this->iku->id)
-            ->assertSeeInOrder(['Kegiatan 1', 'Tahapan Persiapan', 'Kegiatan 2', 'Kegiatan 1', 'Tahapan Pelaksanaan']);
+            ->assertSeeInOrder(['Kegiatan 1', '2 tahapan', 'Survei Sakernas', 'Tahapan Persiapan', 'Tahapan Pelaksanaan', 'Kegiatan 2', 'Rapat koordinasi']);
         $nomorIsian = $isian->instance()->nomorKegiatanBlok();
         $idBlok = collect($isian->get('blocks'))->pluck('id')->all();
 
-        $this->assertSame([$persiapan->id, $rapat->id, $pelaksanaan->id], $idBlok);
+        $this->assertSame([$persiapan->id, $pelaksanaan->id, $rapat->id], $idBlok);
         foreach ($idBlok as $i => $id) {
             $this->assertSame($info[$id]['nomor'], $nomorIsian[$i], "Nomor kegiatan #{$id} harus sama di Isian & Verifikasi.");
         }
-        $this->assertSame([1, 2, 1], $nomorIsian);
+        $this->assertSame([1, 1, 2], $nomorIsian);
+
+        $html = $isian->html();
+        $this->assertSame(1, substr_count($html, '>Kegiatan 1<'));
+        $this->assertSame(1, substr_count($html, 'class="keg keg-induk"'));
+        $this->assertSame(2, substr_count($html, 'class="keg-tahapan"'));
+    }
+
+    public function test_isian_tahapan_terverifikasi_satu_kartu_uraian_sekali(): void
+    {
+        $persiapan = $this->tahapan('Survei Updating Direktori', 'persiapan', ['status_dokumen' => Kegiatan::STATUS_DIVERIFIKASI]);
+        $this->satuFolder('Rapat koordinasi', ['status_dokumen' => Kegiatan::STATUS_DIVERIFIKASI]);
+        $pelaksanaan = $this->tahapan('Survei Updating Direktori', 'pelaksanaan', ['status_dokumen' => Kegiatan::STATUS_DIVERIFIKASI]);
+        foreach ([$persiapan, $pelaksanaan] as $k) {
+            Berkas::create([
+                'ref_id' => $k->id, 'ref_type' => Kegiatan::class, 'kategori' => 'capaian',
+                'nama_file' => "bukti-{$k->tahapan_survei}.pdf", 'status_verifikasi' => 'terverifikasi', 'drive_file_id' => "drive-{$k->id}",
+            ]);
+        }
+
+        $this->login('Ketua Tim');
+        $isian = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)->set('bulan', 7)->set('iku_id', $this->iku->id)
+            ->assertSeeInOrder([
+                'Kegiatan 1', '2 tahapan', 'Survei Updating Direktori',
+                'Tahapan Persiapan', 'bukti-persiapan.pdf', 'Tahapan Pelaksanaan', 'bukti-pelaksanaan.pdf',
+                'Kegiatan 2', 'Rapat koordinasi',
+            ]);
+
+        $html = $isian->html();
+        $this->assertSame(1, substr_count($html, '>Kegiatan 1<'));
+        $this->assertSame(0, substr_count($html, '>Kegiatan 3<'));
+        $this->assertSame(1, substr_count($html, '>Survei Updating Direktori</div>'));
+        $this->assertSame(1, substr_count($html, 'Pisah ke beberapa tahapan</div>'));
+    }
+
+    public function test_uraian_tahapan_yang_bisa_disunting_disamakan_dalam_satu_kegiatan(): void
+    {
+        $this->tahapan('Survei Sakernas', 'persiapan', ['status_dokumen' => Kegiatan::STATUS_DRAFT]);
+        $this->tahapan('Survei Sakernas', 'pelaksanaan', ['status_dokumen' => Kegiatan::STATUS_DRAFT]);
+        $this->satuFolder('Rapat koordinasi', ['status_dokumen' => Kegiatan::STATUS_DRAFT]);
+
+        $this->login('Ketua Tim');
+        $isian = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)->set('bulan', 7)->set('iku_id', $this->iku->id)
+            ->set('blocks.0.uraian_kegiatan', 'Survei Angkatan Kerja Nasional');
+
+        $this->assertSame(
+            ['Survei Angkatan Kerja Nasional', 'Survei Angkatan Kerja Nasional', 'Rapat koordinasi'],
+            collect($isian->get('blocks'))->pluck('uraian_kegiatan')->all()
+        );
+        $this->assertSame([1, 1, 2], $isian->instance()->nomorKegiatanBlok());
     }
 
     public function test_keterangan_tahapan_memakai_token_tema_terang_dan_gelap(): void
