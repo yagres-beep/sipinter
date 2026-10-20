@@ -322,25 +322,118 @@
             @endphp
             @if ($dalamGrup && $anggota[0] === $i)
                 @php
-                    $blokUraianInduk = collect($anggota)->map(fn ($k) => $blocks[$k])->first(fn ($b) => $this->blokTerkunci($b['status_dokumen']));
+                    $blokGrup = collect($anggota)->map(fn ($k) => $blocks[$k]);
+                    $blokUraianInduk = $blokGrup->first(fn ($b) => $this->blokTerkunci($b['status_dokumen']));
+                    // Semua tahapan terkunci: kartu tampil seperti form pengajuan baru —
+                    // satu uraian, pembentukan folder & tahapan terpilih, lalu bukti per
+                    // folder tahapan (lihat cabang $grupTerkunci di bawah).
+                    $grupTerkunci = $blokGrup->every(fn ($b) => $this->blokTerkunci($b['status_dokumen']));
+                    $statusGrup = $blokGrup->pluck('status_dokumen')->unique();
+                    $tahapanGrup = $blokGrup->flatMap(fn ($b) => $b['jenis'] === 'survei_sensus' ? $this->tahapanDipilih($b) : [])->unique()->values()->all();
+                    $jenisGrup = $tahapanGrup !== [] ? 'survei_sensus' : 'bukan_survei_sensus';
                 @endphp
-                <div class="keg keg-induk" wire:key="induk-{{ $i }}-{{ $block['id'] ?? 'baru' }}">
+                <div class="keg keg-induk" wire:key="induk-{{ $i }}-{{ $block['id'] ?? 'baru' }}" @if ($grupTerkunci) style="opacity:.8" @endif>
                     <div class="keg-head">
                         <span class="t">Kegiatan {{ $nomorBlok }}</span>
-                        <span class="keg-induk-jml">{{ count($anggota) }} tahapan</span>
+                        @if ($grupTerkunci && $statusGrup->count() === 1)
+                            <x-badge-status :status="$statusGrup->first()" />
+                        @endif
                     </div>
+                    @if ($grupTerkunci)
+                        <div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">
+                            @if ($blokGrup->contains(fn ($b) => $this->kegiatanBolehBuktiSusulan($b)))
+                                🔒 Sudah diverifikasi Tim SAKIP — isian tidak bisa diubah, tapi Anda masih bisa menambahkan bukti dukung baru di bawah.
+                            @else
+                                🔒 Sudah ditangani/diverifikasi Tim SAKIP — tidak bisa diedit dari sini.
+                            @endif
+                            @if ($blokGrup->flatMap(fn ($b) => $b['existing_bukti'])->contains(fn ($f) => $this->buktiLamaBisaDikelola($f['status_verifikasi'], true)))
+                                Bukti yang ditandai <b style="color:var(--red)">Tidak Sesuai</b> bisa diganti atau dihapus; bukti yang sudah Sesuai hanya bisa dilihat.
+                            @endif
+                        </div>
+                    @endif
                     @if ($blokUraianInduk)
                         <div class="field">
                             <label>Uraian Kegiatan</label>
                             <div class="inp filled" style="background:var(--ro-bg)">{{ $blokUraianInduk['uraian_kegiatan'] }}</div>
                         </div>
+                    @endif
+                    @if ($grupTerkunci)
                         <div class="field">
                             <label>Pembentukan Folder Kegiatan</label>
-                            <div class="inp filled" style="background:var(--ro-bg)">{{ $blokUraianInduk['jenis'] === 'survei_sensus' ? 'Pisah ke beberapa tahapan' : '1 folder (kegiatan)' }}</div>
+                            <div class="pills pills-baca">
+                                <span class="pill {{ $jenisGrup === 'bukan_survei_sensus' ? 'on' : 'locked' }}">1 folder (kegiatan)</span>
+                                <span class="pill {{ $jenisGrup === 'survei_sensus' ? 'on' : 'locked' }}">Pisah ke beberapa tahapan</span>
+                            </div>
                         </div>
+                        @if ($tahapanGrup !== [])
+                            <div class="field">
+                                <label>Tahapan</label>
+                                <div class="pills pills-baca">
+                                    @foreach (array_values(array_unique(array_merge(array_keys(\App\Livewire\PengisianKegiatan::DAFTAR_TAHAPAN), $tahapanGrup))) as $nilaiTahapan)
+                                        @php $tahapanAktif = in_array($nilaiTahapan, $tahapanGrup, true); @endphp
+                                        <span class="pill {{ $tahapanAktif ? 'on' : 'locked' }}">{{ $tahapanAktif ? '☑' : '☐' }} {{ \App\Livewire\PengisianKegiatan::labelTahapan($nilaiTahapan) }}</span>
+                                    @endforeach
+                                </div>
+                            </div>
+                        @endif
+                        <div class="field" style="margin-bottom:0">
+                            <label>Bukti Capaian (PDF)</label>
+                            <div style="border:1.5px dashed var(--line);border-radius:10px;padding:10px 12px;margin-top:6px">
+                                <div class="fhint" style="margin:0 0 6px">Capaian: <b>{{ trim($blokUraianInduk['uraian_kegiatan']) }}</b></div>
+                                @if ($tahapanGrup !== [])
+                                    <div class="foldername">📁 {{ \App\Services\FolderStructureService::namaOtomatis($blokUraianInduk['uraian_kegiatan'], 150) }}</div>
+                                @endif
                     @endif
             @endif
-            @if ($terkunci)
+            @if ($terkunci && $dalamGrup && $grupTerkunci)
+                {{-- Satu folder tahapan di dalam kartu gabungan: nama folder + bukti dukungnya. --}}
+                @php $bolehSusulan = $this->kegiatanBolehBuktiSusulan($block); @endphp
+                <div class="keg-folder-tahapan" wire:key="block-{{ $i }}">
+                    <div class="keg-folder-tahapan-head">
+                        <span class="panah">↳</span>
+                        @if ($block['id'] && ! $formTerkunciSedangDitangani)
+                            <x-nama-folder :id="$block['id']" :nama="$this->namaFolderBerlaku($i)" :kustom="filled($block['nama_folder'] ?? '')" />
+                        @else
+                            <span class="foldername">📁 {{ $this->namaFolderBerlaku($i) }}</span>
+                        @endif
+                        @if ($statusGrup->count() > 1)
+                            <x-badge-status :status="$block['status_dokumen']" />
+                        @endif
+                    </div>
+                    @if (trim(mb_strtolower($block['uraian_kegiatan'])) !== trim(mb_strtolower($blokUraianInduk['uraian_kegiatan'] ?? '')))
+                        <div class="fhint" style="margin:4px 0 0">Uraian tahapan ini: <b>{{ $block['uraian_kegiatan'] }}</b></div>
+                    @endif
+                    <div class="filechip-grid" style="margin-top:6px">
+                        @forelse ($block['existing_bukti'] as $file)
+                            <div class="filechip {{ $file['status_verifikasi'] === 'terverifikasi' ? 'ok' : ($file['status_verifikasi'] === 'ditolak' ? 'no' : '') }}">
+                                <span class="nm">
+                                    <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" :status="$file['status_verifikasi'] ?? null" /><x-belum-di-drive :di-drive="$file['di_drive'] ?? true" :berkas-id="$file['id']" />
+                                    @if (filled($file['subfolder'] ?? null))
+                                        <span class="sub">📁 {{ $file['subfolder'] }}</span>
+                                    @endif
+                                    @if ($file['status_verifikasi'] === 'ditolak' && $file['catatan'])
+                                        <span class="sub" style="color:var(--red)">{{ $file['catatan'] }}</span>
+                                    @endif
+                                </span>
+                                <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file['id'] }}">🔍 Lihat</button>
+                                @if ($this->buktiLamaBisaDikelola($file['status_verifikasi'], true))
+                                    @include('livewire.partials._ganti-berkas', ['berkasId' => $file['id']])
+                                    <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLama', args: [{{ $i }}, {{ $file['id'] }}], tertaut: @js(filled($block['rtl_evaluasi_id'] ?? null)) }" wire:loading.class="btn-busy" wire:target="hapusBuktiLama({{ $i }}, {{ $file['id'] }})">🗑️</span>
+                                @endif
+                            </div>
+                        @empty
+                            <p style="color:var(--muted);font-size:12.5px">Belum ada bukti diunggah.</p>
+                        @endforelse
+                    </div>
+                    @if ($bolehSusulan)
+                        @include('livewire.partials._bukti-susulan', ['kunciSusulan' => 'kegiatan-'.$block['id']])
+                    @endif
+                </div>
+                @if (end($anggota) === $i)
+                            </div>{{-- /kotak bukti --}}
+                        </div>{{-- /.field Bukti Capaian --}}
+                @endif
+            @elseif ($terkunci)
                 <div class="{{ $dalamGrup ? 'keg-tahapan' : 'keg' }}" wire:key="block-{{ $i }}" style="opacity:.8">
                     <div class="keg-head">
                         @if ($dalamGrup)

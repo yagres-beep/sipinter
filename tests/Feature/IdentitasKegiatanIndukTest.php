@@ -225,7 +225,7 @@ class IdentitasKegiatanIndukTest extends TestCase
         // Isian: tahapan satu kegiatan dimuat berdampingan dalam SATU kartu "Kegiatan 1".
         $isian = Livewire::test(PengisianKegiatan::class)
             ->set('tahun', 2026)->set('bulan', 7)->set('iku_id', $this->iku->id)
-            ->assertSeeInOrder(['Kegiatan 1', '2 tahapan', 'Survei Sakernas', 'Tahapan Persiapan', 'Tahapan Pelaksanaan', 'Kegiatan 2', 'Rapat koordinasi']);
+            ->assertSeeInOrder(['Kegiatan 1', 'Survei Sakernas', 'Tahapan Persiapan', 'Tahapan Pelaksanaan', 'Kegiatan 2', 'Rapat koordinasi']);
         $nomorIsian = $isian->instance()->nomorKegiatanBlok();
         $idBlok = collect($isian->get('blocks'))->pluck('id')->all();
 
@@ -255,18 +255,26 @@ class IdentitasKegiatanIndukTest extends TestCase
 
         $this->login('Ketua Tim');
         $isian = Livewire::test(PengisianKegiatan::class)
-            ->set('tahun', 2026)->set('bulan', 7)->set('iku_id', $this->iku->id)
-            ->assertSeeInOrder([
-                'Kegiatan 1', '2 tahapan', 'Survei Updating Direktori',
-                'Tahapan Persiapan', 'bukti-persiapan.pdf', 'Tahapan Pelaksanaan', 'bukti-pelaksanaan.pdf',
-                'Kegiatan 2', 'Rapat koordinasi',
-            ]);
-
+            ->set('tahun', 2026)->set('bulan', 7)->set('iku_id', $this->iku->id);
+        // Seperti form pengajuan baru: uraian, pembentukan folder, tahapan terpilih,
+        // lalu bukti per folder tahapan — bukan kartu terpisah per tahapan.
         $html = $isian->html();
+        $this->assertThat([
+            'Kegiatan 1', 'Uraian Kegiatan', 'Survei Updating Direktori',
+            'Pembentukan Folder Kegiatan', 'Pisah ke beberapa tahapan',
+            'Tahapan', '☑ Persiapan', '☑ Pelaksanaan',
+            'Bukti Capaian (PDF)', 'Persiapan Survei Updating Direktori', 'bukti-persiapan.pdf',
+            'Pelaksanaan Survei Updating Direktori', 'bukti-pelaksanaan.pdf',
+            'Kegiatan 2', 'Rapat koordinasi',
+        ], new \Illuminate\Testing\Constraints\SeeInOrder($html));
+
         $this->assertSame(1, substr_count($html, '>Kegiatan 1<'));
         $this->assertSame(0, substr_count($html, '>Kegiatan 3<'));
         $this->assertSame(1, substr_count($html, '>Survei Updating Direktori</div>'));
-        $this->assertSame(1, substr_count($html, 'Pisah ke beberapa tahapan</div>'));
+        $kartuPertama = strstr($html, '>Kegiatan 2<', true);
+        $this->assertSame(1, substr_count($kartuPertama, '>Uraian Kegiatan<'));
+        $this->assertSame(2, substr_count($html, 'class="keg-folder-tahapan"'));
+        $this->assertStringNotContainsString('Tahapan Persiapan', $html);
     }
 
     public function test_uraian_tahapan_yang_bisa_disunting_disamakan_dalam_satu_kegiatan(): void
