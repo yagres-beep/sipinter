@@ -797,7 +797,7 @@ class NotulaBagian1DocxService
         if (str_contains($xml, '{{blok_berakhlak}}')) {
             $xml = $this->resolveBlokKondisional($xml, 'blok_berakhlak', $isBerakhlak);
         }
-        $xml = $this->resolveBlokKondisional($xml, 'blok_ro', $tampilkanRo);
+        $xml = $this->resolveBlokKondisional($xml, 'blok_ro', $tampilkanRo, $this->unitPenanda($xml, '{{blok_ro}}'));
         $xml = $this->resolveBlokKondisional($xml, 'blok_formula', $tampilkanFormula, 'p');
         if ($tampilkanRo) {
             $xml = $this->gandakanBarisRo($xml, $roIkuTerisi);
@@ -1125,9 +1125,9 @@ class NotulaBagian1DocxService
      * {{blok_x}}...{{/blok_x}} -- kalau $tampilkan true, baris/paragraf marker-nya dibuang tapi
      * ISINYA dipertahankan; kalau false, marker DAN isinya sekaligus dibuang (tidak ada blok lain
      * yang dipilih untuk IKU ini, mis. sudah ada realisasi & bukan BerAKHLAK). $unit 'tr'
-     * untuk penanda berupa BARIS TABEL tersendiri (blok_berakhlak/blok_ro), 'p' untuk penanda
-     * berupa PARAGRAF di dalam sel (blok_formula); blok_proksi dideteksi otomatis lewat
-     * unitPenanda().
+     * untuk penanda berupa BARIS TABEL tersendiri (blok_berakhlak), 'p' untuk penanda
+     * berupa PARAGRAF di dalam sel (blok_formula); blok_proksi & blok_ro dideteksi otomatis
+     * lewat unitPenanda().
      */
     private function resolveBlokKondisional(string $xml, string $namaBlok, bool $tampilkan, string $unit = 'tr'): string
     {
@@ -1456,7 +1456,7 @@ class NotulaBagian1DocxService
             if (str_contains($ikuBlok, '{{blok_berakhlak}}') || str_contains($ikuBlok, '{{/blok_berakhlak}}')) {
                 $this->cariBlokAman($ikuBlok, '{{blok_berakhlak}}', '{{/blok_berakhlak}}', 'tr', $masalah);
             }
-            $blokRo = $this->cariBlokAman($ikuBlok, '{{blok_ro}}', '{{/blok_ro}}', 'tr', $masalah);
+            $blokRo = $this->cariBlokAman($ikuBlok, '{{blok_ro}}', '{{/blok_ro}}', $this->unitPenanda($ikuBlok, '{{blok_ro}}'), $masalah);
             $this->cariBlokAman($ikuBlok, '{{blok_formula}}', '{{/blok_formula}}', 'p', $masalah);
 
             if ($blokRo !== null) {

@@ -129,6 +129,23 @@ class StorageAccounts extends Component
         }
     }
 
+    /**
+     * Uji sambungan akun ke Google sekarang juga (tanpa menunggu pemeriksaan
+     * berkala google:cek-sambungan) — hasilnya langsung mengubah badge status.
+     */
+    public function cekSambungan(int $id): void
+    {
+        $akun = StorageAccount::findOrFail($id);
+
+        try {
+            app(GoogleDriveService::class)->periksaSambungan($akun);
+
+            session()->flash('status', "Akun {$akun->email_gmail_institusi} tersambung normal ke Google Drive.");
+        } catch (\Throwable $e) {
+            session()->flash('error', "Akun {$akun->email_gmail_institusi} tidak bisa tersambung: ".$e->getMessage());
+        }
+    }
+
     public function mulaiUbahFolder(int $id): void
     {
         $akun = StorageAccount::findOrFail($id);

@@ -604,8 +604,14 @@ class GoogleDriveService
      * Publik (bukan cuma dipakai client() di atas) — GoogleOAuthController::callback()
      * juga memanggilnya langsung untuk membangun client MILIK AKUN MASTER saat
      * membagikan folder master ke akun storage lain yang baru terhubung.
+     *
+     * Hasil refresh dicatat di akun (google_dicek_pada / google_galat_*): ditolak
+     * Google (invalid_grant) → akun tampil "Terputus" di semua halaman sampai
+     * dihubungkan ulang; berhasil → tanda putus dibersihkan. $paksaRefresh dipakai
+     * pemeriksaan berkala (periksaSambungan()) supaya putusnya sambungan ketahuan
+     * walau belum ada yang mengunggah.
      */
-    public function clientOAuthUntukAkun(StorageAccount $akun): GoogleClient
+    public function clientOAuthUntukAkun(StorageAccount $akun, bool $paksaRefresh = false): GoogleClient
     {
         $refreshToken = $akun->googleRefreshToken() ?? throw new RuntimeException(
             "Token Google Drive akun {$akun->email_gmail_institusi} tidak bisa dibaca lagi ".
@@ -623,13 +629,23 @@ class GoogleDriveService
 
         $kedaluwarsa = ! $akun->google_token_expires_at || now()->gte($akun->google_token_expires_at);
 
-        if (! $kedaluwarsa) {
+        if (! $kedaluwarsa && ! $paksaRefresh) {
             return $client;
         }
 
         $baru = $client->fetchAccessTokenWithRefreshToken($refreshToken);
 
         if (isset($baru['error'])) {
+            // Hanya galat "token ditolak" yang menandai akun terputus — galat lain
+            // (mis. invalid_client karena .env salah) tidak diperbaiki dengan
+            // menghubungkan ulang, jadi jangan menyuruh Tim SAKIP melakukannya.
+            if (in_array($baru['error'], ['invalid_grant', 'unauthorized_client'], true)) {
+                $akun->forceFill([
+                    'google_galat_pada' => $akun->google_galat_pada ?? now(),
+                    'google_galat' => $baru['error_description'] ?? $baru['error'],
+                ])->save();
+            }
+
             $saran = $baru['error'] === 'invalid_grant'
                 ? ' Bila ini terjadi tiap ±7 hari, ubah status aplikasi di Google Cloud Console '.
                   '(Google Auth Platform > Audience) dari "Testing" ke "In production", lalu hubungkan ulang sekali.'
@@ -645,9 +661,22 @@ class GoogleDriveService
             'google_access_token' => $baru['access_token'],
             'google_refresh_token' => $baru['refresh_token'] ?? $refreshToken,
             'google_token_expires_at' => now()->addSeconds($baru['expires_in']),
+            'google_dicek_pada' => now(),
+            'google_galat_pada' => null,
+            'google_galat' => null,
         ])->save();
 
         return $client;
+    }
+
+    /**
+     * Uji sambungan akun ke Google sekarang juga (paksa refresh token) — dipakai
+     * perintah berkala google:cek-sambungan & tombol "Cek sekarang" di menu Akun &
+     * Storage. Melempar RuntimeException bila gagal; hasilnya sudah tercatat di akun.
+     */
+    public function periksaSambungan(StorageAccount $akun): void
+    {
+        $this->clientOAuthUntukAkun($akun, paksaRefresh: true);
     }
 
     /**

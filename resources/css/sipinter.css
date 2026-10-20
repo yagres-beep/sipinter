@@ -123,6 +123,29 @@ a{text-decoration:none;color:inherit}
 .pb-tag{font-size:10.5px;font-weight:700;color:#fff;background:var(--blue-600);padding:4px 11px;border-radius:20px;margin-left:auto}
 .period-banner.periode-loading{opacity:.6;transition:opacity .1s}
 
+/* .bilah-lengket membungkus .period-banner + .nav-bagian SATU UNIT sticky tepat di
+   bawah .page-head (Isian Kegiatan) — --tinggi-judul = tinggi .page-head yang diukur
+   langsung oleh navigasiBagian (app.js), bukan angka tetap. Jarak ke konten di bawahnya
+   pakai padding (bukan margin) supaya ikut tercat latar sticky (lihat .subtabs).
+   Tingginya sengaja TIDAK berubah saat menempel: perubahan tinggi tepat di titik
+   menempel menggeser alur halaman dan bisa membuat bilah lepas-tempel bergantian. */
+.bilah-lengket{position:sticky;top:calc(var(--topbar-h) + var(--tinggi-judul, 0px));z-index:13;background:var(--bg);padding-bottom:12px;margin-bottom:4px}
+.bilah-lengket.menempel{box-shadow:0 10px 12px -12px rgba(16,32,70,.35)}
+.bilah-lengket .period-banner{margin-bottom:0;padding:10px 16px}
+/* overflow-x di .nav-bagian sendiri (bukan di induk .bilah-lengket) — overflow pada
+   induk elemen sticky membuat sticky tidak berfungsi. */
+.nav-bagian{position:relative;display:flex;gap:6px;margin-top:8px;padding:3px 2px;overflow-x:auto;scrollbar-width:thin;-webkit-overflow-scrolling:touch}
+.nb-item{display:inline-flex;align-items:center;gap:6px;flex:none;padding:5px 12px 5px 5px;border-radius:9px;border:1.5px solid var(--line);background:var(--white);font:inherit;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;white-space:nowrap;transition:background-color .15s,color .15s,border-color .15s}
+.nb-item:hover{border-color:var(--blue);color:var(--blue-600)}
+.nb-item:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+.nb-item.on{background:linear-gradient(135deg,var(--blue),var(--blue-600));color:#fff;border-color:transparent;box-shadow:var(--sh-nav)}
+.nb-n{min-width:20px;height:20px;padding:0 4px;border-radius:6px;background:var(--blue-soft);color:var(--blue-600);display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
+.nb-item.on .nb-n{background:rgba(255,255,255,.22);color:#fff}
+.nb-kunci{font-size:10px;opacity:.8}
+.nb-teks{max-width:180px;overflow:hidden;text-overflow:ellipsis}
+/* judul bagian tujuan tidak tertutup .bilah-lengket saat dilompati (scrollIntoView) */
+.bilah-lengket ~ .card .sec[id]{scroll-margin-top:var(--offset-lengket, 200px)}
+
 /* card */
 .card{background:var(--white);border:1px solid var(--line);border-radius:var(--radius);padding:20px;box-shadow:var(--sh);margin-bottom:16px}
 .card-red{border-color:color-mix(in srgb, var(--red) 45%, transparent);background:var(--red-soft)}
@@ -627,6 +650,13 @@ th.th-sort.active .th-arrow{opacity:1;color:var(--blue-600);font-weight:700}
 
   .page-title{font-size:18px}
   .card{padding:15px}
+
+  /* layar sempit: judul halaman ikut tergulir (tidak sticky) supaya bilah periode +
+     navigasi bagian langsung di bawah topbar dan tidak memakan terlalu banyak tinggi
+     layar. navigasiBagian (app.js) membaca position ini untuk --tinggi-judul. */
+  .page-head:has(~ .bilah-lengket){position:static;background:none}
+  .bilah-lengket .period-banner{padding:8px 12px;gap:8px}
+  .bilah-lengket .pb-ico{display:none}
   th,td{padding:9px 8px;font-size:12px}
 }
 

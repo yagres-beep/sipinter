@@ -104,6 +104,9 @@
             </div>
 
             <div class="content">
+                @auth
+                    <x-peringatan-sambungan-drive />
+                @endauth
                 @yield('content')
             </div>
         </div>

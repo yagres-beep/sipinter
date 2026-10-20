@@ -43,7 +43,20 @@ class StorageAccount extends Model
         'google_access_token',
         'google_refresh_token',
         'google_token_expires_at',
+        'google_terhubung_pada',
+        'google_dicek_pada',
+        'google_galat_pada',
+        'google_galat',
     ];
+
+    /** Nilai statusGoogle() — lihat method tersebut. */
+    public const GOOGLE_TERHUBUNG = 'terhubung';
+
+    public const GOOGLE_TERPUTUS = 'terputus';
+
+    public const GOOGLE_TOKEN_RUSAK = 'token_rusak';
+
+    public const GOOGLE_BELUM = 'belum';
 
     protected function casts(): array
     {
@@ -56,6 +69,9 @@ class StorageAccount extends Model
             // supaya tidak tersimpan polos di database bila database bocor.
             'google_refresh_token' => 'encrypted',
             'google_token_expires_at' => 'datetime',
+            'google_terhubung_pada' => 'datetime',
+            'google_dicek_pada' => 'datetime',
+            'google_galat_pada' => 'datetime',
         ];
     }
 
@@ -93,13 +109,67 @@ class StorageAccount extends Model
 
     /**
      * True bila akun ini PERNAH terhubung (ada token tersimpan di kolomnya) tapi
-     * tokennya sudah tidak bisa dipakai lagi — lihat googleRefreshToken(). Dibedakan
-     * dari "belum pernah terhubung" supaya tampilan bisa memberi tahu bahwa unggahan
-     * ke Drive sedang MATI dan perlu dihubungkan ulang, bukan sekadar belum disiapkan.
+     * tokennya tidak bisa didekripsi lagi — lihat googleRefreshToken().
+     */
+    public function googleTokenRusak(): bool
+    {
+        return filled($this->getRawOriginal('google_refresh_token')) && ! $this->googleTerhubung();
+    }
+
+    /**
+     * True bila token tersimpan masih terbaca tapi DITOLAK Google saat terakhir
+     * dipakai (invalid_grant — kedaluwarsa 7 hari selama consent screen "Testing",
+     * dicabut pemilik akun, dst.). Dicatat oleh GoogleDriveService::clientOAuthUntukAkun().
+     */
+    public function googleTerputus(): bool
+    {
+        return $this->googleTerhubung() && $this->google_galat_pada !== null;
+    }
+
+    /**
+     * True bila unggahan ke Drive lewat akun ini sedang MATI dan Tim SAKIP harus
+     * menghubungkan ulang — dibedakan dari "belum pernah terhubung" (googleTerhubung()
+     * false tanpa token sama sekali), yang artinya memang belum disiapkan.
      */
     public function googlePerluHubungUlang(): bool
     {
-        return filled($this->getRawOriginal('google_refresh_token')) && ! $this->googleTerhubung();
+        return $this->googleTokenRusak() || $this->googleTerputus();
+    }
+
+    /**
+     * Satu dari konstanta GOOGLE_* — dipakai tampilan (menu Akun & Storage, banner
+     * peringatan di semua halaman) supaya "Terhubung" berarti benar-benar diterima
+     * Google, bukan sekadar ada token tersimpan.
+     */
+    public function statusGoogle(): string
+    {
+        return match (true) {
+            $this->googleTokenRusak() => self::GOOGLE_TOKEN_RUSAK,
+            $this->googleTerputus() => self::GOOGLE_TERPUTUS,
+            $this->googleTerhubung() => self::GOOGLE_TERHUBUNG,
+            default => self::GOOGLE_BELUM,
+        };
+    }
+
+    /**
+     * Akun storage AKTIF yang sambungan Google-nya bermasalah (atau belum ada akun
+     * aktif sama sekali) — sumber banner peringatan di layout untuk SEMUA role.
+     * null = aman. Satu query kecil per halaman, sengaja tidak di-cache supaya
+     * banner langsung hilang begitu Tim SAKIP selesai menghubungkan ulang.
+     *
+     * @return array{akun: ?self, status: string}|null
+     */
+    public static function masalahSambunganAktif(): ?array
+    {
+        $akun = static::aktif();
+
+        if (! $akun) {
+            return ['akun' => null, 'status' => self::GOOGLE_BELUM];
+        }
+
+        $status = $akun->statusGoogle();
+
+        return $status === self::GOOGLE_TERHUBUNG ? null : ['akun' => $akun, 'status' => $status];
     }
 
     public function berkas(): HasMany

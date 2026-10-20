@@ -592,11 +592,6 @@
                     @php $berkasPoin = $berkasPerBagianKustom[$poin->id] ?? collect(); @endphp
                     <div class="keg" wire:key="bagian-kustom-{{ $poin->id }}">
                         <p style="font-size:13px;margin-bottom:8px">{{ $poin->teks }}</p>
-                        @foreach ($poinPerBagian->first()->bagianKustom->kolomList() as $kolom)
-                            @if (filled($poin->nilai_kolom[$kolom['kunci']] ?? null))
-                                <div style="font-size:12px;color:var(--muted);margin-bottom:4px">{{ $kolom['label'] }}: {{ $poin->nilai_kolom[$kolom['kunci']] }}</div>
-                            @endif
-                        @endforeach
 
                         @if ($this->bagianKustomBisaDiverifikasi($poin->id))
                             <div x-data="{ pendingMark: null }" style="margin-bottom:10px">

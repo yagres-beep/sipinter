@@ -97,7 +97,7 @@ class GoogleOAuthController extends Controller
         // yang sudah menangkap DecryptException, jadi tanpa pembersihan ini save() akan
         // melempar "The MAC is invalid." dan mematikan satu-satunya jalur pemulihan
         // (Hubungkan ulang) untuk akun yang justru sedang mencoba pulih.
-        if ($storageAccount->googlePerluHubungUlang()) {
+        if ($storageAccount->googleTokenRusak()) {
             DB::table('storage_account')->where('id', $storageAccount->id)->update(['google_refresh_token' => null]);
             $storageAccount->refresh();
         }
@@ -135,6 +135,10 @@ class GoogleOAuthController extends Controller
         // sini, jadi jangan sampai jalur pemulihannya ikut melempar DecryptException.
         $storageAccount->google_refresh_token = $token['refresh_token'] ?? $storageAccount->googleRefreshToken();
         $storageAccount->google_token_expires_at = now()->addSeconds($token['expires_in']);
+        $storageAccount->google_terhubung_pada = now();
+        $storageAccount->google_dicek_pada = now();
+        $storageAccount->google_galat_pada = null;
+        $storageAccount->google_galat = null;
         $storageAccount->save();
 
         if (! $storageAccount->googleTerhubung()) {

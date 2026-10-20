@@ -20,6 +20,9 @@
         // bagian lain untuk mengunggah berkas berikutnya. Tanpa pengecualian ini,
         // begitu unggahan pertama selesai halaman ditarik balik ke posisi lama —
         // pengguna harus menggulir lagi dan rawan mengunggah ke bagian yang salah.
+        // Lompatan lewat tombol navigasi bagian (event lompat-bagian, lihat
+        // navigasiBagian di app.js) juga dihitung menggulir sendiri — klik tombol itu
+        // bisa memicu blur pada field wire:model.live.blur.
         gulirPengguna: 0,
         koreksiScroll(y, sejak = performance.now()) {
             const kunci = () => {
@@ -86,6 +89,7 @@
     x-on:touchmove.window.passive="tandaiGulir($event)"
     x-on:keydown.window="tandaiGulir($event)"
     x-on:pointerdown.window="tandaiGulir($event)"
+    x-on:lompat-bagian="gulirPengguna = performance.now()"
     x-on:livewire-upload-start.window="$dispatch('notify', { type: 'info', message: 'Mengunggah berkas ke server…' })"
     x-on:livewire-upload-finish.window="$dispatch('notify', { type: 'success', message: 'Berkas terunggah — sedang disimpan ke Google Drive…' })"
     x-on:livewire-upload-error.window="$dispatch('notify', { type: 'error', message: 'Gagal mengunggah berkas — periksa koneksi dan format berkas (harus PDF), lalu coba lagi.' })"
@@ -162,6 +166,10 @@
         </div>
     @endif
 
+    {{-- Banner periode + tombol lompat ke tiap bagian, lengket SATU UNIT di bawah
+         .page-head saat discroll (lihat navigasiBagian di app.js & .bilah-lengket di
+         sipinter.css). Tombol hanya menggulir halaman — tidak mengubah isian apa pun. --}}
+    <div class="bilah-lengket" x-data="navigasiBagian" :class="{ menempel: menempel }">
     <div class="period-banner">
         <span class="pb-ico">📅</span>
         <div>
@@ -194,8 +202,43 @@
         @endif
     </div>
 
+    {{-- Bagian 2–5 & bagian kustom terkunci selama IKU belum dipilih — tombolnya tetap
+         menggulir ke judul bagian (yang menampilkan pesan kunci), hanya diberi tanda 🔒.
+         Judul bagian kustom ikut tersembunyi selama IKU belum dipilih, begitu pula
+         tombolnya. --}}
+    <nav class="nav-bagian" x-ref="daftar" aria-label="Lompat ke bagian isian">
+        @php
+            $navBagian = [
+                ['id' => 'bagian-iku', 'n' => '1', 'label' => 'IKU', 'judul' => 'Indikator Kinerja (IKU)', 'butuhIku' => false],
+                ['id' => 'bagian-kegiatan', 'n' => '2', 'label' => 'Kegiatan', 'judul' => 'Kegiatan', 'butuhIku' => true],
+                ['id' => 'bagian-kendala', 'n' => '3', 'label' => 'Kendala & Solusi', 'judul' => 'Kendala & Solusi', 'butuhIku' => true],
+                ['id' => 'bagian-evaluasi-rtl', 'n' => '4', 'label' => 'Evaluasi RTL', 'judul' => 'Evaluasi RTL Triwulan Sebelumnya', 'butuhIku' => true],
+                ['id' => 'bagian-rtl', 'n' => '5', 'label' => 'RTL '.$labelBerikutnya, 'judul' => 'Rencana Tindak Lanjut ('.$labelBerikutnya.')', 'butuhIku' => true],
+            ];
+        @endphp
+        @foreach ($navBagian as $nav)
+            <button type="button" class="nb-item" data-bagian="{{ $nav['id'] }}" title="{{ $nav['judul'] }}"
+                :class="{ on: aktif === '{{ $nav['id'] }}' }" :aria-current="aktif === '{{ $nav['id'] }}' ? 'true' : null"
+                @click="lompatKe('{{ $nav['id'] }}')">
+                <span class="nb-n">{{ $nav['n'] }}</span>{{ $nav['label'] }}
+                @if ($nav['butuhIku'])
+                    <span class="nb-kunci" x-show="! $wire.iku_id" @if ($iku_id) x-cloak @endif title="Pilih IKU terlebih dahulu">🔒</span>
+                @endif
+            </button>
+        @endforeach
+        @foreach ($bagianKustomAktif as $bagian)
+            <button type="button" class="nb-item" data-bagian="bagian-kustom-{{ $bagian->id }}" title="{{ $bagian->nama }}"
+                wire:key="nav-bagian-kustom-{{ $bagian->id }}" x-show="$wire.iku_id" @unless ($iku_id) x-cloak @endunless
+                :class="{ on: aktif === 'bagian-kustom-{{ $bagian->id }}' }" :aria-current="aktif === 'bagian-kustom-{{ $bagian->id }}' ? 'true' : null"
+                @click="lompatKe('bagian-kustom-{{ $bagian->id }}')">
+                <span class="nb-n">🧩</span><span class="nb-teks">{{ $bagian->nama }}</span>
+            </button>
+        @endforeach
+    </nav>
+    </div>
+
     <div class="card" x-data="{ ikuDipilih: {{ $iku_id ? 'true' : 'false' }} }">
-        <div class="sec"><span class="n">1</span><span>IKU</span></div>
+        <div class="sec" id="bagian-iku"><span class="n">1</span><span>IKU</span></div>
         <div class="field">
             <label>Indikator Kinerja (IKU) <span class="req">*</span></label>
             <select class="inp filled" data-abaikan-perubahan
@@ -232,7 +275,7 @@
             @endif
         </div>
 
-        <div class="sec" style="margin-top:20px"><span class="n">2</span><span>Kegiatan (bisa lebih dari satu)</span></div>
+        <div class="sec" id="bagian-kegiatan" style="margin-top:20px"><span class="n">2</span><span>Kegiatan (bisa lebih dari satu)</span></div>
 
         {{-- Tampil/sembunyi INSTAN di sisi klien (Alpine) begitu IKU dipilih — tidak
              menunggu balasan server, karena isi bagian ini (form kegiatan kosong)
@@ -689,7 +732,7 @@
         </div>
         </div>
 
-        <div class="sec" style="margin-top:20px"><span class="n">3</span><span>Kendala &amp; Solusi</span></div>
+        <div class="sec" id="bagian-kendala" style="margin-top:20px"><span class="n">3</span><span>Kendala &amp; Solusi</span></div>
 
         <div x-show="!ikuDipilih" class="info warn">🔒 Pilih IKU terlebih dahulu (Bagian 1) untuk mengisi kendala &amp; solusi.</div>
 
@@ -803,7 +846,7 @@
         </div>
         </div>
 
-        <div class="sec" style="margin-top:20px"><span class="n">4</span><span>Evaluasi RTL Triwulan Sebelumnya</span></div>
+        <div class="sec" id="bagian-evaluasi-rtl" style="margin-top:20px"><span class="n">4</span><span>Evaluasi RTL Triwulan Sebelumnya</span></div>
 
         <div x-show="!ikuDipilih" class="info warn">🔒 Pilih IKU terlebih dahulu (Bagian 1) untuk melihat evaluasi RTL.</div>
 
@@ -1067,7 +1110,7 @@
             </div>
         </div>
 
-        <div class="sec" style="margin-top:20px"><span class="n">5</span><span>Rencana Tindak Lanjut ({{ $labelBerikutnya }})</span></div>
+        <div class="sec" id="bagian-rtl" style="margin-top:20px"><span class="n">5</span><span>Rencana Tindak Lanjut ({{ $labelBerikutnya }})</span></div>
 
         <div x-show="!ikuDipilih" class="info warn">🔒 Pilih IKU terlebih dahulu (Bagian 1) untuk mengisi RTL.</div>
 
@@ -1200,7 +1243,7 @@
             </div>
 
             @foreach ($bagianKustomAktif as $bagian)
-                <div class="sec" style="margin-top:20px"><span class="n">🧩</span><span>{{ $bagian->nama }}</span></div>
+                <div class="sec" id="bagian-kustom-{{ $bagian->id }}" style="margin-top:20px"><span class="n">🧩</span><span>{{ $bagian->nama }}</span></div>
                 @if ($bagian->deskripsi)
                     <div class="info">ℹ️ {{ $bagian->deskripsi }}</div>
                 @endif

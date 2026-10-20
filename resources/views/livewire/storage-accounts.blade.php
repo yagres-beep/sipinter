@@ -11,6 +11,17 @@
         <div class="info red" style="margin-bottom:14px">⚠️ {{ session('error') }}</div>
     @endif
 
+    @php $akunTerputus = $akunList->filter->googlePerluHubungUlang(); @endphp
+    @if ($akunTerputus->isNotEmpty())
+        <div class="card card-red" style="margin-bottom:16px">
+            <div class="card-h" style="color:var(--red)">⛔ {{ $akunTerputus->count() }} Akun Google Drive Terputus</div>
+            <p style="color:var(--red);font-size:13px;margin:0">
+                {{ $akunTerputus->pluck('email_gmail_institusi')->join(', ', ' dan ') }} —
+                klik <b>🔗 Sambungkan ulang sekarang</b> pada baris akun di tabel bawah, lalu login dengan akun Google yang sama.
+            </p>
+        </div>
+    @endif
+
     {{-- RF-10c: peringatan saat storage aktif mendekati penuh --}}
     @if ($akunAktif && $akunAktif->mendekatiPenuh())
         <div class="card card-red" style="margin-bottom:16px">
@@ -91,10 +102,44 @@
                             </span>
                         </td>
                         <td>
-                            @if ($akun->googleTerhubung())
+                            @php
+                                $statusGoogle = $akun->statusGoogle();
+                                $jamWita = fn ($t) => $t ? $t->copy()->timezone('Asia/Makassar')->format('d/m/Y H:i').' WITA' : '—';
+                            @endphp
+                            @if ($statusGoogle === \App\Models\StorageAccount::GOOGLE_TERHUBUNG)
                                 <span class="badge b-approve">✅ Terhubung</span>
-                                <a href="{{ route('storage-accounts.google-redirect', $akun) }}" style="display:block;font-size:11px;color:var(--muted);margin-top:4px">Sambungkan ulang</a>
-                            @elseif ($akun->googlePerluHubungUlang())
+                                <div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.5">
+                                    Disambungkan: {{ $jamWita($akun->google_terhubung_pada) }}<br>
+                                    Terakhir dicek: {{ $jamWita($akun->google_dicek_pada) }}
+                                </div>
+                                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+                                    <button type="button" class="btn btn-ghost btn-sm" style="padding:1px 7px"
+                                        wire:click="cekSambungan({{ $akun->id }})" wire:loading.attr="disabled" wire:target="cekSambungan({{ $akun->id }})"
+                                        title="Uji sambungan ke Google sekarang juga">
+                                        <span wire:loading.remove wire:target="cekSambungan({{ $akun->id }})">🩺 Cek sekarang</span>
+                                        <span wire:loading wire:target="cekSambungan({{ $akun->id }})"><i class="spin"></i> Mengecek…</span>
+                                    </button>
+                                    <a href="{{ route('storage-accounts.google-redirect', $akun) }}" class="btn btn-ghost btn-sm" style="padding:1px 7px">🔗 Sambungkan ulang</a>
+                                </div>
+                            @elseif ($statusGoogle === \App\Models\StorageAccount::GOOGLE_TERPUTUS)
+                                <span class="badge b-tolak">⛔ Terputus</span>
+                                <div style="font-size:11px;color:var(--red);margin-top:4px;line-height:1.5">
+                                    Google menolak sambungan sejak {{ $jamWita($akun->google_galat_pada) }}
+                                    @if ($akun->google_galat)
+                                        ({{ \Illuminate\Support\Str::limit($akun->google_galat, 80) }})
+                                    @endif.
+                                    Unggahan ke Drive lewat akun ini sedang MATI — berkas baru hanya tersimpan sementara di server
+                                    dan disusulkan ke Drive otomatis setelah akun disambungkan ulang.
+                                </div>
+                                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+                                    <a href="{{ route('storage-accounts.google-redirect', $akun) }}" class="btn btn-primary btn-sm">🔗 Sambungkan ulang sekarang</a>
+                                    <button type="button" class="btn btn-ghost btn-sm"
+                                        wire:click="cekSambungan({{ $akun->id }})" wire:loading.attr="disabled" wire:target="cekSambungan({{ $akun->id }})">
+                                        <span wire:loading.remove wire:target="cekSambungan({{ $akun->id }})">🩺 Cek lagi</span>
+                                        <span wire:loading wire:target="cekSambungan({{ $akun->id }})"><i class="spin"></i></span>
+                                    </button>
+                                </div>
+                            @elseif ($statusGoogle === \App\Models\StorageAccount::GOOGLE_TOKEN_RUSAK)
                                 <span class="badge b-tolak">⚠️ Sesi Drive rusak</span>
                                 <div style="font-size:11px;color:var(--muted);margin-top:4px">
                                     Token tersimpan tidak bisa dibaca lagi (APP_KEY berubah). Unggahan ke Drive sedang MATI —
