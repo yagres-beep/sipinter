@@ -51,9 +51,11 @@
                     @elseif ($role === 'Tim SAKIP')
                         <a wire:navigate href="{{ route('verifikasi.index') }}" class="{{ request()->routeIs('verifikasi.*', 'notula.*', 'template-notula.*') ? 'active' : '' }}"><span class="ic">✅</span> Verifikasi &amp; Notula</a>
                         <a wire:navigate href="{{ route('master-iku.index') }}" class="{{ request()->routeIs('master-iku.*', 'folder-config.*') ? 'active' : '' }}"><span class="ic">📊</span> Data Master &amp; Konfigurasi</a>
+                        <a wire:navigate href="{{ route('bagian-kustom.index') }}" class="{{ request()->routeIs('bagian-kustom.*') ? 'active' : '' }}"><span class="ic">🧩</span> Isian Bagian Kustom</a>
                         <a wire:navigate href="{{ route('verifikasi-akun.index') }}" class="{{ request()->routeIs('verifikasi-akun.*', 'storage-accounts.*') ? 'active' : '' }}"><span class="ic">👥</span> Kelola Pengguna</a>
                     @elseif ($role === 'Kepala')
                         <a wire:navigate href="{{ route('persetujuan.index') }}" class="{{ request()->routeIs('persetujuan.*') ? 'active' : '' }}"><span class="ic">✍️</span> Persetujuan</a>
+                        <a wire:navigate href="{{ route('bagian-kustom.index') }}" class="{{ request()->routeIs('bagian-kustom.*') ? 'active' : '' }}"><span class="ic">🧩</span> Isian Bagian Kustom</a>
                         <a wire:navigate href="{{ route('notula-riwayat.index') }}" class="{{ request()->routeIs('notula-riwayat.*') ? 'active' : '' }}"><span class="ic">📄</span> Notula</a>
                     @endif
 
@@ -104,7 +106,15 @@
             </div>
 
             <div class="content">
+                @auth
+                    <x-peringatan-sambungan-drive />
+                @endauth
                 @yield('content')
+                {{-- Bagian kustom yang ditempatkan Tim SAKIP di menu ini, tampil di bawah halaman. --}}
+                @php $menuBagianKustom = \App\Support\MenuBagianKustom::dariRoute(request()->route()?->getName()); @endphp
+                @if ($menuBagianKustom && $menuBagianKustom !== \App\Support\MenuBagianKustom::PENGISIAN)
+                    <livewire:isian-bagian-kustom :menu="$menuBagianKustom" :key="'bagian-kustom-menu-'.$menuBagianKustom" />
+                @endif
             </div>
         </div>
     </div>

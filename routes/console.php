@@ -33,6 +33,10 @@ Schedule::command('pengingat:deadline-iku')->dailyAt($jamPengingat)->timezone('A
 Schedule::command('pengingat:iku-lengkap')->dailyAt($jamPengingat)->timezone('Asia/Makassar');
 Schedule::command('pengingat:google-reconnect')->dailyAt($jamPengingat)->timezone('Asia/Makassar');
 
+// Uji sambungan akun Google Drive tiap jam, supaya sambungan yang putus langsung
+// tampil di banner semua halaman — bukan baru ketahuan saat unggahan gagal.
+Schedule::command('google:cek-sambungan')->hourly()->withoutOverlapping(10)->runInBackground();
+
 // Antrean WhatsApp: berjalan di latar belakang karena satu panggilan bisa
 // menunggu ±1 menit saat gateway Render Free sedang bangun dari tidur.
 Schedule::command('whatsapp:proses-antrean')->everyMinute()->withoutOverlapping(10)->runInBackground();

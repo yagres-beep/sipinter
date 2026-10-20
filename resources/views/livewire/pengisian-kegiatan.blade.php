@@ -13,8 +13,14 @@
         // baru yang baru dirender belum selesai reflow), jadi satu
         // requestAnimationFrame saja kadang masih kebobolan sekejap sebelum posisi
         // scroll dikoreksi balik.
-        koreksiScroll(y) {
-            const kunci = function () {
+        // Tidak dikoreksi bila setelah posisi y ditangkap (sejak) pengguna sengaja
+        // berpindah lewat tombol navigasi bagian (event lompat-bagian, lihat
+        // navigasiBagian di app.js) — klik tombol itu bisa memicu blur pada field
+        // wire:model.live.blur, dan koreksi di sini akan menarik halaman kembali.
+        lompatBagianPada: 0,
+        koreksiScroll(y, sejak) {
+            const kunci = () => {
+                if (sejak !== undefined && this.lompatBagianPada > sejak) return;
                 if (1 < Math.abs(window.scrollY - y)) window.scrollTo(0, y);
             };
             requestAnimationFrame(function () {
@@ -30,6 +36,7 @@
         // DOM selesai diperbarui.
         jagaScroll(aksi) {
             const y = window.scrollY;
+            const sejak = performance.now();
 
             // Lepas fokus dari tombol yang baru diklik SEBELUM DOM diperbarui — tombol
             // 'Tambah ...' ada di BAWAH daftar blok yang baru bertambah, jadi begitu blok
@@ -42,7 +49,7 @@
                 document.activeElement.blur();
             }
 
-            aksi().then(() => this.koreksiScroll(y));
+            aksi().then(() => this.koreksiScroll(y, sejak));
         },
 
         // Field lain (mis. textarea 'Rencana kegiatan', input 'Batas Waktu') pakai
@@ -56,10 +63,12 @@
             Livewire.hook('commit', ({ component, respond }) => {
                 if (component !== this.$wire.__instance) return;
                 const y = window.scrollY;
-                respond(() => this.koreksiScroll(y));
+                const sejak = performance.now();
+                respond(() => this.koreksiScroll(y, sejak));
             });
         },
     }"
+    x-on:lompat-bagian="lompatBagianPada = performance.now()"
     x-on:livewire-upload-start.window="$dispatch('notify', { type: 'info', message: 'Mengunggah berkas ke server…' })"
     x-on:livewire-upload-finish.window="$dispatch('notify', { type: 'success', message: 'Berkas dipilih & tersimpan sementara di server — akan disalin ke Google Drive saat diajukan.' })"
     x-on:livewire-upload-error.window="$dispatch('notify', { type: 'error', message: 'Gagal mengunggah berkas — periksa ukuran (maks 10MB) dan format (harus PDF), lalu coba lagi.' })"
@@ -136,6 +145,10 @@
         </div>
     @endif
 
+    {{-- Banner periode + tombol lompat ke tiap bagian, lengket SATU UNIT di bawah
+         .page-head saat discroll (lihat navigasiBagian di app.js & .bilah-lengket di
+         sipinter.css). Tombol hanya menggulir halaman — tidak mengubah isian apa pun. --}}
+    <div class="bilah-lengket" x-data="navigasiBagian" :class="{ menempel: menempel }">
     <div class="period-banner">
         <span class="pb-ico">📅</span>
         <div>
@@ -168,8 +181,43 @@
         @endif
     </div>
 
+    {{-- Bagian 2–5 & bagian kustom terkunci selama IKU belum dipilih — tombolnya tetap
+         menggulir ke judul bagian (yang menampilkan pesan kunci), hanya diberi tanda 🔒.
+         Judul bagian kustom ikut tersembunyi selama IKU belum dipilih, begitu pula
+         tombolnya. --}}
+    <nav class="nav-bagian" x-ref="daftar" aria-label="Lompat ke bagian isian">
+        @php
+            $navBagian = [
+                ['id' => 'bagian-iku', 'n' => '1', 'label' => 'IKU', 'judul' => 'Indikator Kinerja (IKU)', 'butuhIku' => false],
+                ['id' => 'bagian-kegiatan', 'n' => '2', 'label' => 'Kegiatan', 'judul' => 'Kegiatan', 'butuhIku' => true],
+                ['id' => 'bagian-kendala', 'n' => '3', 'label' => 'Kendala & Solusi', 'judul' => 'Kendala & Solusi', 'butuhIku' => true],
+                ['id' => 'bagian-evaluasi-rtl', 'n' => '4', 'label' => 'Evaluasi RTL', 'judul' => 'Evaluasi RTL Triwulan Sebelumnya', 'butuhIku' => true],
+                ['id' => 'bagian-rtl', 'n' => '5', 'label' => 'RTL '.$labelBerikutnya, 'judul' => 'Rencana Tindak Lanjut ('.$labelBerikutnya.')', 'butuhIku' => true],
+            ];
+        @endphp
+        @foreach ($navBagian as $nav)
+            <button type="button" class="nb-item" data-bagian="{{ $nav['id'] }}" title="{{ $nav['judul'] }}"
+                :class="{ on: aktif === '{{ $nav['id'] }}' }" :aria-current="aktif === '{{ $nav['id'] }}' ? 'true' : null"
+                @click="lompatKe('{{ $nav['id'] }}')">
+                <span class="nb-n">{{ $nav['n'] }}</span>{{ $nav['label'] }}
+                @if ($nav['butuhIku'])
+                    <span class="nb-kunci" x-show="! $wire.iku_id" @if ($iku_id) x-cloak @endif title="Pilih IKU terlebih dahulu">🔒</span>
+                @endif
+            </button>
+        @endforeach
+        @foreach ($bagianKustomAktif as $bagian)
+            <button type="button" class="nb-item" data-bagian="bagian-kustom-{{ $bagian->id }}" title="{{ $bagian->nama }}"
+                wire:key="nav-bagian-kustom-{{ $bagian->id }}" x-show="$wire.iku_id" @unless ($iku_id) x-cloak @endunless
+                :class="{ on: aktif === 'bagian-kustom-{{ $bagian->id }}' }" :aria-current="aktif === 'bagian-kustom-{{ $bagian->id }}' ? 'true' : null"
+                @click="lompatKe('bagian-kustom-{{ $bagian->id }}')">
+                <span class="nb-n">🧩</span><span class="nb-teks">{{ $bagian->nama }}</span>
+            </button>
+        @endforeach
+    </nav>
+    </div>
+
     <div class="card" x-data="{ ikuDipilih: {{ $iku_id ? 'true' : 'false' }} }">
-        <div class="sec"><span class="n">1</span><span>IKU</span></div>
+        <div class="sec" id="bagian-iku"><span class="n">1</span><span>IKU</span></div>
         <div class="field">
             <label>Indikator Kinerja (IKU) <span class="req">*</span></label>
             <select class="inp filled" data-abaikan-perubahan
@@ -206,7 +254,7 @@
             @endif
         </div>
 
-        <div class="sec" style="margin-top:20px"><span class="n">2</span><span>Kegiatan (bisa lebih dari satu)</span></div>
+        <div class="sec" id="bagian-kegiatan" style="margin-top:20px"><span class="n">2</span><span>Kegiatan (bisa lebih dari satu)</span></div>
 
         {{-- Tampil/sembunyi INSTAN di sisi klien (Alpine) begitu IKU dipilih — tidak
              menunggu balasan server, karena isi bagian ini (form kegiatan kosong)
@@ -701,7 +749,7 @@
         </div>
         </div>
 
-        <div class="sec" style="margin-top:20px"><span class="n">3</span><span>Kendala &amp; Solusi</span></div>
+        <div class="sec" id="bagian-kendala" style="margin-top:20px"><span class="n">3</span><span>Kendala &amp; Solusi</span></div>
 
         <div x-show="!ikuDipilih" class="info warn">🔒 Pilih IKU terlebih dahulu (Bagian 1) untuk mengisi kendala &amp; solusi.</div>
 
@@ -815,7 +863,7 @@
         </div>
         </div>
 
-        <div class="sec" style="margin-top:20px"><span class="n">4</span><span>Evaluasi RTL Triwulan Sebelumnya</span></div>
+        <div class="sec" id="bagian-evaluasi-rtl" style="margin-top:20px"><span class="n">4</span><span>Evaluasi RTL Triwulan Sebelumnya</span></div>
 
         <div x-show="!ikuDipilih" class="info warn">🔒 Pilih IKU terlebih dahulu (Bagian 1) untuk melihat evaluasi RTL.</div>
 
@@ -929,7 +977,7 @@
             </div>
         </div>
 
-        <div class="sec" style="margin-top:20px"><span class="n">5</span><span>Rencana Tindak Lanjut ({{ $labelBerikutnya }})</span></div>
+        <div class="sec" id="bagian-rtl" style="margin-top:20px"><span class="n">5</span><span>Rencana Tindak Lanjut ({{ $labelBerikutnya }})</span></div>
 
         <div x-show="!ikuDipilih" class="info warn">🔒 Pilih IKU terlebih dahulu (Bagian 1) untuk mengisi RTL.</div>
 
@@ -1062,7 +1110,7 @@
             </div>
 
             @foreach ($bagianKustomAktif as $bagian)
-                <div class="sec" style="margin-top:20px"><span class="n">🧩</span><span>{{ $bagian->nama }}</span></div>
+                <div class="sec" id="bagian-kustom-{{ $bagian->id }}" style="margin-top:20px"><span class="n">🧩</span><span>{{ $bagian->nama }}</span></div>
                 @if ($bagian->deskripsi)
                     <div class="info">ℹ️ {{ $bagian->deskripsi }}</div>
                 @endif
@@ -1086,6 +1134,11 @@
                                 @foreach ($entriTriwulan as $entri)
                                     <div style="padding:8px 0;border-bottom:1px solid var(--line2);font-size:13px">
                                         <div>{{ $entri->teks }}</div>
+                                        @foreach ($bagian->kolomList() as $kolom)
+                                            @if (filled($entri->nilai_kolom[$kolom['kunci']] ?? null))
+                                                <div style="font-size:12px;color:var(--muted)">{{ $kolom['label'] }}: {{ $entri->nilai_kolom[$kolom['kunci']] }}</div>
+                                            @endif
+                                        @endforeach
                                         @if ($entri->berkas->isNotEmpty())
                                             <div class="filechip-grid">
                                                 @foreach ($entri->berkas as $file)
@@ -1129,13 +1182,36 @@
                         @endif
 
                         <div class="field">
-                            <label>Uraian <span class="req">*</span></label>
+                            <label>{{ $bagian->labelUraianEfektif() }} <span class="req">*</span></label>
                             <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model.live.blur="bagianKustomBlocks.{{ $bagian->id }}.{{ $i }}.teks"
                                 placeholder="Uraikan poin {{ $bagian->nama }} ini..."></textarea>
                             @error("bagianKustomBlocks.{$bagian->id}.{$i}.teks")
                                 <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                             @enderror
                         </div>
+
+                        @foreach ($bagian->kolomList() as $kolom)
+                            <div class="field">
+                                <label>{{ $kolom['label'] }}
+                                    @if ($kolom['wajib'])<span class="req">*</span>@else<span style="color:var(--muted);font-weight:500">opsional</span>@endif
+                                </label>
+                                @if ($kolom['tipe'] === 'pilihan')
+                                    <select class="inp filled" wire:model.blur="bagianKustomBlocks.{{ $bagian->id }}.{{ $i }}.kolom.{{ $kolom['kunci'] }}">
+                                        <option value="">— pilih —</option>
+                                        @foreach ($kolom['opsi'] as $opsi)
+                                            <option value="{{ $opsi }}">{{ $opsi }}</option>
+                                        @endforeach
+                                    </select>
+                                @elseif ($kolom['tipe'] === 'angka')
+                                    <input type="text" inputmode="decimal" class="inp filled" wire:model.blur="bagianKustomBlocks.{{ $bagian->id }}.{{ $i }}.kolom.{{ $kolom['kunci'] }}" placeholder="Angka">
+                                @else
+                                    <input type="text" class="inp filled" wire:model.blur="bagianKustomBlocks.{{ $bagian->id }}.{{ $i }}.kolom.{{ $kolom['kunci'] }}">
+                                @endif
+                                @error("bagianKustomBlocks.{$bagian->id}.{$i}.kolom.{$kolom['kunci']}")
+                                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                                @enderror
+                            </div>
+                        @endforeach
 
                         <div class="field" style="margin-bottom:0">
                             <label>Bukti Dukung (PDF)

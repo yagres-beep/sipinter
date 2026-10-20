@@ -375,17 +375,12 @@ class DasborUtama extends Component
      */
     protected function peringatanStorage(): ?string
     {
+        // Akun aktif yang belum ada / sambungan Google-nya putus sudah diperingatkan
+        // banner di layout untuk semua role (components/peringatan-sambungan-drive) —
+        // di sini tinggal kuota saja supaya peringatannya tidak muncul dua kali.
         $akunAktif = StorageAccount::aktif();
 
-        if (! $akunAktif) {
-            return 'Belum ada akun storage yang dijadikan aktif — unggahan bukti dukung akan gagal. Buka menu Akun & Storage untuk menambah/menetapkannya.';
-        }
-
-        if ($akunAktif->googlePerluHubungUlang()) {
-            return "Sesi Google Drive akun aktif ({$akunAktif->email_gmail_institusi}) rusak/kedaluwarsa — unggahan bukti dukung sedang MATI. Hubungkan ulang lewat menu Akun & Storage.";
-        }
-
-        if ($akunAktif->mendekatiPenuh()) {
+        if ($akunAktif?->mendekatiPenuh()) {
             return "Kuota Drive akun aktif ({$akunAktif->email_gmail_institusi}) sudah {$akunAktif->persentaseTerpakai()}% terpakai — siapkan akun institusi berikutnya lewat menu Akun & Storage.";
         }
 

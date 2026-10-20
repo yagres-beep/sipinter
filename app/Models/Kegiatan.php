@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Support\Collection;
 
 class Kegiatan extends Model
 {
@@ -132,18 +133,44 @@ class Kegiatan extends Model
     }
 
     /**
-     * Nama capaian di notula: kegiatan yang dipisah ke beberapa tahapan dicatat per
-     * tahapan dengan nama folder tahapannya ("<Tahapan> <kegiatan>", atau nama yang
-     * diganti pengguna) — kegiatan induknya sendiri tidak ikut tercatat. Kegiatan
-     * "1 folder" tetap memakai uraian kegiatannya.
+     * Nama capaian di notula = nama kegiatan utama (uraian_kegiatan, spasi berlebih
+     * dirapikan), apa pun jenisnya. Kegiatan yang dipisah ke beberapa tahapan tetap
+     * satu baris per tahapan di DB & Drive (folder "<Tahapan> <kegiatan>", diverifikasi
+     * per tahapan), tapi nama folder tahapan — termasuk yang diganti pengguna — TIDAK
+     * dipakai sebagai nama capaian. Lihat daftarNamaCapaian() untuk penyatuannya.
      */
     public function namaCapaian(): string
     {
-        if ($this->jenis === 'survei_sensus' && filled($this->tahapan_survei)) {
-            return $this->uraianTampil();
-        }
+        $uraian = (string) $this->uraian_kegiatan;
 
-        return (string) $this->uraian_kegiatan;
+        return trim(preg_replace('/\s+/u', ' ', $uraian) ?? $uraian);
+    }
+
+    /**
+     * Daftar nama capaian unik untuk sekumpulan kegiatan SATU IKU pada SATU triwulan
+     * (pemanggil yang menyaring IKU & triwulannya, lihat NotulaService::
+     * kumpulkanDataBagianSatu()). Baris-baris tahapan satu kegiatan utama — dan
+     * kegiatan yang sama dari bulan lain triwulan itu — disatukan jadi satu nama.
+     *
+     * Tidak ada id induk eksplisit untuk tahapan-tahapan satu kegiatan, jadi kuncinya
+     * mengikuti definisi "kegiatan yang sama" yang sudah dipakai aplikasi (IKU sama,
+     * triwulan sama, uraian sama tanpa beda besar/kecil huruf & spasi — lihat
+     * PengisianKegiatan::kegiatanSama() dan folder induk survei di
+     * FolderStructureService::resolveKegiatanFolder()). Kegiatan dengan uraian
+     * berbeda selalu tampil terpisah; urutan mengikuti kegiatan yang lebih dulu dibuat.
+     *
+     * @param  iterable<int, self>  $kegiatan
+     * @return Collection<int, string>
+     */
+    public static function daftarNamaCapaian(iterable $kegiatan): Collection
+    {
+        return collect($kegiatan)
+            ->sortBy('id')
+            ->map(fn (self $k) => ['iku' => $k->iku_id, 'nama' => $k->namaCapaian()])
+            ->filter(fn ($baris) => $baris['nama'] !== '')
+            ->unique(fn ($baris) => $baris['iku'].'|'.mb_strtolower($baris['nama']))
+            ->pluck('nama')
+            ->values();
     }
 
     /**

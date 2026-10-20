@@ -87,6 +87,10 @@ Route::middleware(['auth', 'profile.complete'])->group(function () {
     // RF-48 s.d. RF-50: filter periode & dasbor kinerja (progres + rekapitulasi per IKU
     // dalam satu halaman) — dipakai Tim SAKIP & Kepala.
     Route::middleware('role:Tim SAKIP,Kepala')->group(function () {
+        Route::view('/isian-bagian-kustom', 'bagian-kustom.index')->name('bagian-kustom.index');
+    });
+
+    Route::middleware('role:Tim SAKIP,Kepala')->group(function () {
         Route::view('/dasbor-kinerja', 'dasbor-kinerja.index')->name('dasbor-kinerja.index');
     });
 

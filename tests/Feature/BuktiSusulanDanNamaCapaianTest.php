@@ -58,13 +58,16 @@ class BuktiSusulanDanNamaCapaianTest extends TestCase
             ->set('iku_id', $this->iku->id);
     }
 
-    public function test_nama_capaian_notula_pakai_nama_folder_tahapan_atau_uraian_kegiatan(): void
+    public function test_nama_capaian_notula_selalu_uraian_kegiatan_utama_bukan_nama_folder(): void
     {
         $tahapan = $this->kegiatan(['jenis' => 'survei_sensus', 'tahapan_survei' => 'persiapan', 'nama_folder_auto' => 'Persiapan Survei Sakernas']);
         $satuFolder = $this->kegiatan(['uraian_kegiatan' => 'Rapat koordinasi', 'nama_folder_auto' => 'Rapat koordinasi', 'nama_folder_kustom' => 'Folder Rapat']);
 
-        $this->assertSame('Persiapan Survei Sakernas', $tahapan->namaCapaian());
+        $this->assertSame('Survei Sakernas', $tahapan->namaCapaian());
         $this->assertSame('Rapat koordinasi', $satuFolder->namaCapaian());
+        // Nama folder (untuk Drive & tampilan folder) tetap per tahapan.
+        $this->assertSame('Persiapan Survei Sakernas', $tahapan->uraianTampil());
+        $this->assertSame('Folder Rapat', $satuFolder->namaFolder());
     }
 
     public function test_kegiatan_terverifikasi_bisa_ditambah_bukti_dukung_baru(): void

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\FolderConfig;
+use App\Models\Kegiatan;
 use App\Models\MasterIku;
 use App\Models\Notula;
 use App\Models\PengaturanCapaian;
@@ -471,12 +472,25 @@ class NotulaBagian1DocxService
         $xml = '';
 
         foreach ($bagianKustomPerBagian as $bagian) {
+            // Judul & format baris diatur Tim SAKIP di Data Master (lihat BagianKustom::
+            // judulNotulaEfektif() & formatNotulaEfektif()), bukan ditulis di sini.
             $xml .= '<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">'
-                .htmlspecialchars($bagian->nama, ENT_QUOTES | ENT_XML1)
+                .htmlspecialchars($bagian->judulNotulaEfektif(), ENT_QUOTES | ENT_XML1)
                 .'</w:t></w:r></w:p>';
 
             foreach ($bagian->poin as $poin) {
-                $teks = ($poin->masterIku->kode ?? '').': '.$poin->teks;
+                $konteks = \App\Support\TemplateBagianKustom::konteks(
+                    $poin->masterIku->kode ?? null,
+                    $poin->masterIku->indikator ?? null,
+                    $poin->teks,
+                    $bagian->nama,
+                    $poin->periode?->tahun,
+                    $poin->periode?->triwulan,
+                    $poin->periode?->bulan,
+                    $bagian->nilaiKolomLengkap($poin->nilai_kolom),
+                );
+
+                $teks = \App\Support\TemplateBagianKustom::render($bagian->formatNotulaEfektif(), $konteks);
                 $xml .= '<w:p><w:r><w:t xml:space="preserve">• '
                     .htmlspecialchars($teks, ENT_QUOTES | ENT_XML1)
                     .'</w:t></w:r></w:p>';
@@ -553,7 +567,7 @@ class NotulaBagian1DocxService
         if (str_contains($xml, '{{blok_berakhlak}}')) {
             $xml = $this->resolveBlokKondisional($xml, 'blok_berakhlak', $isBerakhlak);
         }
-        $xml = $this->resolveBlokKondisional($xml, 'blok_ro', $tampilkanRo);
+        $xml = $this->resolveBlokKondisional($xml, 'blok_ro', $tampilkanRo, $this->unitPenanda($xml, '{{blok_ro}}'));
         $xml = $this->resolveBlokKondisional($xml, 'blok_formula', $tampilkanFormula, 'p');
         if ($tampilkanRo) {
             $xml = $this->gandakanBarisRo($xml, $roIkuTerisi);
@@ -579,7 +593,9 @@ class NotulaBagian1DocxService
         // (termasuk BerAKHLAK & yang punya proksi) -- kotak "Analisis Capaian Kinerja"
         // tidak lagi dirangkap jadi pertanyaan proksi seperti versi template lama.
         $analisis = trim((string) $capaian?->analisis_capaian);
-        $daftarKegiatan = $this->daftarBernomor($kegiatanIku->map(fn ($k) => $k->namaCapaian())->filter()->unique()->values());
+        // Nama kegiatan utama, satu kali per kegiatan walau dipisah ke beberapa tahapan
+        // (lihat Kegiatan::daftarNamaCapaian()) -- bukan nama folder tahapannya.
+        $daftarKegiatan = $this->daftarBernomor(Kegiatan::daftarNamaCapaian($kegiatanIku));
         // $daftarKegiatan SUDAH diawali "\n" sendiri (lihat daftarBernomor()) -- pemisahnya
         // cukup SATU "\n" lagi di sini supaya total ada baris kosong di antara narasi dan
         // daftar (bukan dua "\n\n" + "\n" bawaan yang bikin tiga baris kosong).
@@ -670,7 +686,9 @@ class NotulaBagian1DocxService
      */
     private function akhirTriwulan(int $tahun, int $triwulan): Carbon
     {
-        return Carbon::create($tahun, $triwulan * 3, 1)->endOfMonth();
+        // locale('id') eksplisit: APP_LOCALE production 'en', jadi translatedFormat()
+        // tanpa ini mencetak "December 2026", bukan "Desember 2026".
+        return Carbon::create($tahun, $triwulan * 3, 1)->endOfMonth()->locale('id');
     }
 
     /**
@@ -875,9 +893,9 @@ class NotulaBagian1DocxService
      * {{blok_x}}...{{/blok_x}} -- kalau $tampilkan true, baris/paragraf marker-nya dibuang tapi
      * ISINYA dipertahankan; kalau false, marker DAN isinya sekaligus dibuang (tidak ada blok lain
      * yang dipilih untuk IKU ini, mis. sudah ada realisasi & bukan BerAKHLAK). $unit 'tr'
-     * untuk penanda berupa BARIS TABEL tersendiri (blok_berakhlak/blok_ro), 'p' untuk penanda
-     * berupa PARAGRAF di dalam sel (blok_formula); blok_proksi dideteksi otomatis lewat
-     * unitPenanda().
+     * untuk penanda berupa BARIS TABEL tersendiri (blok_berakhlak), 'p' untuk penanda
+     * berupa PARAGRAF di dalam sel (blok_formula); blok_proksi & blok_ro dideteksi otomatis
+     * lewat unitPenanda().
      */
     private function resolveBlokKondisional(string $xml, string $namaBlok, bool $tampilkan, string $unit = 'tr'): string
     {
@@ -1206,7 +1224,7 @@ class NotulaBagian1DocxService
             if (str_contains($ikuBlok, '{{blok_berakhlak}}') || str_contains($ikuBlok, '{{/blok_berakhlak}}')) {
                 $this->cariBlokAman($ikuBlok, '{{blok_berakhlak}}', '{{/blok_berakhlak}}', 'tr', $masalah);
             }
-            $blokRo = $this->cariBlokAman($ikuBlok, '{{blok_ro}}', '{{/blok_ro}}', 'tr', $masalah);
+            $blokRo = $this->cariBlokAman($ikuBlok, '{{blok_ro}}', '{{/blok_ro}}', $this->unitPenanda($ikuBlok, '{{blok_ro}}'), $masalah);
             $this->cariBlokAman($ikuBlok, '{{blok_formula}}', '{{/blok_formula}}', 'p', $masalah);
 
             if ($blokRo !== null) {
