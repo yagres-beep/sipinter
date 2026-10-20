@@ -261,6 +261,24 @@ class VerifikasiCapaian extends Component
     public array $koreksiRtlBerikutnya = [];
 
     /**
+     * Pasangan kendala &amp; solusi BARU yang ditambahkan Tim SAKIP sendiri selagi
+     * memverifikasi (lihat tambahKendala()) — dikunci "baru-...", baru tersimpan ke DB
+     * lewat simpanKoreksiTeks(); pasangan yang kendala & solusinya sama-sama kosong
+     * dilewati, sama seperti Ketua Tim di PengisianKegiatan.
+     *
+     * @var array<string, array{kendala: string, solusi: string}>
+     */
+    public array $kendalaBaru = [];
+
+    /**
+     * Poin rencana RTL triwulan berikutnya BARU dari Tim SAKIP (lihat
+     * tambahRtlBerikutnya()) — pola sama seperti $kendalaBaru.
+     *
+     * @var array<string, string>
+     */
+    public array $rtlBerikutnyaTambahan = [];
+
+    /**
      * Catatan penolakan uraian kegiatan, dikunci pada id kegiatan — pola sama
      * persis dengan $catatanBerkas/$catatanKendala.
      *
@@ -332,6 +350,7 @@ class VerifikasiCapaian extends Component
     protected const PROPERTI_ISIAN = [
         'analisis_capaian', 'catatan', 'rincianOutput', 'indikatorProksi', 'koreksiKegiatan', 'koreksiKendala',
         'koreksiRtlRealisasi', 'koreksiRtlBerikutnya', 'picRtlBerikutnyaTerpilih', 'rincianNPilih', 'rincianNTw',
+        'kendalaBaru', 'rtlBerikutnyaTambahan',
     ];
 
     public function updated(string $property): void
@@ -867,9 +886,12 @@ class VerifikasiCapaian extends Component
      */
     public function bagianKustomList()
     {
+        // Hanya bagian yang ditempatkan di menu Isian Kegiatan — bagian di menu lain
+        // tidak lewat verifikasi capaian (lihat IsianBagianKustom).
         return $this->cacheBagianKustomList ??= BagianKustomPoin::with('bagianKustom')
             ->where('iku_id', $this->capaian->iku_id)
             ->where('periode_id', $this->capaian->periode_id)
+            ->whereHas('bagianKustom', fn ($q) => $q->whereJsonContains('penempatan', \App\Support\MenuBagianKustom::PENGISIAN))
             ->orderBy('id')
             ->get();
     }
@@ -1381,6 +1403,165 @@ class VerifikasiCapaian extends Component
         unset($this->koreksiRtlBerikutnya[$rtlId], $this->catatanRtlBerikutnya[$rtlId]);
 
         $this->cacheRtlBerikutnya = null;
+        // Sudah terhapus dari DB, notula ikut diperbarui saat "Simpan Perubahan".
+        $this->adaPerubahan = true;
+    }
+
+    /**
+     * Tim SAKIP boleh menambah poin RTL berikutnya sendiri (seperti Ketua Tim) hanya
+     * selagi memverifikasi DAN pada bulan terakhir triwulan — sama dengan
+     * PengisianKegiatan::rtlBaruBisaDiisi().
+     */
+    public function rtlBerikutnyaBisaDitambah(): bool
+    {
+        return $this->bisaDiverifikasi() && ((int) $this->capaian->periode->bulan - 1) % 3 === 2;
+    }
+
+    public function tambahRtlBerikutnya(): void
+    {
+        if (! $this->rtlBerikutnyaBisaDitambah()) {
+            return;
+        }
+
+        $this->rtlBerikutnyaTambahan['baru-'.(string) Str::uuid()] = '';
+        $this->adaPerubahan = true;
+    }
+
+    public function hapusRtlBerikutnyaTambahan(string $kunci): void
+    {
+        unset($this->rtlBerikutnyaTambahan[$kunci]);
+    }
+
+    /**
+     * Tambah satu pasangan kendala &amp; solusi kosong — baru tersimpan saat
+     * "Simpan"/"Verifikasi Selesai"/dst. ditekan (lihat simpanKendalaBaru()).
+     */
+    public function tambahKendala(): void
+    {
+        if (! $this->bisaDiverifikasi()) {
+            return;
+        }
+
+        $this->kendalaBaru['baru-'.(string) Str::uuid()] = ['kendala' => '', 'solusi' => ''];
+        $this->adaPerubahan = true;
+    }
+
+    public function hapusKendalaBaru(string $kunci): void
+    {
+        unset($this->kendalaBaru[$kunci]);
+    }
+
+    /**
+     * Hapus satu pasangan kendala &amp; solusi yang sudah tersimpan — gerbangnya sama
+     * dengan kendalaBisaDiverifikasi(), pola sama seperti hapusRtlBerikutnya().
+     */
+    public function hapusKendala(int $kendalaId): void
+    {
+        if (! $this->kendalaBisaDiverifikasi($kendalaId)) {
+            return;
+        }
+
+        KendalaSolusi::whereKey($kendalaId)->delete();
+
+        unset($this->koreksiKendala[$kendalaId], $this->catatanKendala[$kendalaId]);
+
+        $this->cacheKendalaSolusiList = null;
+        $this->adaPerubahan = true;
+    }
+
+    /**
+     * Tulis $kendalaBaru ke DB. Pasangan dari Tim SAKIP langsung "terverifikasi" —
+     * mereka sendiri yang menulisnya, jadi tidak perlu ditandai ulang.
+     */
+    protected function simpanKendalaBaru(): void
+    {
+        if (! $this->bisaDiverifikasi()) {
+            return;
+        }
+
+        foreach ($this->kendalaBaru as $kunci => $baris) {
+            $kendala = trim((string) ($baris['kendala'] ?? ''));
+            $solusi = trim((string) ($baris['solusi'] ?? ''));
+
+            if ($kendala === '' && $solusi === '') {
+                unset($this->kendalaBaru[$kunci]);
+
+                continue;
+            }
+
+            $ks = KendalaSolusi::create([
+                'iku_id' => $this->capaian->iku_id,
+                'periode_id' => $this->capaian->periode_id,
+                'kendala' => $kendala,
+                'solusi' => $solusi ?: null,
+                'status_dokumen' => KendalaSolusi::STATUS_DIAJUKAN,
+                'status_verifikasi' => 'terverifikasi',
+            ]);
+
+            $this->koreksiKendala[$ks->id] = ['kendala' => $ks->kendala, 'solusi' => $ks->solusi];
+            $this->catatanKendala[$ks->id] = null;
+            unset($this->kendalaBaru[$kunci]);
+        }
+
+        $this->cacheKendalaSolusiList = null;
+    }
+
+    /**
+     * Tulis $rtlBerikutnyaTambahan ke DB sebagai poin RTL triwulan berikutnya —
+     * periode tujuan, keterangan bulan & batas waktu dihitung sama seperti
+     * PengisianKegiatan::simpanBagianIsian() langkah 4.
+     */
+    protected function simpanRtlBerikutnyaTambahan(): void
+    {
+        if (! $this->rtlBerikutnyaBisaDitambah()) {
+            return;
+        }
+
+        $teksBaru = collect($this->rtlBerikutnyaTambahan)->map(fn ($t) => trim((string) $t))->filter();
+        $this->rtlBerikutnyaTambahan = [];
+
+        if ($teksBaru->isEmpty()) {
+            return;
+        }
+
+        $periode = $this->capaian->periode;
+        $triwulan = $periode->triwulan === 4 ? 1 : $periode->triwulan + 1;
+        $tahun = $periode->triwulan === 4 ? $periode->tahun + 1 : $periode->tahun;
+        $bulanPertama = ($triwulan - 1) * 3 + 1;
+
+        $periodeTarget = \App\Models\Periode::firstOrCreate(
+            ['tahun' => $tahun, 'bulan' => $bulanPertama],
+            ['triwulan' => $triwulan, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]
+        );
+
+        $namaBulan = collect([$bulanPertama, $bulanPertama + 1, $bulanPertama + 2])
+            ->map(fn ($b) => \Illuminate\Support\Carbon::create(2000, $b, 1)->locale('id')->translatedFormat('F'));
+
+        $pic = $this->picRtlBerikutnyaTerpilih !== []
+            ? $this->picRtlBerikutnyaTerpilih
+            : ($this->capaian->masterIku?->namaTimList() ?? []);
+
+        foreach ($teksBaru as $teks) {
+            $rtl = RtlEvaluasi::create([
+                'iku_id' => $this->capaian->iku_id,
+                'periode_id' => $periodeTarget->id,
+                'rtl_teks' => $teks,
+                'berlaku_bulan' => 'RTL untuk '.$namaBulan->join(', ', ', dan '),
+                'pic' => $pic !== [] ? implode(', ', $pic) : null,
+                'batas_waktu' => \Illuminate\Support\Carbon::create($tahun, $bulanPertama + 2, 1)->endOfMonth()->toDateString(),
+                'status_dokumen' => RtlEvaluasi::STATUS_DIAJUKAN,
+                'status_verifikasi' => 'terverifikasi',
+            ]);
+
+            $this->koreksiRtlBerikutnya[$rtl->id] = $rtl->rtl_teks;
+            $this->catatanRtlBerikutnya[$rtl->id] = null;
+        }
+
+        if ($this->picRtlBerikutnyaTerpilih === []) {
+            $this->picRtlBerikutnyaTerpilih = $pic;
+        }
+
+        $this->cacheRtlBerikutnya = null;
     }
 
     /**
@@ -1426,6 +1607,9 @@ class VerifikasiCapaian extends Component
             'koreksiKendala.*.solusi' => ['nullable', 'string'],
             'koreksiRtlRealisasi.*' => ['nullable', 'string'],
             'koreksiRtlBerikutnya.*' => ['required', 'string'],
+            'kendalaBaru.*.kendala' => ['nullable', 'string', 'required_with:kendalaBaru.*.solusi'],
+            'kendalaBaru.*.solusi' => ['nullable', 'string'],
+            'rtlBerikutnyaTambahan.*' => ['nullable', 'string'],
             'rincianNPilih.*' => ['boolean'],
             'rincianNTw.*' => ['nullable', 'integer', 'min:1', 'max:'.(int) $this->capaian->periode->triwulan],
             'alokasi_tw1' => ['nullable', 'numeric', 'min:0'],
@@ -1467,6 +1651,9 @@ class VerifikasiCapaian extends Component
             'indikatorProksi.*.target' => 'target proksi',
             'indikatorProksi.*.realisasi' => 'realisasi proksi',
             'koreksiRtlBerikutnya.*' => 'rencana RTL berikutnya',
+            'kendalaBaru.*.kendala' => 'kendala',
+            'kendalaBaru.*.solusi' => 'solusi',
+            'rtlBerikutnyaTambahan.*' => 'rencana RTL berikutnya',
             'alokasi_tw1' => 'Alokasi Target TW I',
             'alokasi_tw2' => 'Alokasi Target TW II',
             'alokasi_tw3' => 'Alokasi Target TW III',
@@ -1756,6 +1943,11 @@ class VerifikasiCapaian extends Component
         foreach ($this->koreksiRtlBerikutnya as $id => $teks) {
             RtlEvaluasi::whereKey($id)->update(['rtl_teks' => $teks]);
         }
+
+        // Tambahan Tim SAKIP sendiri — SETELAH koreksi di atas (baris baru tidak perlu
+        // ditulis ulang) dan SEBELUM PIC di bawah (supaya poin baru ikut ber-PIC sama).
+        $this->simpanKendalaBaru();
+        $this->simpanRtlBerikutnyaTambahan();
 
         // PIC Tindak Lanjut boleh belum diisi Ketua Tim (lihat App\Livewire\
         // PengisianKegiatan::rules()) — Tim SAKIP mengisi/mengonfirmasinya di sini,
@@ -2325,6 +2517,7 @@ class VerifikasiCapaian extends Component
             'berkasPerBagianKustom' => $bagianKustomList->mapWithKeys(fn ($p) => [$p->id => $this->berkasUntukBagianKustom($p->id)]),
             'bisaDiverifikasi' => $this->bisaDiverifikasi(),
             'bisaDibukaKembali' => $this->bisaDibukaKembali(),
+            'rtlBerikutnyaBisaDitambah' => $this->rtlBerikutnyaBisaDitambah(),
             'adaYangDitolak' => $this->adaYangDitolak(),
             'adaBelumDitandai' => $this->daftarIsianBelumDitandai() !== [],
             'daftarBelumDitandai' => $this->daftarIsianBelumDitandai(),

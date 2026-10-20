@@ -1784,4 +1784,62 @@ class VerifikasiCapaianTest extends TestCase
 
         $this->get(route('verifikasi.show', $data['capaian']))->assertForbidden();
     }
+
+    public function test_tim_sakip_bisa_menambah_dan_menghapus_kendala_solusi_saat_verifikasi(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+        $lama = KendalaSolusi::create(['iku_id' => $data['iku']->id, 'periode_id' => $data['periode']->id, 'kendala' => 'Kendala lama']);
+
+        $komponen = Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
+            ->call('hapusKendala', $lama->id)
+            ->call('tambahKendala');
+
+        $kunci = array_key_first($komponen->get('kendalaBaru'));
+
+        $komponen->set("kendalaBaru.{$kunci}.kendala", 'Kendala dari SAKIP')
+            ->set("kendalaBaru.{$kunci}.solusi", 'Solusi dari SAKIP')
+            ->call('simpanSementara')
+            ->assertHasNoErrors()
+            ->assertSet('kendalaBaru', []);
+
+        $this->assertNull($lama->fresh());
+        $baru = KendalaSolusi::where('iku_id', $data['iku']->id)->sole();
+        $this->assertSame('Kendala dari SAKIP', $baru->kendala);
+        $this->assertSame('Solusi dari SAKIP', $baru->solusi);
+        $this->assertSame('terverifikasi', $baru->status_verifikasi);
+    }
+
+    public function test_tim_sakip_bisa_menambah_poin_rtl_berikutnya_di_bulan_terakhir_triwulan(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+        $data['periode']->update(['bulan' => 9, 'bulan_ke' => 3]);
+
+        $komponen = Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']->fresh()])
+            ->call('tambahRtlBerikutnya');
+
+        $kunci = array_key_first($komponen->get('rtlBerikutnyaTambahan'));
+
+        $komponen->set("rtlBerikutnyaTambahan.{$kunci}", 'Rencana dari SAKIP')
+            ->call('simpanSementara')
+            ->assertHasNoErrors();
+
+        $rtl = RtlEvaluasi::where('iku_id', $data['iku']->id)->sole();
+        $this->assertSame('Rencana dari SAKIP', $rtl->rtl_teks);
+        $this->assertSame('terverifikasi', $rtl->status_verifikasi);
+        $this->assertSame('Uji', $rtl->pic);
+        $this->assertSame('2026-12-31', $rtl->batas_waktu->toDateString());
+        $this->assertSame(4, (int) $rtl->periode->triwulan);
+    }
+
+    public function test_poin_rtl_berikutnya_tidak_bisa_ditambah_sebelum_bulan_terakhir_triwulan(): void
+    {
+        $this->actingAs($this->buatSakip());
+        $data = $this->siapkanIkuDenganDuaKegiatan();
+
+        Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']])
+            ->call('tambahRtlBerikutnya')
+            ->assertSet('rtlBerikutnyaTambahan', []);
+    }
 }
