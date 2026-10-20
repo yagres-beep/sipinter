@@ -4707,6 +4707,13 @@ class PengisianKegiatan extends Component
                     continue;
                 }
 
+                // Poin RTL berikutnya (baru maupun perbaikan) ikut menjadi alasan Capaian
+                // kembali "diajukan" — tanpa ini, menambah RTL berikutnya pada isian yang
+                // sudah "diverifikasi" membuat poinnya "menunggu" tapi Capaian tetap
+                // "diverifikasi", sehingga Tim SAKIP tidak bisa memeriksanya (lihat
+                // VerifikasiCapaian::rtlBerikutnyaBisaDiverifikasi()).
+                $adaPerbaikanLainDiajukan = true;
+
                 // Blok dengan id terisi berarti poin lama — baik yang DITOLAK Tim SAKIP
                 // (dimuat lewat rtlBerikutnyaDitolak()) MAUPUN draft milik sendiri yang
                 // belum pernah diajukan (dimuat lewat rtlBerikutnyaDraftSendiri(), lihat

@@ -2611,4 +2611,161 @@ class PengisianKegiatanTest extends TestCase
 
         $this->assertDatabaseHas('berkas', ['id' => $berkas->id]);
     }
+
+    /**
+     * Isian bulan terakhir Triwulan III yang SUDAH "diverifikasi" Tim SAKIP (satu
+     * kegiatan berbukti terverifikasi + satu kendala terverifikasi + riwayat
+     * diajukan → diverifikasi) — titik awal pengajuan ulang hal baru pada IKU sama.
+     *
+     * @return array{ketua: User, iku: MasterIku, capaian: Capaian, kegiatan: Kegiatan, berkas: Berkas}
+     */
+    protected function siapkanIsianSudahDiverifikasi(): array
+    {
+        $peranKetua = Role::create(['nama' => 'Ketua Tim']);
+        $peranSakip = Role::create(['nama' => 'Tim SAKIP']);
+        $ketua = User::create([
+            'nama' => 'Ketua Uji Ajukan Ulang', 'username' => 'ketua-uji-ajukan-ulang@example.test', 'email' => 'ketua-uji-ajukan-ulang@example.test',
+            'password' => 'password', 'role_id' => $peranKetua->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+        $sakip = User::create([
+            'nama' => 'SAKIP Uji Ajukan Ulang', 'username' => 'sakip-uji-ajukan-ulang@example.test', 'email' => 'sakip-uji-ajukan-ulang@example.test',
+            'password' => 'password', 'role_id' => $peranSakip->id, 'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        $iku = MasterIku::create([
+            'kode' => 'UJI-AJUKAN-ULANG', 'indikator' => 'Indikator uji ajukan ulang', 'tim' => 'Uji', 'penanggung_jawab' => 'Ketua Uji',
+        ]);
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 9, 'triwulan' => 3, 'bulan_ke' => 3, 'flag_bulan_terlewat' => false]);
+
+        $capaian = Capaian::create(['iku_id' => $iku->id, 'periode_id' => $periode->id, 'status' => Capaian::STATUS_DRAFT]);
+        $capaian->catatStatus(Capaian::STATUS_DIAJUKAN, $ketua);
+        $capaian->catatStatus(Capaian::STATUS_DIVERIFIKASI, $sakip, 'Semua sesuai');
+
+        $kegiatan = Kegiatan::create([
+            'iku_id' => $iku->id, 'periode_id' => $periode->id,
+            'uraian_kegiatan' => 'Kegiatan sudah diverifikasi', 'jenis' => 'bukan_survei_sensus',
+            'status_dokumen' => Kegiatan::STATUS_DIVERIFIKASI,
+        ]);
+
+        $berkas = Berkas::create([
+            'ref_id' => $kegiatan->id, 'ref_type' => Kegiatan::class, 'kategori' => 'capaian',
+            'nama_file' => 'bukti-lama.pdf', 'path' => 'bukti-capaian/bukti-lama.pdf',
+            'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        KendalaSolusi::create([
+            'iku_id' => $iku->id, 'periode_id' => $periode->id,
+            'kendala' => 'Kendala sudah diterima', 'solusi' => 'Solusi sudah diterima',
+            'status_verifikasi' => 'terverifikasi',
+        ]);
+
+        return compact('ketua', 'sakip', 'iku', 'capaian', 'kegiatan', 'berkas');
+    }
+
+    /**
+     * Regresi produksi (dasbor: "RTL Berikutnya 1 Menunggu" tapi status IKU tetap
+     * "Diverifikasi"): menambah RTL triwulan berikutnya pada isian yang sudah
+     * diverifikasi lalu mengajukannya HARUS memindahkan Capaian ke "diajukan" —
+     * kalau tidak, Tim SAKIP tidak bisa memeriksa poin RTL baru itu sama sekali.
+     */
+    public function test_ajukan_rtl_berikutnya_baru_setelah_diverifikasi_memindahkan_status_ke_diajukan(): void
+    {
+        Storage::fake('local');
+        $data = $this->siapkanIsianSudahDiverifikasi();
+
+        $this->actingAs($data['ketua']);
+
+        Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 9)
+            ->set('iku_id', $data['iku']->id)
+            ->set('rtlBaru.0.rtl_teks', 'RTL baru setelah diverifikasi')
+            ->call('ajukanIsian')
+            ->assertHasNoErrors();
+
+        $capaian = $data['capaian']->fresh();
+        $this->assertSame(Capaian::STATUS_DIAJUKAN, $capaian->status);
+
+        // Riwayat lama (diajukan → diverifikasi + catatannya) tetap utuh, pengajuan
+        // baru ditambahkan sebagai baris baru oleh Ketua Tim.
+        $riwayat = $capaian->riwayatStatus()->get();
+        $this->assertSame(['diajukan', 'diverifikasi', 'diajukan'], $riwayat->reverse()->pluck('status')->values()->all());
+        $this->assertSame('Semua sesuai', $riwayat->firstWhere('status', 'diverifikasi')->catatan);
+        $this->assertSame($data['ketua']->id, $riwayat->first()->user_id);
+
+        // Kegiatan & bukti yang sudah diverifikasi tidak disentuh.
+        $this->assertSame(Kegiatan::STATUS_DIVERIFIKASI, $data['kegiatan']->fresh()->status_dokumen);
+        $this->assertSame('terverifikasi', $data['berkas']->fresh()->status_verifikasi);
+
+        $rtl = RtlEvaluasi::where('rtl_teks', 'RTL baru setelah diverifikasi')->first();
+        $this->assertSame(RtlEvaluasi::STATUS_DIAJUKAN, $rtl->status_dokumen);
+    }
+
+    public function test_ajukan_kegiatan_baru_berulang_setelah_beberapa_kali_diverifikasi_selalu_diajukan(): void
+    {
+        Storage::fake('local');
+        $data = $this->siapkanIsianSudahDiverifikasi();
+
+        foreach ([1, 2] as $putaran) {
+            $this->actingAs($data['ketua']);
+
+            $component = Livewire::test(PengisianKegiatan::class)
+                ->set('tahun', 2026)
+                ->set('bulan', 9)
+                ->set('iku_id', $data['iku']->id)
+                ->call('addBlock');
+
+            // Blok baru selalu paling akhir, setelah blok-blok terkunci yang sudah diverifikasi.
+            $baru = count($component->get('blocks')) - 1;
+            $component->set("blocks.{$baru}.uraian_kegiatan", "Kegiatan tambahan ke-{$putaran}")
+                ->set("blocks.{$baru}.jenis", 'bukan_survei_sensus')
+                ->set("blocks.{$baru}.bukti", [UploadedFile::fake()->create("bukti-{$putaran}.pdf", 100, 'application/pdf')]);
+
+            // Bulan terakhir triwulan: RTL berikutnya wajib sekali per triwulan.
+            if ($putaran === 1) {
+                $component->set('rtlBaru.0.rtl_teks', 'RTL triwulan berikutnya');
+            }
+
+            $component->call('ajukanIsian')->assertHasNoErrors();
+
+            $capaian = $data['capaian']->fresh();
+            $this->assertSame(Capaian::STATUS_DIAJUKAN, $capaian->status, "Putaran {$putaran}");
+            $this->assertSame(Kegiatan::STATUS_DIAJUKAN, Kegiatan::where('uraian_kegiatan', "Kegiatan tambahan ke-{$putaran}")->value('status_dokumen'));
+
+            // Tim SAKIP memverifikasi lagi sebelum putaran berikutnya.
+            Kegiatan::where('iku_id', $data['iku']->id)->update(['status_dokumen' => Kegiatan::STATUS_DIVERIFIKASI]);
+            RtlEvaluasi::where('iku_id', $data['iku']->id)->update(['status_verifikasi' => 'terverifikasi']);
+            $capaian->catatStatus(Capaian::STATUS_DIVERIFIKASI, $data['sakip']);
+        }
+
+        // 2 riwayat awal + (diajukan, diverifikasi) × 2 putaran — tidak ada yang hilang.
+        $this->assertSame(6, $data['capaian']->riwayatStatus()->count());
+        $this->assertDatabaseHas('berkas', ['id' => $data['berkas']->id, 'status_verifikasi' => 'terverifikasi']);
+    }
+
+    public function test_simpan_draft_hal_baru_setelah_diverifikasi_tidak_mengubah_status(): void
+    {
+        Storage::fake('local');
+        $data = $this->siapkanIsianSudahDiverifikasi();
+
+        $this->actingAs($data['ketua']);
+
+        Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 9)
+            ->set('iku_id', $data['iku']->id)
+            ->call('addBlock')
+            ->set('blocks.1.uraian_kegiatan', 'Kegiatan tambahan draf')
+            ->set('blocks.1.jenis', 'bukan_survei_sensus')
+            ->set('rtlBaru.0.rtl_teks', 'RTL draf setelah diverifikasi')
+            ->call('simpanDraft')
+            ->assertHasNoErrors();
+
+        $capaian = $data['capaian']->fresh();
+        $this->assertSame(Capaian::STATUS_DIVERIFIKASI, $capaian->status);
+        $this->assertSame(2, $capaian->riwayatStatus()->count());
+        $this->assertSame(Kegiatan::STATUS_DRAFT, Kegiatan::where('uraian_kegiatan', 'Kegiatan tambahan draf')->value('status_dokumen'));
+        $this->assertSame(RtlEvaluasi::STATUS_DRAFT, RtlEvaluasi::where('rtl_teks', 'RTL draf setelah diverifikasi')->value('status_dokumen'));
+    }
 }
