@@ -189,7 +189,8 @@ class SalinanBuktiRtlTest extends TestCase
             ->set('blocks.0.jenis', 'survei_sensus')
             ->call('toggleTahapan', 0, 'persiapan')
             ->call('aturSusunanFolder', 0, true, 'persiapan')
-            ->call('tambahSubfolder', 0, 'Undangan', 'persiapan');
+            ->call('tambahSubfolder', 0, 'Undangan', 'persiapan')
+            ->call('tambahSubfolder', 0, 'Notula', 'persiapan');
 
         $test->set('unggahFolder.0.0.1', [$this->pdf('undangan.pdf')])->assertHasNoErrors();
         $test->set('unggahFolder.0.0.0', [$this->pdf('laporan.pdf')])->assertHasNoErrors();
@@ -292,6 +293,7 @@ class SalinanBuktiRtlTest extends TestCase
             ->call('tambahTahapanRtl', $this->poinLain->id, 'Tahapan 2')
             ->call('aturSusunanFolderRtl', $this->poinLain->id, true, 'Tahapan 1')
             ->call('tambahSubfolderRtl', $this->poinLain->id, 'Undangan', 'Tahapan 1')
+            ->call('tambahSubfolderRtl', $this->poinLain->id, 'Notula', 'Tahapan 1')
             ->assertSeeHtml('wire:model="unggahRtl.'.$this->poinLain->id.'.0.1"')
             ->assertSeeHtml('wire:model="unggahRtl.'.$this->poinLain->id.'.1.0"');
 
@@ -313,6 +315,34 @@ class SalinanBuktiRtlTest extends TestCase
             ->assertSet("evaluasi.{$this->poinLain->id}.pisah_tahapan", true)
             ->assertSet("evaluasi.{$this->poinLain->id}.tahapan", ['Tahapan 1', 'Tahapan 2'])
             ->assertSet("evaluasi.{$this->poinLain->id}.subfolders_tahapan.Tahapan 1", ['Undangan']);
+    }
+
+    /** Pisah subfolder poin RTL juga wajib minimal dua folder — server menolak walau tombol dilewati. */
+    public function test_unggah_mandiri_rtl_pisah_subfolder_wajib_minimal_dua(): void
+    {
+        $id = $this->poinLain->id;
+
+        $test = $this->form()
+            ->call('aturTahapanRtl', $id, true)
+            ->call('tambahTahapanRtl', $id, 'Tahapan 1')
+            ->call('tambahSubfolderRtl', $id, 'Undangan', 'Tahapan 1')
+            ->assertSee('Pilih minimal 2 folder tujuan untuk menggunakan fitur pemisahan folder')
+            ->assertDontSeeHtml('wire:model="unggahRtl.'.$id.'.0.1"')
+            ->set("unggahRtl.{$id}.0.1", [$this->pdf('undangan.pdf')])
+            ->assertHasErrors("evaluasi.{$id}.susunan_folder")
+            ->assertSet("evaluasi.{$id}.bukti", [])
+            ->assertSet("evaluasi.{$id}.subfolders_tahapan.Tahapan 1", ['Undangan']);
+
+        $this->assertSame([], $this->drive->semuaBerkas());
+        $this->assertNotEmpty(array_filter($test->instance()->kekuranganPengajuan(), fn ($p) => str_contains($p, 'Pilih minimal 2 folder tujuan')));
+
+        $test->call('tambahSubfolderRtl', $id, 'Notula', 'Tahapan 1')
+            ->assertHasNoErrors()
+            ->set("unggahRtl.{$id}.0.1", [$this->pdf('undangan.pdf')])
+            ->assertHasNoErrors();
+
+        $this->assertSame([self::AKAR.'/Evaluasi-RTL/Pelatihan petugas lapangan/Tahapan 1/Undangan/undangan.pdf'], $this->drive->semuaBerkas());
+        $this->assertSame(1, $this->poinLain->berkas()->count());
     }
 
     public function test_unggah_mandiri_tanpa_subfolder_per_kegiatan_tidak_memaksakan_tahapan(): void

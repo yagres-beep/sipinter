@@ -7,7 +7,8 @@
      $argId      argumen pertama (indeks blok kegiatan / id poin RTL)
      $argTahapan literal JS tahapan (Js::from(), "null" bila tanpa tahapan)
      $kunci      awalan wire:key unik
-     $pakai, $daftar, $saran, $tempat (teks lokasi folder untuk keterangan) --}}
+     $pakai, $daftar, $saran, $tempat (teks lokasi folder untuk keterangan)
+     $kurang     true bila mode pisah baru berisi < 2 subfolder (subfolderKurangDariDua()) --}}
 <div class="pills">
     <span class="pill {{ $pakai ? '' : 'on' }}" wire:click="{{ $metode['atur'] }}({{ $argId }}, false, {{ $argTahapan }})">1 folder (bawaan)</span>
     <span class="pill {{ $pakai ? 'on' : '' }}" wire:click="{{ $metode['atur'] }}({{ $argId }}, true, {{ $argTahapan }})">Pisah ke beberapa subfolder</span>
@@ -35,7 +36,10 @@
             @endif
         @endforeach
     </div>
-    <div class="fhint">Folder dibuat di dalam folder {{ $tempat }}. Tiap folder punya tombol unggah sendiri di bawah.</div>
+    @if ($kurang ?? false)
+        <div style="color:var(--red);font-size:11.5px;margin-top:6px" role="alert">⚠️ Pilih minimal 2 folder tujuan untuk menggunakan fitur pemisahan folder — {{ $daftar === [] ? 'belum ada' : 'baru 1' }} subfolder. Tambah subfolder lagi atau pilih "1 folder (bawaan)" bila semua bukti cukup di satu folder.</div>
+    @endif
+    <div class="fhint">Folder dibuat di dalam folder {{ $tempat }}. Tiap folder punya tombol unggah sendiri di bawah{{ ($kurang ?? false) ? ', aktif setelah minimal 2 subfolder dibuat' : '' }}.</div>
 @else
     <div class="fhint">Semua bukti masuk langsung ke folder {{ $tempat }}. Pilih "Pisah ke beberapa subfolder" untuk membuat folder sendiri (mis. Undangan, Dokumentasi).</div>
 @endif

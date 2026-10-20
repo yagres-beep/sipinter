@@ -741,8 +741,12 @@
                                 'daftar' => $daftarSub,
                                 'saran' => \App\Livewire\PengisianKegiatan::saranSubfolder($tahapanSusunan),
                                 'tempat' => $tahapanSusunan !== null ? '"'.$namaFolderTahapan.'"' : 'kegiatan',
+                                'kurang' => $this->subfolderKurangDariDua($block, $tahapanSusunan),
                             ])
                         </div>
+                    @endforeach
+                    @foreach (array_unique($errors->get("blocks.{$i}.susunan_folder")) as $pesanSusunan)
+                        <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $pesanSusunan }}</div>
                     @endforeach
                 </div>
 
@@ -805,7 +809,15 @@
                             @endif
 
                             @foreach ($this->folderUnggahBlok($i) as $grup)
+                                @php $unggahTerkunci = $this->subfolderKurangDariDua($block, $grup['tahapan']); @endphp
                                 <div wire:key="grup-unggah-{{ $i }}-{{ $grup['tahapan'] ?? 'kegiatan' }}" style="{{ $survei ? 'margin-left:18px;' : '' }}margin-top:8px">
+                                    @if ($unggahTerkunci)
+                                        {{-- Mode pisah dengan < 2 subfolder: semua kotak unggah folder ini
+                                             disembunyikan (server juga menolak, lihat updatedUnggahFolder()). --}}
+                                        <div class="locked-note" style="padding:10px 12px;border:1.5px dashed var(--line);border-radius:10px;font-size:11.5px;margin-top:6px">
+                                            🔒 Unggah ke {{ $grup['tahapan'] !== null ? 'folder "'.$grup['label'].'"' : 'folder kegiatan ini' }} belum aktif — pilih minimal 2 folder tujuan untuk menggunakan fitur pemisahan folder, atau pilih "1 folder (bawaan)" di Susunan Folder Bukti.
+                                        </div>
+                                    @endif
                                     @foreach ($grup['folder'] as $folder)
                                         @php
                                             $berkasFolder = collect($block['bukti'] ?? [])->filter(fn ($f) => $this->tahapanBerkasBaru($block, $f) === $grup['tahapan'] && $this->subfolderBerkasBaru($block, $f) === $folder['subfolder']);
@@ -888,8 +900,10 @@
                                                 </div>
                                             @endif
 
-                                            <x-zona-unggah :model="'unggahFolder.'.$i.'.'.$grup['urutan'].'.'.$folder['urutan']" :ringkas="true"
-                                                label="Seret PDF ke folder ini atau klik untuk memilih" style="margin-top:6px;margin-left:18px" />
+                                            @unless ($unggahTerkunci)
+                                                <x-zona-unggah :model="'unggahFolder.'.$i.'.'.$grup['urutan'].'.'.$folder['urutan']" :ringkas="true"
+                                                    label="Seret PDF ke folder ini atau klik untuk memilih" style="margin-top:6px;margin-left:18px" />
+                                            @endunless
                                         </div>
                                     @endforeach
                                 </div>
@@ -1235,8 +1249,12 @@
                                                 'daftar' => $this->daftarSubfolder($dataRtl, $tahapanSusunan),
                                                 'saran' => \App\Livewire\PengisianKegiatan::SARAN_SUBFOLDER,
                                                 'tempat' => $tahapanSusunan !== null ? '"'.$tahapanSusunan.'"' : 'poin RTL ini',
+                                                'kurang' => $this->subfolderRtlKurangDariDua($poin->id, $tahapanSusunan),
                                             ])
                                         </div>
+                                    @endforeach
+                                    @foreach (array_unique($errors->get("evaluasi.{$poin->id}.susunan_folder")) as $pesanSusunan)
+                                        <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $pesanSusunan }}</div>
                                     @endforeach
                                 </div>
                             @else
@@ -1250,7 +1268,13 @@
                             <div style="border:1.5px dashed var(--line);border-radius:10px;padding:10px 12px;margin-top:6px">
                                 <div class="foldername">📁 {{ \Illuminate\Support\Str::limit(end($polaRtl['jalur']), 90) }}</div>
                                 @foreach ($polaRtl['per_kegiatan'] ? $this->folderUnggahRtl($poin->id) : [['urutan' => 0, 'tahapan' => null, 'label' => '', 'folder' => [['urutan' => 0, 'subfolder' => '', 'label' => '']]]] as $grup)
+                                    @php $unggahTerkunci = $this->subfolderRtlKurangDariDua($poin->id, $grup['tahapan']); @endphp
                                     <div wire:key="grup-unggah-rtl-{{ $poin->id }}-{{ md5((string) $grup['tahapan']) }}" style="margin-left:18px;margin-top:8px">
+                                        @if ($unggahTerkunci)
+                                            <div class="locked-note" style="padding:10px 12px;border:1.5px dashed var(--line);border-radius:10px;font-size:11.5px;margin-top:6px">
+                                                🔒 Unggah ke {{ $grup['tahapan'] !== null ? 'folder "'.$grup['label'].'"' : 'folder poin RTL ini' }} belum aktif — pilih minimal 2 folder tujuan untuk menggunakan fitur pemisahan folder, atau pilih "1 folder (bawaan)".
+                                            </div>
+                                        @endif
                                         @foreach ($grup['folder'] as $folder)
                                             @php
                                                 $berkasFolder = collect($dataRtl['bukti'] ?? [])->filter(fn ($f) => ! $polaRtl['per_kegiatan']
@@ -1279,8 +1303,10 @@
                                                     </div>
                                                 @endif
 
-                                                <x-zona-unggah :model="'unggahRtl.'.$poin->id.'.'.$grup['urutan'].'.'.$folder['urutan']" :ringkas="true"
-                                                    label="Seret PDF bukti realisasi ke folder ini atau klik untuk memilih" style="margin-top:6px;margin-left:18px" />
+                                                @unless ($unggahTerkunci)
+                                                    <x-zona-unggah :model="'unggahRtl.'.$poin->id.'.'.$grup['urutan'].'.'.$folder['urutan']" :ringkas="true"
+                                                        label="Seret PDF bukti realisasi ke folder ini atau klik untuk memilih" style="margin-top:6px;margin-left:18px" />
+                                                @endunless
                                             </div>
                                         @endforeach
                                     </div>

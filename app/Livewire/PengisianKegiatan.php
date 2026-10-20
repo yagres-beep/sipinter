@@ -362,6 +362,112 @@ class PengisianKegiatan extends Component
         return $this->pakaiSubfolder($block, $tahapan) ? $this->daftarSubfolder($block, $tahapan) : [];
     }
 
+    /**
+     * Pesan bila "Pisah ke beberapa subfolder" dipilih dengan kurang dari dua subfolder.
+     * Syarat ini HANYA untuk mode pisah — "1 folder (bawaan)" tetap boleh dipakai tanpa
+     * subfolder sama sekali.
+     */
+    public const PESAN_MINIMAL_DUA_SUBFOLDER = 'Pilih minimal 2 folder tujuan untuk menggunakan fitur pemisahan folder. Tambah subfolder lagi atau pilih "1 folder (bawaan)".';
+
+    /**
+     * Folder ini dipilih "Pisah ke beberapa subfolder" tapi subfolder yang benar-benar
+     * berbeda (nama dinormalisasi, tanpa beda huruf besar/kecil) belum sampai dua —
+     * satu subfolder saja sama dengan "1 folder". Dikecualikan: folder yang subfolder-
+     * nya sudah berisi berkas TERSIMPAN. Susunan subfolder kosong tidak ikut tersimpan
+     * (muatBlocksKegiatan()/muatFormEvaluasi() menyusunnya ulang dari berkas), jadi
+     * folder sah yang baru diisi di satu subfolder termuat dengan satu subfolder dan
+     * tidak boleh terkunci karenanya.
+     *
+     * @param  list<string|null>  $subfolderTersimpan  subfolder berkas tersimpan di folder ini
+     */
+    protected function susunanKurangDariDua(array $data, ?string $tahapan, array $subfolderTersimpan): bool
+    {
+        if (! $this->pakaiSubfolder($data, $tahapan)) {
+            return false;
+        }
+
+        $daftar = $this->daftarSubfolder($data, $tahapan);
+        $berbeda = collect($daftar)
+            ->map(fn ($nama) => mb_strtolower(FolderStructureService::namaOtomatis((string) $nama, 100)))
+            ->filter()
+            ->unique();
+
+        return $berbeda->count() < 2 && array_intersect($daftar, array_filter($subfolderTersimpan)) === [];
+    }
+
+    /** susunanKurangDariDua() untuk satu folder kegiatan/tahapan di blok kegiatan. */
+    public function subfolderKurangDariDua(array $block, ?string $tahapan): bool
+    {
+        $tahapanTersimpan = ($block['jenis'] ?? '') === 'survei_sensus' ? ($block['tahapan_survei'] ?? null) : null;
+        $tersimpan = filled($block['id'] ?? null) && ($tahapan === null || $tahapan === $tahapanTersimpan)
+            ? array_column($block['existing_bukti'] ?? [], 'subfolder')
+            : [];
+
+        return $this->susunanKurangDariDua($block, $tahapan, $tersimpan);
+    }
+
+    /**
+     * susunanKurangDariDua() untuk satu folder tahapan/poin Evaluasi RTL. Subfolder
+     * hanya berlaku bila Struktur Folder Drive memakai folder per poin (lihat blade).
+     */
+    public function subfolderRtlKurangDariDua(int $rtlId, ?string $tahapan): bool
+    {
+        $poin = $this->rtlTriwulanBerjalan()->firstWhere('id', $rtlId);
+
+        if (! $poin || ! $this->polaFolderRtl($poin)['per_kegiatan']) {
+            return false;
+        }
+
+        $berkas = $tahapan === null ? $poin->berkas->whereNull('tahapan') : $poin->berkas->where('tahapan', $tahapan);
+
+        return $this->susunanKurangDariDua($this->evaluasi[$rtlId] ?? [], $tahapan, $berkas->pluck('subfolder')->all());
+    }
+
+    /**
+     * Galat susunan folder semua kegiatan & poin Evaluasi RTL yang masih bisa diubah —
+     * dipakai simpanDraft() (termasuk simpan otomatis setelah unggah) dan buatValidator()
+     * (Ajukan), jadi susunan yang tidak sah tidak pernah tersimpan walau tombol di layar
+     * dilewati.
+     *
+     * @param  bool  $hanyaBlokTerisi  lewati blok tanpa uraian (tidak ikut tersimpan, lihat aturanBlokTerisiSaja())
+     * @return array<string, list<string>> kunci blocks.<i>.susunan_folder / evaluasi.<id>.susunan_folder => pesan
+     */
+    protected function galatSusunanFolder(bool $hanyaBlokTerisi = false): array
+    {
+        $galat = [];
+
+        foreach ($this->blocks as $i => $block) {
+            if ($this->blokTerkunci($block['status_dokumen'] ?? null)
+                || ($hanyaBlokTerisi && trim((string) ($block['uraian_kegiatan'] ?? '')) === '')) {
+                continue;
+            }
+
+            $daftarTahapan = ($block['jenis'] ?? '') === 'survei_sensus' ? $this->tahapanDipilih($block) : [];
+
+            foreach ($daftarTahapan ?: [null] as $tahapan) {
+                if ($this->subfolderKurangDariDua($block, $tahapan)) {
+                    $folder = $tahapan !== null ? 'tahapan '.self::labelTahapan($tahapan) : 'kegiatan';
+                    $galat["blocks.{$i}.susunan_folder"][] = "Folder {$folder}: ".self::PESAN_MINIMAL_DUA_SUBFOLDER;
+                }
+            }
+        }
+
+        foreach (array_keys($this->evaluasi) as $rtlId) {
+            if (! $this->poinRtlBisaDiunggah((int) $rtlId)) {
+                continue;
+            }
+
+            foreach ($this->tahapanRtlDipilih((int) $rtlId) ?: [null] as $tahapan) {
+                if ($this->subfolderRtlKurangDariDua((int) $rtlId, $tahapan)) {
+                    $folder = $tahapan !== null ? 'tahapan '.$tahapan : 'poin RTL';
+                    $galat["evaluasi.{$rtlId}.susunan_folder"][] = "Folder {$folder}: ".self::PESAN_MINIMAL_DUA_SUBFOLDER;
+                }
+            }
+        }
+
+        return $galat;
+    }
+
     /** Saran nama subfolder untuk satu tahapan (atau kegiatan tanpa tahapan). */
     public static function saranSubfolder(?string $tahapan): array
     {
@@ -378,6 +484,7 @@ class PengisianKegiatan extends Component
         if ($daftar !== null) {
             data_set($this->blocks[$index], $kunciDaftar, array_values($daftar));
         }
+        $this->resetErrorBag("blocks.{$index}.susunan_folder");
         $this->adaPerubahan = true;
     }
 
@@ -517,6 +624,16 @@ class PengisianKegiatan extends Component
         }
 
         $tahapan = ($block['jenis'] ?? '') === 'survei_sensus' ? ($this->tahapanDipilih($block)[$urutanTahapan] ?? null) : null;
+
+        // Tombol unggahnya sudah dinonaktifkan di layar; ini pengaman bila request
+        // tetap terkirim. Berkas ditolak utuh — tidak ada yang masuk Drive — sedangkan
+        // susunan folder & berkas lain di form tetap seperti semula.
+        if ($this->subfolderKurangDariDua($block, $tahapan)) {
+            $this->addError("blocks.{$index}.susunan_folder", self::PESAN_MINIMAL_DUA_SUBFOLDER);
+
+            return;
+        }
+
         $subfolder = $urutanFolder > 0 ? ($this->subfolderBlok($block, $tahapan)[$urutanFolder - 1] ?? '') : '';
 
         foreach ($daftarBerkas as $berkas) {
@@ -748,6 +865,7 @@ class PengisianKegiatan extends Component
         }
 
         $this->evaluasi[$rtlId] = $data;
+        $this->resetErrorBag("evaluasi.{$rtlId}.susunan_folder");
         $this->adaPerubahan = true;
     }
 
@@ -831,6 +949,14 @@ class PengisianKegiatan extends Component
 
         $data = array_merge($this->evaluasiKosong(), $this->evaluasi[$rtlId] ?? []);
         $tahapan = $this->tahapanRtlDipilih($rtlId)[$urutanTahapan] ?? null;
+
+        // Pengaman sisi server, sama dengan updatedUnggahFolder().
+        if ($this->subfolderRtlKurangDariDua($rtlId, $tahapan)) {
+            $this->addError("evaluasi.{$rtlId}.susunan_folder", self::PESAN_MINIMAL_DUA_SUBFOLDER);
+
+            return;
+        }
+
         $subfolder = $urutanFolder > 0 ? ($this->subfolderBlok($data, $tahapan)[$urutanFolder - 1] ?? '') : '';
 
         foreach ($daftarBerkas as $berkas) {
@@ -4086,6 +4212,12 @@ class PengisianKegiatan extends Component
         );
 
         $validator->after(function ($validator) {
+            foreach ($this->galatSusunanFolder() as $kunci => $daftarPesan) {
+                foreach ($daftarPesan as $pesan) {
+                    $validator->errors()->add($kunci, $pesan);
+                }
+            }
+
             // Blok dengan lebih dari satu tahapan: tiap tahapan menjadi kegiatan
             // sendiri, jadi masing-masing wajib punya minimal satu bukti (tahapan
             // utama boleh memakai bukti lama yang sudah tersimpan).
@@ -4322,8 +4454,11 @@ class PengisianKegiatan extends Component
             }
 
             $teks = $this->rtlTriwulanBerjalan()->firstWhere('id', (int) $bagian[1])?->rtl_teks;
+            $label = 'Evaluasi RTL'.($teks ? ' "'.Str::limit($teks, 40).'"' : '');
 
-            return 'Evaluasi RTL'.($teks ? ' "'.Str::limit($teks, 40).'"' : '').': berkas bukti realisasi harus berupa PDF.';
+            return ($bagian[2] ?? null) === 'susunan_folder'
+                ? "{$label}: {$pesanAsli}"
+                : "{$label}: berkas bukti realisasi harus berupa PDF.";
         }
 
         if ($kunci === 'rtlBaru') {
@@ -4425,6 +4560,12 @@ class PengisianKegiatan extends Component
             // lain yang uraiannya belum diisi — blok seperti itu memang dilewati
             // simpanBagianIsian() dan dipasang lagi di layar oleh muatUlangForm().
             $this->validate($otomatis ? $this->aturanBlokTerisiSaja($aturan) : $aturan, $this->messages(), $this->validationAttributes());
+
+            // Pisah subfolder wajib minimal dua folder tujuan — dicek sebelum apa pun
+            // tersimpan, jadi berkas yang menunggu tidak terunggah ke susunan tak sah.
+            if ($galatSusunan = $this->galatSusunanFolder(hanyaBlokTerisi: $otomatis)) {
+                throw ValidationException::withMessages($galatSusunan);
+            }
         } catch (ValidationException $e) {
             $this->dispatch('notify', type: 'error', message: $otomatis
                 ? 'Berkas belum terunggah ke Google Drive — lengkapi isian yang ditandai merah, lalu klik "Simpan Draft".'
