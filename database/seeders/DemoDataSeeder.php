@@ -196,9 +196,13 @@ class DemoDataSeeder extends Seeder
                 ]
             );
 
+            // kode diisi eksplisit: DatabaseSeeder memakai WithoutModelEvents, jadi hook
+            // creating di Berkas (yang biasanya mengisi kode) tidak jalan — tanpa kode,
+            // route('berkas.show') di form Isian Kegiatan gagal (500).
             Berkas::firstOrCreate(
                 ['ref_id' => $kegiatan->id, 'ref_type' => Kegiatan::class, 'kategori' => 'capaian'],
                 [
+                    'kode' => Berkas::buatKode('capaian'),
                     'nama_file' => 'bukti-capaian.pdf',
                     'status_verifikasi' => 'terverifikasi',
                     'storage_account_id' => $storageAccount->id,
@@ -298,6 +302,7 @@ class DemoDataSeeder extends Seeder
         Berkas::firstOrCreate(
             ['ref_id' => $kegiatan->id, 'ref_type' => Kegiatan::class, 'kategori' => 'capaian'],
             [
+                'kode' => Berkas::buatKode('capaian'), // lihat catatan di buatSiklusCapaianLengkap()
                 'nama_file' => 'bukti-capaian.pdf',
                 'status_verifikasi' => 'terverifikasi',
                 'storage_account_id' => $storageAccount->id,

@@ -13,14 +13,16 @@
         // baru yang baru dirender belum selesai reflow), jadi satu
         // requestAnimationFrame saja kadang masih kebobolan sekejap sebelum posisi
         // scroll dikoreksi balik.
-        // Tidak dikoreksi bila setelah posisi y ditangkap (sejak) pengguna sengaja
-        // berpindah lewat tombol navigasi bagian (event lompat-bagian, lihat
-        // navigasiBagian di app.js) — klik tombol itu bisa memicu blur pada field
-        // wire:model.live.blur, dan koreksi di sini akan menarik halaman kembali.
-        lompatBagianPada: 0,
+        // Tidak dikoreksi bila pengguna sengaja berpindah lewat tombol navigasi bagian
+        // (event lompat-bagian, lihat navigasiBagian di app.js) — klik tombol itu bisa
+        // memicu blur pada field wire:model.live.blur, dan koreksi di sini akan menarik
+        // halaman kembali. Request hasil blur itu baru TERKIRIM sesaat SESUDAH klik
+        // (Livewire menunda commit sebentar), jadi y-nya tertangkap di tengah scroll
+        // halus — karena itu lompatan sampai 1,5 detik SEBELUM y ditangkap juga dihitung.
+        lompatBagianPada: -Infinity,
         koreksiScroll(y, sejak) {
             const kunci = () => {
-                if (sejak !== undefined && this.lompatBagianPada > sejak) return;
+                if (sejak !== undefined && this.lompatBagianPada > sejak - 1500) return;
                 if (1 < Math.abs(window.scrollY - y)) window.scrollTo(0, y);
             };
             requestAnimationFrame(function () {

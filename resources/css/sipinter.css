@@ -124,12 +124,13 @@ a{text-decoration:none;color:inherit}
 .period-banner.periode-loading{opacity:.6;transition:opacity .1s}
 
 /* .bilah-lengket membungkus .period-banner + .nav-bagian SATU UNIT sticky tepat di
-   bawah .page-head (Isian Kegiatan) — --tinggi-judul = tinggi .page-head yang diukur
-   langsung oleh navigasiBagian (app.js), bukan angka tetap. Jarak ke konten di bawahnya
+   bawah .page-head (Isian Kegiatan) — --atas-lengket = batas bawah .page-head (atau
+   topbar bila .page-head tidak sticky) yang diukur langsung oleh navigasiBagian (app.js),
+   bukan angka tetap; rumus calc() hanya cadangan sebelum JS berjalan. Jarak ke konten di bawahnya
    pakai padding (bukan margin) supaya ikut tercat latar sticky (lihat .subtabs).
    Tingginya sengaja TIDAK berubah saat menempel: perubahan tinggi tepat di titik
    menempel menggeser alur halaman dan bisa membuat bilah lepas-tempel bergantian. */
-.bilah-lengket{position:sticky;top:calc(var(--topbar-h) + var(--tinggi-judul, 0px));z-index:13;background:var(--bg);padding-bottom:12px;margin-bottom:4px}
+.bilah-lengket{position:sticky;top:var(--atas-lengket, calc(var(--topbar-h) + var(--tinggi-judul, 0px)));z-index:13;background:var(--bg);padding-bottom:12px;margin-bottom:4px}
 .bilah-lengket.menempel{box-shadow:0 10px 12px -12px rgba(16,32,70,.35)}
 .bilah-lengket .period-banner{margin-bottom:0;padding:10px 16px}
 /* overflow-x di .nav-bagian sendiri (bukan di induk .bilah-lengket) — overflow pada
