@@ -19,11 +19,46 @@
          lain tetap tampil biasa (tidak lengket), supaya tidak bertumpuk dengan halaman itu. --}}
     @if ($halamanSendiri)
     <div class="bilah-lengket" x-data="navigasiBagian" :class="{ menempel: menempel }">
-    @endif
-    <div class="card" style="{{ $halamanSendiri ? 'margin-bottom:0;padding:10px 16px' : 'margin-bottom:16px' }}">
-        @if ($halamanSendiri)
-            <div class="pb-lbl" style="margin-bottom:6px">📅 Periode Pengisian</div>
+        <div class="period-banner">
+            <span class="pb-ico">📅</span>
+            <div>
+                <div class="pb-lbl">Periode Pengisian</div>
+                <div class="pb-val">
+                    <select wire:model.live="bulan" aria-label="Bulan" style="border:none;background:transparent;font-weight:700;color:var(--ink);font-size:14px">
+                        @foreach ($namaBulan as $nomor => $nama)
+                            <option value="{{ $nomor }}">{{ $nama }}</option>
+                        @endforeach
+                    </select>
+                    <select wire:model.live="tahun" aria-label="Tahun" style="border:none;background:transparent;font-weight:700;color:var(--ink);font-size:14px">
+                        @foreach ($tahunPilihan as $t)
+                            <option value="{{ $t }}">{{ $t }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+            @if ($periodeAda)
+                <span class="pb-tag">TW {{ ['I', 'II', 'III', 'IV'][intdiv((int) $bulan - 1, 3)] }}</span>
+            @else
+                <span class="badge b-tunggu" style="margin-left:auto">⚠ Periode belum tersedia</span>
+            @endif
+        </div>
+        @if ($bagianList->isNotEmpty())
+            <nav class="nav-bagian" x-ref="daftar" aria-label="Lompat ke bagian isian">
+                @foreach ($bagianList as $bagian)
+                    <button type="button" class="nb-item" data-bagian="bagian-kustom-{{ $bagian->id }}" title="{{ $bagian->nama }}" wire:key="nav-bagian-kustom-{{ $bagian->id }}"
+                        :class="{ on: aktif === 'bagian-kustom-{{ $bagian->id }}' }" :aria-current="aktif === 'bagian-kustom-{{ $bagian->id }}' ? 'true' : null"
+                        @click="lompatKe('bagian-kustom-{{ $bagian->id }}')">
+                        <span class="nb-n">{{ $loop->iteration }}</span><span class="nb-teks">{{ $bagian->nama }}</span>
+                    </button>
+                @endforeach
+            </nav>
         @endif
+    </div>
+    @unless ($periodeAda)
+        <div class="info warn">⚠️ Periode {{ $namaBulan[$bulan] }} {{ $tahun }} belum tersedia di sistem, jadi isian belum bisa disimpan.</div>
+    @endunless
+    @else
+    <div class="card" style="margin-bottom:16px">
         <div class="row2">
             <div class="field" style="margin-bottom:0">
                 <label>Tahun</label>
@@ -45,19 +80,6 @@
         @unless ($periodeAda)
             <div class="info warn" style="margin-top:12px">⚠️ Periode {{ $namaBulan[$bulan] }} {{ $tahun }} belum tersedia di sistem, jadi isian belum bisa disimpan.</div>
         @endunless
-    </div>
-    @if ($halamanSendiri)
-        @if ($bagianList->isNotEmpty())
-            <nav class="nav-bagian" x-ref="daftar" aria-label="Lompat ke bagian isian">
-                @foreach ($bagianList as $bagian)
-                    <button type="button" class="nb-item" data-bagian="bagian-kustom-{{ $bagian->id }}" title="{{ $bagian->nama }}" wire:key="nav-bagian-kustom-{{ $bagian->id }}"
-                        :class="{ on: aktif === 'bagian-kustom-{{ $bagian->id }}' }" :aria-current="aktif === 'bagian-kustom-{{ $bagian->id }}' ? 'true' : null"
-                        @click="lompatKe('bagian-kustom-{{ $bagian->id }}')">
-                        <span class="nb-n">{{ $loop->iteration }}</span><span class="nb-teks">{{ $bagian->nama }}</span>
-                    </button>
-                @endforeach
-            </nav>
-        @endif
     </div>
     @endif
 
