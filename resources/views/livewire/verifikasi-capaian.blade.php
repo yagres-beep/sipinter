@@ -312,27 +312,39 @@
             <div class="info">ℹ️ Uraian kegiatan bisa disunting bila ada salah ketik, lalu tandai sesuai/tidak sesuai. Klik tiap berkas untuk memeriksa &amp; menandai sesuai/tidak sesuai.</div>
         @endif
 
+        @php $infoInduk = $this->infoKegiatanInduk(); @endphp
         @forelse ($kegiatanList as $kegiatan)
             @php
                 $berkasKegiatan = $berkasPerKegiatan[$kegiatan->id] ?? collect();
                 $bisaDikoreksi = $this->kegiatanBisaDikoreksi($kegiatan);
+                $induk = $infoInduk[$kegiatan->id] ?? null;
             @endphp
             <div class="keg" wire:key="keg-{{ $kegiatan->id }}" @if (!$bisaDikoreksi) style="opacity:.8" @endif>
+                {{-- Nomor = kegiatan INDUK (Kegiatan::kelompokInduk()): tahapan-tahapan satu
+                     kegiatan berbagi nomor yang sama seperti di Isian Kegiatan, tahapannya
+                     tampil sebagai keterangan sekunder. Verifikasi tetap per baris tahapan. --}}
                 <div class="keg-head">
-                    <span class="t">Kegiatan {{ $loop->iteration }}</span>
+                    <span class="t">Kegiatan {{ $induk['nomor'] ?? $loop->iteration }}</span>
+                    @if ($kegiatan->jenis === 'survei_sensus')
+                        <x-tahapan-kegiatan :tahapan="$kegiatan->tahapan_survei" />
+                    @endif
                     <x-badge-status :status="$kegiatan->status_dokumen" />
                     <span style="color:var(--muted);font-size:11.5px">
-                        {{ $kegiatan->jenis === 'survei_sensus' ? 'Pisah ke beberapa tahapan' : '1 folder (kegiatan)' }}{{ $kegiatan->tahapan_survei ? ' · Tahapan '.\App\Livewire\PengisianKegiatan::labelTahapan($kegiatan->tahapan_survei) : '' }}
+                        {{ $kegiatan->jenis === 'survei_sensus' ? 'Pisah ke beberapa tahapan' : '1 folder (kegiatan)' }}
                     </span>
                 </div>
-                @if ($kegiatan->jenis === 'survei_sensus' && $kegiatan->tahapan_survei)
-                    <div style="font-size:12px;margin-bottom:4px">Capaian: <b>{{ $kegiatan->uraianTampil() }}</b></div>
+                @if ($induk && $induk['uraian_berbeda'])
+                    <div class="fhint" style="margin:0 0 6px">ℹ️ Uraian tahapan-tahapan kegiatan ini berbeda. Di notula kegiatan ini tetap dicatat satu kali sebagai <b>{{ $induk['nama_utama'] }}</b>.</div>
                 @endif
-                <textarea class="inp filled" style="height:auto;display:block;font-style:italic" rows="2" wire:model.live.blur="koreksiKegiatan.{{ $kegiatan->id }}" @readonly(!$bisaDikoreksi)></textarea>
+                {{-- Nama capaian = uraian kegiatan (Kegiatan::namaCapaian()), sama untuk semua
+                     tahapan satu kegiatan; nama folder tahapan di bawahnya hanya lokasi bukti. --}}
+                <div style="font-size:11.5px;color:var(--muted);margin-bottom:4px">Nama kegiatan (capaian)</div>
+                <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model.live.blur="koreksiKegiatan.{{ $kegiatan->id }}" @readonly(!$bisaDikoreksi)></textarea>
                 @error("koreksiKegiatan.{$kegiatan->id}")
                     <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                 @enderror
-                <div style="margin-top:6px">
+                <div style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                    <span style="font-size:11.5px;color:var(--muted)">Lokasi bukti dukung:</span>
                     <x-nama-folder :id="$kegiatan->id" :nama="$kegiatan->namaFolder()" :kustom="filled($kegiatan->nama_folder_kustom)" />
                 </div>
 

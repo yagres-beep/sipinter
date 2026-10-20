@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Exceptions\InvalidStatusTransitionException;
+use App\Livewire\PengisianKegiatan;
 use App\Services\FolderStructureService;
 use App\Services\GoogleDriveService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -11,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 
 class Kegiatan extends Model
 {
@@ -122,10 +124,11 @@ class Kegiatan extends Model
     }
 
     /**
-     * Nama capaian kegiatan untuk ditampilkan = nama folder kegiatannya: survei/sensus
-     * "<Tahapan> <uraian>" (mis. "Persiapan Survei Sakernas", satu baris per tahapan),
-     * selain itu nama folder kegiatan. Keduanya mengikuti nama yang diganti pengguna.
-     * Nama otomatis lama berformat "[Persiapan] ..." ikut dirapikan tanpa kurung siku.
+     * Label LOKASI folder bukti dukung kegiatan ini (bukan nama capaian — itu
+     * namaCapaian()): survei/sensus "<Tahapan> <uraian>" (mis. "Persiapan Survei
+     * Sakernas", satu baris per tahapan), selain itu nama folder kegiatan. Keduanya
+     * mengikuti nama yang diganti pengguna. Nama otomatis lama berformat
+     * "[Persiapan] ..." ikut dirapikan tanpa kurung siku.
      */
     public function uraianTampil(): string
     {
@@ -147,17 +150,25 @@ class Kegiatan extends Model
     }
 
     /**
-     * Daftar nama capaian unik untuk sekumpulan kegiatan SATU IKU pada SATU triwulan
-     * (pemanggil yang menyaring IKU & triwulannya, lihat NotulaService::
-     * kumpulkanDataBagianSatu()). Baris-baris tahapan satu kegiatan utama — dan
-     * kegiatan yang sama dari bulan lain triwulan itu — disatukan jadi satu nama.
-     *
-     * Tidak ada id induk eksplisit untuk tahapan-tahapan satu kegiatan, jadi kuncinya
-     * mengikuti definisi "kegiatan yang sama" yang sudah dipakai aplikasi (IKU sama,
-     * triwulan sama, uraian sama tanpa beda besar/kecil huruf & spasi — lihat
-     * PengisianKegiatan::kegiatanSama() dan folder induk survei di
-     * FolderStructureService::resolveKegiatanFolder()). Kegiatan dengan uraian
-     * berbeda selalu tampil terpisah; urutan mengikuti kegiatan yang lebih dulu dibuat.
+     * Nama kegiatan induk hasil Kegiatan::terapkanNamaInduk() — tidak disimpan di DB.
+     */
+    public ?string $namaIndukTerhitung = null;
+
+    /**
+     * Nama utama yang ditampilkan untuk kegiatan ini: nama kegiatan induknya bila sudah
+     * dihitung bersama tahapan-tahapan lainnya (terapkanNamaInduk()), selain itu
+     * uraiannya sendiri (namaCapaian()).
+     */
+    public function namaKegiatanUtama(): string
+    {
+        return $this->namaIndukTerhitung ?? $this->namaCapaian();
+    }
+
+    /**
+     * Daftar nama capaian untuk sekumpulan kegiatan SATU triwulan (pemanggil yang
+     * menyaring triwulannya, lihat NotulaService::kumpulkanDataBagianSatu()) — satu
+     * nama per kegiatan induk (kelompokInduk()), per IKU, urut kegiatan yang lebih
+     * dulu dibuat. Dua kegiatan induk berbeda tetap tercatat dua kali walau namanya sama.
      *
      * @param  iterable<int, self>  $kegiatan
      * @return Collection<int, string>
@@ -166,11 +177,231 @@ class Kegiatan extends Model
     {
         return collect($kegiatan)
             ->sortBy('id')
-            ->map(fn (self $k) => ['iku' => $k->iku_id, 'nama' => $k->namaCapaian()])
-            ->filter(fn ($baris) => $baris['nama'] !== '')
-            ->unique(fn ($baris) => $baris['iku'].'|'.mb_strtolower($baris['nama']))
-            ->pluck('nama')
+            ->groupBy('iku_id')
+            ->flatMap(fn (Collection $satuIku) => self::kelompokInduk($satuIku))
+            ->sortBy(fn (Collection $kelompok) => $kelompok->min('id'))
+            ->map(fn (Collection $kelompok) => self::namaUtamaKelompok($kelompok))
+            ->filter(fn (string $nama) => $nama !== '')
             ->values();
+    }
+
+    /**
+     * Kelompokkan baris-baris kegiatan menjadi kegiatan INDUK — satu kegiatan yang
+     * dipisah ke beberapa tahapan tersimpan satu baris per tahapan (lihat
+     * PengisianKegiatan::simpanBagianIsian()), dan kegiatan yang sama dari bulan lain
+     * triwulan itu juga baris tersendiri. Belum ada kolom id induk, jadi identitasnya
+     * diturunkan dari data yang sudah ada (lihat bisaSatuInduk()). Urutan masukan
+     * dipertahankan (kelompok urut anggota pertamanya) begitu juga kunci masukan.
+     *
+     * @param  iterable<array-key, self>  $kegiatan
+     * @return Collection<int, Collection<array-key, self>>
+     */
+    public static function kelompokInduk(iterable $kegiatan): Collection
+    {
+        $kelompok = [];
+
+        foreach ($kegiatan as $kunci => $k) {
+            foreach ($kelompok as $g => $anggota) {
+                if (self::bisaSatuInduk($anggota, $k)) {
+                    $kelompok[$g][$kunci] = $k;
+
+                    continue 2;
+                }
+            }
+
+            $kelompok[] = [$kunci => $k];
+        }
+
+        return collect($kelompok)->map(fn (array $anggota) => collect($anggota));
+    }
+
+    /**
+     * Nomor "Kegiatan N" per kunci masukan — tahapan-tahapan satu kegiatan induk
+     * berbagi nomor yang sama. Dipakai Isian Kegiatan & Verifikasi Capaian dengan
+     * baris & urutan yang sama (semua kegiatan IKU+bulan itu, urut id), supaya
+     * nomornya cocok di kedua menu.
+     *
+     * @param  iterable<array-key, self>  $kegiatan
+     * @return array<array-key, int>
+     */
+    public static function nomorKegiatanInduk(iterable $kegiatan): array
+    {
+        $nomor = [];
+
+        foreach (self::kelompokInduk($kegiatan)->values() as $i => $kelompok) {
+            foreach ($kelompok->keys() as $kunci) {
+                $nomor[$kunci] = $i + 1;
+            }
+        }
+
+        return $nomor;
+    }
+
+    /**
+     * Isi namaIndukTerhitung tiap kegiatan (per IKU) dengan nama kegiatan induknya.
+     *
+     * @param  iterable<array-key, self>  $kegiatan
+     * @return Collection<int, Collection<array-key, self>> kelompok induk, urut id terkecil
+     */
+    public static function terapkanNamaInduk(iterable $kegiatan): Collection
+    {
+        $kelompok = collect($kegiatan)
+            ->sortBy('id')
+            ->groupBy('iku_id', preserveKeys: true)
+            ->flatMap(fn (Collection $satuIku) => self::kelompokInduk($satuIku))
+            ->values();
+
+        foreach ($kelompok as $anggota) {
+            $nama = self::namaUtamaKelompok($anggota);
+            $anggota->each(fn (self $k) => $k->namaIndukTerhitung = $nama);
+        }
+
+        return $kelompok;
+    }
+
+    /**
+     * Nama utama satu kegiatan induk: uraian tahapan yang dikoreksi Tim SAKIP
+     * (uraianDikoreksi()) bila ada — koreksi itu yang terbaru & disengaja — selain itu
+     * uraian tahapan pertamanya. Uraian tiap tahapan sendiri tidak diubah.
+     *
+     * @param  Collection<array-key, self>  $kelompok
+     */
+    public static function namaUtamaKelompok(Collection $kelompok): string
+    {
+        $terisi = $kelompok->filter(fn (self $k) => $k->namaCapaian() !== '');
+
+        return ($terisi->first(fn (self $k) => $k->uraianDikoreksi()) ?? $terisi->first())?->namaCapaian() ?? '';
+    }
+
+    /**
+     * Boleh tidaknya $k masuk kelompok $anggota: TIDAK bertentangan dengan satu pun
+     * anggota, DAN ada bukti positif dengan setidaknya satu anggota.
+     *
+     * Bertentangan (pasti kegiatan berbeda): IKU/jenis berbeda, triwulan berbeda (bila
+     * periodenya dimuat), tertaut ke poin RTL yang berbeda, atau bulan & tahapan sama
+     * (satu kegiatan tidak mungkin punya tahapan yang sama dua kali dalam satu bulan —
+     * dicegah PengisianKegiatan::tahapanTerpakai()).
+     *
+     * Bukti positif: uraian sama (abaikan besar/kecil huruf & spasi, definisi "kegiatan
+     * yang sama" di PengisianKegiatan::kegiatanSama()), jejak uraian asal sama
+     * (uraianAsal() — tetap walau uraian salah satu tahapan dikoreksi Tim SAKIP), atau
+     * folder Drive yang sama. Poin RTL yang sama SAJA tidak cukup: satu poin RTL bisa
+     * dilaksanakan oleh lebih dari satu kegiatan.
+     *
+     * @param  array<array-key, self>  $anggota
+     */
+    protected static function bisaSatuInduk(array $anggota, self $k): bool
+    {
+        $adaBukti = false;
+
+        foreach ($anggota as $lain) {
+            if (self::bertentangan($lain, $k)) {
+                return false;
+            }
+
+            $adaBukti = $adaBukti || self::buktiSatuInduk($lain, $k);
+        }
+
+        return $adaBukti;
+    }
+
+    protected static function bertentangan(self $a, self $b): bool
+    {
+        if ((int) $a->iku_id !== (int) $b->iku_id || $a->jenis !== $b->jenis) {
+            return true;
+        }
+
+        if ($a->rtl_evaluasi_id && $b->rtl_evaluasi_id && (int) $a->rtl_evaluasi_id !== (int) $b->rtl_evaluasi_id) {
+            return true;
+        }
+
+        if ($a->relationLoaded('periode') && $b->relationLoaded('periode') && $a->periode && $b->periode
+            && ((int) $a->periode->tahun !== (int) $b->periode->tahun || (int) $a->periode->triwulan !== (int) $b->periode->triwulan)) {
+            return true;
+        }
+
+        return (int) $a->periode_id === (int) $b->periode_id && $a->kunciTahapan() === $b->kunciTahapan();
+    }
+
+    protected static function buktiSatuInduk(self $a, self $b): bool
+    {
+        $uraian = self::uraianNormal($a->uraian_kegiatan);
+
+        if ($uraian !== '' && $uraian === self::uraianNormal($b->uraian_kegiatan)) {
+            return true;
+        }
+
+        $asal = $a->uraianAsal();
+
+        if ($asal !== null && $asal === $b->uraianAsal()) {
+            return true;
+        }
+
+        return filled($a->drive_folder_id) && $a->drive_folder_id === $b->drive_folder_id;
+    }
+
+    protected function kunciTahapan(): ?string
+    {
+        return $this->jenis === 'survei_sensus' && filled($this->tahapan_survei) ? (string) $this->tahapan_survei : null;
+    }
+
+    /**
+     * Jejak uraian kegiatan SAAT terakhir disimpan Ketua Tim, dibaca dari
+     * nama_folder_auto ("<Tahapan> <uraian>", maks. 100 karakter, lihat
+     * PengisianKegiatan::namaFolderOtomatis()) — kolom itu tidak ikut berubah saat
+     * Tim SAKIP mengoreksi uraian di Verifikasi Capaian. Null bila tidak bisa
+     * dipastikan (kosong / awalan tahapannya tidak cocok).
+     */
+    public function uraianAsal(): ?string
+    {
+        $auto = $this->namaFolderAutoRapi();
+
+        if ($auto === '') {
+            return null;
+        }
+
+        if (($tahapan = $this->kunciTahapan()) !== null) {
+            $awalan = mb_strtolower(trim(PengisianKegiatan::uraianDenganTahapan('', $tahapan))).' ';
+
+            if (! str_starts_with($auto, $awalan)) {
+                return null;
+            }
+
+            $auto = mb_substr($auto, mb_strlen($awalan));
+        }
+
+        return $auto !== '' ? $auto : null;
+    }
+
+    /**
+     * Uraian kegiatan ini sudah berbeda dari jejak uraian asalnya (uraianAsal()) —
+     * artinya dikoreksi setelah disimpan Ketua Tim, yaitu oleh Tim SAKIP.
+     */
+    public function uraianDikoreksi(): bool
+    {
+        $auto = $this->namaFolderAutoRapi();
+
+        if ($auto === '') {
+            return false;
+        }
+
+        $seharusnya = Str::limit(PengisianKegiatan::uraianDenganTahapan((string) $this->uraian_kegiatan, $this->kunciTahapan()), 100, '');
+
+        return self::uraianNormal($seharusnya) !== $auto;
+    }
+
+    /**
+     * nama_folder_auto dinormalkan: format lama "[Persiapan] ..." tanpa kurung siku,
+     * huruf kecil, spasi dirapikan.
+     */
+    protected function namaFolderAutoRapi(): string
+    {
+        return self::uraianNormal(preg_replace('/^\[([^\]]+)\]\s*/u', '$1 ', (string) $this->nama_folder_auto));
+    }
+
+    protected static function uraianNormal(?string $teks): string
+    {
+        return mb_strtolower(trim(preg_replace('/\s+/u', ' ', (string) $teks) ?? ''));
     }
 
     /**

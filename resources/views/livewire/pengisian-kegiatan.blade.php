@@ -267,12 +267,26 @@
         <div wire:loading.remove wire:target="iku_id,bulan,tahun">
         <div class="info">ℹ️ Isi tiap kolom berurutan dari atas — uraian kegiatan dulu, baru pembentukan folder kegiatan bisa dipilih. Nama folder Drive direkomendasikan otomatis dari tahapan dan uraian kegiatan (bisa diganti lewat ✏️). Bukti capaian wajib diunggah tiap kegiatan; bila lebih dari satu berkas, nama bawaannya diberi nomor urut di belakang dan tetap bisa diganti lewat ✏️.</div>
 
+        {{-- Nomor kegiatan INDUK (PengisianKegiatan::nomorKegiatanBlok()): tahapan-tahapan
+             satu kegiatan berbagi nomor, sama dengan Verifikasi Capaian; tahapannya tampil
+             sebagai keterangan sekunder bila nomornya dipakai lebih dari satu blok. --}}
+        @php
+            $nomorKegiatan = $this->nomorKegiatanBlok();
+            $jumlahPerNomor = array_count_values($nomorKegiatan);
+        @endphp
         @foreach ($blocks as $i => $block)
-            @php $terkunci = $this->blokTerkunci($block['status_dokumen']); @endphp
+            @php
+                $terkunci = $this->blokTerkunci($block['status_dokumen']);
+                $nomorBlok = $nomorKegiatan[$i] ?? $i + 1;
+                $tahapanHead = ($jumlahPerNomor[$nomorBlok] ?? 0) > 1 && $block['jenis'] === 'survei_sensus' ? $this->tahapanDipilih($block) : [];
+            @endphp
             @if ($terkunci)
                 <div class="keg" wire:key="block-{{ $i }}" style="opacity:.8">
                     <div class="keg-head">
-                        <span class="t">Kegiatan {{ $i + 1 }}</span>
+                        <span class="t">Kegiatan {{ $nomorBlok }}</span>
+                        @foreach ($tahapanHead as $t)
+                            <x-tahapan-kegiatan :tahapan="$t" />
+                        @endforeach
                         <x-badge-status :status="$block['status_dokumen']" />
                     </div>
                     @php $bolehSusulan = $this->kegiatanBolehBuktiSusulan($block); @endphp
@@ -366,6 +380,7 @@
                     namaFolder: @js($block['nama_folder'] ?? ''),
                     ubahFolder: false,
                     pendingBuktiNames: [],
+                    pendingFolderUnggah: '',
                     get folderPreview() {
                         if (! this.uraianTeks.trim()) return '';
                         const prefix = (this.jenisTerpilih === 'survei_sensus' && this.tahapanNilai)
@@ -376,7 +391,10 @@
                     }
                 }">
                 <div class="keg-head">
-                    <span class="t">Kegiatan {{ $i + 1 }}</span>
+                    <span class="t">Kegiatan {{ $nomorBlok }}</span>
+                    @foreach ($tahapanHead as $t)
+                        <x-tahapan-kegiatan :tahapan="$t" />
+                    @endforeach
                     @if ($block['status_dokumen'])
                         <x-badge-status :status="$block['status_dokumen']" />
                     @endif
@@ -612,6 +630,9 @@
 
                         @php $survei = $tahapanBlok !== []; @endphp
                         <div style="border:1.5px dashed var(--line);border-radius:10px;padding:10px 12px;margin-top:6px">
+                            {{-- Nama capaian = uraian kegiatan (Kegiatan::namaCapaian()), sama untuk
+                                 semua tahapan — nama folder di bawah hanya lokasi penyimpanan bukti. --}}
+                            <div class="fhint" style="margin:0 0 6px">Capaian: <b x-text="uraianTeks.trim()">{{ trim($block['uraian_kegiatan']) }}</b></div>
                             @if ($survei)
                                 {{-- Folder induk kegiatan survei/sensus (FolderStructureService::resolveKegiatanFolder()). --}}
                                 <div class="foldername">📁 {{ \App\Services\FolderStructureService::namaOtomatis($block['uraian_kegiatan'], 150) }}</div>
@@ -629,7 +650,8 @@
                                             {{-- Semua nama folder bisa diganti lewat ✏️: folder utama →
                                                  blocks.*.nama_folder, folder tahapan tambahan →
                                                  blocks.*.nama_folder_tahapan.<tahapan>, subfolder →
-                                                 gantiNamaSubfolder(). Nama folder tahapan/kegiatan = capaian. --}}
+                                                 gantiNamaSubfolder(). Nama folder hanya lokasi unggah, BUKAN
+                                                 nama capaian (lihat Kegiatan::namaCapaian()). --}}
                                             <div x-data="{ ubahIni: false }">
                                                 <div class="foldername" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
                                                     <span>{{ $survei || ! $folderInduk ? '↳ ' : '' }}📁
@@ -647,7 +669,7 @@
                                                     <label class="btn btn-ghost btn-sm" style="cursor:pointer;margin-left:auto">
                                                         📤 Unggah ke folder ini
                                                         <input type="file" wire:model="unggahFolder.{{ $i }}.{{ $grup['urutan'] }}.{{ $folder['urutan'] }}" multiple accept="application/pdf" style="display:none"
-                                                            @change="pendingBuktiNames = Array.from($event.target.files).map(f => f.name)">
+                                                            @change="pendingBuktiNames = Array.from($event.target.files).map(f => f.name); pendingFolderUnggah = {{ $folderUtama ? '(namaFolder.trim() !== \'\' ? namaFolder.trim() : folderPreview)' : \Illuminate\Support\Js::from($folder['label']) }}">
                                                     </label>
                                                 </div>
 
@@ -682,11 +704,11 @@
                                                 @endif
 
                                                 @if ($folderInduk)
-                                                    <div class="fhint" style="margin-top:2px">Capaian:
-                                                        @if ($folderUtama)
-                                                            <b x-text="namaFolder.trim() !== '' ? namaFolder.trim() : folderPreview">{{ $grup['label'] }}</b>
+                                                    <div class="fhint" style="margin-top:2px">📍 Lokasi unggah bukti dukung
+                                                        @if ($grup['tahapan'] !== null)
+                                                            tahapan <b>{{ \App\Livewire\PengisianKegiatan::labelTahapan($grup['tahapan']) }}</b>
                                                         @else
-                                                            <b>{{ $grup['label'] }}</b>
+                                                            kegiatan ini
                                                         @endif
                                                     </div>
                                                 @endif
@@ -726,7 +748,7 @@
                          selesai dulu baru terlihat namanya. --}}
                     <div wire:loading wire:target="unggahFolder" style="font-size:11.5px;color:var(--muted);margin-top:6px">
                         <template x-for="nama in pendingBuktiNames" :key="nama">
-                            <div>📄 <span x-text="nama"></span> — mengunggah…</div>
+                            <div>📄 <span x-text="nama"></span> — mengunggah<span x-show="pendingFolderUnggah"> ke 📁 <span x-text="pendingFolderUnggah"></span></span>…</div>
                         </template>
                         <div x-show="pendingBuktiNames.length === 0">Mengunggah berkas…</div>
                     </div>

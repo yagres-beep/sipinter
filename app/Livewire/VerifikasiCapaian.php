@@ -806,6 +806,38 @@ class VerifikasiCapaian extends Component
     }
 
     /**
+     * Identitas kegiatan induk tiap baris kegiatanList() (Kegiatan::kelompokInduk()):
+     * nomor "Kegiatan N" — dihitung dari SEMUA kegiatan IKU+bulan ini termasuk draft,
+     * urut id, sama persis dengan Isian Kegiatan (PengisianKegiatan::nomorKegiatanBlok())
+     * — nama utama di notula, jumlah baris tahapannya, dan apakah uraian antartahapannya
+     * berbeda (mis. hanya satu tahapan yang dikoreksi). Hanya untuk tampilan; verifikasi
+     * & koreksi tetap per baris.
+     *
+     * @return array<int, array{nomor: int, nama_utama: string, jumlah: int, uraian_berbeda: bool}>
+     */
+    public function infoKegiatanInduk(): array
+    {
+        $semua = Kegiatan::where('iku_id', $this->capaian->iku_id)
+            ->where('periode_id', $this->capaian->periode_id)
+            ->orderBy('id')
+            ->get()
+            ->keyBy('id');
+
+        $info = [];
+
+        foreach (Kegiatan::kelompokInduk($semua)->values() as $i => $kelompok) {
+            $namaUtama = Kegiatan::namaUtamaKelompok($kelompok);
+            $uraianBerbeda = $kelompok->map(fn (Kegiatan $k) => mb_strtolower($k->namaCapaian()))->unique()->count() > 1;
+
+            foreach ($kelompok as $id => $k) {
+                $info[$id] = ['nomor' => $i + 1, 'nama_utama' => $namaUtama, 'jumlah' => $kelompok->count(), 'uraian_berbeda' => $uraianBerbeda];
+            }
+        }
+
+        return $info;
+    }
+
+    /**
      * Halaman ini bisa diakses untuk MELIHAT isian berstatus apa pun (RF-36 lama
      * hanya izinkan "diajukan" — sekarang VerifikasiList juga menampilkan riwayat
      * diverifikasi/dikembalikan/disetujui, jadi tautan "Lihat →" ke sini harus tetap
