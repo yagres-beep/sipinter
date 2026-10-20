@@ -20,13 +20,18 @@
         // bagian lain untuk mengunggah berkas berikutnya. Tanpa pengecualian ini,
         // begitu unggahan pertama selesai halaman ditarik balik ke posisi lama —
         // pengguna harus menggulir lagi dan rawan mengunggah ke bagian yang salah.
-        // Lompatan lewat tombol navigasi bagian (event lompat-bagian, lihat
-        // navigasiBagian di app.js) juga dihitung menggulir sendiri — klik tombol itu
-        // bisa memicu blur pada field wire:model.live.blur.
+        //
+        // Begitu pula lompatan lewat tombol navigasi bagian (event lompat-bagian, lihat
+        // navigasiBagian di app.js) — klik tombol itu bisa memicu blur pada field
+        // wire:model.live.blur. Request hasil blur itu baru TERKIRIM sesaat SESUDAH klik
+        // (Livewire menunda commit sebentar), jadi y-nya tertangkap di tengah scroll
+        // halus — karena itu lompatan sampai 1,5 detik SEBELUM y ditangkap juga dihitung.
         gulirPengguna: 0,
+        lompatBagianPada: -Infinity,
         koreksiScroll(y, sejak = performance.now()) {
             const kunci = () => {
                 if (this.gulirPengguna >= sejak) return;
+                if (this.lompatBagianPada > sejak - 1500) return;
                 if (1 < Math.abs(window.scrollY - y)) window.scrollTo(0, y);
             };
             requestAnimationFrame(function () {
@@ -89,7 +94,7 @@
     x-on:touchmove.window.passive="tandaiGulir($event)"
     x-on:keydown.window="tandaiGulir($event)"
     x-on:pointerdown.window="tandaiGulir($event)"
-    x-on:lompat-bagian="gulirPengguna = performance.now()"
+    x-on:lompat-bagian="lompatBagianPada = performance.now()"
     x-on:livewire-upload-start.window="$dispatch('notify', { type: 'info', message: 'Mengunggah berkas ke server…' })"
     x-on:livewire-upload-finish.window="$dispatch('notify', { type: 'success', message: 'Berkas terunggah — sedang disimpan ke Google Drive…' })"
     x-on:livewire-upload-error.window="$dispatch('notify', { type: 'error', message: 'Gagal mengunggah berkas — periksa koneksi dan format berkas (harus PDF), lalu coba lagi.' })"

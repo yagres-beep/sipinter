@@ -4,6 +4,7 @@ namespace Tests\Unit;
 
 use App\Models\Notula;
 use App\Models\Periode;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class NotulaTest extends TestCase
@@ -13,9 +14,8 @@ class NotulaTest extends TestCase
      * maupun tabel TTD bawaan template .docx) -- HARUS tanggal saja, TANPA nama hari,
      * walau hari_tanggal-nya ditulis bebas oleh Tim SAKIP (pemisah "/" atau ",", atau
      * tanpa nama hari sama sekali).
-     *
-     * @dataProvider hariTanggalProvider
      */
+    #[DataProvider('hariTanggalProvider')]
     public function test_tanggal_ttd_membuang_nama_hari(?string $hariTanggal, ?string $diharapkan): void
     {
         $notula = new Notula(['hari_tanggal' => $hariTanggal]);

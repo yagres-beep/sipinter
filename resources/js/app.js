@@ -186,7 +186,10 @@ document.addEventListener('alpine:init', () => {
         scrollOtomatis: false,
 
         init() {
-            this.judul = this.$el.parentElement.querySelector(':scope > .page-head');
+            // $el di method yang dipanggil dari @click di dalam wrapper = tombol yang diklik,
+            // bukan wrapper — simpan wrapper sekali di sini dan selalu pakai this.wadah.
+            this.wadah = this.$el;
+            this.judul = this.wadah.parentElement.querySelector(':scope > .page-head');
             this.onScroll = () => {
                 if (this._raf) return;
                 this._raf = requestAnimationFrame(() => {
@@ -194,14 +197,20 @@ document.addEventListener('alpine:init', () => {
                     this.perbarui();
                 });
             };
-            this.onUserScroll = () => { this.scrollOtomatis = false; };
+            this.onUserScroll = () => { this.scrollOtomatis = false; this.targetLompat = null; };
             this.onResize = () => { this.ukur(); this.perbarui(); };
+            // Klik tombol bisa memicu blur → request Livewire; balasannya bisa mengubah
+            // tinggi konten DI ATAS bagian tujuan setelah posisi scroll dihitung —
+            // luruskan lagi begitu DOM selesai diperbarui.
+            this.lepasHook = window.Livewire?.hook('commit', ({ respond }) => {
+                respond(() => requestAnimationFrame(() => this.luruskan()));
+            });
 
             window.addEventListener('scroll', this.onScroll, { passive: true });
             window.addEventListener('resize', this.onResize);
             ['wheel', 'touchstart', 'keydown'].forEach((ev) => window.addEventListener(ev, this.onUserScroll, { passive: true }));
             this.ro = new ResizeObserver(this.onResize);
-            this.ro.observe(this.$el);
+            this.ro.observe(this.wadah);
             if (this.judul) this.ro.observe(this.judul);
 
             this.$watch('aktif', (id) => this.tampilkanTombol(id));
@@ -214,7 +223,11 @@ document.addEventListener('alpine:init', () => {
             window.removeEventListener('resize', this.onResize);
             ['wheel', 'touchstart', 'keydown'].forEach((ev) => window.removeEventListener(ev, this.onUserScroll));
             this.ro?.disconnect();
+            if (typeof this.lepasHook === 'function') this.lepasHook();
+            window.removeEventListener('scroll', this._tundaSelesai);
+            clearTimeout(this._timerSelesai);
             document.documentElement.style.removeProperty('--tinggi-judul');
+            document.documentElement.style.removeProperty('--atas-lengket');
             document.documentElement.style.removeProperty('--offset-lengket');
         },
 
@@ -224,22 +237,32 @@ document.addEventListener('alpine:init', () => {
             const html = document.documentElement.style;
             const judulLengket = this.judul && getComputedStyle(this.judul).position === 'sticky';
             html.setProperty('--tinggi-judul', (judulLengket ? this.judul.offsetHeight : 0) + 'px');
-            html.setProperty('--offset-lengket', Math.ceil(this.atasLengket() + this.$el.offsetHeight + 12) + 'px');
+            // Batas bawah sebenarnya dari elemen lengket di atas bilah ini (.page-head, atau
+            // topbar bila .page-head tidak sticky) — --topbar-h (69px) tidak selalu sama
+            // dengan tinggi topbar sesungguhnya (mis. di layar sempit), dan selisihnya jadi
+            // celah tempat konten mengintip. Dibulatkan ke bawah: lebih baik sedikit
+            // tertumpuk (tertutup topbar/judul yang z-index-nya lebih tinggi) daripada bercelah.
+            const topbar = document.querySelector('.topbar');
+            const atas = judulLengket
+                ? (parseFloat(getComputedStyle(this.judul).top) || 0) + this.judul.getBoundingClientRect().height
+                : (topbar ? topbar.getBoundingClientRect().height : 0);
+            html.setProperty('--atas-lengket', Math.floor(atas) + 'px');
+            html.setProperty('--offset-lengket', Math.ceil(this.atasLengket() + this.wadah.offsetHeight + 12) + 'px');
         },
 
         atasLengket() {
-            return parseFloat(getComputedStyle(this.$el).top) || 0;
+            return parseFloat(getComputedStyle(this.wadah).top) || 0;
         },
 
         daftarBagian() {
-            return Array.from(this.$el.querySelectorAll('[data-bagian]'))
+            return Array.from(this.wadah.querySelectorAll('[data-bagian]'))
                 .map((tombol) => document.getElementById(tombol.dataset.bagian))
                 // bagian yang sedang disembunyikan (x-show) tidak ikut dihitung
                 .filter((el) => el && el.getClientRects().length > 0);
         },
 
         perbarui() {
-            this.menempel = this.$el.getBoundingClientRect().top <= this.atasLengket() + 0.5;
+            this.menempel = this.wadah.getBoundingClientRect().top <= this.atasLengket() + 0.5;
             if (! this.scrollOtomatis) this.aktif = this.hitungAktif();
         },
 
@@ -249,7 +272,7 @@ document.addEventListener('alpine:init', () => {
         hitungAktif() {
             const bagian = this.daftarBagian();
             if (bagian.length === 0) return null;
-            const batas = this.atasLengket() + this.$el.offsetHeight + 16;
+            const batas = this.atasLengket() + this.wadah.offsetHeight + 16;
             let aktif = bagian[0];
             for (const el of bagian) {
                 if (el.getBoundingClientRect().top > batas) break;
@@ -269,28 +292,49 @@ document.addEventListener('alpine:init', () => {
             if (! el || el.getClientRects().length === 0) return;
             this.ukur();
             this.aktif = id;
-            this.scrollOtomatis = true;
             // Beri tahu penjaga posisi scroll komponen Livewire (koreksiScroll) supaya
             // tidak menarik balik halaman — klik tombol ini bisa memicu blur pada field
             // wire:model.live.blur yang sedang fokus, yang mengirim request.
             this.$dispatch('lompat-bagian');
-            // Posisi tujuan dihitung sendiri (judul tepat di bawah bilah lengket), bukan
-            // scrollIntoView + scroll-margin-top: pada pengujian di Chromium, scroll halus
-            // scrollIntoView bisa berhenti melewati batas itu sehingga judul tertutup.
-            const offset = this.atasLengket() + this.$el.offsetHeight + 12;
-            window.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top + window.scrollY - offset), behavior: 'smooth' });
+            // Posisi tujuan dijaga sampai 2,5 detik (lihat luruskan()) kecuali pengguna
+            // menggulir sendiri lebih dulu.
+            this.targetLompat = id;
+            this.lompatSampai = performance.now() + 2500;
+            this.luruskan();
+        },
+
+        // Gulir supaya judul bagian tujuan berhenti tepat di bawah bilah lengket (tidak
+        // tertutup). Dihitung langsung dari tinggi bilah saat ini; scroll-margin-top
+        // (--offset-lengket) di CSS hanya cadangan untuk lompatan lewat #anchor/keyboard.
+        luruskan() {
+            if (! this.targetLompat || performance.now() > this.lompatSampai) return;
+            const el = document.getElementById(this.targetLompat);
+            if (! el || el.getClientRects().length === 0) return;
+            const offset = this.atasLengket() + this.wadah.offsetHeight + 12;
+            const maks = document.documentElement.scrollHeight - window.innerHeight;
+            const tujuan = Math.min(maks, Math.max(0, el.getBoundingClientRect().top + window.scrollY - offset));
+            // sudah pas, atau tidak bisa lebih jauh lagi (mentok atas/bawah)
+            if (Math.abs(tujuan - window.scrollY) <= 2) return;
+            this.scrollOtomatis = true;
+            window.scrollTo({ top: tujuan, behavior: 'smooth' });
             this.tungguScrollSelesai();
         },
 
         tungguScrollSelesai() {
-            let timer;
+            clearTimeout(this._timerSelesai);
+            window.removeEventListener('scroll', this._tundaSelesai);
             const selesai = () => {
-                window.removeEventListener('scroll', tunda);
+                window.removeEventListener('scroll', this._tundaSelesai);
                 this.scrollOtomatis = false;
+                // tinggi konten bisa berubah selama scroll berjalan — cek sekali lagi
+                this.luruskan();
             };
-            const tunda = () => { clearTimeout(timer); timer = setTimeout(selesai, 150); };
-            window.addEventListener('scroll', tunda, { passive: true });
-            tunda();
+            this._tundaSelesai = () => {
+                clearTimeout(this._timerSelesai);
+                this._timerSelesai = setTimeout(selesai, 150);
+            };
+            window.addEventListener('scroll', this._tundaSelesai, { passive: true });
+            this._tundaSelesai();
         },
 
         // Di layar sempit bilah tombol bisa digeser horizontal — pastikan tombol aktif
