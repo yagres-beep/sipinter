@@ -467,19 +467,24 @@
         <button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px" wire:click="tambahProksi" wire:loading.attr="disabled" wire:target="tambahProksi">+ Tambah Proksi</button>
     </div>
 
-    @if ($kendalaSolusiList->isNotEmpty())
+    @if ($kendalaSolusiList->isNotEmpty() || $bisaDiverifikasi)
         <div class="card">
             <div class="sec"><span>Kendala &amp; Solusi</span></div>
             @foreach ($kendalaSolusiList as $ks)
                 <div class="poin-row" wire:key="ks-{{ $ks->id }}">
                     <span class="k-num">Pasangan {{ $loop->iteration }}</span>
+                    @if ($this->kendalaBisaDiverifikasi($ks->id))
+                        <button type="button" class="btn btn-red btn-sm" style="position:absolute;top:8px;right:8px;z-index:1" title="Hapus pasangan ini"
+                            wire:click="hapusKendala({{ $ks->id }})" wire:confirm="Hapus pasangan kendala & solusi ini?"
+                            wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="hapusKendala({{ $ks->id }})">🗑</button>
+                    @endif
                     <x-badge-status style="position:absolute;top:-9px;right:12px" :status="$ks->status_verifikasi === 'terverifikasi' ? 'diverifikasi' : ($ks->status_verifikasi === 'ditolak' ? 'dikembalikan' : 'diajukan')" :label="$ks->status_verifikasi === 'terverifikasi' ? 'Sesuai' : ($ks->status_verifikasi === 'ditolak' ? 'Tidak Sesuai' : 'Menunggu')" />
 
                     <div class="field" style="margin-bottom:0">
                         <label style="font-size:11.5px">Kendala</label>
                         <textarea class="inp filled" style="height:auto;display:block;font-style:italic" rows="2" wire:model.live.blur="koreksiKendala.{{ $ks->id }}.kendala"></textarea>
                     </div>
-                    @if ($ks->solusi)
+                    @if ($ks->solusi || $bisaDiverifikasi)
                         <div class="field" style="margin-bottom:0">
                             <label style="font-size:11.5px">Solusi</label>
                             <textarea class="inp filled" style="height:auto;display:block;font-style:italic" rows="2" wire:model.live.blur="koreksiKendala.{{ $ks->id }}.solusi"></textarea>
@@ -545,6 +550,35 @@
                     @endif
                 </div>
             @endforeach
+
+            {{-- Pasangan baru dari Tim SAKIP sendiri — baru tersimpan saat Simpan/Verifikasi
+                 Selesai ditekan, lalu langsung berstatus "Sesuai". --}}
+            @foreach ($kendalaBaru as $kunci => $baris)
+                <div class="poin-row" wire:key="ks-baru-{{ $kunci }}">
+                    <span class="k-num">Pasangan baru</span>
+                    <button type="button" class="btn btn-red btn-sm" style="position:absolute;top:8px;right:8px;z-index:1" title="Batal tambah"
+                        wire:click="hapusKendalaBaru('{{ $kunci }}')">🗑</button>
+                    <div class="field" style="margin-bottom:0">
+                        <label style="font-size:11.5px">Kendala</label>
+                        <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model.live.blur="kendalaBaru.{{ $kunci }}.kendala" placeholder="Tuliskan kendala…"></textarea>
+                        @error("kendalaBaru.{$kunci}.kendala")
+                            <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                        @enderror
+                    </div>
+                    <div class="field" style="margin-bottom:0">
+                        <label style="font-size:11.5px">Solusi</label>
+                        <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model.live.blur="kendalaBaru.{{ $kunci }}.solusi" placeholder="Tuliskan solusi…"></textarea>
+                    </div>
+                </div>
+            @endforeach
+
+            @if ($kendalaSolusiList->isEmpty() && $kendalaBaru === [])
+                <p style="color:var(--muted);font-size:12.5px;margin-top:8px">Belum ada kendala &amp; solusi untuk IKU ini.</p>
+            @endif
+
+            @if ($bisaDiverifikasi)
+                <button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px" wire:click="tambahKendala" wire:loading.attr="disabled" wire:target="tambahKendala">+ Tambah Kendala &amp; Solusi</button>
+            @endif
         </div>
     @endif
 
@@ -558,6 +592,11 @@
                     @php $berkasPoin = $berkasPerBagianKustom[$poin->id] ?? collect(); @endphp
                     <div class="keg" wire:key="bagian-kustom-{{ $poin->id }}">
                         <p style="font-size:13px;margin-bottom:8px">{{ $poin->teks }}</p>
+                        @foreach ($poinPerBagian->first()->bagianKustom->kolomList() as $kolom)
+                            @if (filled($poin->nilai_kolom[$kolom['kunci']] ?? null))
+                                <div style="font-size:12px;color:var(--muted);margin-bottom:4px">{{ $kolom['label'] }}: {{ $poin->nilai_kolom[$kolom['kunci']] }}</div>
+                            @endif
+                        @endforeach
 
                         @if ($this->bagianKustomBisaDiverifikasi($poin->id))
                             <div x-data="{ pendingMark: null }" style="margin-bottom:10px">
@@ -758,7 +797,8 @@
         </div>
     @endforeach
 
-    @if ($rtlBerikutnya->isNotEmpty())
+    @php $adaRtlBerikutnya = $rtlBerikutnya->isNotEmpty() || $rtlBerikutnyaTambahan !== []; @endphp
+    @if ($adaRtlBerikutnya || $rtlBerikutnyaBisaDitambah)
         <div class="card">
             <div class="sec"><span>Rencana Tindak Lanjut Triwulan Berikutnya (Baru Ditetapkan)</span></div>
             <div class="info">ℹ️ Ketua Tim baru menetapkan rencana ini untuk triwulan berikutnya (belum berjalan, belum ada realisasi) — periksa kejelasan/kelayakan rencananya. Kalau ditandai "Tidak Sesuai", seluruh rencana IKU ini akan dibuka kembali untuk diperbaiki Ketua Tim.</div>
@@ -768,7 +808,7 @@
                  ditampilkan sekali di sini, tidak diulang di tiap poin. PIC wajib
                  diisi/dikonfirmasi Tim SAKIP di sini (boleh kosong dari Ketua Tim, lihat
                  App\Livewire\PengisianKegiatan) sebelum "Verifikasi Selesai" bisa ditekan. --}}
-            @if ($rtlBerikutnya->isNotEmpty())
+            @if ($adaRtlBerikutnya)
                 <div class="row2" style="margin-bottom:10px;align-items:flex-end">
                     <div class="field" style="margin-bottom:0">
                         <label>PIC Tindak Lanjut <span class="req">*</span></label>
@@ -802,7 +842,7 @@
                     </div>
                     <div class="field" style="margin-bottom:0">
                         <label>Batas Waktu</label>
-                        <p style="margin:0;font-size:13px">{{ $rtlBerikutnya->first()->batas_waktu?->translatedFormat('d F Y') }}</p>
+                        <p style="margin:0;font-size:13px">{{ $rtlBerikutnya->first()?->batas_waktu?->translatedFormat('d F Y') ?? 'Akhir triwulan berikutnya' }}</p>
                     </div>
                 </div>
             @endif
@@ -875,6 +915,24 @@
                     @endif
                 </div>
             @endforeach
+
+            {{-- Poin baru dari Tim SAKIP sendiri — baru tersimpan saat Simpan/Verifikasi
+                 Selesai ditekan, lalu langsung berstatus "Sesuai". --}}
+            @foreach ($rtlBerikutnyaTambahan as $kunci => $teks)
+                <div class="poin-single" wire:key="rtl-berikutnya-baru-{{ $kunci }}">
+                    <span class="k-num stat-in">Poin RTL baru</span>
+                    <button type="button" class="btn btn-red btn-sm" style="position:absolute;top:8px;right:8px" title="Batal tambah"
+                        wire:click="hapusRtlBerikutnyaTambahan('{{ $kunci }}')">🗑</button>
+                    <div class="field" style="margin-bottom:0">
+                        <label>Rencana Kegiatan</label>
+                        <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model.live.blur="rtlBerikutnyaTambahan.{{ $kunci }}" placeholder="Tuliskan rencana tindak lanjut…"></textarea>
+                    </div>
+                </div>
+            @endforeach
+
+            @if ($rtlBerikutnyaBisaDitambah)
+                <button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px" wire:click="tambahRtlBerikutnya" wire:loading.attr="disabled" wire:target="tambahRtlBerikutnya">+ Tambah Poin RTL</button>
+            @endif
         </div>
     @endif
 
