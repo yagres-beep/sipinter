@@ -358,6 +358,58 @@ class PengisianKegiatan extends Component
         return $this->pakaiSubfolder($block, $tahapan) ? $this->daftarSubfolder($block, $tahapan) : [];
     }
 
+    /**
+     * Folder kegiatan/tahapan ini dipilih "Pisah ke beberapa subfolder" tapi subfolder-
+     * nya belum sampai dua. Dikecualikan: folder yang sudah TERSIMPAN berisi berkas
+     * di subfolder — subfolder kosong tidak ikut tersimpan (muatBlocksKegiatan()
+     * menyusunnya dari berkas), jadi isian lama bisa termuat dengan satu subfolder
+     * dan tidak boleh terkunci karenanya.
+     */
+    public function subfolderKurangDariDua(array $block, ?string $tahapan): bool
+    {
+        $daftar = $this->daftarSubfolder($block, $tahapan);
+
+        if (! $this->pakaiSubfolder($block, $tahapan) || count($daftar) >= 2) {
+            return false;
+        }
+
+        $tahapanTersimpan = ($block['jenis'] ?? '') === 'survei_sensus' ? ($block['tahapan_survei'] ?? null) : null;
+        $sudahTersimpan = filled($block['id'] ?? null)
+            && ($tahapan === null || $tahapan === $tahapanTersimpan)
+            && collect($block['existing_bukti'] ?? [])->contains(fn ($b) => in_array($b['subfolder'] ?? null, $daftar, true));
+
+        return ! $sudahTersimpan;
+    }
+
+    /**
+     * Galat susunan folder: "Pisah ke beberapa subfolder" baru bermakna bila minimal
+     * dua subfolder dibuat — satu subfolder saja sama dengan "1 folder". Dipakai
+     * simpanDraft() dan buatValidator(); blok terkunci dilewati.
+     *
+     * @return array<string, list<string>> kunci blocks.<i>.susunan_folder => pesan
+     */
+    protected function galatSusunanFolder(): array
+    {
+        $galat = [];
+
+        foreach ($this->blocks as $i => $block) {
+            if ($this->blokTerkunci($block['status_dokumen'] ?? null)) {
+                continue;
+            }
+
+            $daftarTahapan = ($block['jenis'] ?? '') === 'survei_sensus' ? $this->tahapanDipilih($block) : [];
+
+            foreach ($daftarTahapan ?: [null] as $tahapan) {
+                if ($this->subfolderKurangDariDua($block, $tahapan)) {
+                    $folder = $tahapan !== null ? 'tahapan '.self::labelTahapan($tahapan) : 'kegiatan';
+                    $galat["blocks.{$i}.susunan_folder"][] = "folder {$folder} dipisah ke subfolder tapi baru berisi kurang dari 2 subfolder — tambah minimal 2 subfolder atau pilih \"1 folder (bawaan)\".";
+                }
+            }
+        }
+
+        return $galat;
+    }
+
     /** Saran nama subfolder untuk satu tahapan (atau kegiatan tanpa tahapan). */
     public static function saranSubfolder(?string $tahapan): array
     {
@@ -3348,6 +3400,12 @@ class PengisianKegiatan extends Component
         );
 
         $validator->after(function ($validator) {
+            foreach ($this->galatSusunanFolder() as $kunci => $daftarPesan) {
+                foreach ($daftarPesan as $pesan) {
+                    $validator->errors()->add($kunci, $pesan);
+                }
+            }
+
             // Blok dengan lebih dari satu tahapan: tiap tahapan menjadi kegiatan
             // sendiri, jadi masing-masing wajib punya minimal satu bukti (tahapan
             // utama boleh memakai bukti lama yang sudah tersimpan).
@@ -3667,6 +3725,10 @@ class PengisianKegiatan extends Component
                 ],
                 'blocks.*.nama_folder' => ['nullable', 'string', 'max:150'],
             ] + $this->aturanTahapanDanSubfolder(), $this->messages(), $this->validationAttributes());
+
+            if ($galatSusunan = $this->galatSusunanFolder()) {
+                throw ValidationException::withMessages($galatSusunan);
+            }
         } catch (ValidationException $e) {
             $this->dispatch('notify', type: 'error', message: 'Draf gagal disimpan — lengkapi data yang wajib diisi lebih dulu.');
 

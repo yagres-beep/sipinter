@@ -97,6 +97,7 @@ class TahapanGandaDanSubfolderTest extends TestCase
 
         $test->set('tahapanBuktiBaru.'.$komponen->kunciBuktiBaru($laporan), 'pelaksanaan')
             ->call('tambahSubfolder', 0, 'Undangan', 'persiapan')
+            ->call('tambahSubfolder', 0, 'Notula', 'persiapan')
             ->set('subfolderBuktiBaru.'.$komponen->kunciBuktiBaru($undangan), 'Undangan')
             ->call('simpanDraft')
             ->assertHasNoErrors();
@@ -172,6 +173,31 @@ class TahapanGandaDanSubfolderTest extends TestCase
         $this->assertCount(1, $grup[1]['folder']);
     }
 
+    public function test_pisah_subfolder_wajib_minimal_dua_folder(): void
+    {
+        $iku = $this->siapkan();
+
+        $this->mock(FolderStructureService::class, function ($mock) {
+            $mock->shouldReceive('unggahBerkasKegiatan')->andReturn(['drive_file_id' => 'x', 'storage_account_id' => null, 'nama_file' => 'x.pdf']);
+        });
+
+        $test = $this->formSurvei($iku)
+            ->call('toggleTahapan', 0, 'persiapan')
+            ->call('tambahSubfolder', 0, 'Undangan', 'persiapan')
+            ->set('blocks.0.bukti', [UploadedFile::fake()->create('a.pdf', 10, 'application/pdf')])
+            ->call('simpanDraft')
+            ->assertHasErrors('blocks.0.susunan_folder');
+
+        $this->assertSame(0, Kegiatan::count());
+        $this->assertNotEmpty(array_filter($test->instance()->kekuranganPengajuan(), fn ($p) => str_contains($p, 'kurang dari 2 subfolder')));
+
+        $test->call('tambahSubfolder', 0, 'Notula', 'persiapan')
+            ->call('simpanDraft')
+            ->assertHasNoErrors();
+
+        $this->assertSame(1, Kegiatan::count());
+    }
+
     public function test_tahapan_buatan_sendiri_bisa_ditambah_dan_disimpan(): void
     {
         $iku = $this->siapkan();
@@ -188,6 +214,7 @@ class TahapanGandaDanSubfolderTest extends TestCase
             ->assertSet('blocks.0.tahapan_kustom', ['Pelatihan Petugas'])
             ->assertSet('blocks.0.tahapan_tambahan', ['Pelatihan Petugas', 'pelaksanaan'])
             ->call('tambahSubfolder', 0, 'Daftar Hadir', 'Pelatihan Petugas')
+            ->call('tambahSubfolder', 0, 'Materi', 'Pelatihan Petugas')
             ->set('unggahFolder.0.0.0', [UploadedFile::fake()->create('a.pdf', 10, 'application/pdf')])
             ->set('unggahFolder.0.1.1', [UploadedFile::fake()->create('b.pdf', 10, 'application/pdf')])
             ->set('unggahFolder.0.2.0', [UploadedFile::fake()->create('c.pdf', 10, 'application/pdf')])
@@ -200,10 +227,14 @@ class TahapanGandaDanSubfolderTest extends TestCase
         $this->assertSame(3, Kegiatan::count());
 
         // Saat dimuat ulang, tahapan buatan sendiri tetap tampil sebagai pilihan.
+        // Subfolder kosong ("Materi") tidak tersimpan, tapi folder yang sudah
+        // dipecah tetap bisa disimpan ulang walau termuat dengan satu subfolder.
         $this->formSurvei($iku)
             ->assertSet('blocks.1.tahapan_survei', 'Pelatihan Petugas')
             ->assertSet('blocks.1.tahapan_kustom', ['Pelatihan Petugas'])
-            ->assertSet('blocks.1.subfolders_tahapan', ['Pelatihan Petugas' => ['Daftar Hadir']]);
+            ->assertSet('blocks.1.subfolders_tahapan', ['Pelatihan Petugas' => ['Daftar Hadir']])
+            ->call('simpanDraft')
+            ->assertHasNoErrors();
     }
 
     public function test_tahapan_buatan_sendiri_bisa_dihapus(): void
@@ -230,8 +261,9 @@ class TahapanGandaDanSubfolderTest extends TestCase
             ->call('toggleTahapan', 0, 'persiapan')
             ->call('toggleTahapan', 0, 'pelaksanaan')
             ->call('tambahSubfolder', 0, 'Undangan', 'persiapan')
+            ->call('tambahSubfolder', 0, 'Notula', 'persiapan')
             ->call('gantiNamaSubfolder', 0, 0, 'Surat Undangan', 'persiapan')
-            ->assertSet('blocks.0.subfolders_tahapan.persiapan', ['Surat Undangan'])
+            ->assertSet('blocks.0.subfolders_tahapan.persiapan', ['Surat Undangan', 'Notula'])
             ->set('blocks.0.nama_folder_tahapan.pelaksanaan', 'Lapangan Sakernas')
             ->set('blocks.0.bukti', [
                 UploadedFile::fake()->create('a.pdf', 10, 'application/pdf'),

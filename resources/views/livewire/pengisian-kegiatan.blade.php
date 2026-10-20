@@ -574,11 +574,17 @@
                                         @endif
                                     @endforeach
                                 </div>
+                                @if ($this->subfolderKurangDariDua($block, $tahapanSusunan))
+                                    <div style="color:var(--red);font-size:11.5px;margin-top:6px">⚠️ Pisah folder minimal 2 subfolder — {{ $daftarSub === [] ? 'belum ada' : 'baru 1' }} subfolder. Tambah lagi atau pilih "1 folder (bawaan)".</div>
+                                @endif
                                 <div class="fhint">Folder dibuat di dalam folder {{ $tahapanSusunan !== null ? '"'.$namaFolderTahapan.'"' : 'kegiatan' }}. Tiap folder punya tombol unggah sendiri di bawah.</div>
                             @else
                                 <div class="fhint">Semua bukti masuk langsung ke folder {{ $tahapanSusunan !== null ? '"'.$namaFolderTahapan.'"' : 'kegiatan' }}. Pilih "Pisah ke beberapa subfolder" untuk membuat folder sendiri (mis. Undangan, Dokumentasi).</div>
                             @endif
                         </div>
+                    @endforeach
+                    @foreach ($errors->get("blocks.{$i}.susunan_folder") as $pesanSusunan)
+                        <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ \Illuminate\Support\Str::ucfirst($pesanSusunan) }}</div>
                     @endforeach
                 </div>
 
