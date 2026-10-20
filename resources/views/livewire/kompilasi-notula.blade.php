@@ -592,14 +592,14 @@
 
             @if ($sudahDigabung)
                 <a href="{{ route('notula.unduh-draf', $notula) }}" class="btn btn-ghost btn-sm {{ ! $semuaTerverifikasi ? 'disabled' : '' }}"
-                    @if (! $semuaTerverifikasi) onclick="return false" style="opacity:.5;cursor:not-allowed" title="Seluruh bukti kegiatan triwulan ini harus terverifikasi dahulu" @endif>
+                    @if (! $semuaTerverifikasi) onclick="return false" style="opacity:max(.5,var(--op-dis-min));cursor:not-allowed" title="Seluruh bukti kegiatan triwulan ini harus terverifikasi dahulu" @endif>
                     ⬇ Unduh draf resmi
                 </a>
 
                 @if ($notula->status === \App\Models\Notula::STATUS_DISETUJUI && $notula->pdf_final)
                     <a href="{{ route('notula.unduh-final', $notula) }}" class="btn btn-teal btn-sm">⬇ Unduh final</a>
                 @else
-                    <span class="btn btn-teal btn-sm" style="opacity:.5;cursor:not-allowed" title="Menunggu persetujuan Kepala">⬇ Unduh final</span>
+                    <span class="btn btn-teal btn-sm" style="opacity:max(.5,var(--op-dis-min));cursor:not-allowed" title="Menunggu persetujuan Kepala">⬇ Unduh final</span>
                 @endif
             @endif
         </div>

@@ -324,7 +324,7 @@
                 $statusDokumen = $induk['tahapan']->pluck('status_dokumen')->unique();
                 $perTahapan = $kegiatan->jenis === 'survei_sensus' || $induk['tahapan']->count() > 1;
             @endphp
-            <div class="keg" wire:key="keg-{{ $kegiatan->id }}" @if (!$bisaDikoreksi) style="opacity:.8" @endif>
+            <div class="keg" wire:key="keg-{{ $kegiatan->id }}" @if (!$bisaDikoreksi) style="opacity:max(.8,var(--op-min))" @endif>
                 {{-- Nomor = kegiatan INDUK (Kegiatan::kelompokInduk()), sama seperti di Isian
                      Kegiatan; tahapannya tampil sebagai keterangan sekunder. --}}
                 <div class="keg-head">
@@ -455,7 +455,7 @@
             @php $nomorRo = 0; @endphp
             @forelse ($rincianOutput as $kunciRo => $baris)
                 @php $bisaDikoreksi = $this->rincianOutputBisaDikoreksi($baris); $nomorRo++; @endphp
-                <div class="keg" style="margin-top:8px{{ $bisaDikoreksi ? '' : ';opacity:.8' }}" wire:key="ro-{{ $kunciRo }}">
+                <div class="keg" style="margin-top:8px{{ $bisaDikoreksi ? '' : ';opacity:max(.8,var(--op-min))' }}" wire:key="ro-{{ $kunciRo }}">
                     <div class="keg-head">
                         <span class="t">RO {{ $nomorRo }}</span>
                         @if ($bisaDikoreksi)
@@ -1141,7 +1141,7 @@
                         @endforeach
                     </ul>
                 @endif
-                <div style="opacity:.85">
+                <div style="opacity:max(.85,var(--op-min))">
                     @if ($daftarBelumDitandai !== [])
                         Tandai seluruh isian di atas terlebih dahulu.
                     @endif

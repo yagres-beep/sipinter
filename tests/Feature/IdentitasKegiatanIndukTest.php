@@ -247,9 +247,13 @@ class IdentitasKegiatanIndukTest extends TestCase
         $this->assertStringContainsString('background:var(--chip-auto-bg)', $html);
         $this->assertSame('', trim((string) $this->blade('<x-tahapan-kegiatan :tahapan="null" />')));
 
-        // Kedua token didefinisikan ulang di KEDUA blok tema gelap (ikut OS & dipaksa).
+        // Kedua token didefinisikan ulang di KEDUA blok tema gelap (ikut OS & dipaksa),
+        // dan kedua blok itu harus identik supaya tema gelap sama apa pun pemicunya.
         $css = file_get_contents(resource_path('css/sipinter.css'));
-        $this->assertSame(2, substr_count($css, '--chip-auto-bg:#334155'));
-        $this->assertSame(2, substr_count($css, '--ink:#f8fafc'));
+        $this->assertSame(1, preg_match('/:root:not\(\[data-theme="light"\]\)\{\R(.*?)\}/s', $css, $ikutOs));
+        $this->assertSame(1, preg_match('/\R:root\[data-theme="dark"\]\{\R(.*?)\}/s', $css, $dipaksa));
+        $this->assertSame(trim($ikutOs[1]), trim($dipaksa[1]));
+        $this->assertStringContainsString('--chip-auto-bg:', $dipaksa[1]);
+        $this->assertStringContainsString('--ink:', $dipaksa[1]);
     }
 }

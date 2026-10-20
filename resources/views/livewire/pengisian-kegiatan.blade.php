@@ -283,7 +283,7 @@
                 $tahapanHead = ($jumlahPerNomor[$nomorBlok] ?? 0) > 1 && $block['jenis'] === 'survei_sensus' ? $this->tahapanDipilih($block) : [];
             @endphp
             @if ($terkunci)
-                <div class="keg" wire:key="block-{{ $i }}" style="opacity:.8">
+                <div class="keg" wire:key="block-{{ $i }}" style="opacity:max(.8,var(--op-min))">
                     <div class="keg-head">
                         <span class="t">Kegiatan {{ $nomorBlok }}</span>
                         @foreach ($tahapanHead as $t)
@@ -1361,7 +1361,7 @@
                     <li>{{ $item }}</li>
                 @endforeach
             </ul>
-            <div style="margin-top:6px;opacity:.85">Daftar ini diperbarui otomatis setiap kali isian berubah; tombol "Ajukan ke Tim SAKIP" aktif begitu daftar ini kosong.</div>
+            <div style="margin-top:6px;opacity:max(.85,var(--op-min))">Daftar ini diperbarui otomatis setiap kali isian berubah; tombol "Ajukan ke Tim SAKIP" aktif begitu daftar ini kosong.</div>
         </div>
     @else
         <div style="color:var(--teal);font-size:11.5px;margin-top:8px">✅ Seluruh isian wajib sudah lengkap — siap diajukan ke Tim SAKIP.</div>

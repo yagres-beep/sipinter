@@ -113,7 +113,7 @@
                                     @if ($baris['dikecualikan']->isNotEmpty())
                                         <div class="pj-chips" style="margin-top:5px">
                                             @foreach ($baris['dikecualikan'] as $p)
-                                                <span class="chip chip-auto" style="opacity:.55" wire:key="kecuali-{{ $p['pengecualian_id'] }}">
+                                                <span class="chip chip-auto" style="opacity:max(.55,var(--op-min))" wire:key="kecuali-{{ $p['pengecualian_id'] }}">
                                                     {{ $p['user']->nama }} <span class="chip-via">dikecualikan</span>
                                                     <span class="chip-x" wire:click="sertakanKembali({{ $p['pengecualian_id'] }})" wire:loading.class="btn-busy" wire:target="sertakanKembali({{ $p['pengecualian_id'] }})" title="Sertakan lagi sebagai PJ otomatis">↺</span>
                                                 </span>

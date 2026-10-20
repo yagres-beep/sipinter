@@ -16,7 +16,7 @@
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px">
         @foreach ($katalogMenu as $kunci => $menu)
             @php $bisa = array_intersect($peranDipilih ?? [], $menu['peran']) !== []; @endphp
-            <label style="display:flex;gap:6px;align-items:center;font-size:12.5px;cursor:{{ $bisa ? 'pointer' : 'not-allowed' }};opacity:{{ $bisa ? 1 : 0.45 }}">
+            <label style="display:flex;gap:6px;align-items:center;font-size:12.5px;cursor:{{ $bisa ? 'pointer' : 'not-allowed' }};opacity:{{ $bisa ? '1' : 'max(.45,var(--op-dis-min))' }}">
                 <input type="checkbox" value="{{ $kunci }}" wire:model="{{ $modelMenu }}" @disabled(! $bisa)> {{ $menu['label'] }}
             </label>
         @endforeach

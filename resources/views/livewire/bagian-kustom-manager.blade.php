@@ -147,7 +147,7 @@
                             <div style="font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px">Kolom tambahan</div>
 
                             @forelse (($f['kolom'] ?? []) as $j => $kol)
-                                <div style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--surface, #fff)">
+                                <div style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--surface-2)">
                                     <div class="row2">
                                         <div class="field" style="margin-bottom:8px">
                                             <label>Label kolom <span class="req">*</span></label>
