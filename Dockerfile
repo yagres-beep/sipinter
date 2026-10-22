@@ -10,6 +10,13 @@ RUN npm run build
 # Tahap 2 — image PHP final (Nginx + PHP-FPM + LibreOffice, dijalankan lewat Supervisor)
 FROM php:8.2-fpm-bookworm
 
+# pg_dump harus sama atau lebih baru dari versi server database (produksi: PostgreSQL 17).
+# Debian bookworm hanya punya client 15, jadi ambil client 17 dari repo resmi PostgreSQL (PGDG).
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
+    && install -d /usr/share/postgresql-common/pgdg \
+    && curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+    && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
         nginx \
         supervisor \
@@ -26,7 +33,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libreoffice-calc \
         libreoffice-impress \
         poppler-utils \
-        postgresql-client \
+        postgresql-client-17 \
         fonts-dejavu \
         fonts-liberation \
         fonts-crosextra-carlito \
@@ -52,7 +59,7 @@ RUN composer dump-autoload --optimize --no-dev \
 
 ENV LIBREOFFICE_PATH=/usr/bin/soffice
 ENV POPPLER_PDFTOPPM_PATH=/usr/bin/pdftoppm
-ENV PG_DUMP_PATH=/usr/bin/pg_dump
+ENV PG_DUMP_PATH=/usr/lib/postgresql/17/bin/pg_dump
 
 COPY docker/php.ini /usr/local/etc/php/conf.d/zz-app.ini
 COPY docker/nginx.conf /etc/nginx/sites-available/default.template

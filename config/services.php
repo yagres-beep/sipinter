@@ -116,8 +116,10 @@ return [
     | Symfony Process untuk membuat dump SQL penuh database (database SIPINTER
     | memakai Postgres terkelola di Supabase, lihat DB_CONNECTION di .env).
     |
-    | Di server produksi (Docker, lihat Dockerfile): paket apt "postgresql-client"
-    | sudah terpasang, binary-nya ada di /usr/bin/pg_dump.
+    | Di server produksi (Docker, lihat Dockerfile): paket apt "postgresql-client-17"
+    | dari repo PGDG, binary-nya ada di /usr/lib/postgresql/17/bin/pg_dump.
+    | Versi pg_dump wajib >= versi server (Supabase saat ini PostgreSQL 17) --
+    | kalau server naik versi, naikkan juga versi paket ini di Dockerfile.
     |
     | Di komputer Windows (opsional, hanya untuk mencoba fitur ini secara lokal):
     | pasang "Command Line Tools" dari installer PostgreSQL EDB
