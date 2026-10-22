@@ -45,5 +45,10 @@ Schedule::command('whatsapp:proses-antrean')->everyMinute()->withoutOverlapping(
 // terhapus tiap deploy ulang — disusulkan ke Drive secepatnya (lihat perintahnya).
 Schedule::command('berkas:sinkron-drive')->everyFiveMinutes()->withoutOverlapping(30)->runInBackground();
 
+// Backup database mingguan. Dicek tiap jam, tapi backup hanya dibuat bila sudah
+// 7 hari tanpa backup berhasil -- tahan terhadap server tidur/deploy ulang
+// (lihat App\Console\Commands\BackupMingguanCommand).
+Schedule::command('backup:mingguan')->hourly()->withoutOverlapping(60)->runInBackground();
+
 // Salinan bukti kegiatan di folder Evaluasi-RTL yang gagal/tertunda dicoba lagi.
 Schedule::command('bukti:sinkron-rtl')->everyFiveMinutes()->withoutOverlapping(30)->runInBackground();

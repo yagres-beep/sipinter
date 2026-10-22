@@ -15,6 +15,8 @@
         ℹ️ Backup berisi DATA SAJA (bukan berkas bukti dukung — berkas sudah tersimpan di Google Drive).
         Setelah dibuat, backup otomatis diarsipkan juga ke Google Drive (folder "Backup Database" di akun
         storage aktif) supaya tetap bisa diunduh walau server di-deploy ulang.
+        <br>🕒 Backup juga dibuat <b>otomatis tiap minggu</b> — sistem membuat backup baru bila sudah 7 hari
+        tanpa backup yang berhasil (backup manual di bawah ikut dihitung).
     </div>
 
     <div class="card">
@@ -52,6 +54,8 @@
                             {{ $backup->created_at->wita()->translatedFormat('d F Y, H:i') }} WITA
                             @if ($backup->dibuatOleh)
                                 <div style="font-size:11px">oleh {{ $backup->dibuatOleh->nama }}</div>
+                            @elseif ($backup->dibuat_oleh === null)
+                                <div style="font-size:11px">🕒 otomatis mingguan</div>
                             @endif
                         </td>
                         <td>
