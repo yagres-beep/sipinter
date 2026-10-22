@@ -125,7 +125,6 @@ class Kegiatan extends Model
     }
 
     /**
-<<<<<<< HEAD
      * Nama kegiatan untuk ditampilkan = Uraian Kegiatan apa adanya, baik "1 folder"
      * maupun "pisah ke beberapa tahapan". Tahapan hanya menentukan susunan folder
      * Drive (tiap tahapan tersimpan sebagai baris sendiri dengan uraian yang sama) —

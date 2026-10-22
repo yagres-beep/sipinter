@@ -594,17 +594,21 @@ class NotulaService
         // Bagian kustom (mis. Manajemen Risiko) — SEMUA bagian yang punya poin di
         // triwulan ini ikut ditampilkan, termasuk yang sudah dinonaktifkan Tim SAKIP
         // setelahnya, supaya data historis notula tidak pernah hilang dari catatan.
+        // Hanya bagian yang diatur "Tampilkan di notula" (masuk_notula) di Data Master.
         $bagianKustomPerBagian = BagianKustom::query()
+            ->where('masuk_notula', true)
             ->whereHas('poin', fn ($q) => $q->whereHas(
                 'periode',
                 fn ($q2) => $q2->where('tahun', $periode->tahun)->where('triwulan', $tw)
             ))
             ->with(['poin' => function ($q) use ($periode, $tw) {
-                $q->with('masterIku')->whereHas(
+                $q->with(['masterIku', 'periode'])->whereHas(
                     'periode',
                     fn ($q2) => $q2->where('tahun', $periode->tahun)->where('triwulan', $tw)
                 );
             }])
+            ->orderBy('urutan')
+            ->orderBy('id')
             ->get();
 
         // RF baru: link bukti dukung realisasi per IKU (subfolder "Capaian" milik IKU tsb,

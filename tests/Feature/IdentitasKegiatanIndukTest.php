@@ -135,18 +135,19 @@ class IdentitasKegiatanIndukTest extends TestCase
         $sebelum = Kegiatan::orderBy('id')->get()->keyBy('id');
         $capaian = Capaian::create(['iku_id' => $this->iku->id, 'periode_id' => $this->juli->id, 'status' => Capaian::STATUS_DIAJUKAN]);
 
-        // Tim SAKIP mengoreksi uraian HANYA tahapan pelaksanaan.
+        // Tim SAKIP mengoreksi uraian di satu-satunya isian uraian kegiatan ini.
         $this->login('Tim SAKIP');
         Livewire::test(VerifikasiCapaian::class, ['capaian' => $capaian])
-            ->set("koreksiKegiatan.{$kegiatan['pelaksanaan']->id}", 'Survei Angkatan Kerja Nasional')
+            ->set("koreksiKegiatan.{$kegiatan['persiapan']->id}", 'Survei Angkatan Kerja Nasional')
             ->call('simpanSementara')
             ->assertHasNoErrors();
 
-        // Koreksi tersimpan di baris itu saja; baris lain, folder, berkas & status tetap.
+        // Koreksi berlaku untuk semua tahapan (tetap satu nama); folder, berkas & status tetap.
         $sesudah = Kegiatan::orderBy('id')->get()->keyBy('id');
-        $this->assertSame('Survei Angkatan Kerja Nasional', $sesudah[$kegiatan['pelaksanaan']->id]->uraian_kegiatan);
-        $this->assertSame('Survei Sakernas', $sesudah[$kegiatan['persiapan']->id]->uraian_kegiatan);
-        $this->assertSame('Survei Sakernas', $sesudah[$kegiatan['pengolahan']->id]->uraian_kegiatan);
+        $this->assertSame(3, $sesudah->count());
+        foreach ($kegiatan as $k) {
+            $this->assertSame('Survei Angkatan Kerja Nasional', $sesudah[$k->id]->uraian_kegiatan);
+        }
         foreach ($sebelum as $id => $lama) {
             $this->assertSame($lama->nama_folder_auto, $sesudah[$id]->nama_folder_auto);
             $this->assertSame($lama->drive_folder_id, $sesudah[$id]->drive_folder_id);
@@ -155,11 +156,12 @@ class IdentitasKegiatanIndukTest extends TestCase
         }
         $this->assertSame('drive-bukti', Berkas::sole()->drive_file_id);
 
-        // Verifikasi: satu nomor kegiatan untuk ketiga tahapan + penjelasan nama di notula.
-        Livewire::test(VerifikasiCapaian::class, ['capaian' => $capaian->fresh()])
-            ->assertSeeInOrder(['Kegiatan 1', 'Tahapan Persiapan', 'Kegiatan 1', 'Tahapan Pelaksanaan', 'Kegiatan 1', 'Tahapan Pengolahan'])
+        // Verifikasi: satu kartu kegiatan dengan ketiga tahapan di dalamnya.
+        $html = Livewire::test(VerifikasiCapaian::class, ['capaian' => $capaian->fresh()])
+            ->assertSeeInOrder(['Kegiatan 1', 'Tahapan Persiapan', 'Tahapan Pelaksanaan', 'Tahapan Pengolahan'])
             ->assertDontSee('Kegiatan 2')
-            ->assertSee('Di notula kegiatan ini tetap dicatat satu kali');
+            ->html();
+        $this->assertSame(1, substr_count($html, '>Kegiatan 1<'));
 
         // Notula: satu nama (koreksi Tim SAKIP didahulukan), DOCX unduhan & jalur pratinjau/PDF sama.
         Kegiatan::query()->update(['status_dokumen' => Kegiatan::STATUS_DIVERIFIKASI]);
@@ -219,7 +221,8 @@ class IdentitasKegiatanIndukTest extends TestCase
 
         $this->login('Tim SAKIP');
         $verifikasi = Livewire::test(VerifikasiCapaian::class, ['capaian' => $capaian])
-            ->assertSeeInOrder(['Kegiatan 1', 'Tahapan Persiapan', 'Kegiatan 2', 'Kegiatan 1', 'Tahapan Pelaksanaan']);
+            // Satu kartu per kegiatan induk: tahapan pelaksanaan ikut di kartu Kegiatan 1.
+            ->assertSeeInOrder(['Kegiatan 1', 'Tahapan Persiapan', 'Tahapan Pelaksanaan', 'Kegiatan 2']);
         $info = $verifikasi->instance()->infoKegiatanInduk();
 
         // Isian: tahapan satu kegiatan dimuat berdampingan dalam SATU kartu "Kegiatan 1".
@@ -304,9 +307,13 @@ class IdentitasKegiatanIndukTest extends TestCase
         $this->assertStringContainsString('background:var(--chip-auto-bg)', $html);
         $this->assertSame('', trim((string) $this->blade('<x-tahapan-kegiatan :tahapan="null" />')));
 
-        // Kedua token didefinisikan ulang di KEDUA blok tema gelap (ikut OS & dipaksa).
+        // Kedua token didefinisikan ulang di KEDUA blok tema gelap (ikut OS & dipaksa),
+        // dan kedua blok itu harus identik supaya tema gelap sama apa pun pemicunya.
         $css = file_get_contents(resource_path('css/sipinter.css'));
-        $this->assertSame(2, substr_count($css, '--chip-auto-bg:#334155'));
-        $this->assertSame(2, substr_count($css, '--ink:#f8fafc'));
+        $this->assertSame(1, preg_match('/:root:not\(\[data-theme="light"\]\)\{\R(.*?)\}/s', $css, $ikutOs));
+        $this->assertSame(1, preg_match('/\R:root\[data-theme="dark"\]\{\R(.*?)\}/s', $css, $dipaksa));
+        $this->assertSame(trim($ikutOs[1]), trim($dipaksa[1]));
+        $this->assertStringContainsString('--chip-auto-bg:', $dipaksa[1]);
+        $this->assertStringContainsString('--ink:', $dipaksa[1]);
     }
 }

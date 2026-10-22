@@ -714,12 +714,25 @@ class NotulaBagian1DocxService
         $xml = '';
 
         foreach ($bagianKustomPerBagian as $bagian) {
+            // Judul & format baris diatur Tim SAKIP di Data Master (lihat BagianKustom::
+            // judulNotulaEfektif() & formatNotulaEfektif()), bukan ditulis di sini.
             $xml .= '<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">'
-                .htmlspecialchars($bagian->nama, ENT_QUOTES | ENT_XML1)
+                .htmlspecialchars($bagian->judulNotulaEfektif(), ENT_QUOTES | ENT_XML1)
                 .'</w:t></w:r></w:p>';
 
             foreach ($bagian->poin as $poin) {
-                $teks = ($poin->masterIku->kode ?? '').': '.$poin->teks;
+                $konteks = \App\Support\TemplateBagianKustom::konteks(
+                    $poin->masterIku->kode ?? null,
+                    $poin->masterIku->indikator ?? null,
+                    $poin->teks,
+                    $bagian->nama,
+                    $poin->periode?->tahun,
+                    $poin->periode?->triwulan,
+                    $poin->periode?->bulan,
+                    $bagian->nilaiKolomLengkap($poin->nilai_kolom),
+                );
+
+                $teks = \App\Support\TemplateBagianKustom::render($bagian->formatNotulaEfektif(), $konteks);
                 $this->adaDaftarButir = true;
                 $xml .= '<w:p>'.$this->pPrDaftar('', self::NUM_ID_BUTIR).'<w:r><w:t xml:space="preserve">'
                     .htmlspecialchars($teks, ENT_QUOTES | ENT_XML1)

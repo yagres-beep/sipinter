@@ -378,6 +378,11 @@ class VerifikasiCapaian extends Component
      */
     protected ?Collection $cacheKegiatanList = null;
 
+    protected ?Collection $cacheKegiatanIndukList = null;
+
+    /** @var array<int, array{nomor: int, nama_utama: string, jumlah: int, uraian_berbeda: bool}>|null */
+    protected ?array $cacheInfoInduk = null;
+
     protected ?Collection $cacheKendalaSolusiList = null;
 
     protected ?Collection $cacheRtlSebelumnya = null;
@@ -441,6 +446,14 @@ class VerifikasiCapaian extends Component
         foreach ($this->kegiatanList() as $kegiatan) {
             $this->koreksiKegiatan[$kegiatan->id] = $kegiatan->uraian_kegiatan;
             $this->catatanUraian[$kegiatan->id] = $kegiatan->catatan_uraian;
+        }
+
+        // Isian uraian & catatannya satu per kegiatan induk (kunci = baris wakil, lihat
+        // kegiatanIndukList()) — catatan penolakan tahapan mana pun ikut tampil di sana.
+        foreach ($this->kegiatanIndukList() as $induk) {
+            if ($induk['catatan_uraian']) {
+                $this->catatanUraian[$induk['wakil']->id] = $induk['catatan_uraian'];
+            }
         }
 
         // Daftar datar lintas SEMUA Kegiatan pada IKU ini — lihat catatan di properti
@@ -818,6 +831,10 @@ class VerifikasiCapaian extends Component
      */
     public function infoKegiatanInduk(): array
     {
+        if ($this->cacheInfoInduk !== null) {
+            return $this->cacheInfoInduk;
+        }
+
         $semua = Kegiatan::where('iku_id', $this->capaian->iku_id)
             ->where('periode_id', $this->capaian->periode_id)
             ->orderBy('id')
@@ -835,7 +852,65 @@ class VerifikasiCapaian extends Component
             }
         }
 
-        return $info;
+        return $this->cacheInfoInduk = $info;
+    }
+
+    /**
+     * Kegiatan pendukung per kegiatan INDUK — SATU entri per kegiatan walau dipisah ke
+     * beberapa tahapan (satu baris Kegiatan per tahapan, lihat
+     * PengisianKegiatan::simpanBagianIsian()). Pengelompokannya sama dengan nomor
+     * "Kegiatan N" (infoKegiatanInduk()) & nama kegiatan di notula
+     * (Kegiatan::daftarNamaCapaian()), jadi daftar di halaman ini selalu sejalan
+     * dengan notula. Baris tahapan tetap utuh di DB: berkas & lokasi bukti dukung
+     * tetap per tahapan, sedangkan uraian (nama capaian) diverifikasi & dikoreksi
+     * sekali untuk seluruh tahapannya (lihat anggotaInduk()).
+     *
+     * 'wakil' = baris yang uraiannya menjadi nama utama — kunci isian koreksi uraian &
+     * catatan di tampilan. 'status_uraian' = gabungan seluruh tahapan: ditolak bila
+     * ada yang ditolak, menunggu bila ada yang belum ditandai, selain itu terverifikasi.
+     *
+     * @return Collection<int, array{nomor: int, wakil: Kegiatan, tahapan: Collection<int, Kegiatan>, nama_utama: string, uraian_berbeda: bool, status_uraian: string, catatan_uraian: ?string}>
+     */
+    public function kegiatanIndukList(): Collection
+    {
+        if ($this->cacheKegiatanIndukList !== null) {
+            return $this->cacheKegiatanIndukList;
+        }
+
+        $info = $this->infoKegiatanInduk();
+        $urutanTahapan = array_flip(array_keys(PengisianKegiatan::DAFTAR_TAHAPAN));
+
+        return $this->cacheKegiatanIndukList = $this->kegiatanList()
+            ->groupBy(fn (Kegiatan $k) => isset($info[$k->id]) ? 'induk-'.$info[$k->id]['nomor'] : 'baris-'.$k->id)
+            ->map(function (Collection $anggota) use ($info, $urutanTahapan) {
+                $anggota = $anggota->sortBy(fn (Kegiatan $k) => [$urutanTahapan[$k->tahapan_survei] ?? count($urutanTahapan), $k->id])->values();
+                $infoInduk = $info[$anggota->first()->id] ?? null;
+                $namaUtama = $infoInduk['nama_utama'] ?? Kegiatan::namaUtamaKelompok($anggota);
+                $status = $anggota->pluck('status_verifikasi_uraian');
+
+                return [
+                    'nomor' => $infoInduk['nomor'] ?? 0,
+                    'wakil' => $anggota->first(fn (Kegiatan $k) => $k->namaCapaian() === $namaUtama) ?? $anggota->first(),
+                    'tahapan' => $anggota,
+                    'nama_utama' => $namaUtama,
+                    'uraian_berbeda' => $anggota->map(fn (Kegiatan $k) => mb_strtolower($k->namaCapaian()))->unique()->count() > 1,
+                    'status_uraian' => $status->contains('ditolak') ? 'ditolak' : ($status->contains('menunggu') ? 'menunggu' : 'terverifikasi'),
+                    'catatan_uraian' => $anggota->where('status_verifikasi_uraian', 'ditolak')->pluck('catatan_uraian')->filter()->unique()->implode(' / ') ?: null,
+                ];
+            })
+            ->values();
+    }
+
+    /**
+     * Seluruh baris tahapan (dalam kegiatanList()) yang satu kegiatan induk dengan
+     * $kegiatanId, termasuk dirinya — kosong bila id tsb bukan kegiatan halaman ini.
+     *
+     * @return Collection<int, Kegiatan>
+     */
+    protected function anggotaInduk(int $kegiatanId): Collection
+    {
+        return $this->kegiatanIndukList()
+            ->first(fn (array $induk) => $induk['tahapan']->contains('id', $kegiatanId))['tahapan'] ?? collect();
     }
 
     /**
@@ -919,9 +994,12 @@ class VerifikasiCapaian extends Component
      */
     public function bagianKustomList()
     {
+        // Hanya bagian yang ditempatkan di menu Isian Kegiatan — bagian di menu lain
+        // tidak lewat verifikasi capaian (lihat IsianBagianKustom).
         return $this->cacheBagianKustomList ??= BagianKustomPoin::with('bagianKustom')
             ->where('iku_id', $this->capaian->iku_id)
             ->where('periode_id', $this->capaian->periode_id)
+            ->whereHas('bagianKustom', fn ($q) => $q->whereJsonContains('penempatan', \App\Support\MenuBagianKustom::PENGISIAN))
             ->orderBy('id')
             ->get();
     }
@@ -1204,23 +1282,39 @@ class VerifikasiCapaian extends Component
         return $kegiatan && $this->kegiatanBisaDikoreksi($kegiatan);
     }
 
+    /**
+     * Uraian = nama kegiatan induk, sama untuk seluruh tahapannya — jadi ditandai
+     * SEKALI untuk semua baris tahapan kegiatan itu (anggotaInduk()), tidak perlu
+     * diverifikasi ulang per tahapan. Berkas tetap ditandai per berkas.
+     */
     public function tandaiUraianSesuai(int $kegiatanId): void
     {
         if (! $this->uraianBisaDiverifikasi($kegiatanId)) {
             return;
         }
 
+        $ids = $this->anggotaInduk($kegiatanId)->pluck('id')->all() ?: [$kegiatanId];
+
         $this->resetErrorBag('catatanUraian.'.$kegiatanId);
-        $this->catatanUraian[$kegiatanId] = null;
+        foreach ($ids as $id) {
+            $this->catatanUraian[$id] = null;
+        }
 
         $this->tandaiSedangDitangani();
 
-        Kegiatan::whereKey($kegiatanId)->update([
+        Kegiatan::whereKey($ids)->update([
             'status_verifikasi_uraian' => 'terverifikasi',
             'catatan_uraian' => null,
         ]);
 
+        $this->lupakanCacheKegiatan();
+    }
+
+    protected function lupakanCacheKegiatan(): void
+    {
         $this->cacheKegiatanList = null;
+        $this->cacheKegiatanIndukList = null;
+        $this->cacheInfoInduk = null;
     }
 
     public function tandaiUraianTolak(int $kegiatanId): void
@@ -1240,14 +1334,19 @@ class VerifikasiCapaian extends Component
             return;
         }
 
+        $ids = $this->anggotaInduk($kegiatanId)->pluck('id')->all() ?: [$kegiatanId];
+        foreach ($ids as $id) {
+            $this->catatanUraian[$id] = $catatan;
+        }
+
         $this->tandaiSedangDitangani();
 
-        Kegiatan::whereKey($kegiatanId)->update([
+        Kegiatan::whereKey($ids)->update([
             'status_verifikasi_uraian' => 'ditolak',
             'catatan_uraian' => $catatan,
         ]);
 
-        $this->cacheKegiatanList = null;
+        $this->lupakanCacheKegiatan();
     }
 
     /**
@@ -1962,17 +2061,35 @@ class VerifikasiCapaian extends Component
      */
     protected function simpanKoreksiTeks(): void
     {
-        foreach ($this->koreksiKegiatan as $id => $teks) {
-            $kegiatan = $this->kegiatanList()->firstWhere('id', (int) $id);
+        // Satu isian uraian per kegiatan induk (kunci = baris 'wakil'): uraian yang
+        // diubah berlaku untuk SEMUA tahapannya supaya satu kegiatan tetap satu nama.
+        // Induk yang tidak diubah dibiarkan apa adanya — termasuk data lama yang
+        // uraian antartahapannya sudah terlanjur berbeda.
+        foreach ($this->kegiatanIndukList() as $induk) {
+            $diubah = $induk['tahapan']
+                ->sortBy(fn (Kegiatan $k) => $k->id === $induk['wakil']->id ? 0 : 1)
+                ->first(fn (Kegiatan $k) => array_key_exists($k->id, $this->koreksiKegiatan)
+                    && (string) $this->koreksiKegiatan[$k->id] !== (string) $k->uraian_kegiatan);
 
-            // Pertahanan berlapis (bukan cuma readonly di UI): tidak tersunting bila
-            // Capaian-nya sendiri sudah tidak bisa diverifikasi lagi (mis. "disetujui").
-            if (! $kegiatan || ! $this->kegiatanBisaDikoreksi($kegiatan)) {
+            if (! $diubah) {
                 continue;
             }
 
-            $kegiatan->update(['uraian_kegiatan' => $teks]);
+            $teks = $this->koreksiKegiatan[$diubah->id];
+
+            foreach ($induk['tahapan'] as $kegiatan) {
+                // Pertahanan berlapis (bukan cuma readonly di UI): tidak tersunting bila
+                // Capaian-nya sendiri sudah tidak bisa diverifikasi lagi (mis. "disetujui").
+                if (! $this->kegiatanBisaDikoreksi($kegiatan)) {
+                    continue;
+                }
+
+                $kegiatan->update(['uraian_kegiatan' => $teks]);
+                $this->koreksiKegiatan[$kegiatan->id] = $teks;
+            }
         }
+
+        $this->lupakanCacheKegiatan();
 
         $this->simpanRincianOutput();
         $this->simpanIndikatorProksi();
@@ -2228,8 +2345,8 @@ class VerifikasiCapaian extends Component
             $daftar[] = "Berkas \"{$b->nama_file}\"";
         }
 
-        foreach ($this->kegiatanList()->where('status_verifikasi_uraian', 'menunggu') as $k) {
-            $daftar[] = 'Uraian kegiatan "'.Str::limit($k->uraian_kegiatan ?: '(kosong)', 40).'"';
+        foreach ($this->kegiatanIndukList()->where('status_uraian', 'menunggu') as $induk) {
+            $daftar[] = 'Uraian kegiatan "'.Str::limit($induk['nama_utama'] ?: '(kosong)', 40).'"';
         }
 
         foreach ($this->kendalaSolusiList()->where('status_verifikasi', 'menunggu') as $k) {
@@ -2275,8 +2392,8 @@ class VerifikasiCapaian extends Component
             $daftar[] = ['label' => "Berkas \"{$b->nama_file}\"", 'catatan' => $b->catatan];
         }
 
-        foreach ($this->kegiatanList()->where('status_verifikasi_uraian', 'ditolak') as $k) {
-            $daftar[] = ['label' => 'Uraian kegiatan "'.Str::limit($k->uraian_kegiatan ?: '(kosong)', 40).'"', 'catatan' => $k->catatan_uraian];
+        foreach ($this->kegiatanIndukList()->where('status_uraian', 'ditolak') as $induk) {
+            $daftar[] = ['label' => 'Uraian kegiatan "'.Str::limit($induk['nama_utama'] ?: '(kosong)', 40).'"', 'catatan' => $induk['catatan_uraian']];
         }
 
         foreach ($this->kendalaSolusiList()->where('status_verifikasi', 'ditolak') as $k) {
@@ -2314,9 +2431,9 @@ class VerifikasiCapaian extends Component
             $daftar[] = 'PIC Tindak Lanjut untuk rencana RTL triwulan berikutnya belum diisi.';
         }
 
-        foreach ($this->kegiatanList() as $k) {
-            if (trim((string) ($this->koreksiKegiatan[$k->id] ?? '')) === '') {
-                $daftar[] = 'Teks uraian kegiatan "'.Str::limit($k->uraian_kegiatan ?: '(kosong)', 40).'" tidak boleh dikosongkan.';
+        foreach ($this->kegiatanIndukList() as $induk) {
+            if ($induk['tahapan']->contains(fn ($k) => trim((string) ($this->koreksiKegiatan[$k->id] ?? '')) === '')) {
+                $daftar[] = 'Teks uraian kegiatan "'.Str::limit($induk['nama_utama'] ?: '(kosong)', 40).'" tidak boleh dikosongkan.';
             }
         }
 
@@ -2581,6 +2698,7 @@ class VerifikasiCapaian extends Component
         return view('livewire.verifikasi-capaian', [
             'rtlPerBerkas' => $rtlPerBerkas,
             'kegiatanList' => $kegiatanList,
+            'kegiatanIndukList' => $this->kegiatanIndukList(),
             'kendalaSolusiList' => $kendalaSolusiList,
             'rtlSebelumnya' => $rtlSebelumnya,
             'rtlBerikutnya' => $this->rtlBerikutnyaBaruDitetapkan(),

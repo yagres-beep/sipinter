@@ -20,6 +20,13 @@
   --hover-line:#c9d4e8; --period-bg2:#eef4ff; --period-line:#d3e2ff;
   --ico-blue-2:#dbeafe; --ico-teal-2:#ccfbf1; --ico-amber-2:#fde68a; --ico-red-2:#fecaca;
   --nav-dim:#5b6d99; --nav-faint:#7183ad; --badge-ring:0%; --search-bg:#f6f8fb; --teal-fill-a:#14b8a6; --teal-fill-b:#0d9488;
+  --nav-text:#aeb9d4; --sidebar-line:transparent; --upload-line:#e9edf3; --upload-bg:#f6f8fb;
+  --btn-dis-bg:#e9edf3; --btn-dis-ink:#94a3b8; --sh-sticky:0 10px 12px -12px rgba(16,32,70,.35);
+  /* batas bawah opacity — dipakai lewat opacity:max(<nilai terang>, var(--op-min)).
+     Di terang 0 (nilai asli berlaku apa adanya); di gelap dinaikkan supaya teks pada
+     blok baca-saja/ikon kecil tidak memudar di atas latar gelap. --op-dis-min sama,
+     khusus kontrol nonaktif (tetap lebih redup dari normal, tapi masih terbaca). */
+  --op-min:0; --op-dis-min:0;
   /* tinggi blok yang ikut sticky di bawah topbar — dipakai untuk menumpuk
      .page-title/.page-sub/.subtabs supaya tidak tertimpa satu sama lain saat discroll. */
   --topbar-h:69px; --subtabs-h:58px;
@@ -34,49 +41,58 @@
 /* mode gelap/terang — ikut tema perangkat (prefers-color-scheme) secara bawaan,
    bisa dipaksa lewat atribut data-theme="light"/"dark" (lihat tombol di sidebar-foot
    & app.js) yang disimpan di localStorage supaya pilihan bertahan antar kunjungan. */
-/* Palet gelap — lapisan sengaja dibuat berjenjang supaya tiap level bisa dibedakan:
-   halaman #0f172a < sidebar/topbar #172554 < kartu #1e293b < kartu poin #273449,
-   sedangkan kolom isian TURUN ke #111c30 (lebih gelap dari kartu induknya) dengan
-   border #7586a0 (≥3,3:1 terhadap kartu, kartu poin & isian). Kontras teks (WCAG AA)
-   terhadap kartu #1e293b: ink 14,0:1 · muted 9,9:1 · faint 7,3:1 · blue-600 8,1:1;
-   status di atas latar softnya: amber 8,7:1 · green 5,1:1 · red 5,8:1. Tombol berisi
-   pakai --accent-a/b (#2563eb/#1d4ed8) supaya teks putih ≥5,2:1 — #60a5fa lama 2,5:1.
-   Blok ini ditulis dua kali (ikut OS & dipaksa lewat tombol tema) — ubah keduanya. */
+/* Palet gelap navy — lapisan berjenjang supaya tiap level bisa dibedakan:
+   halaman #0b172a < sidebar/topbar #102448 < kartu #12233f < kartu poin #162a49 ≈
+   kolom isian #172b4a. Kartu & panel dipisahkan dari latar oleh border biru #315781;
+   kolom isian/kontrol memakai border lebih terang #5b80b0 (≥3,4:1 terhadap kartu,
+   kartu poin & isian — WCAG 1.4.11). Kontras teks (WCAG AA) terhadap kartu #12233f:
+   ink 14,3:1 · muted 10,6:1 · faint 7,9:1 · blue-600 8,7:1 · placeholder 6,4:1 (di
+   isian); status di atas latar softnya: green 7,3:1 · teal 6,9:1 · amber 8,2:1 ·
+   red 5,9:1. Tombol/navigasi aktif pakai --accent-a/b (#1a6cf0/#2563eb) — teks putih
+   ≥4,7:1. Sidebar: teks menu 9,8:1, label grup 7,0:1 terhadap #102448.
+   Blok ini ditulis dua kali (ikut OS & dipaksa lewat tombol tema) — ubah keduanya;
+   IdentitasKegiatanIndukTest memastikan keduanya tetap identik. */
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --navy:#172554; --navy2:#93c5fd; --blue:#60a5fa; --blue-600:#93c5fd; --blue-soft:#162b4d;
-    --accent-a:#2563eb; --accent-b:#1d4ed8; --accent-c:#3b82f6;
-    --teal:#2dd4bf; --teal-soft:#042f2e; --amber:#fbbf24; --amber-soft:#422006;
-    --red:#f87171; --red-soft:#450a0a; --green:#34d399; --green-soft:#064e3b;
-    --ink:#f8fafc; --muted:#cbd5e1; --faint:#aab8cc; --line:#475569; --line2:#334155;
-    --bg:#0f172a; --white:#1e293b; --surface-2:#273449;
-    --input-bg:#111c30; --input-line:#7586a0; --focus-ring:#60a5fa; --placeholder:#8494ad;
-    --sh-sm:0 1px 2px rgba(0,0,0,.35); --sh:0 2px 8px rgba(0,0,0,.35),0 1px 2px rgba(0,0,0,.3);
-    --sh-lg:0 12px 40px rgba(0,0,0,.55); --sh-nav:0 2px 8px rgba(37,99,235,.45);
-    --topbar-bg:#172554; --ro-bg:rgba(148,163,184,.12); --soft-surface:rgba(255,255,255,.03);
-    --dashed-line:#64748b; --chip-auto-bg:#334155;
-    --overlay:rgba(2,6,23,.72); --red-line:rgba(248,113,113,.55); --teal-line:rgba(45,212,191,.4);
-    --blue-line:rgba(96,165,250,.45); --hover-line:#64748b; --period-bg2:#1b2f55; --period-line:#2f4a7a;
+    --navy:#102448; --navy2:#93c5fd; --blue:#60a5fa; --blue-600:#93c5fd; --blue-soft:#173563;
+    --accent-a:#1a6cf0; --accent-b:#2563eb; --accent-c:#3b82f6;
+    --teal:#2dd4bf; --teal-soft:#0a3836; --amber:#fbbf24; --amber-soft:#3d2a08;
+    --red:#fb7185; --red-soft:#3f1220; --green:#4ade80; --green-soft:#0d3a2a;
+    --ink:#f1f5f9; --muted:#cbd5e1; --faint:#a9b9d0; --line:#315781; --line2:#223c61;
+    --bg:#0b172a; --white:#12233f; --surface-2:#162a49;
+    --input-bg:#172b4a; --input-line:#5b80b0; --focus-ring:#60a5fa; --placeholder:#9fb0c9;
+    --sh-sm:0 1px 2px rgba(0,0,0,.4); --sh:0 4px 14px rgba(0,0,0,.35),0 1px 2px rgba(0,0,0,.3);
+    --sh-lg:0 14px 40px rgba(0,0,0,.6); --sh-nav:0 4px 14px rgba(22,119,255,.4);
+    --topbar-bg:#102448; --ro-bg:#1b3050; --soft-surface:rgba(255,255,255,.03);
+    --dashed-line:#4b6e9c; --chip-auto-bg:#213a5e;
+    --overlay:rgba(3,9,22,.75); --red-line:rgba(251,113,133,.55); --teal-line:rgba(45,212,191,.45);
+    --blue-line:rgba(96,165,250,.5); --hover-line:#6b8fbf; --period-bg2:#1b3a6b; --period-line:#3a6aa8;
     --ico-blue-2:#1e3a8a; --ico-teal-2:#134e4a; --ico-amber-2:#713f12; --ico-red-2:#7f1d1d;
-    --nav-dim:#94a3c8; --nav-faint:#9aa9cc; --badge-ring:40%; --search-bg:#111c30; --teal-fill-a:#0f766e; --teal-fill-b:#115e59;
+    --nav-dim:#9db0d6; --nav-faint:#9db0d6; --badge-ring:45%; --search-bg:#172b4a; --teal-fill-a:#0f766e; --teal-fill-b:#115e59;
+    --nav-text:#c3cfe6; --sidebar-line:#1d3a63; --upload-line:#3b82f6; --upload-bg:#0f2142;
+    --btn-dis-bg:#25426a; --btn-dis-ink:#a9b9d0; --sh-sticky:0 10px 14px -10px rgba(0,0,0,.6);
+    --op-min:.9; --op-dis-min:.6;
   }
 }
 :root[data-theme="dark"]{
-  --navy:#172554; --navy2:#93c5fd; --blue:#60a5fa; --blue-600:#93c5fd; --blue-soft:#162b4d;
-  --accent-a:#2563eb; --accent-b:#1d4ed8; --accent-c:#3b82f6;
-  --teal:#2dd4bf; --teal-soft:#042f2e; --amber:#fbbf24; --amber-soft:#422006;
-  --red:#f87171; --red-soft:#450a0a; --green:#34d399; --green-soft:#064e3b;
-  --ink:#f8fafc; --muted:#cbd5e1; --faint:#aab8cc; --line:#475569; --line2:#334155;
-  --bg:#0f172a; --white:#1e293b; --surface-2:#273449;
-  --input-bg:#111c30; --input-line:#7586a0; --focus-ring:#60a5fa; --placeholder:#8494ad;
-  --sh-sm:0 1px 2px rgba(0,0,0,.35); --sh:0 2px 8px rgba(0,0,0,.35),0 1px 2px rgba(0,0,0,.3);
-  --sh-lg:0 12px 40px rgba(0,0,0,.55); --sh-nav:0 2px 8px rgba(37,99,235,.45);
-  --topbar-bg:#172554; --ro-bg:rgba(148,163,184,.12); --soft-surface:rgba(255,255,255,.03);
-  --dashed-line:#64748b; --chip-auto-bg:#334155;
-  --overlay:rgba(2,6,23,.72); --red-line:rgba(248,113,113,.55); --teal-line:rgba(45,212,191,.4);
-  --blue-line:rgba(96,165,250,.45); --hover-line:#64748b; --period-bg2:#1b2f55; --period-line:#2f4a7a;
-  --ico-blue-2:#1e3a8a; --ico-teal-2:#134e4a; --ico-amber-2:#713f12; --ico-red-2:#7f1d1d;
-  --nav-dim:#94a3c8; --nav-faint:#9aa9cc; --badge-ring:40%; --search-bg:#111c30; --teal-fill-a:#0f766e; --teal-fill-b:#115e59;
+    --navy:#102448; --navy2:#93c5fd; --blue:#60a5fa; --blue-600:#93c5fd; --blue-soft:#173563;
+    --accent-a:#1a6cf0; --accent-b:#2563eb; --accent-c:#3b82f6;
+    --teal:#2dd4bf; --teal-soft:#0a3836; --amber:#fbbf24; --amber-soft:#3d2a08;
+    --red:#fb7185; --red-soft:#3f1220; --green:#4ade80; --green-soft:#0d3a2a;
+    --ink:#f1f5f9; --muted:#cbd5e1; --faint:#a9b9d0; --line:#315781; --line2:#223c61;
+    --bg:#0b172a; --white:#12233f; --surface-2:#162a49;
+    --input-bg:#172b4a; --input-line:#5b80b0; --focus-ring:#60a5fa; --placeholder:#9fb0c9;
+    --sh-sm:0 1px 2px rgba(0,0,0,.4); --sh:0 4px 14px rgba(0,0,0,.35),0 1px 2px rgba(0,0,0,.3);
+    --sh-lg:0 14px 40px rgba(0,0,0,.6); --sh-nav:0 4px 14px rgba(22,119,255,.4);
+    --topbar-bg:#102448; --ro-bg:#1b3050; --soft-surface:rgba(255,255,255,.03);
+    --dashed-line:#4b6e9c; --chip-auto-bg:#213a5e;
+    --overlay:rgba(3,9,22,.75); --red-line:rgba(251,113,133,.55); --teal-line:rgba(45,212,191,.45);
+    --blue-line:rgba(96,165,250,.5); --hover-line:#6b8fbf; --period-bg2:#1b3a6b; --period-line:#3a6aa8;
+    --ico-blue-2:#1e3a8a; --ico-teal-2:#134e4a; --ico-amber-2:#713f12; --ico-red-2:#7f1d1d;
+    --nav-dim:#9db0d6; --nav-faint:#9db0d6; --badge-ring:45%; --search-bg:#172b4a; --teal-fill-a:#0f766e; --teal-fill-b:#115e59;
+    --nav-text:#c3cfe6; --sidebar-line:#1d3a63; --upload-line:#3b82f6; --upload-bg:#0f2142;
+    --btn-dis-bg:#25426a; --btn-dis-ink:#a9b9d0; --sh-sticky:0 10px 14px -10px rgba(0,0,0,.6);
+    --op-min:.9; --op-dis-min:.6;
 }
 
 body{font-family:'Inter','Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);line-height:1.55;font-size:14px;-webkit-font-smoothing:antialiased;transition:background-color .15s,color .15s}
@@ -88,14 +104,14 @@ a{text-decoration:none;color:inherit}
 
 /* sidebar — tetap di tempat (fixed) saat konten di sebelah kanan discroll,
    sama seperti perilaku prototipe */
-.sidebar{width:220px;background:var(--navy);color:#aeb9d4;padding:0;flex:none;display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;overflow-y:auto;z-index:20}
+.sidebar{width:220px;background:var(--navy);color:var(--nav-text);border-right:1px solid var(--sidebar-line);padding:0;flex:none;display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;overflow-y:auto;z-index:20}
 .brand{padding:20px 18px;display:flex;align-items:center;gap:11px;border-bottom:1px solid rgba(255,255,255,.06)}
 .brand .logo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--accent-a),var(--accent-c));display:flex;align-items:center;justify-content:center;color:#fff;font-size:17px}
 .brand h2{font-size:17px;color:#fff;font-weight:700;line-height:1}
 .brand span{font-size:10px;color:var(--nav-faint);display:block;margin-top:2px}
 .nav{flex:1;padding:8px 10px}
 .nav-group{font-size:9.5px;text-transform:uppercase;letter-spacing:1.2px;color:var(--nav-dim);padding:12px 10px 7px}
-.nav a{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:10px;color:#aeb9d4;font-size:13px;margin-bottom:3px;font-weight:500;text-decoration:none;background:none;border:none;width:100%;text-align:left;font-family:inherit;cursor:pointer}
+.nav a{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:10px;color:var(--nav-text);font-size:13px;margin-bottom:3px;font-weight:500;text-decoration:none;background:none;border:none;width:100%;text-align:left;font-family:inherit;cursor:pointer}
 .nav a:not(.active):hover{background:rgba(255,255,255,.07);color:#fff}
 .nav a:focus-visible{outline:2px solid #93c5fd;outline-offset:-2px}
 .nav a.active{background:linear-gradient(135deg,var(--accent-a),var(--accent-b));color:#fff;box-shadow:var(--sh-nav)}
@@ -151,7 +167,7 @@ a{text-decoration:none;color:inherit}
 /* period banner */
 .period-banner{display:flex;align-items:center;gap:13px;background:linear-gradient(135deg,var(--blue-soft),var(--period-bg2));border:1.5px solid var(--period-line);border-radius:13px;padding:12px 16px;margin-bottom:18px}
 .pb-ico{font-size:22px}
-.pb-lbl{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--blue-600);opacity:.85}
+.pb-lbl{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--blue-600);opacity:max(.85,var(--op-min))}
 .pb-val{font-size:14px;margin-top:1px}
 .pb-val b{color:var(--ink)}
 .pb-tag{font-size:10.5px;font-weight:700;color:#fff;background:var(--accent-b);padding:4px 11px;border-radius:20px;margin-left:auto}
@@ -165,7 +181,7 @@ a{text-decoration:none;color:inherit}
    Tingginya sengaja TIDAK berubah saat menempel: perubahan tinggi tepat di titik
    menempel menggeser alur halaman dan bisa membuat bilah lepas-tempel bergantian. */
 .bilah-lengket{position:sticky;top:var(--atas-lengket, calc(var(--topbar-h) + var(--tinggi-judul, 0px)));z-index:13;background:var(--bg);padding-bottom:12px;margin-bottom:4px}
-.bilah-lengket.menempel{box-shadow:0 10px 12px -12px rgba(16,32,70,.35)}
+.bilah-lengket.menempel{box-shadow:var(--sh-sticky)}
 .bilah-lengket .period-banner{margin-bottom:0;padding:10px 16px}
 /* overflow-x di .nav-bagian sendiri (bukan di induk .bilah-lengket) — overflow pada
    induk elemen sticky membuat sticky tidak berfungsi. */
@@ -176,7 +192,7 @@ a{text-decoration:none;color:inherit}
 .nb-item.on{background:linear-gradient(135deg,var(--accent-a),var(--accent-b));color:#fff;border-color:transparent;box-shadow:var(--sh-nav)}
 .nb-n{min-width:20px;height:20px;padding:0 4px;border-radius:6px;background:var(--blue-soft);color:var(--blue-600);display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
 .nb-item.on .nb-n{background:rgba(255,255,255,.22);color:#fff}
-.nb-kunci{font-size:10px;opacity:.8}
+.nb-kunci{font-size:10px;opacity:max(.8,var(--op-min))}
 .nb-teks{max-width:180px;overflow:hidden;text-overflow:ellipsis}
 /* judul bagian tujuan tidak tertutup .bilah-lengket saat dilompati (scrollIntoView) */
 .bilah-lengket ~ .card .sec[id]{scroll-margin-top:var(--offset-lengket, 200px)}
@@ -206,7 +222,7 @@ a{text-decoration:none;color:inherit}
 .inp .chev{color:var(--faint)}
 
 /* upload */
-.upload{border:2px dashed var(--line);border-radius:11px;padding:16px;text-align:center;background:var(--bg);color:var(--muted);font-size:12.5px}
+.upload{border:2px dashed var(--upload-line);border-radius:11px;padding:16px;text-align:center;background:var(--upload-bg);color:var(--muted);font-size:12.5px}
 .upload.need{border-color:color-mix(in srgb, var(--red) 45%, transparent);background:var(--red-soft);color:var(--red)}
 .upload .big{font-size:22px;margin-bottom:2px}
 /* Zona unggah drag-and-drop bersama — <x-zona-unggah>, Alpine.data('zonaUnggah') di resources/js/app.js */
@@ -243,7 +259,7 @@ a{text-decoration:none;color:inherit}
 .filechip-grid .filechip{margin-top:0;min-width:0}
 .filechip-grid .filechip .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
 /* Ganti nama berkas langsung dari web (komponen <x-nama-berkas>) */
-.btn-ubah-nama{background:none;border:0;padding:0 2px;margin-left:4px;cursor:pointer;font-size:12px;opacity:.55;vertical-align:baseline;flex:none}
+.btn-ubah-nama{background:none;border:0;padding:0 2px;margin-left:4px;cursor:pointer;font-size:12px;opacity:max(.55,var(--op-min));vertical-align:baseline;flex:none}
 /* Nama panjang: hanya .teks-nama yang terpotong (white-space mewarisi induk — di filechip-grid nowrap → "…", di tempat lain tetap membungkus) */
 .nama-berkas .tampil-nama{display:inline-flex;align-items:center;gap:4px;max-width:100%;min-width:0;vertical-align:bottom}
 .nama-berkas .ikon-nama{flex:none}
@@ -261,7 +277,7 @@ a{text-decoration:none;color:inherit}
 .btn{display:inline-flex;align-items:center;gap:7px;padding:10px 17px;border-radius:10px;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:filter .15s,background-color .15s,border-color .15s}
 .btn:hover:not(:disabled){filter:brightness(1.08)}
 .btn:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
-.btn:disabled{background:var(--line)!important;color:var(--faint)!important;box-shadow:none!important;cursor:not-allowed!important}
+.btn:disabled{background:var(--btn-dis-bg)!important;color:var(--btn-dis-ink)!important;box-shadow:none!important;cursor:not-allowed!important}
 .btn-sm{padding:7px 13px;font-size:12px}
 .btn-primary{background:linear-gradient(135deg,var(--accent-a),var(--accent-b));color:#fff;box-shadow:0 3px 10px rgba(59,130,246,.32)}
 .btn-navy{background:var(--navy);color:#fff}
@@ -316,7 +332,7 @@ tr.clickable:hover{background:var(--blue-soft)}
 .tp-nav{display:flex;align-items:center;gap:4px}
 .tp-nav button{width:27px;height:27px;border:1.5px solid var(--line);background:var(--white);border-radius:7px;color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;padding:0}
 .tp-nav button:hover:not(:disabled){background:var(--ro-bg)}
-.tp-nav button:disabled{opacity:.4;cursor:not-allowed}
+.tp-nav button:disabled{opacity:max(.4,var(--op-dis-min));cursor:not-allowed}
 .tp-nav .tp-page{padding:0 6px;font-weight:600;color:var(--ink);white-space:nowrap}
 
 /* indikator kuota storage (RF-10c) */
@@ -404,7 +420,7 @@ tr.clickable:hover{background:var(--blue-soft)}
 .pills{display:flex;gap:7px;flex-wrap:wrap}
 .pill{padding:7px 13px;border:1.5px solid var(--line);border-radius:10px;font-size:12px;background:var(--white);font-weight:500;cursor:pointer}
 .pill.on{background:linear-gradient(135deg,var(--accent-a),var(--accent-b));color:#fff;border-color:transparent}
-.pill.locked{background:var(--bg);color:var(--faint);cursor:not-allowed;opacity:.6}
+.pill.locked{background:var(--bg);color:var(--faint);cursor:not-allowed;opacity:max(.6,var(--op-min))}
 .locked-note{font-size:11.5px;color:var(--muted);margin-top:6px}
 
 /* blok kegiatan (isian kegiatan) */
@@ -477,7 +493,7 @@ tr.clickable:hover{background:var(--blue-soft)}
 /* header tabel yang bisa diurutkan */
 th.th-sort{cursor:pointer;user-select:none}
 th.th-sort:hover{color:var(--blue-600)}
-th.th-sort .th-arrow{display:inline-block;margin-left:4px;font-size:11px;opacity:.55}
+th.th-sort .th-arrow{display:inline-block;margin-left:4px;font-size:11px;opacity:max(.55,var(--op-min))}
 th.th-sort:hover .th-arrow{opacity:.85}
 th.th-sort.active .th-arrow{opacity:1;color:var(--blue-600);font-weight:700}
 
@@ -493,7 +509,7 @@ th.th-sort.active .th-arrow{opacity:1;color:var(--blue-600);font-weight:700}
 .page-head-group .subtabs{position:static;background:none;padding-top:0}
 .subtab{display:inline-flex;align-items:center;gap:7px;padding:9px 15px;border-radius:10px;border:1.5px solid var(--line);background:var(--white);font-size:12.5px;font-weight:600;color:var(--muted);cursor:pointer}
 .subtab.on{background:linear-gradient(135deg,var(--accent-a),var(--accent-b));color:#fff;border-color:transparent}
-.subtab.disabled{opacity:.5;cursor:not-allowed}
+.subtab.disabled{opacity:max(.5,var(--op-dis-min));cursor:not-allowed}
 
 /* sel penanggung jawab (tab Penugasan IKU) — chip beserta satu dropdown ramping
    untuk menambah PJ manual, dipilih langsung tanpa panel/tombol terpisah supaya
@@ -521,7 +537,7 @@ th.th-sort.active .th-arrow{opacity:1;color:var(--blue-600);font-weight:700}
 .chip-add{padding:5px 10px;border:1.5px dashed var(--line);border-radius:20px;font-size:11.5px;font-weight:600;color:var(--muted);background:var(--white);cursor:pointer;transition:.15s}
 .chip-add:hover{border-color:var(--blue);color:var(--blue-600);background:var(--blue-soft)}
 .chip-via{font-size:10px;font-weight:600;color:var(--faint);margin-left:1px}
-.chip-x{cursor:pointer;font-weight:700;opacity:.55;transition:.15s;margin-left:1px}
+.chip-x{cursor:pointer;font-weight:700;opacity:max(.55,var(--op-min));transition:.15s;margin-left:1px}
 .chip-x:hover{opacity:1;color:var(--red)}
 
 /* struktur folder — tingkat & kategori */
@@ -530,7 +546,7 @@ th.th-sort.active .th-arrow{opacity:1;color:var(--blue-600);font-weight:700}
 .fl-name{flex:1;font-weight:600;font-size:12.5px}
 .fl-move{display:flex;gap:4px}
 .fl-move span,.fl-move button{width:26px;height:26px;border:1.5px solid var(--line);background:var(--white);border-radius:7px;display:flex;align-items:center;justify-content:center;color:var(--muted);cursor:pointer;font:inherit;padding:0}
-.fl-move button:disabled{opacity:.4;cursor:not-allowed}
+.fl-move button:disabled{opacity:max(.4,var(--op-dis-min));cursor:not-allowed}
 .catwrap{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:2px}
 .catchip{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border-radius:10px;font-size:12px;font-weight:600;background:var(--teal-soft);color:var(--teal);border:1px solid var(--teal-line)}
 .catchip .lock{font-size:8.5px;font-weight:700;text-transform:uppercase;color:var(--muted);background:var(--white);border:1px solid var(--line);padding:1px 6px;border-radius:20px}

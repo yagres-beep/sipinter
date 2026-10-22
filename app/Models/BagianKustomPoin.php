@@ -23,10 +23,18 @@ class BagianKustomPoin extends Model
         'iku_id',
         'periode_id',
         'teks',
+        'nilai_kolom',
         'status_verifikasi',
         'catatan',
         'catatan_bukti_dihapus',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'nilai_kolom' => 'array',
+        ];
+    }
 
     public function bagianKustom(): BelongsTo
     {

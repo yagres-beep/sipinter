@@ -1406,6 +1406,7 @@ class PengisianKegiatan extends Component
         return [
             'id' => null,
             'teks' => '',
+            'kolom' => [],
             'bukti' => [],
             'existing_bukti' => [],
             'catatan_bukti_dihapus' => null,
@@ -1413,14 +1414,24 @@ class PengisianKegiatan extends Component
     }
 
     /**
-     * Daftar bagian kustom aktif — dipakai untuk merender bagian tambahan di form
-     * (mis. Manajemen Risiko) dan untuk validasi/penyimpanannya.
+     * Daftar bagian kustom aktif yang diisi Ketua Tim — dipakai untuk merender bagian
+     * tambahan di form (mis. Manajemen Risiko) dan untuk validasi/penyimpanannya.
+     * Bagian yang diisi Tim SAKIP/Kepala ada di halaman IsianBagianKustom.
      *
      * @return Collection<int, BagianKustom>
      */
     protected function bagianKustomAktif()
     {
-        return BagianKustom::daftarAktif();
+        return BagianKustom::daftarUntuk(BagianKustom::PERAN_KETUA_TIM, \App\Support\MenuBagianKustom::PENGISIAN);
+    }
+
+    /**
+     * Blok poin terisi bila uraian ATAU salah satu kolom tambahan sudah diisi.
+     */
+    protected function blokBagianKustomTerisi(array $blok): bool
+    {
+        return filled(trim((string) ($blok['teks'] ?? '')))
+            || collect($blok['kolom'] ?? [])->contains(fn ($v) => filled(trim((string) $v)));
     }
 
     /**
@@ -3349,6 +3360,7 @@ class PengisianKegiatan extends Component
             $this->bagianKustomBlocks[$bagian->id] = $daftar->map(fn (BagianKustomPoin $poin) => [
                 'id' => $poin->id,
                 'teks' => $poin->teks,
+                'kolom' => collect($bagian->kolomList())->mapWithKeys(fn ($k) => [$k['kunci'] => (string) ($poin->nilai_kolom[$k['kunci']] ?? '')])->all(),
                 'bukti' => [],
                 'existing_bukti' => $poin->berkas->map(fn (Berkas $b) => $this->maskBerkas([
                     'id' => $b->id,
@@ -4109,6 +4121,7 @@ class PengisianKegiatan extends Component
         // aturan blocks.*.bukti untuk Kegiatan di atas.
         foreach ($this->bagianKustomAktif() as $bagian) {
             $rules["bagianKustomBlocks.{$bagian->id}.*.teks"] = ['nullable', 'string'];
+            $rules["bagianKustomBlocks.{$bagian->id}.*.kolom.*"] = ['nullable', 'string', 'max:500'];
 
             foreach ($this->bagianKustomBlocks[$bagian->id] ?? [] as $i => $blok) {
                 $adaBuktiLama = ! empty($blok['existing_bukti']);
@@ -4314,12 +4327,36 @@ class PengisianKegiatan extends Component
             $bulanKeSekarang = $this->bulanKeDari($this->bulan);
 
             foreach ($this->bagianKustomAktif() as $bagian) {
+                // Poin yang terisi (uraian atau kolom) wajib punya uraian, kolom wajib,
+                // dan nilai pilihan yang benar-benar ada di daftar opsinya.
+                foreach ($this->bagianKustomBlocks[$bagian->id] ?? [] as $i => $blok) {
+                    if (! $this->blokBagianKustomTerisi($blok)) {
+                        continue;
+                    }
+
+                    if (blank(trim((string) ($blok['teks'] ?? '')))) {
+                        $validator->errors()->add("bagianKustomBlocks.{$bagian->id}.{$i}.teks", 'Isi '.mb_strtolower($bagian->labelUraianEfektif()).' untuk poin ini.');
+                    }
+
+                    foreach ($bagian->kolomList() as $kolom) {
+                        $nilai = trim((string) ($blok['kolom'][$kolom['kunci']] ?? ''));
+
+                        if ($nilai === '' && $kolom['wajib']) {
+                            $validator->errors()->add("bagianKustomBlocks.{$bagian->id}.{$i}.kolom.{$kolom['kunci']}", "Kolom \"{$kolom['label']}\" wajib diisi.");
+                        } elseif ($nilai !== '' && $kolom['tipe'] === 'pilihan' && ! in_array($nilai, $kolom['opsi'], true)) {
+                            $validator->errors()->add("bagianKustomBlocks.{$bagian->id}.{$i}.kolom.{$kolom['kunci']}", "Pilih salah satu opsi untuk \"{$kolom['label']}\".");
+                        } elseif ($nilai !== '' && $kolom['tipe'] === 'angka' && ! is_numeric(str_replace(',', '.', $nilai))) {
+                            $validator->errors()->add("bagianKustomBlocks.{$bagian->id}.{$i}.kolom.{$kolom['kunci']}", "\"{$kolom['label']}\" harus berupa angka.");
+                        }
+                    }
+                }
+
                 if (! $bagian->wajibDiisiPada($bulanKeSekarang)) {
                     continue;
                 }
 
                 $adaTerisi = collect($this->bagianKustomBlocks[$bagian->id] ?? [])
-                    ->contains(fn ($blok) => filled($blok['teks'] ?? null));
+                    ->contains(fn ($blok) => $this->blokBagianKustomTerisi($blok));
 
                 if (! $adaTerisi) {
                     $pesanWaktu = $bagian->frekuensi_wajib === 'setiap_bulan'
@@ -4999,9 +5036,11 @@ class PengisianKegiatan extends Component
         // tidak duplikat, mengikuti pola yang sama dengan Kendala & Solusi di atas.
         foreach ($this->bagianKustomAktif() as $bagian) {
             foreach ($this->bagianKustomBlocks[$bagian->id] ?? [] as $i => $blok) {
-                if (trim($blok['teks'] ?? '') === '') {
+                if (! $this->blokBagianKustomTerisi($blok)) {
                     continue;
                 }
+
+                $nilaiKolom = $bagian->bersihkanNilaiKolom($blok['kolom'] ?? []);
 
                 if ($blok['id'] ?? null) {
                     $poin = BagianKustomPoin::whereKey($blok['id'])
@@ -5016,13 +5055,14 @@ class PengisianKegiatan extends Component
 
                     // status_verifikasi & catatan SENGAJA TIDAK direset — sama seperti
                     // Kendala & Solusi/Evaluasi RTL di atas, lihat penjelasan di sana.
-                    $poin->update(['teks' => $blok['teks']]);
+                    $poin->update(['teks' => $blok['teks'], 'nilai_kolom' => $nilaiKolom]);
                 } else {
                     $poin = BagianKustomPoin::create([
                         'bagian_kustom_id' => $bagian->id,
                         'iku_id' => $this->iku_id,
                         'periode_id' => $periode->id,
                         'teks' => $blok['teks'],
+                        'nilai_kolom' => $nilaiKolom,
                     ]);
                     $this->bagianKustomBlocks[$bagian->id][$i]['id'] = $poin->id;
                 }
