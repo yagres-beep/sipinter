@@ -11,12 +11,16 @@
         <div class="info red" style="margin-bottom:14px">⚠️ {{ session('error') }}</div>
     @endif
 
+    {{-- .info memakai flex: isi teks dibungkus satu <div> supaya tidak terpecah jadi kolom. --}}
     <div class="info">
-        ℹ️ Backup berisi DATA SAJA (bukan berkas bukti dukung — berkas sudah tersimpan di Google Drive).
-        Setelah dibuat, backup otomatis diarsipkan juga ke Google Drive (folder "Backup Database" di akun
-        storage aktif) supaya tetap bisa diunduh walau server di-deploy ulang.
-        <br>🕒 Backup juga dibuat <b>otomatis tiap minggu</b> — sistem membuat backup baru bila sudah 7 hari
-        tanpa backup yang berhasil (backup manual di bawah ikut dihitung).
+        <span>ℹ️</span>
+        <div>
+            Backup berisi DATA SAJA (bukan berkas bukti dukung — berkas sudah tersimpan di Google Drive).
+            Setelah dibuat, backup otomatis diarsipkan juga ke Google Drive (folder "Backup Database" di akun
+            storage aktif) supaya tetap bisa diunduh walau server di-deploy ulang.
+            <div style="margin-top:6px">🕒 Backup juga dibuat <b>otomatis tiap minggu</b> — sistem membuat backup
+            baru bila sudah 7 hari tanpa backup yang berhasil (backup manual di bawah ikut dihitung).</div>
+        </div>
     </div>
 
     <div class="card">
