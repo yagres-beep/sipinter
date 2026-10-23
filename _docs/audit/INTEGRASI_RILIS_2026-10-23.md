@@ -26,7 +26,7 @@ Akses produksi hanya baca-saja (`SELECT` dalam `BEGIN TRANSACTION READ ONLY … 
 | Hal | Nilai |
 |---|---|
 | Cabang | `integrasi/rilis-bagian-kustom` (lokal, **tanpa upstream** — tidak melacak `origin/main`) |
-| Dasar | `origin/main` `685d7ee` (kode produksi), seluruh 50 commit produksi utuh |
+| Dasar | `origin/main` `685d7ee` (kode produksi), seluruh 50 commit produksi utuh; ditambah `b2c3d40` (scheduler sebagai www-data, kotak info Backup) yang di-push ke `main` **saat integrasi berjalan** (23 Okt 09:40) — digabung di `348592e` tanpa konflik. Diperiksa ulang setelah test akhir: cabang tidak tertinggal dari `origin/main`. |
 | Worktree | `D:\Latsar\sipinter-integrasi` (folder kerja utama `D:\Latsar\sipinter` tidak diubah) |
 | Ref cadangan dipertahankan | `refs/cadangan/pagi-20261022` (`cc4d049`), `refs/cadangan/sebelum-finalisasi-20261022` (`6420c4a`) |
 | Ref cadangan baru | `refs/cadangan/snapshot-integrasi-20261022` (`8527702`, potret perubahan belum-commit cabang kerja, dibuat lewat index sementara), `refs/cadangan/integrasi-tree-akhir-20261023` (tree yang diuji sebelum dipecah) |
@@ -87,7 +87,9 @@ perubahan potret dipindahkan manual dan disesuaikan ke alur produksi.
 | `67ca217` | Rincian N: sumber rincian, rincian tambahan n, triwulan mulai berlaku | `RincianN`, Target Tahunan, migrasi `2026_10_21_000001`, hunk Rincian N di Verifikasi & Notula | SQLite 720 lulus (worktree terpisah) |
 | `32d460a` | Format angka kolom Bagian Kustom: …, pembulatan eksak | `FormatAngkaKolom` + unit test (fungsi murni, belum disambungkan) | SQLite 733 lulus (worktree terpisah) |
 | `50b2845` | Bagian Kustom & Isian Kegiatan: otorisasi, bentrok, log aktivitas, Drive | sisanya (lihat pesan commit) | SQLite 867, PostgreSQL 867 |
-| (commit ini) | Dokumen audit & `.gitignore` | `_docs/audit/*.md`, `.gitignore` (abaikan `.env.*` & pengaturan lokal `.claude/`) | — |
+| `8b0b4d1` | Dokumen audit & `.gitignore` | `_docs/audit/*.md`, `.gitignore` (abaikan `.env.*` & pengaturan lokal `.claude/`) | — |
+| `348592e` | Gabungkan origin/main `b2c3d40` | `docker/supervisord.conf`, Blade Backup (produksi) | SQLite 867, PostgreSQL 867 (HEAD akhir) |
+| (commit ini) | Laporan: catat `b2c3d40` | dokumen saja | — |
 
 Alasan pengelompokan `50b2845`: konfigurasi, otorisasi, bentrok, log, dan Drive berada di hunk yang sama
 dan saling memanggil di `PengisianKegiatan`, `IsianBagianKustom`, `BagianKustomManager`, `VerifikasiCapaian`,
@@ -101,8 +103,8 @@ dan saling memanggil di `PengisianKegiatan`, `IsianBagianKustom`, `BagianKustomM
 | Tahap 1 (`8f443c7`), SQLite | 710 lulus, 0 gagal, 0 dilewati |
 | Commit `67ca217`, SQLite | 720 lulus, 0 gagal, 0 dilewati |
 | Commit `32d460a`, SQLite | 733 lulus, 0 gagal, 0 dilewati |
-| **Akhir (kode `50b2845`), SQLite in-memory** | **867 lulus, 0 gagal, 0 dilewati, 3.740 asersi** |
-| **Akhir, PostgreSQL 18.3 lokal** (klaster pribadi 127.0.0.1:55432, `sipinter_uji`) | **867 lulus, 0 gagal, 0 dilewati, 4.057 asersi** |
+| **Akhir (`50b2845`, diulang di HEAD `348592e`), SQLite in-memory** | **867 lulus, 0 gagal, 0 dilewati, 3.740 asersi** |
+| **Akhir (`50b2845`, diulang di HEAD `348592e`), PostgreSQL 18.3 lokal** (klaster pribadi 127.0.0.1:55432, `sipinter_uji`) | **867 lulus, 0 gagal, 0 dilewati, 4.057 asersi** |
 
 Cakupan butir §E (semua di dalam suite di atas):
 
