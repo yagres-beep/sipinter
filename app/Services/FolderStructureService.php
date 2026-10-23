@@ -507,7 +507,11 @@ class FolderStructureService
         $namaBerkas = self::namaUnik($namaDasar, $namaSudahAda, $ekstensi);
         $this->tandaiNamaDipakai($tujuanFolderId, $namaBerkas);
 
-        $hasil = $this->drive->uploadFile($localPath, $namaBerkas, $tujuanFolderId, $mimeType, $kodeBerkas ? [self::PENANDA_KODE => $kodeBerkas] : []);
+        // PENANDA_APLIKASI (nilai tetap) memungkinkan pemeriksa konsistensi mendaftar
+        // semua bukti bertanda (GoogleDriveService::daftarBerkasBertanda()).
+        $hasil = $this->drive->uploadFile($localPath, $namaBerkas, $tujuanFolderId, $mimeType, $kodeBerkas
+            ? [self::PENANDA_KODE => $kodeBerkas, GoogleDriveService::PENANDA_APLIKASI => '1']
+            : []);
 
         $akun = StorageAccount::aktif();
         $akun?->tambahKuotaTerpakai($hasil['size_bytes']);

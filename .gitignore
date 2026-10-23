@@ -3,6 +3,12 @@
 .env
 .env.backup
 .env.production
+# Varian .env lain (mis. .env.testing, .env.uji) bisa berisi kredensial; hanya contoh yang disimpan.
+.env.*
+!.env.example
+# Pengaturan Claude Code milik mesin lokal (izin perintah & path lokal) — bukan bagian proyek.
+/.claude/settings.local.json
+/.claude/settings.json
 .phpactor.json
 .phpunit.result.cache
 /.fleet

@@ -10,6 +10,7 @@ use App\Models\PengaturanCapaian;
 use App\Models\Periode;
 use App\Models\RincianN;
 use App\Support\RumusMarkup;
+use App\Support\TemplateBagianKustom;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
@@ -714,12 +715,27 @@ class NotulaBagian1DocxService
         $xml = '';
 
         foreach ($bagianKustomPerBagian as $bagian) {
+            // Judul & format baris diatur Tim SAKIP di Data Master (lihat BagianKustom::
+            // judulNotulaEfektif() & formatNotulaEfektif()), bukan ditulis di sini.
             $xml .= '<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">'
-                .htmlspecialchars($bagian->nama, ENT_QUOTES | ENT_XML1)
+                .htmlspecialchars($bagian->judulNotulaEfektif(), ENT_QUOTES | ENT_XML1)
                 .'</w:t></w:r></w:p>';
 
             foreach ($bagian->poin as $poin) {
-                $teks = ($poin->masterIku->kode ?? '').': '.$poin->teks;
+                $konteks = TemplateBagianKustom::konteks(
+                    $poin->masterIku->kode ?? null,
+                    $poin->masterIku->indikator ?? null,
+                    $poin->teks,
+                    $bagian->nama,
+                    $poin->periode?->tahun,
+                    $poin->periode?->triwulan,
+                    $poin->periode?->bulan,
+                    // Format angka (desimal, pemisah, satuan) diatur per kolom; kolom
+                    // tanpa pengaturan format tercetak apa adanya seperti sebelumnya.
+                    $bagian->nilaiKolomTampil($poin->nilai_kolom),
+                );
+
+                $teks = TemplateBagianKustom::render($bagian->formatNotulaEfektif(), $konteks);
                 $this->adaDaftarButir = true;
                 $xml .= '<w:p>'.$this->pPrDaftar('', self::NUM_ID_BUTIR).'<w:r><w:t xml:space="preserve">'
                     .htmlspecialchars($teks, ENT_QUOTES | ENT_XML1)
@@ -905,7 +921,7 @@ class NotulaBagian1DocxService
         $this->set($sub, 'batas_waktu_rtl_berikutnya', $rtlBerikutnyaIku->isNotEmpty()
             ? $this->akhirTriwulan($data['tahunTwBerikutnya'], $data['twBerikutnya'])->translatedFormat('F Y')
             : null);
-        $this->setTautan($sub, 'bukti_rtl_sebelumnya',$rtlSebelumnyaIku->isNotEmpty() ? $linkFolderTwSebelumnya : null);
+        $this->setTautan($sub, 'bukti_rtl_sebelumnya', $rtlSebelumnyaIku->isNotEmpty() ? $linkFolderTwSebelumnya : null);
         $this->setBerdaftar($sub, 'penjelasan_lainnya', $capaian?->catatan);
 
         return $this->getMainPart($sub);
@@ -1054,13 +1070,21 @@ class NotulaBagian1DocxService
      */
     private function rincianNMencakupTeks(MasterIku $iku, Periode $periode): ?string
     {
-        $semua = RincianN::where('iku_id', $iku->id)->where('tahun', $periode->tahun)->orderBy('id')->get();
+        $semua = RincianN::milik($iku->id, (int) $periode->tahun)->orderBy('id')->get();
 
-        if ($semua->isEmpty()) {
+        // N = rincian target yang belum dilepas; n = rincian sumber apa pun
+        // (termasuk rincian tambahan Verifikasi) yang terealisasi s.d. TW ini dan
+        // tidak sebelum triwulan mulai berlakunya.
+        $penyebut = $semua->filter(fn (RincianN $r) => ! $r->isTambahan() && ! $r->isDilepas());
+
+        if ($penyebut->isEmpty()) {
             return null;
         }
 
-        $terealisasi = $semua->filter(fn (RincianN $r) => $r->triwulan_realisasi !== null && $r->triwulan_realisasi <= $periode->triwulan);
+        $tw = (int) $periode->triwulan;
+        $terealisasi = $semua->filter(fn (RincianN $r) => $r->triwulan_realisasi !== null
+            && $r->triwulan_realisasi <= $tw
+            && $r->triwulan_realisasi >= $r->triwulan_mulai_berlaku);
 
         $daftar = fn (Collection $baris) => $baris->map(fn (RincianN $r) => '• '.$r->uraian)->implode("\n");
 
@@ -1068,7 +1092,7 @@ class NotulaBagian1DocxService
             ? "n = {$terealisasi->count()} mencakup:\n".$daftar($terealisasi)."\n\n"
             : '';
 
-        return "{$blokN}N = {$semua->count()} mencakup:\n".$daftar($semua);
+        return "{$blokN}N = {$penyebut->count()} mencakup:\n".$daftar($penyebut);
     }
 
     /**

@@ -20,7 +20,7 @@
                             @if ($notula->status === \App\Models\Notula::STATUS_DISETUJUI && $notula->pdf_final)
                                 <a href="{{ route('notula.unduh-final', $notula) }}" class="btn btn-primary btn-sm">Buka →</a>
                             @else
-                                <span class="btn btn-ghost btn-sm" style="opacity:.5;cursor:not-allowed" title="Belum disetujui Kepala">Belum tersedia</span>
+                                <span class="btn btn-ghost btn-sm" style="opacity:max(.5,var(--op-dis-min));cursor:not-allowed" title="Belum disetujui Kepala">Belum tersedia</span>
                             @endif
                         </td>
                     </tr>

@@ -147,7 +147,7 @@
             @foreach ($progresTriwulan as $tw => $data)
                 <div style="margin-bottom:6px">
                     <button type="button" @click="terbukaTw = (terbukaTw === {{ $tw }} ? null : {{ $tw }})"
-                        style="display:block;width:100%;text-align:left;background:none;border:none;padding:8px 0;cursor:pointer;font:inherit;color:inherit;{{ $data['total'] === 0 ? 'cursor:not-allowed;opacity:.6' : '' }}"
+                        style="display:block;width:100%;text-align:left;background:none;border:none;padding:8px 0;cursor:pointer;font:inherit;color:inherit;{{ $data['total'] === 0 ? 'cursor:not-allowed;opacity:max(.6,var(--op-dis-min))' : '' }}"
                         @disabled($data['total'] === 0)>
                         <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px">
                             <span style="font-weight:600">Triwulan {{ ['I', 'II', 'III', 'IV'][$tw - 1] }} <span style="color:var(--faint)" x-text="terbukaTw === {{ $tw }} ? '▲' : '▼'"></span></span>

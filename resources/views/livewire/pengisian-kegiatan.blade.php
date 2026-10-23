@@ -120,7 +120,23 @@
         </div>
     @endif
 
-    @if ($errors->any())
+    @if ($bentrok !== [])
+        <div class="info red" style="margin-bottom:14px" wire:key="peringatan-bentrok">
+            ⚠️ <b>Belum tersimpan — data ini sudah diubah pengguna lain sejak halaman Anda dimuat.</b>
+            Tidak ada isian yang tersimpan (seluruh penyimpanan dibatalkan supaya perubahan orang lain tidak tertimpa). Isian Anda masih di layar.
+            <ul style="margin:6px 0 0 18px;padding:0">
+                @foreach (collect($bentrok)->flatten() as $labelBentrok)
+                    <li>{{ $labelBentrok }}</li>
+                @endforeach
+            </ul>
+            <div style="margin-top:8px">Salin perubahan Anda pada bagian di atas bila perlu, lalu muat data terbaru bagian tersebut (isian baru yang belum tersimpan tetap dipertahankan) dan simpan kembali.</div>
+            <div class="btn-row" style="margin-top:8px">
+                <button type="button" class="btn btn-primary btn-sm" wire:click="muatUlangBagianBentrok" wire:loading.attr="disabled" wire:target="muatUlangBagianBentrok">↻ Muat data terbaru</button>
+            </div>
+        </div>
+    @endif
+
+    @if ($errors->any() && ! ($errors->count() === 1 && $errors->has('bentrok')))
         <div class="info red">
             ⚠️ Belum bisa diajukan — {{ $errors->count() }} hal perlu dilengkapi:
             <ul style="margin:6px 0 0 18px;padding:0">
@@ -332,7 +348,7 @@
                     $tahapanGrup = $blokGrup->flatMap(fn ($b) => $b['jenis'] === 'survei_sensus' ? $this->tahapanDipilih($b) : [])->unique()->values()->all();
                     $jenisGrup = $tahapanGrup !== [] ? 'survei_sensus' : 'bukan_survei_sensus';
                 @endphp
-                <div class="keg keg-induk" wire:key="induk-{{ $i }}-{{ $block['id'] ?? 'baru' }}" @if ($grupTerkunci) style="opacity:.8" @endif>
+                <div class="keg keg-induk" wire:key="induk-{{ $i }}-{{ $block['id'] ?? 'baru' }}" @if ($grupTerkunci) style="opacity:max(.8,var(--op-min))" @endif>
                     <div class="keg-head">
                         <span class="t">Kegiatan {{ $nomorBlok }}</span>
                         @if ($grupTerkunci && $statusGrup->count() === 1)
@@ -434,7 +450,7 @@
                         </div>{{-- /.field Bukti Capaian --}}
                 @endif
             @elseif ($terkunci)
-                <div class="{{ $dalamGrup ? 'keg-tahapan' : 'keg' }}" wire:key="block-{{ $i }}" style="opacity:.8">
+                <div class="{{ $dalamGrup ? 'keg-tahapan' : 'keg' }}" wire:key="block-{{ $i }}" style="opacity:max(.8,var(--op-min))">
                     <div class="keg-head">
                         @if ($dalamGrup)
                             <span class="t">
@@ -1485,6 +1501,11 @@
                                 @foreach ($entriTriwulan as $entri)
                                     <div style="padding:8px 0;border-bottom:1px solid var(--line2);font-size:13px">
                                         <div>{{ $entri->teks }}</div>
+                                        @foreach ($bagian->kolomList() as $kolom)
+                                            @if (filled($entri->nilai_kolom[$kolom['kunci']] ?? null))
+                                                <div style="font-size:12px;color:var(--muted)">{{ $kolom['label'] }}: {{ \App\Models\BagianKustom::nilaiTampil($kolom, $entri->nilai_kolom[$kolom['kunci']]) }}</div>
+                                            @endif
+                                        @endforeach
                                         @if ($entri->berkas->isNotEmpty())
                                             <div class="filechip-grid">
                                                 @foreach ($entri->berkas as $file)
@@ -1528,13 +1549,37 @@
                         @endif
 
                         <div class="field">
-                            <label>Uraian <span class="req">*</span></label>
+                            <label>{{ $bagian->labelUraianEfektif() }} <span class="req">*</span></label>
                             <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model.live.blur="bagianKustomBlocks.{{ $bagian->id }}.{{ $i }}.teks"
                                 placeholder="Uraikan poin {{ $bagian->nama }} ini..."></textarea>
                             @error("bagianKustomBlocks.{$bagian->id}.{$i}.teks")
                                 <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                             @enderror
                         </div>
+
+                        @foreach ($bagian->kolomBerlaku($tahun, \App\Models\BagianKustom::triwulanDariBulan($bulan)) as $kolom)
+                            <div class="field">
+                                <label>{{ $kolom['label'] }}
+                                    @if ($kolom['wajib'])<span class="req">*</span>@else<span style="color:var(--muted);font-weight:500">opsional</span>@endif
+                                    @include('livewire.partials._petunjuk-kolom-angka', ['kolom' => $kolom])
+                                </label>
+                                @if ($kolom['tipe'] === 'pilihan')
+                                    <select class="inp filled" wire:model.blur="bagianKustomBlocks.{{ $bagian->id }}.{{ $i }}.kolom.{{ $kolom['kunci'] }}">
+                                        <option value="">— pilih —</option>
+                                        @foreach ($kolom['opsi'] as $opsi)
+                                            <option value="{{ $opsi }}">{{ $opsi }}</option>
+                                        @endforeach
+                                    </select>
+                                @elseif ($kolom['tipe'] === 'angka')
+                                    <input type="text" inputmode="decimal" class="inp filled" wire:model.blur="bagianKustomBlocks.{{ $bagian->id }}.{{ $i }}.kolom.{{ $kolom['kunci'] }}" placeholder="Angka">
+                                @else
+                                    <input type="text" class="inp filled" wire:model.blur="bagianKustomBlocks.{{ $bagian->id }}.{{ $i }}.kolom.{{ $kolom['kunci'] }}">
+                                @endif
+                                @error("bagianKustomBlocks.{$bagian->id}.{$i}.kolom.{$kolom['kunci']}")
+                                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                                @enderror
+                            </div>
+                        @endforeach
 
                         <div class="field" style="margin-bottom:0">
                             <label>Bukti Dukung (PDF)
@@ -1637,7 +1682,7 @@
                     <li>{{ $item }}</li>
                 @endforeach
             </ul>
-            <div style="margin-top:6px;opacity:.85">Daftar ini diperbarui otomatis setiap kali isian berubah; tombol "Ajukan ke Tim SAKIP" aktif begitu daftar ini kosong.</div>
+            <div style="margin-top:6px;opacity:max(.85,var(--op-min))">Daftar ini diperbarui otomatis setiap kali isian berubah; tombol "Ajukan ke Tim SAKIP" aktif begitu daftar ini kosong.</div>
         </div>
     @else
         <div style="color:var(--teal);font-size:11.5px;margin-top:8px">✅ Seluruh isian wajib sudah lengkap — siap diajukan ke Tim SAKIP.</div>

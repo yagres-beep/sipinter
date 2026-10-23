@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Support\MenuBagianKustom;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -22,11 +24,63 @@ class BagianKustomPoin extends Model
         'bagian_kustom_id',
         'iku_id',
         'periode_id',
+        'menu',
+        'peran_pengisi',
+        'diisi_oleh',
+        'diubah_oleh',
         'teks',
+        'nilai_kolom',
         'status_verifikasi',
         'catatan',
         'catatan_bukti_dihapus',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'nilai_kolom' => 'array',
+        ];
+    }
+
+    /**
+     * Poin isian Ketua Tim di menu Isian Kegiatan. Poin lama tanpa konteks (menu
+     * NULL) ikut di sini: sebelum fitur peran & penempatan menu, hanya jalur Isian
+     * Kegiatan yang bisa membuat poin.
+     */
+    public function scopeKonteksIsianKegiatan(Builder $query): Builder
+    {
+        return $query->where(fn (Builder $q) => $q
+            ->where('menu', MenuBagianKustom::PENGISIAN)
+            ->orWhereNull('menu'));
+    }
+
+    /**
+     * Poin milik satu konteks pengisian: menu + peran. Pengguna dengan peran yang
+     * sama di menu yang sama berbagi data yang sama (data tim, bukan data pribadi).
+     */
+    public function scopeKonteks(Builder $query, string $menu, string $peran): Builder
+    {
+        if ($menu === MenuBagianKustom::PENGISIAN) {
+            return $query->konteksIsianKegiatan();
+        }
+
+        return $query->where('menu', $menu)->where('peran_pengisi', $peran);
+    }
+
+    /**
+     * Sidik jari isi poin saat dimuat ke layar — dipakai untuk mendeteksi perubahan
+     * oleh pengguna lain sebelum menimpa atau menghapus poin ini.
+     */
+    public function sidikJari(): string
+    {
+        return sha1(json_encode([
+            (int) $this->iku_id,
+            (string) $this->teks,
+            $this->nilai_kolom ?? [],
+            (string) $this->status_verifikasi,
+            optional($this->updated_at)->format('Y-m-d H:i:s.u'),
+        ]));
+    }
 
     public function bagianKustom(): BelongsTo
     {

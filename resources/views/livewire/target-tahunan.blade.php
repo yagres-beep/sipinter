@@ -81,10 +81,16 @@
                                         @foreach (($rincianN[$iku->id] ?? []) as $kunci => $baris)
                                             <div wire:key="rincian-n-{{ $iku->id }}-{{ $kunci }}" style="display:flex;gap:4px;align-items:center">
                                                 <input type="text" class="inp filled" style="flex:1;font-size:11.5px;padding:4px 6px" placeholder="Uraian item" wire:model="rincianN.{{ $iku->id }}.{{ $kunci }}.uraian">
-                                                <button type="button" class="btn btn-red btn-sm" style="padding:2px 6px" wire:click="hapusN({{ $iku->id }}, '{{ $kunci }}')" title="Hapus item">✕</button>
+                                                @if (! empty($baris['terealisasi']))
+                                                    <span class="badge b-approve" style="font-size:9.5px" title="Sudah terealisasi. Bila dihapus dari N, realisasinya tetap tercatat di n (tidak ikut terhapus).">✓ terealisasi</span>
+                                                @endif
+                                                <button type="button" class="btn btn-red btn-sm" style="padding:2px 6px" wire:click="hapusN({{ $iku->id }}, '{{ $kunci }}')" title="{{ ! empty($baris['terealisasi']) ? 'Keluarkan dari N (realisasi tetap tercatat) -- diproses saat Simpan' : 'Hapus item -- diproses saat Simpan' }}">✕</button>
                                             </div>
                                         @endforeach
                                     </div>
+                                    @if (($jumlahTambahan[$iku->id] ?? 0) > 0)
+                                        <div class="muted" style="font-size:10.5px;margin-top:4px" title="Ditambahkan lewat halaman Verifikasi. Tidak dihitung sebagai N dan tidak terpengaruh perubahan di sini.">+ {{ $jumlahTambahan[$iku->id] }} rincian tambahan dari Verifikasi (tidak masuk N)</div>
+                                    @endif
                                     <button type="button" class="btn btn-ghost btn-sm" style="margin-top:4px" wire:click="tambahN({{ $iku->id }})">+ Tambah item</button>
                                     @error("rincianN.{$iku->id}.*.uraian")
                                         <div style="color:var(--red);font-size:10.5px">{{ $message }}</div>
