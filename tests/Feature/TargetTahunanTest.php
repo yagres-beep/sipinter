@@ -225,10 +225,15 @@ class TargetTahunanTest extends TestCase
         ]);
         $n = RincianN::create(['iku_id' => $iku->id, 'tahun' => 2026, 'uraian' => 'Item lama']);
 
-        Livewire::test(TargetTahunan::class)
+        // Penghapusan baru diproses saat Simpan, bukan seketika.
+        $komponen = Livewire::test(TargetTahunan::class)
             ->set('tahun', 2026)
             ->call('hapusN', $iku->id, (string) $n->id)
             ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('rincian_n', ['id' => $n->id]);
+
+        $komponen->call('simpan')->assertHasNoErrors();
 
         $this->assertDatabaseMissing('rincian_n', ['id' => $n->id]);
     }

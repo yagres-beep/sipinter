@@ -1067,13 +1067,21 @@ class NotulaBagian1DocxService
      */
     private function rincianNMencakupTeks(MasterIku $iku, Periode $periode): ?string
     {
-        $semua = RincianN::where('iku_id', $iku->id)->where('tahun', $periode->tahun)->orderBy('id')->get();
+        $semua = RincianN::milik($iku->id, (int) $periode->tahun)->orderBy('id')->get();
 
-        if ($semua->isEmpty()) {
+        // N = rincian target yang belum dilepas; n = rincian sumber apa pun
+        // (termasuk rincian tambahan Verifikasi) yang terealisasi s.d. TW ini dan
+        // tidak sebelum triwulan mulai berlakunya.
+        $penyebut = $semua->filter(fn (RincianN $r) => ! $r->isTambahan() && ! $r->isDilepas());
+
+        if ($penyebut->isEmpty()) {
             return null;
         }
 
-        $terealisasi = $semua->filter(fn (RincianN $r) => $r->triwulan_realisasi !== null && $r->triwulan_realisasi <= $periode->triwulan);
+        $tw = (int) $periode->triwulan;
+        $terealisasi = $semua->filter(fn (RincianN $r) => $r->triwulan_realisasi !== null
+            && $r->triwulan_realisasi <= $tw
+            && $r->triwulan_realisasi >= $r->triwulan_mulai_berlaku);
 
         $daftar = fn (Collection $baris) => $baris->map(fn (RincianN $r) => '• '.$r->uraian)->implode("\n");
 
@@ -1081,7 +1089,7 @@ class NotulaBagian1DocxService
             ? "n = {$terealisasi->count()} mencakup:\n".$daftar($terealisasi)."\n\n"
             : '';
 
-        return "{$blokN}N = {$semua->count()} mencakup:\n".$daftar($semua);
+        return "{$blokN}N = {$penyebut->count()} mencakup:\n".$daftar($penyebut);
     }
 
     /**

@@ -180,6 +180,28 @@
                                         @endif
                                     </div>
                                 @endif
+                                @if ($prefix === 'x_realisasi')
+                                    {{-- Rincian tambahan n: realisasi di luar daftar N. Tidak menambah N
+                                        (penyebut), berlaku mulai TW periode ini, tersimpan saat "Simpan". --}}
+                                    <div style="margin-top:8px;display:flex;flex-direction:column;gap:4px;max-width:320px">
+                                        @foreach ($rincianTambahanBaru as $kunci => $baris)
+                                            <div wire:key="rincian-tambahan-{{ $kunci }}" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+                                                <input type="text" class="inp filled" style="flex:1;min-width:140px;font-size:11.5px;padding:4px 6px" placeholder="Uraian rincian tambahan" wire:model.live.debounce.400ms="rincianTambahanBaru.{{ $kunci }}.uraian">
+                                                <label class="fl-row" style="gap:4px;font-size:11px;font-weight:400" title="Centang bila rincian ini sudah benar-benar terealisasi pada TW {{ ['I', 'II', 'III', 'IV'][$twAktif - 1] }}">
+                                                    <input type="checkbox" wire:model.live="rincianTambahanBaru.{{ $kunci }}.terealisasi"> terealisasi TW {{ ['I', 'II', 'III', 'IV'][$twAktif - 1] }}
+                                                </label>
+                                                <button type="button" class="btn btn-ghost btn-sm" style="padding:2px 6px" wire:click="batalRincianTambahan('{{ $kunci }}')" title="Batalkan baris ini">✕</button>
+                                                @error("rincianTambahanBaru.{$kunci}.uraian")
+                                                    <div style="color:var(--red);font-size:10.5px;width:100%">{{ $message }}</div>
+                                                @enderror
+                                            </div>
+                                        @endforeach
+                                        <div>
+                                            <button type="button" class="btn btn-ghost btn-sm" wire:click="tambahRincianTambahan" title="Realisasi di luar daftar N. Tidak menambah N (penyebut), berlaku mulai TW {{ ['I', 'II', 'III', 'IV'][$twAktif - 1] }}.">+ Rincian tambahan n</button>
+                                        </div>
+                                        <span class="muted" style="font-size:10.5px;font-weight:400">Rincian tambahan tidak menambah N, berlaku mulai TW {{ ['I', 'II', 'III', 'IV'][$twAktif - 1] }}, dan baru menambah n bila sudah terealisasi.</span>
+                                    </div>
+                                @endif
                             </td>
                             @for ($tw = 1; $tw <= 4; $tw++)
                                 <td style="text-align:center{{ $prefix === 'x_realisasi' && $tw <= $twAktif ? ';min-width:190px;text-align:left' : '' }}">
@@ -194,6 +216,8 @@
                                             (bukan carry-forward) memindahkan klaim ke situ. --}}
                                         <div style="max-height:170px;overflow-y:auto;display:flex;flex-direction:column;gap:3px">
                                             @foreach ($this->rincianNBisaDipilih() as $n)
+                                                {{-- rincian tambahan tidak tampil sebelum TW mulai berlakunya --}}
+                                                @continue($tw < $n->triwulan_mulai_berlaku)
                                                 @php
                                                     $dicentang = (bool) ($rincianNPilih[$n->id] ?? false);
                                                     $twItem = ! $editRincianN && $n->triwulan_realisasi === $twAktif
@@ -205,7 +229,10 @@
                                                         ini kolom asal klaimnya sendiri (interaktif, bisa dilepas) --}}
                                                     <label class="fl-row" style="cursor:pointer;gap:6px;font-size:11.5px" title="{{ $n->triwulan_realisasi === null ? 'Belum tercatat -- klik untuk klaim ke TW '.['I', 'II', 'III', 'IV'][$tw - 1].', akan terkunci ke TW ini begitu disimpan' : '' }}">
                                                         <input type="checkbox" {{ $dicentang ? 'checked' : '' }} wire:click="toggleRincianN({{ $n->id }}, {{ $tw }})">
-                                                        <span>{{ $n->uraian }}</span>
+                                                        <span>{{ $n->uraian }}@if ($n->isTambahan()) <span class="muted" style="font-weight:400" title="Rincian tambahan n, tidak masuk N">(tambahan, sejak TW {{ ['I', 'II', 'III', 'IV'][$n->triwulan_mulai_berlaku - 1] }})</span>@endif</span>
+                                                        @if ($tw === $twAktif && $this->rincianTambahanBisaDihapus($n))
+                                                            <button type="button" class="btn btn-ghost btn-sm" style="padding:0 5px;margin-left:auto" wire:click.prevent="hapusRincianTambahan({{ $n->id }})" wire:confirm="Hapus rincian tambahan ini?" title="Hapus rincian tambahan (belum terealisasi)">✕</button>
+                                                        @endif
                                                     </label>
                                                 @elseif ($tw > $twItem)
                                                     {{-- kolom SESUDAH TW asal klaim -- ikut tercentang (kumulatif),
@@ -217,11 +244,11 @@
                                                     </div>
                                                 @endif
                                             @endforeach
-                                            @foreach ($this->rincianNTerkunci() as $n)
+                                            @foreach ($this->rincianNTerkunciTampil() as $n)
                                                 @continue($n->triwulan_realisasi > $tw)
-                                                <div class="muted" style="font-size:11.5px" title="Direalisasikan TW {{ ['I', 'II', 'III', 'IV'][$n->triwulan_realisasi - 1] }}, sudah tersimpan — klik ✏️ Edit Pilihan untuk mengoreksi{{ $n->triwulan_realisasi !== $tw ? ' -- tetap terhitung kumulatif, ikut tampil di sini' : '' }}">✓ {{ $n->uraian }}{{ $n->triwulan_realisasi !== $tw ? ' (sejak TW '.['I', 'II', 'III', 'IV'][$n->triwulan_realisasi - 1].')' : '' }}</div>
+                                                <div class="muted" style="font-size:11.5px" title="Direalisasikan TW {{ ['I', 'II', 'III', 'IV'][$n->triwulan_realisasi - 1] }}, sudah tersimpan{{ $n->isDilepas() ? ' -- sudah dikeluarkan dari N di Target Tahunan, realisasinya tetap tercatat' : ' — klik ✏️ Edit Pilihan untuk mengoreksi' }}{{ $n->triwulan_realisasi !== $tw ? ' -- tetap terhitung kumulatif, ikut tampil di sini' : '' }}">✓ {{ $n->uraian }}{{ $n->triwulan_realisasi !== $tw ? ' (sejak TW '.['I', 'II', 'III', 'IV'][$n->triwulan_realisasi - 1].')' : '' }}{{ $n->isTambahan() ? ' (tambahan)' : '' }}{{ $n->isDilepas() ? ' (dilepas dari N)' : '' }}</div>
                                             @endforeach
-                                            @if ($this->rincianNList()->isEmpty() && $tw === $twAktif)
+                                            @if ($this->rincianNList()->where('sumber', \App\Models\RincianN::SUMBER_TARGET)->isEmpty() && $tw === $twAktif)
                                                 <span class="muted" style="font-size:11.5px">Belum ada Rincian N — tambahkan di <a wire:navigate href="{{ route('master-iku.index') }}#target">🎯 Target Tahunan</a>.</span>
                                             @endif
                                         </div>

@@ -122,6 +122,16 @@ class VerifikasiCapaian extends Component
     public bool $editRincianN = false;
 
     /**
+     * Rincian tambahan n yang baru diketik di sesi ini (belum tersimpan) --
+     * dikunci "baru-uuid". Disimpan di syncRincianN() sebagai baris sumber
+     * 'verifikasi' dengan triwulan_mulai_berlaku = TW periode ini. Tidak otomatis
+     * terealisasi: hanya menambah n bila 'terealisasi' dicentang.
+     *
+     * @var array<string, array{uraian: string|null, terealisasi: bool}>
+     */
+    public array $rincianTambahanBaru = [];
+
+    /**
      * Nilai form Alokasi/Realisasi Triwulanan — diikat lewat wire:model (properti
      * FLAT, bukan atribut model relasi, karena Livewire di sini tidak mendukung
      * wire:model langsung ke atribut model — "Can't set model properties
@@ -351,7 +361,7 @@ class VerifikasiCapaian extends Component
     protected const PROPERTI_ISIAN = [
         'analisis_capaian', 'catatan', 'rincianOutput', 'indikatorProksi', 'koreksiKegiatan', 'koreksiKendala',
         'koreksiRtlRealisasi', 'koreksiRtlBerikutnya', 'picRtlBerikutnyaTerpilih', 'rincianNPilih', 'rincianNTw',
-        'kendalaBaru', 'rtlBerikutnyaTambahan',
+        'rincianTambahanBaru', 'kendalaBaru', 'rtlBerikutnyaTambahan',
     ];
 
     public function updated(string $property): void
@@ -527,6 +537,10 @@ class VerifikasiCapaian extends Component
         $this->rincianNTw = [];
 
         foreach ($this->rincianNList() as $n) {
+            if (! $this->rincianNBisaDiubah($n, $tw)) {
+                continue;
+            }
+
             if ($n->triwulan_realisasi === null) {
                 $this->rincianNTw[$n->id] = $tw;
             } elseif ($n->triwulan_realisasi === $tw || ($this->editRincianN && $n->triwulan_realisasi < $tw)) {
@@ -592,9 +606,15 @@ class VerifikasiCapaian extends Component
     /**
      * Normal: item kosong atau tersimpan di TW aktif. Mode edit: juga item yang
      * tersimpan di TW sebelum TW aktif (item TW SESUDAH TW aktif tetap terkunci).
+     * Selalu terkunci: rincian yang sudah dilepas dari N, dan rincian tambahan
+     * yang baru mulai berlaku setelah TW aktif.
      */
     protected function rincianNBisaDiubah(RincianN $n, int $tw): bool
     {
+        if ($n->isDilepas() || $n->triwulan_mulai_berlaku > $tw) {
+            return false;
+        }
+
         return $n->triwulan_realisasi === null
             || $n->triwulan_realisasi === $tw
             || ($this->editRincianN && $n->triwulan_realisasi < $tw);
@@ -613,6 +633,68 @@ class VerifikasiCapaian extends Component
     }
 
     /**
+     * Rincian yang ditampilkan sebagai daftar terkunci (read-only): sudah
+     * terealisasi di TW lain, atau sudah dilepas dari N. Rincian tambahan yang
+     * belum berlaku pada TW ini (dan belum terealisasi) tidak ditampilkan.
+     */
+    public function rincianNTerkunciTampil(): Collection
+    {
+        return $this->rincianNTerkunci()->filter(fn (RincianN $n) => $n->isTerealisasi())->values();
+    }
+
+    /**
+     * Rincian tambahan n yang sudah tersimpan tapi belum terealisasi -- boleh
+     * dihapus dari sesi verifikasi (belum punya realisasi apa pun).
+     */
+    public function rincianTambahanBisaDihapus(RincianN $n): bool
+    {
+        return $n->isTambahan()
+            && ! $n->isTerealisasi()
+            && $n->triwulan_mulai_berlaku <= (int) $this->capaian->periode->triwulan;
+    }
+
+    /** Tambah satu baris isian rincian tambahan n (tersimpan saat Simpan). */
+    public function tambahRincianTambahan(): void
+    {
+        if (! $this->capaian->masterIku->pakaiRasio()) {
+            return;
+        }
+
+        $this->rincianTambahanBaru['baru-'.(string) Str::uuid()] = ['uraian' => null, 'terealisasi' => false];
+        $this->adaPerubahan = true;
+    }
+
+    public function batalRincianTambahan(string $kunci): void
+    {
+        unset($this->rincianTambahanBaru[$kunci]);
+        $this->recomputeXRealisasiLive();
+    }
+
+    public function updatedRincianTambahanBaru(): void
+    {
+        $this->recomputeXRealisasiLive();
+    }
+
+    /**
+     * Hapus rincian tambahan n yang sudah tersimpan -- hanya bila belum
+     * terealisasi (lihat rincianTambahanBisaDihapus()). Rincian target tidak
+     * pernah bisa dihapus dari sini.
+     */
+    public function hapusRincianTambahan(int $id): void
+    {
+        $n = $this->rincianNList()->firstWhere('id', $id);
+
+        if (! $n || ! $this->rincianTambahanBisaDihapus($n)) {
+            return;
+        }
+
+        $n->delete();
+        unset($this->rincianNPilih[$id], $this->rincianNTw[$id]);
+        $this->cacheRincianNList = null;
+        $this->recomputeXRealisasiLive();
+    }
+
+    /**
      * Triwulan TUJUAN efektif satu item $rincianNBisaDipilih() -- TW aktif bila
      * item ini sudah direalisasikan TW aktif (triwulan_realisasi === TW aktif,
      * tidak bisa dipindah lagi), atau pilihan $rincianNTw (dibatasi 1..TW aktif,
@@ -628,7 +710,8 @@ class VerifikasiCapaian extends Component
 
         $pilihan = (int) ($this->rincianNTw[$n->id] ?? $twAktif);
 
-        return min(max($pilihan, 1), $twAktif);
+        // Tidak boleh direalisasikan sebelum triwulan mulai berlakunya.
+        return min(max($pilihan, $n->triwulan_mulai_berlaku, 1), $twAktif);
     }
 
     /**
@@ -650,13 +733,23 @@ class VerifikasiCapaian extends Component
 
         foreach ($this->rincianNList() as $n) {
             if (! $this->rincianNBisaDiubah($n, $twAktif)) {
-                $hitung[$n->triwulan_realisasi]++;
+                if ($n->isTerealisasi() && $n->triwulan_realisasi >= $n->triwulan_mulai_berlaku && isset($hitung[$n->triwulan_realisasi])) {
+                    $hitung[$n->triwulan_realisasi]++;
+                }
 
                 continue;
             }
 
             if ((bool) ($this->rincianNPilih[$n->id] ?? false)) {
                 $hitung[$this->twTujuanRincianN($n, $twAktif)]++;
+            }
+        }
+
+        // Rincian tambahan baru (belum tersimpan) hanya dihitung bila dicentang
+        // terealisasi, dan selalu pada TW aktif (= triwulan mulai berlakunya).
+        foreach ($this->rincianTambahanBaru as $baris) {
+            if (trim((string) ($baris['uraian'] ?? '')) !== '' && ! empty($baris['terealisasi'])) {
+                $hitung[$twAktif]++;
             }
         }
 
@@ -736,7 +829,7 @@ class VerifikasiCapaian extends Component
 
         $n = $this->rincianNBisaDipilih()->firstWhere('id', $id);
 
-        if (! $n) {
+        if (! $n || $tw < $n->triwulan_mulai_berlaku) {
             return;
         }
 
@@ -776,6 +869,7 @@ class VerifikasiCapaian extends Component
         }
 
         $twAktif = (int) $this->capaian->periode->triwulan;
+        $tahun = (int) $this->capaian->periode->tahun;
 
         foreach ($this->rincianNBisaDipilih() as $n) {
             $dicentang = (bool) ($this->rincianNPilih[$n->id] ?? false);
@@ -786,15 +880,34 @@ class VerifikasiCapaian extends Component
             }
         }
 
+        // Rincian tambahan n: berlaku mulai TW periode ini, tersimpan permanen,
+        // tidak pernah masuk N. Triwulan mulai berlakunya tidak pernah diubah lagi
+        // oleh koreksi/pengajuan ulang mana pun.
+        foreach ($this->rincianTambahanBaru as $baris) {
+            $uraian = trim((string) ($baris['uraian'] ?? ''));
+
+            if ($uraian === '') {
+                continue;
+            }
+
+            RincianN::create([
+                'iku_id' => $this->capaian->iku_id,
+                'tahun' => $tahun,
+                'uraian' => $uraian,
+                'sumber' => RincianN::SUMBER_VERIFIKASI,
+                'triwulan_mulai_berlaku' => $twAktif,
+                'triwulan_realisasi' => ! empty($baris['terealisasi']) ? $twAktif : null,
+                'dibuat_oleh' => auth()->id(),
+            ]);
+        }
+        $this->rincianTambahanBaru = [];
+
         $this->cacheRincianNList = null;
         $this->editRincianN = false;
         $this->muatPilihanRincianN();
 
-        for ($tw = 1; $tw <= 4; $tw++) {
-            $this->{"x_realisasi_tw{$tw}"} = RincianN::where('iku_id', $this->capaian->iku_id)
-                ->where('tahun', $this->capaian->periode->tahun)
-                ->where('triwulan_realisasi', $tw)
-                ->count();
+        foreach (RincianN::jumlahRealisasiPerTw((int) $this->capaian->iku_id, $tahun) as $tw => $jumlah) {
+            $this->{"x_realisasi_tw{$tw}"} = $jumlah;
         }
     }
 
@@ -1761,6 +1874,8 @@ class VerifikasiCapaian extends Component
             'rtlBerikutnyaTambahan.*' => ['nullable', 'string'],
             'rincianNPilih.*' => ['boolean'],
             'rincianNTw.*' => ['nullable', 'integer', 'min:1', 'max:'.(int) $this->capaian->periode->triwulan],
+            'rincianTambahanBaru.*.uraian' => ['nullable', 'string', 'max:255'],
+            'rincianTambahanBaru.*.terealisasi' => ['boolean'],
             'alokasi_tw1' => ['nullable', 'numeric', 'min:0'],
             'alokasi_tw2' => ['nullable', 'numeric', 'min:0'],
             'alokasi_tw3' => ['nullable', 'numeric', 'min:0'],

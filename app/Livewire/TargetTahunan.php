@@ -77,9 +77,20 @@ class TargetTahunan extends Component
      * "baru-..." (baris baru dari tambahN(), belum pernah disimpan). Jumlah baris
      * per iku_id menggantikan input manual Alokasi Y -- lihat simpan().
      *
-     * @var array<int, array<string, array{id: int|null, uraian: string|null}>>
+     * Hanya baris sumber 'target' yang belum dilepas -- rincian tambahan dari
+     * Verifikasi tidak pernah dimuat, jadi tidak bisa terhapus/tertimpa dari sini.
+     *
+     * @var array<int, array<string, array{id: int|null, uraian: string|null, terealisasi?: bool}>>
      */
     public array $rincianN = [];
+
+    /**
+     * Id rincian N tersimpan yang ditandai hapus lewat hapusN() -- baru diproses
+     * saat simpan() (lihat lepasAtauHapusRincianN()), tidak seketika.
+     *
+     * @var array<int, list<int>>
+     */
+    public array $rincianNDihapus = [];
 
     /**
      * Kolom Alokasi per triwulan, dipakai berulang di muatNilai()/rules()/simpan()
@@ -124,10 +135,34 @@ class TargetTahunan extends Component
 
         $this->rincianN = RincianN::whereIn('iku_id', $this->daftarIku()->pluck('id'))
             ->where('tahun', $this->tahun)
+            ->penyebut()
             ->orderBy('id')
             ->get()
             ->groupBy('iku_id')
-            ->map(fn ($baris) => $baris->mapWithKeys(fn (RincianN $n) => [(string) $n->id => ['id' => $n->id, 'uraian' => $n->uraian]])->all())
+            ->map(fn ($baris) => $baris->mapWithKeys(fn (RincianN $n) => [(string) $n->id => [
+                'id' => $n->id,
+                'uraian' => $n->uraian,
+                'terealisasi' => $n->isTerealisasi(),
+            ]])->all())
+            ->all();
+
+        $this->rincianNDihapus = [];
+    }
+
+    /**
+     * Jumlah rincian tambahan (dari Verifikasi) per IKU tahun ini -- hanya info di
+     * blade, tidak pernah masuk N.
+     *
+     * @return array<int, int>
+     */
+    public function jumlahRincianTambahan(): array
+    {
+        return RincianN::where('tahun', $this->tahun)
+            ->where('sumber', RincianN::SUMBER_VERIFIKASI)
+            ->selectRaw('iku_id, COUNT(*) as jumlah')
+            ->groupBy('iku_id')
+            ->pluck('jumlah', 'iku_id')
+            ->map(fn ($j) => (int) $j)
             ->all();
     }
 
@@ -169,35 +204,60 @@ class TargetTahunan extends Component
     }
 
     /**
-     * Hapus satu baris Rincian N -- baris yang SUDAH tersimpan (punya id asli)
-     * dihapus dari DB seketika, baris baru yang belum disimpan cukup dibuang dari
-     * state lokal. Pola sama seperti VerifikasiCapaian::hapusRo().
+     * Tandai satu baris Rincian N untuk dihapus -- baris tersimpan baru diproses
+     * saat simpan() (lihat lepasAtauHapusRincianN()), baris baru yang belum
+     * disimpan cukup dibuang dari state lokal.
      */
     public function hapusN(int $ikuId, string $kunci): void
     {
         $id = $this->rincianN[$ikuId][$kunci]['id'] ?? null;
         if ($id) {
-            RincianN::whereKey($id)->delete();
+            $this->rincianNDihapus[$ikuId][] = (int) $id;
         }
 
         unset($this->rincianN[$ikuId][$kunci]);
     }
 
     /**
-     * Tulis seluruh baris Rincian N satu IKU ke DB: baris kosong (uraian kosong)
-     * dihapus bila sudah tersimpan sebelumnya atau dilewati bila memang baru
-     * ditambahkan lewat tambahN() dan tidak pernah diisi; baris terisi
-     * dibuat/diperbarui sesuai ada/tidaknya id asli. Pola sama seperti
-     * VerifikasiCapaian::simpanRincianOutputKegiatan().
+     * Rincian target yang dikeluarkan dari N: yang belum terealisasi dihapus,
+     * yang sudah terealisasi hanya dilepas dari target (realisasinya tetap
+     * tercatat & tetap dihitung di n, tapi tidak lagi masuk N). Hanya menyentuh
+     * baris sumber 'target' milik IKU+tahun ini.
+     */
+    protected function lepasAtauHapusRincianN(int $ikuId, int $id): void
+    {
+        $n = RincianN::milik($ikuId, $this->tahun)->penyebut()->whereKey($id)->first();
+
+        if (! $n) {
+            return;
+        }
+
+        if ($n->isTerealisasi()) {
+            $n->update(['dilepas_dari_target_at' => now()]);
+        } else {
+            $n->delete();
+        }
+    }
+
+    /**
+     * Tulis perubahan rincian N satu IKU ke DB berdasarkan perubahan nyata saja:
+     * baris yang ditandai hapus/dikosongkan dilepas atau dihapus, baris terisi
+     * dibuat/diperbarui sesuai ada/tidaknya id asli. Rincian tambahan (sumber
+     * 'verifikasi') tidak pernah disentuh.
      */
     protected function simpanRincianNUntukIku(int $ikuId): void
     {
+        foreach (array_unique($this->rincianNDihapus[$ikuId] ?? []) as $id) {
+            $this->lepasAtauHapusRincianN($ikuId, (int) $id);
+        }
+        unset($this->rincianNDihapus[$ikuId]);
+
         foreach ($this->rincianN[$ikuId] ?? [] as $kunci => $baris) {
             $uraian = trim((string) ($baris['uraian'] ?? ''));
 
             if ($uraian === '') {
                 if (! empty($baris['id'])) {
-                    RincianN::whereKey($baris['id'])->delete();
+                    $this->lepasAtauHapusRincianN($ikuId, (int) $baris['id']);
                     $this->rincianN[$ikuId][$kunci]['id'] = null;
                 }
 
@@ -205,9 +265,15 @@ class TargetTahunan extends Component
             }
 
             if (! empty($baris['id'])) {
-                RincianN::whereKey($baris['id'])->update(['uraian' => $uraian]);
+                RincianN::milik($ikuId, $this->tahun)->penyebut()->whereKey($baris['id'])->update(['uraian' => $uraian]);
             } else {
-                $n = RincianN::create(['iku_id' => $ikuId, 'tahun' => $this->tahun, 'uraian' => $uraian]);
+                $n = RincianN::create([
+                    'iku_id' => $ikuId,
+                    'tahun' => $this->tahun,
+                    'uraian' => $uraian,
+                    'sumber' => RincianN::SUMBER_TARGET,
+                    'triwulan_mulai_berlaku' => 1,
+                ]);
                 $this->rincianN[$ikuId][$kunci]['id'] = $n->id;
             }
         }
@@ -255,7 +321,9 @@ class TargetTahunan extends Component
 
                 if ($iku?->pakaiRasio()) {
                     $this->simpanRincianNUntukIku($ikuId);
-                    $yTotal = (float) RincianN::where('iku_id', $ikuId)->where('tahun', $this->tahun)->count();
+                    // N hanya menghitung rincian target yang belum dilepas -- rincian
+                    // tambahan dari Verifikasi tidak pernah mengubah penyebut.
+                    $yTotal = (float) RincianN::jumlahPenyebut($ikuId, $this->tahun);
 
                     $alokasi = $alokasi->merge([
                         'y_alokasi_tw1' => $yTotal,
@@ -285,6 +353,9 @@ class TargetTahunan extends Component
             }
         });
 
+        // Muat ulang supaya rincian yang dilepas dari target hilang dari daftar N.
+        $this->muatNilai();
+
         session()->flash('status', 'Target Tahunan tersimpan.');
     }
 
@@ -306,6 +377,7 @@ class TargetTahunan extends Component
     {
         return view('livewire.target-tahunan', [
             'daftarIku' => $this->daftarIku(),
+            'jumlahTambahan' => $this->jumlahRincianTambahan(),
         ]);
     }
 }
