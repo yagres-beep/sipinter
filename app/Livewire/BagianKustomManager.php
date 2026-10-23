@@ -2,12 +2,19 @@
 
 namespace App\Livewire;
 
+use App\Exceptions\KonflikPenyuntinganException;
 use App\Models\BagianKustom;
 use App\Models\BagianKustomPoin;
+use App\Models\Capaian;
 use App\Models\FolderConfig;
+use App\Models\LogAktivitas;
+use App\Models\RiwayatKonfigurasiBagianKustom;
+use App\Support\FormatAngkaKolom;
 use App\Support\MenuBagianKustom;
 use App\Support\TemplateBagianKustom;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 /**
@@ -30,6 +37,13 @@ class BagianKustomManager extends Component
     public string $frekuensiWajibBaru = BagianKustom::FREKUENSI_OPSIONAL;
 
     /**
+     * Bagian sumber bila bagian baru dibuat dengan MENYALIN pengaturannya (null = mulai
+     * dari kosong). Yang disalin hanya definisi — tidak pernah poin isian, bukti dukung,
+     * status verifikasi, atau riwayat milik bagian sumber.
+     */
+    public ?int $sumberSalinId = null;
+
+    /**
      * Keadaan form per bagian, dikunci pada id. Kolom isian disimpan sebagai daftar baris
      * (label, tipe, opsi_teks, wajib, kunci) agar bisa diedit langsung di layar.
      *
@@ -46,6 +60,30 @@ class BagianKustomManager extends Component
     public ?int $pendingHapusId = null;
 
     public string $pendingHapusNama = '';
+
+    /**
+     * Sidik jari definisi tiap bagian saat form-nya dimuat. Simpan ditolak bila definisi
+     * di database sudah berbeda (diubah Tim SAKIP lain) — perubahan orang lain tidak
+     * tertimpa diam-diam. Dikunci: hanya server yang mengisinya.
+     *
+     * @var array<int, string>
+     */
+    #[Locked]
+    public array $versiForm = [];
+
+    /**
+     * Hanya Tim SAKIP yang boleh mengelola definisi bagian kustom. boot() berjalan di
+     * SETIAP request Livewire (mount dan setiap aksi), jadi pengguna yang kehilangan
+     * peran Tim SAKIP saat halaman masih terbuka tetap ditolak di aksi berikutnya —
+     * tidak hanya mengandalkan middleware rute halaman atau tombol yang disembunyikan.
+     */
+    public function boot(): void
+    {
+        if (auth()->user()?->namaRole() !== BagianKustom::NAMA_PERAN[BagianKustom::PERAN_TIM_SAKIP]) {
+            LogAktivitas::aksesDitolak('pengaturan Bagian Kustom');
+            abort(403);
+        }
+    }
 
     public function mount(): void
     {
@@ -66,6 +104,8 @@ class BagianKustomManager extends Component
     {
         $bagian = BagianKustom::findOrFail($id);
 
+        $this->versiForm[$id] = self::versi($bagian);
+
         $this->form[$id] = [
             'nama' => $bagian->nama,
             'deskripsi' => $bagian->deskripsi,
@@ -83,7 +123,55 @@ class BagianKustomManager extends Component
                 'tipe' => $k['tipe'],
                 'opsi_teks' => implode(', ', $k['opsi']),
                 'wajib' => $k['wajib'],
+                'aktif' => $k['aktif'],
+                'mulai_tahun' => $k['mulai_tahun'] !== null ? (string) $k['mulai_tahun'] : '',
+                'mulai_triwulan' => $k['mulai_triwulan'] !== null ? (string) $k['mulai_triwulan'] : '',
+                'satuan' => (string) $k['satuan'],
+                'desimal' => $k['desimal'] !== null ? (string) $k['desimal'] : '',
+                'pemisah' => $k['pemisah'],
+                'ribuan' => $k['ribuan'],
             ])->values()->all(),
+        ];
+    }
+
+    /**
+     * Sidik jari isi definisi yang ditulis tombol Simpan (bukan waktu ubah) untuk deteksi
+     * bentrok. Status aktif & urutan tidak ikut: keduanya diubah lewat tombol sendiri
+     * dan tidak ditimpa oleh Simpan.
+     */
+    protected static function versi(BagianKustom $bagian): string
+    {
+        return sha1((string) json_encode(array_diff_key($bagian->potretDefinisi(), ['aktif' => true])));
+    }
+
+    /**
+     * Jalankan $ubah di dalam SATU transaksi bersama pencatatan riwayatnya: bila
+     * pencatatan riwayat gagal, perubahan konfigurasi ikut batal (tidak ada perubahan
+     * tanpa jejak).
+     *
+     * @template T
+     *
+     * @param  callable(): T  $ubah
+     * @return T
+     */
+    protected function dalamTransaksi(callable $ubah): mixed
+    {
+        return DB::transaction($ubah);
+    }
+
+    /** Baris form kolom baru. */
+    protected function kolomKosong(int $id): array
+    {
+        // Bagian yang sudah punya isian: kolom baru default berlaku mulai triwulan
+        // berjalan, supaya isian periode sebelumnya tidak dianggap kurang satu kolom.
+        // Tim SAKIP tetap bisa mengubah atau mengosongkannya.
+        $sudahBerisi = BagianKustomPoin::where('bagian_kustom_id', $id)->exists();
+
+        return [
+            'kunci' => '', 'label' => '', 'tipe' => 'teks', 'opsi_teks' => '', 'wajib' => false, 'aktif' => true,
+            'mulai_tahun' => $sudahBerisi ? (string) now()->year : '',
+            'mulai_triwulan' => $sudahBerisi ? (string) BagianKustom::triwulanDariBulan((int) now()->month) : '',
+            'satuan' => '', 'desimal' => '', 'pemisah' => FormatAngkaKolom::PEMISAH_KOMA, 'ribuan' => true,
         ];
     }
 
@@ -102,9 +190,81 @@ class BagianKustomManager extends Component
 
     public function setTab(string $tab): void
     {
-        if (in_array($tab, ['dasar', 'isian', 'notula', 'pratinjau'], true)) {
+        if (in_array($tab, ['dasar', 'isian', 'notula', 'pratinjau', 'riwayat'], true)) {
             $this->tab = $tab;
         }
+    }
+
+    /**
+     * Saat bagian sumber dipilih, isi peran, menu, frekuensi, dan deskripsi form tambah
+     * dari bagian tersebut — semuanya masih bisa disesuaikan sebelum disimpan.
+     */
+    public function updatedSumberSalinId($nilai): void
+    {
+        $this->resetErrorBag('sumberSalinId');
+        if (blank($nilai)) {
+            $this->sumberSalinId = null;
+
+            return;
+        }
+
+        $sumber = BagianKustom::find((int) $nilai);
+
+        if (! $sumber) {
+            // Dibiarkan apa adanya supaya tambah() menolaknya lewat validasi exists.
+            $this->addError('sumberSalinId', 'Bagian sumber tidak ditemukan.');
+
+            return;
+        }
+
+        $this->sumberSalinId = $sumber->id;
+        $this->peranBaru = array_values($sumber->peran ?? []);
+        $this->penempatanBaru = array_values($sumber->penempatan ?? []);
+        $this->frekuensiWajibBaru = (string) $sumber->frekuensi_wajib;
+
+        if (trim($this->deskripsiBaru) === '') {
+            $this->deskripsiBaru = (string) $sumber->deskripsi;
+        }
+    }
+
+    /**
+     * Kolom yang ikut disalin: hanya kolom AKTIF, dengan kunci yang sama (kunci hanya
+     * berlaku di dalam satu bagian, jadi data dua bagian tidak pernah tercampur) dan
+     * tanpa periode mulai berlaku (bagian baru belum punya riwayat).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function kolomSalinan(BagianKustom $sumber): array
+    {
+        return collect($sumber->kolomList())
+            ->filter(fn ($k) => $k['aktif'])
+            ->map(fn ($k) => ['mulai_tahun' => null, 'mulai_triwulan' => null] + $k)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Ringkasan yang ditampilkan sebelum bagian salinan disimpan.
+     *
+     * @return array{nama: string, kolom: array<int, array<string, mixed>>, kolom_nonaktif: int, label_uraian: string, notula: string, bukti: bool, poin_sumber: int}|null
+     */
+    protected function ringkasanSalin(): ?array
+    {
+        $sumber = $this->sumberSalinId ? BagianKustom::withCount('poin')->find($this->sumberSalinId) : null;
+
+        if (! $sumber) {
+            return null;
+        }
+
+        return [
+            'nama' => $sumber->nama,
+            'kolom' => $this->kolomSalinan($sumber),
+            'kolom_nonaktif' => collect($sumber->kolomList())->where('aktif', false)->count(),
+            'label_uraian' => $sumber->labelUraianEfektif(),
+            'notula' => $sumber->masuk_notula ? 'Masuk notula, format: '.$sumber->formatNotulaEfektif() : 'Tidak masuk notula',
+            'bukti' => (bool) $sumber->bukti_wajib,
+            'poin_sumber' => (int) $sumber->poin_count,
+        ];
     }
 
     /**
@@ -119,11 +279,30 @@ class BagianKustomManager extends Component
             return;
         }
 
-        $ini = $daftar[$posisi];
-        $atas = $daftar[$posisi - 1];
+        $this->tukarUrutan($daftar[$posisi], $daftar[$posisi - 1], 'atas');
+    }
 
-        BagianKustom::whereKey($ini->id)->update(['urutan' => $atas->urutan]);
-        BagianKustom::whereKey($atas->id)->update(['urutan' => $ini->urutan]);
+    /**
+     * Tukar urutan dua bagian + catat riwayat dalam satu transaksi. Urutan dibaca ulang
+     * dengan kunci baris supaya dua klik bersamaan tidak saling menimpa.
+     */
+    protected function tukarUrutan(BagianKustom $ini, BagianKustom $lain, string $arah): void
+    {
+        $this->dalamTransaksi(function () use ($ini, $lain, $arah) {
+            $terkunci = BagianKustom::whereKey([$ini->id, $lain->id])->lockForUpdate()->get()->keyBy('id');
+
+            if ($terkunci->count() !== 2) {
+                return;
+            }
+
+            $urutanIni = $terkunci[$ini->id]->urutan;
+            $urutanLain = $terkunci[$lain->id]->urutan;
+
+            BagianKustom::whereKey($ini->id)->update(['urutan' => $urutanLain]);
+            BagianKustom::whereKey($lain->id)->update(['urutan' => $urutanIni]);
+
+            RiwayatKonfigurasiBagianKustom::catat($ini, $ini->nama, 'urutan', ['urutan' => $urutanIni], ['urutan' => $urutanLain], 'Dipindah ke '.$arah.' "'.$lain->nama.'"');
+        });
 
         BagianKustom::lupakanCache();
     }
@@ -140,13 +319,7 @@ class BagianKustomManager extends Component
             return;
         }
 
-        $ini = $daftar[$posisi];
-        $bawah = $daftar[$posisi + 1];
-
-        BagianKustom::whereKey($ini->id)->update(['urutan' => $bawah->urutan]);
-        BagianKustom::whereKey($bawah->id)->update(['urutan' => $ini->urutan]);
-
-        BagianKustom::lupakanCache();
+        $this->tukarUrutan($daftar[$posisi], $daftar[$posisi + 1], 'bawah');
     }
 
     public function tambah(): void
@@ -159,7 +332,10 @@ class BagianKustomManager extends Component
             'penempatanBaru' => ['required', 'array', 'min:1'],
             'penempatanBaru.*' => [Rule::in(array_keys(MenuBagianKustom::katalog()))],
             'frekuensiWajibBaru' => ['required', Rule::in([BagianKustom::FREKUENSI_OPSIONAL, BagianKustom::FREKUENSI_SETIAP_BULAN, BagianKustom::FREKUENSI_AKHIR_TRIWULAN])],
-        ], [], ['namaBaru' => 'nama bagian']);
+            'sumberSalinId' => ['nullable', 'integer', Rule::exists('bagian_kustom', 'id')],
+        ], [], ['namaBaru' => 'nama bagian', 'sumberSalinId' => 'bagian sumber']);
+
+        $sumber = $this->sumberSalinId ? BagianKustom::find($this->sumberSalinId) : null;
 
         $sudahAda = BagianKustom::whereRaw('LOWER(nama) = ?', [mb_strtolower(trim($this->namaBaru))])->exists();
 
@@ -178,32 +354,54 @@ class BagianKustomManager extends Component
             return;
         }
 
-        $bagian = BagianKustom::create([
-            'nama' => trim($this->namaBaru),
-            'deskripsi' => trim($this->deskripsiBaru) ?: null,
-            'peran' => $peran,
-            'penempatan' => $penempatan,
-            'frekuensi_wajib' => $this->frekuensiWajibBaru,
-            'bukti_wajib' => $this->bukti_wajib_boleh($peran, $penempatan),
-            'masuk_notula' => true,
-            'kolom' => [],
-            'aktif' => true,
-            'urutan' => ((int) BagianKustom::max('urutan')) + 1,
-        ]);
+        // Bagian baru, riwayatnya, dan kategori foldernya dibuat dalam satu transaksi:
+        // bila salah satu gagal, tidak ada yang tersimpan.
+        $bagian = $this->dalamTransaksi(function () use ($sumber, $peran, $penempatan) {
+            $bagian = BagianKustom::create([
+                'nama' => trim($this->namaBaru),
+                'deskripsi' => trim($this->deskripsiBaru) ?: null,
+                'peran' => $peran,
+                'penempatan' => $penempatan,
+                'frekuensi_wajib' => $this->frekuensiWajibBaru,
+                // Bagian baru dari kosong: bukti wajib bila memang didukung (perilaku lama).
+                // Salinan: ikut pengaturan sumber, tetap hanya bila didukung peran & menu.
+                'bukti_wajib' => $this->bukti_wajib_boleh($peran, $penempatan) && ($sumber ? (bool) $sumber->bukti_wajib : true),
+                'masuk_notula' => $sumber ? (bool) $sumber->masuk_notula : true,
+                'label_uraian' => $sumber?->label_uraian,
+                // Judul notula TIDAK disalin: kosong = memakai nama bagian baru.
+                'format_notula' => $sumber?->format_notula,
+                'kolom' => $sumber ? $this->kolomSalinan($sumber) : [],
+                'aktif' => true,
+                'urutan' => ((int) BagianKustom::max('urutan')) + 1,
+            ]);
 
-        $this->reset(['namaBaru', 'deskripsiBaru']);
+            RiwayatKonfigurasiBagianKustom::catat(
+                $bagian,
+                $bagian->nama,
+                $sumber ? 'salin' : 'buat',
+                null,
+                $bagian->potretDefinisi(),
+                $sumber ? 'Dibuat dengan menyalin pengaturan "'.$sumber->nama.'" (tanpa isian, bukti, maupun riwayatnya)' : 'Dibuat dari kosong',
+            );
+
+            FolderConfig::tambahKategoriDariBagianKustom($bagian->nama);
+
+            return $bagian;
+        });
+
+        $this->reset(['namaBaru', 'deskripsiBaru', 'sumberSalinId']);
         $this->peranBaru = [BagianKustom::PERAN_KETUA_TIM];
         $this->penempatanBaru = [MenuBagianKustom::PENGISIAN];
         $this->frekuensiWajibBaru = BagianKustom::FREKUENSI_OPSIONAL;
-
-        FolderConfig::tambahKategoriDariBagianKustom($bagian->nama);
 
         BagianKustom::lupakanCache();
         $this->muatForm($bagian->id);
         $this->bukaId = $bagian->id;
         $this->tab = 'isian';
 
-        session()->flash('status', 'Bagian "'.$bagian->nama.'" dibuat. Atur kolom isian, peran pengisi, dan notula di bawah ini — folder kategorinya sudah ditambahkan ke Struktur Folder.');
+        session()->flash('status', $sumber
+            ? 'Bagian "'.$bagian->nama.'" dibuat dari salinan pengaturan "'.$sumber->nama.'". Periksa kolom, peran, dan notula di bawah ini — isian milik "'.$sumber->nama.'" tidak ikut disalin.'
+            : 'Bagian "'.$bagian->nama.'" dibuat. Atur kolom isian, peran pengisi, dan notula di bawah ini — folder kategorinya sudah ditambahkan ke Struktur Folder.');
     }
 
     /**
@@ -239,7 +437,9 @@ class BagianKustomManager extends Component
 
     public function tambahKolom(int $id): void
     {
-        $this->form[$id]['kolom'][] = ['kunci' => '', 'label' => '', 'tipe' => 'teks', 'opsi_teks' => '', 'wajib' => false];
+        abort_unless(isset($this->form[$id]), 404);
+
+        $this->form[$id]['kolom'][] = $this->kolomKosong($id);
     }
 
     public function hapusKolom(int $id, int $index): void
@@ -317,6 +517,13 @@ class BagianKustomManager extends Component
             "form.{$id}.kolom.*.tipe" => ['required', Rule::in(array_keys(BagianKustom::TIPE_KOLOM))],
             "form.{$id}.kolom.*.opsi_teks" => ['nullable', 'string', 'max:500'],
             "form.{$id}.kolom.*.wajib" => ['boolean'],
+            "form.{$id}.kolom.*.aktif" => ['boolean'],
+            "form.{$id}.kolom.*.mulai_tahun" => ['nullable', 'integer', 'min:2020', 'max:2100'],
+            "form.{$id}.kolom.*.mulai_triwulan" => ['nullable', 'integer', 'min:1', 'max:4'],
+            "form.{$id}.kolom.*.satuan" => ['nullable', 'string', 'max:30'],
+            "form.{$id}.kolom.*.desimal" => ['nullable', 'integer', 'min:0', 'max:'.FormatAngkaKolom::DESIMAL_MAKS],
+            "form.{$id}.kolom.*.pemisah" => ['nullable', Rule::in(array_keys(FormatAngkaKolom::PEMISAH))],
+            "form.{$id}.kolom.*.ribuan" => ['boolean'],
         ];
     }
 
@@ -356,16 +563,43 @@ class BagianKustomManager extends Component
                 $this->addError("form.{$id}.kolom.{$i}.opsi_teks", 'Kolom pilihan butuh minimal dua opsi, dipisah koma.');
             }
 
-            $hasil[] = [
-                'kunci' => $kunci,
-                'label' => trim((string) $row['label']),
-                'tipe' => $row['tipe'],
-                'opsi' => $row['tipe'] === 'pilihan' ? $opsi : [],
-                'wajib' => (bool) ($row['wajib'] ?? false),
-            ];
+            if (filled($row['mulai_tahun'] ?? null) xor filled($row['mulai_triwulan'] ?? null)) {
+                $this->addError("form.{$id}.kolom.{$i}.mulai_triwulan", 'Isi tahun dan triwulan mulai berlaku bersamaan, atau kosongkan keduanya.');
+            }
+
+            $hasil[] = $this->kolomTersimpan($kunci, $row, $opsi);
         }
 
         return $hasil;
+    }
+
+    /**
+     * Bentuk satu kolom yang disimpan di bagian_kustom.kolom. Pengaturan format hanya
+     * untuk kolom angka.
+     *
+     * @param  array<string, mixed>  $row
+     * @param  array<int, string>  $opsi
+     * @return array<string, mixed>
+     */
+    protected function kolomTersimpan(string $kunci, array $row, array $opsi): array
+    {
+        $tipe = (string) ($row['tipe'] ?? 'teks');
+        $angka = $tipe === 'angka';
+
+        return BagianKustom::normalkanKolom([
+            'kunci' => $kunci,
+            'label' => trim((string) ($row['label'] ?? '')),
+            'tipe' => $tipe,
+            'opsi' => $tipe === 'pilihan' ? $opsi : [],
+            'wajib' => (bool) ($row['wajib'] ?? false),
+            'aktif' => (bool) ($row['aktif'] ?? true),
+            'mulai_tahun' => $row['mulai_tahun'] ?? null,
+            'mulai_triwulan' => $row['mulai_triwulan'] ?? null,
+            'satuan' => $angka ? ($row['satuan'] ?? null) : null,
+            'desimal' => $angka ? ($row['desimal'] ?? null) : null,
+            'pemisah' => $row['pemisah'] ?? FormatAngkaKolom::PEMISAH_KOMA,
+            'ribuan' => (bool) ($row['ribuan'] ?? true),
+        ]);
     }
 
     /**
@@ -409,11 +643,19 @@ class BagianKustomManager extends Component
 
                 if ($jumlah > 0) {
                     $label = collect($bagian->kolomList())->firstWhere('kunci', $kunci)['label'] ?? $kunci;
-                    $this->addError("form.{$id}.kolom", "Kolom \"{$label}\" sudah berisi data di {$jumlah} poin, jadi tidak bisa dihapus. Batalkan penghapusannya.");
+                    $this->addError("form.{$id}.kolom", "Kolom \"{$label}\" sudah berisi data di {$jumlah} poin, jadi tidak bisa dihapus. Klik \"Batal ubah\", lalu hapus centang \"Aktif\" pada kolom itu untuk berhenti memakainya — data lamanya tetap tersimpan dan tetap tampil di notula.");
 
                     return;
                 }
             }
+        }
+
+        // Mengganti jenis isian kolom yang sudah berisi data hanya boleh bila data lama
+        // cocok dengan jenis baru (mis. teks "12,5" → angka boleh; "tinggi" → angka tidak).
+        if (($galatTipe = $this->galatGantiTipe($bagian, $kolom)) !== null) {
+            $this->addError("form.{$id}.kolom", $galatTipe);
+
+            return;
         }
 
         $tidakDikenal = TemplateBagianKustom::variabelTidakDikenal((string) ($f['format_notula'] ?? ''), $kunciBaru);
@@ -433,31 +675,177 @@ class BagianKustomManager extends Component
             return;
         }
 
-        $bagian->update([
-            'nama' => trim($f['nama']),
-            'deskripsi' => trim((string) ($f['deskripsi'] ?? '')) ?: null,
-            'peran' => $peran,
-            'penempatan' => $penempatan,
-            'label_uraian' => trim((string) ($f['label_uraian'] ?? '')) ?: null,
-            'frekuensi_wajib' => $f['frekuensi_wajib'],
-            // Bukti dukung (PDF) hanya didukung untuk isian di menu Isian Kegiatan (Ketua Tim).
-            'bukti_wajib' => $this->bukti_wajib_boleh($peran, $penempatan) && (bool) $f['bukti_wajib'],
-            'masuk_notula' => (bool) $f['masuk_notula'],
-            'judul_notula' => trim((string) ($f['judul_notula'] ?? '')) ?: null,
-            'format_notula' => trim((string) ($f['format_notula'] ?? '')) ?: null,
-            'kolom' => $kolom,
-        ]);
+        // Melepas menu Isian Kegiatan membuat poin bagian ini hilang dari layar
+        // Verifikasi (lihat VerifikasiCapaian::bagianKustomList()) — tolak selama masih
+        // ada poin yang sedang menunggu pemeriksaan Tim SAKIP.
+        $lepasDariIsianKegiatan = in_array(MenuBagianKustom::PENGISIAN, $bagian->penempatan ?? [], true)
+            && ! in_array(MenuBagianKustom::PENGISIAN, $penempatan, true);
 
+        if ($lepasDariIsianKegiatan && ($jumlahMenunggu = $this->jumlahPoinMenungguVerifikasi($id)) > 0) {
+            $this->addError("form.{$id}.penempatan", "Menu Isian Kegiatan belum bisa dilepas: masih ada {$jumlahMenunggu} poin bagian ini yang sedang menunggu verifikasi. Selesaikan verifikasinya lebih dulu.");
+
+            return;
+        }
+
+        // Menu/peran yang dilepas tetapi masih punya poin tersimpan: datanya tetap ada
+        // dan tetap masuk notula, hanya tidak tampil lagi untuk diisi.
+        $konteksDilepas = $this->konteksDilepasBerisi($bagian, $peran, $penempatan);
+
+        // Perubahan + riwayatnya dalam satu transaksi, dengan baris bagian dikunci dan
+        // dicocokkan dengan versi saat form dimuat: bila Tim SAKIP lain sudah mengubah
+        // bagian ini, simpan dibatalkan (isian form tetap di layar).
+        try {
+            $this->dalamTransaksi(function () use ($id, $f, $peran, $penempatan, $kolom) {
+                $bagian = BagianKustom::whereKey($id)->lockForUpdate()->firstOrFail();
+
+                if (! isset($this->versiForm[$id]) || self::versi($bagian) !== $this->versiForm[$id]) {
+                    throw new KonflikPenyuntinganException(['bagian' => [$bagian->nama]]);
+                }
+
+                $sebelum = $bagian->potretDefinisi();
+
+                $bagian->update([
+                    'nama' => trim($f['nama']),
+                    'deskripsi' => trim((string) ($f['deskripsi'] ?? '')) ?: null,
+                    'peran' => $peran,
+                    'penempatan' => $penempatan,
+                    'label_uraian' => trim((string) ($f['label_uraian'] ?? '')) ?: null,
+                    'frekuensi_wajib' => $f['frekuensi_wajib'],
+                    // Bukti dukung (PDF) hanya didukung untuk isian di menu Isian Kegiatan (Ketua Tim).
+                    'bukti_wajib' => $this->bukti_wajib_boleh($peran, $penempatan) && (bool) $f['bukti_wajib'],
+                    'masuk_notula' => (bool) $f['masuk_notula'],
+                    'judul_notula' => trim((string) ($f['judul_notula'] ?? '')) ?: null,
+                    'format_notula' => trim((string) ($f['format_notula'] ?? '')) ?: null,
+                    'kolom' => $kolom,
+                ]);
+
+                $sesudah = $bagian->fresh()->potretDefinisi();
+
+                if ($sebelum != $sesudah) {
+                    RiwayatKonfigurasiBagianKustom::catat($bagian, $bagian->nama, 'ubah', $sebelum, $sesudah);
+                }
+            });
+        } catch (KonflikPenyuntinganException) {
+            $this->addError("form.{$id}.bentrok", 'Pengaturan "'.$bagian->nama.'" sudah diubah Tim SAKIP lain sejak Anda membukanya, jadi perubahan Anda BELUM disimpan (isian Anda masih di layar). Catat perubahan Anda, klik "Batal ubah" untuk memuat pengaturan terbaru, lalu terapkan kembali.');
+
+            return;
+        }
+
+        $bagian->refresh();
         BagianKustom::lupakanCache();
         $this->muatForm($id);
 
-        session()->flash('status', 'Perubahan "'.$bagian->nama.'" disimpan. Isian yang sudah tersimpan tetap ada di notula.');
+        session()->flash('status', 'Perubahan "'.$bagian->nama.'" disimpan. Isian yang sudah tersimpan tetap ada di notula.'
+            .($konteksDilepas !== [] ? ' Perhatian: poin yang sudah diisi di '.implode(', ', $konteksDilepas).' tetap tersimpan, tetapi tidak tampil lagi untuk diisi.' : ''));
     }
 
-    public function toggleAktif(int $id): void
+    /**
+     * Pesan galat bila jenis isian kolom yang sudah berisi data diganti ke jenis yang
+     * tidak cocok dengan data lamanya, null bila aman.
+     *
+     * @param  array<int, array<string, mixed>>  $kolomBaru
+     */
+    protected function galatGantiTipe(BagianKustom $bagian, array $kolomBaru): ?string
     {
-        $bagian = BagianKustom::findOrFail($id);
-        $bagian->update(['aktif' => ! $bagian->aktif]);
+        $lama = collect($bagian->kolomList())->keyBy('kunci');
+        $berganti = collect($kolomBaru)->filter(fn ($k) => $lama->has($k['kunci']) && $lama[$k['kunci']]['tipe'] !== $k['tipe'] && $k['tipe'] !== 'teks');
+
+        if ($berganti->isEmpty()) {
+            return null;
+        }
+
+        $nilaiTersimpan = BagianKustomPoin::where('bagian_kustom_id', $bagian->id)->whereNotNull('nilai_kolom')->pluck('nilai_kolom');
+
+        foreach ($berganti as $k) {
+            $tidakCocok = $nilaiTersimpan
+                ->map(fn ($n) => trim((string) ($n[$k['kunci']] ?? '')))
+                ->filter(fn ($v) => $v !== '' && match ($k['tipe']) {
+                    'angka' => FormatAngkaKolom::urai($v, null) === null,
+                    'pilihan' => ! in_array($v, $k['opsi'], true),
+                    default => false,
+                })
+                ->unique()
+                ->values();
+
+            if ($tidakCocok->isNotEmpty()) {
+                return "Jenis kolom \"{$k['label']}\" tidak bisa diganti menjadi ".BagianKustom::TIPE_KOLOM[$k['tipe']]
+                    .' karena data lama tidak cocok: "'.$tidakCocok->take(3)->implode('", "').'"'.($tidakCocok->count() > 3 ? ' dan lainnya' : '')
+                    .'. Biarkan jenisnya, atau nonaktifkan kolom ini dan buat kolom baru.';
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Poin konteks Isian Kegiatan yang sedang dalam antrean verifikasi: poinnya belum
+     * diperiksa dan Capaian IKU+periode-nya sedang diajukan/ditangani Tim SAKIP.
+     */
+    protected function jumlahPoinMenungguVerifikasi(int $bagianId): int
+    {
+        return BagianKustomPoin::konteksIsianKegiatan()
+            ->where('bagian_kustom_id', $bagianId)
+            ->where('status_verifikasi', 'menunggu')
+            ->whereExists(fn ($q) => $q->selectRaw('1')
+                ->from('capaian')
+                ->whereColumn('capaian.iku_id', 'bagian_kustom_poin.iku_id')
+                ->whereColumn('capaian.periode_id', 'bagian_kustom_poin.periode_id')
+                ->whereIn('capaian.status', [Capaian::STATUS_DIAJUKAN, Capaian::STATUS_SEDANG_DITANGANI]))
+            ->count();
+    }
+
+    /**
+     * Label "menu (peran)" yang tidak lagi tampil setelah perubahan tetapi masih punya
+     * poin tersimpan.
+     *
+     * @param  array<int, string>  $peranBaru
+     * @param  array<int, string>  $penempatanBaru
+     * @return array<int, string>
+     */
+    protected function konteksDilepasBerisi(BagianKustom $bagian, array $peranBaru, array $penempatanBaru): array
+    {
+        $hasil = [];
+
+        foreach ($bagian->penempatan ?? [] as $menu) {
+            foreach (array_intersect($bagian->peran ?? [], MenuBagianKustom::peranDiizinkan($menu)) as $peran) {
+                $masihTampil = in_array($menu, $penempatanBaru, true) && in_array($peran, $peranBaru, true);
+
+                if ($masihTampil || ! BagianKustomPoin::konteks($menu, $peran)->where('bagian_kustom_id', $bagian->id)->exists()) {
+                    continue;
+                }
+
+                $hasil[] = MenuBagianKustom::label($menu).' ('.(BagianKustom::NAMA_PERAN[$peran] ?? $peran).')';
+            }
+        }
+
+        return $hasil;
+    }
+
+    /**
+     * Aktifkan/nonaktifkan. $aktifkan = keadaan yang dituju sesuai tombol yang diklik
+     * (null = balik keadaan, perilaku lama) — bila keadaan di database sudah seperti itu
+     * (diubah Tim SAKIP lain), tidak ada yang diubah, supaya klik tidak membalik
+     * keputusan orang lain.
+     */
+    public function toggleAktif(int $id, ?bool $aktifkan = null): void
+    {
+        $this->dalamTransaksi(function () use ($id, $aktifkan) {
+            $bagian = BagianKustom::whereKey($id)->lockForUpdate()->firstOrFail();
+            $tujuan = $aktifkan ?? ! $bagian->aktif;
+
+            if ((bool) $bagian->aktif === $tujuan) {
+                return;
+            }
+
+            $bagian->update(['aktif' => $tujuan]);
+
+            RiwayatKonfigurasiBagianKustom::catat($bagian, $bagian->nama, $tujuan ? 'aktifkan' : 'nonaktifkan', ['aktif' => ! $tujuan], ['aktif' => $tujuan],
+                $tujuan ? 'Bagian diaktifkan' : 'Bagian dinonaktifkan (isian lama tetap tersimpan dan tetap masuk notula)');
+        });
+
+        if (isset($this->form[$id])) {
+            $this->versiForm[$id] = self::versi(BagianKustom::findOrFail($id));
+        }
 
         BagianKustom::lupakanCache();
     }
@@ -486,17 +874,31 @@ class BagianKustomManager extends Component
             return;
         }
 
-        $bagian = BagianKustom::withCount('poin')->findOrFail($this->pendingHapusId);
+        $bagian = BagianKustom::findOrFail($this->pendingHapusId);
 
-        if ($bagian->poin_count > 0) {
+        // Pemeriksaan "belum punya isian" diulang di dalam transaksi dengan baris bagian
+        // dikunci, dan riwayat ditulis di transaksi yang sama dengan penghapusannya.
+        $dihapus = $this->dalamTransaksi(function () use ($bagian) {
+            $terkunci = BagianKustom::whereKey($bagian->id)->lockForUpdate()->first();
+
+            if (! $terkunci || BagianKustomPoin::where('bagian_kustom_id', $bagian->id)->exists()) {
+                return false;
+            }
+
+            RiwayatKonfigurasiBagianKustom::catat($terkunci, $terkunci->nama, 'hapus', $terkunci->potretDefinisi(), null, 'Bagian dihapus (belum pernah punya isian)');
+            $terkunci->delete();
+
+            return true;
+        });
+
+        if (! $dihapus) {
             $this->batalkanHapus();
             $this->addError('hapus', 'Bagian "'.$bagian->nama.'" sudah punya isian tersimpan — nonaktifkan saja, jangan dihapus, supaya data lama tidak hilang.');
 
             return;
         }
 
-        $bagian->delete();
-        unset($this->form[$bagian->id]);
+        unset($this->form[$bagian->id], $this->versiForm[$bagian->id]);
 
         if ($this->bukaId === $bagian->id) {
             $this->bukaId = null;
@@ -591,8 +993,13 @@ class BagianKustomManager extends Component
             'kolomTampil' => $kolomTampil,
             'namaPeran' => BagianKustom::NAMA_PERAN,
             'tipeKolom' => BagianKustom::TIPE_KOLOM,
+            'pilihanPemisah' => FormatAngkaKolom::PEMISAH,
             'katalogMenu' => MenuBagianKustom::katalog(),
             'lokasi' => $this->lokasiTampil(),
+            'ringkasanSalin' => $this->ringkasanSalin(),
+            'riwayat' => $this->bukaId !== null && $this->tab === 'riwayat'
+                ? RiwayatKonfigurasiBagianKustom::with('user')->where('bagian_kustom_id', $this->bukaId)->latest('id')->limit(30)->get()
+                : collect(),
         ]);
     }
 
@@ -620,13 +1027,7 @@ class BagianKustomManager extends Component
                 continue;
             }
 
-            $hasil[] = [
-                'kunci' => $kunci,
-                'label' => trim((string) $row['label']),
-                'tipe' => $row['tipe'] ?? 'teks',
-                'opsi' => ($row['tipe'] ?? '') === 'pilihan' ? $this->opsiDariTeks((string) ($row['opsi_teks'] ?? '')) : [],
-                'wajib' => (bool) ($row['wajib'] ?? false),
-            ];
+            $hasil[] = $this->kolomTersimpan($kunci, $row, $this->opsiDariTeks((string) ($row['opsi_teks'] ?? '')));
         }
 
         return $hasil;

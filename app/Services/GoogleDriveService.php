@@ -33,6 +33,14 @@ use RuntimeException;
  */
 class GoogleDriveService
 {
+    /**
+     * Penanda tetap (nilai "1") pada bukti yang diunggah SIPINTER, di samping
+     * FolderStructureService::PENANDA_KODE — kueri appProperties Drive hanya bisa
+     * mencocokkan nilai persis, jadi daftar semua bukti bertanda (pemeriksa
+     * konsistensi, daftarBerkasBertanda()) butuh penanda bernilai tetap ini.
+     */
+    public const PENANDA_APLIKASI = 'sipinter';
+
     protected ?GoogleClient $client = null;
 
     protected ?Drive $drive = null;
@@ -403,6 +411,59 @@ class GoogleDriveService
             'web_view_link' => $file->getWebViewLink(),
             'size_bytes' => (int) $file->getSize(),
         ] : null;
+    }
+
+    /**
+     * Metadata satu berkas — BACA SAJA (pemeriksa konsistensi). null bila tidak
+     * ditemukan (404) atau sudah di Sampah Drive.
+     *
+     * @return array{id: string, name: string}|null
+     */
+    public function infoBerkas(string $fileId): ?array
+    {
+        try {
+            /** @var DriveFile $file */
+            $file = $this->drive()->files->get($fileId, ['fields' => 'id, name, trashed']);
+        } catch (GoogleServiceException $e) {
+            if ($e->getCode() === 404) {
+                return null;
+            }
+
+            throw new RuntimeException($this->pesanGoogleRamah($e, 'membaca info berkas'), previous: $e);
+        }
+
+        return $file->getTrashed() ? null : ['id' => $file->getId(), 'name' => $file->getName()];
+    }
+
+    /**
+     * Daftar bukti di Drive yang diunggah SIPINTER (penanda PENANDA_APLIKASI, maks
+     * $batas) beserta kode berkasnya (FolderStructureService::PENANDA_KODE) — BACA
+     * SAJA. Berkas yang diunggah sebelum penanda PENANDA_APLIKASI dipasang, dan
+     * salinan bukti di folder Evaluasi-RTL, tidak ikut terdaftar.
+     *
+     * @return array<int, array{id: string, nama: string, kode: ?string}>
+     */
+    public function daftarBerkasBertanda(int $batas = 1000): array
+    {
+        $hasil = [];
+        $token = null;
+
+        do {
+            $halaman = $this->panggilApi(fn () => $this->drive()->files->listFiles(array_filter([
+                'q' => sprintf("appProperties has { key='%s' and value='1' } and trashed = false", self::PENANDA_APLIKASI),
+                'fields' => 'nextPageToken, files(id, name, appProperties)',
+                'pageSize' => min(1000, $batas),
+                'pageToken' => $token,
+            ])), 'membaca daftar berkas bertanda');
+
+            foreach ($halaman->getFiles() as $file) {
+                $hasil[] = ['id' => $file->getId(), 'nama' => $file->getName(), 'kode' => $file->getAppProperties()[FolderStructureService::PENANDA_KODE] ?? null];
+            }
+
+            $token = $halaman->getNextPageToken();
+        } while ($token && count($hasil) < $batas);
+
+        return array_slice($hasil, 0, $batas);
     }
 
     /**

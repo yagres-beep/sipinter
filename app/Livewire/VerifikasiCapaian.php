@@ -11,12 +11,17 @@ use App\Models\CapaianTahunan;
 use App\Models\IndikatorProksi;
 use App\Models\Kegiatan;
 use App\Models\KendalaSolusi;
+use App\Models\LogAktivitas;
 use App\Models\MasterIku;
+use App\Models\Periode;
 use App\Models\RincianN;
 use App\Models\RincianOutput;
 use App\Models\RiwayatVerifikasiBerkas;
 use App\Models\RtlEvaluasi;
 use App\Services\NotulaService;
+use App\Support\JejakAktivitasBagianKustom;
+use App\Support\MenuBagianKustom;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -416,6 +421,19 @@ class VerifikasiCapaian extends Component
      */
     protected ?CapaianTahunan $cacheCapaianTahunan = null;
 
+    /**
+     * Halaman Verifikasi hanya untuk Tim SAKIP. boot() berjalan di SETIAP request
+     * Livewire, jadi semua aksi (penandaan, simpan analisis, ganti nama folder, dst.)
+     * langsung ditolak begitu peran Tim SAKIP dicabut, walau halaman masih terbuka.
+     */
+    public function boot(): void
+    {
+        if (auth()->user()?->namaRole() !== 'Tim SAKIP') {
+            LogAktivitas::aksesDitolak('halaman Verifikasi');
+            abort(403);
+        }
+    }
+
     public function mount(Capaian $capaian): void
     {
         $this->capaian = $capaian->load(['masterIku', 'periode']);
@@ -621,18 +639,6 @@ class VerifikasiCapaian extends Component
     }
 
     /**
-     * Item yang SUDAH direalisasikan pada triwulan LAIN (sebelum triwulan
-     * berjalan) -- ditampilkan read-only di blade, tidak pernah masuk
-     * $rincianNPilih maupun bisa diubah dari sesi verifikasi ini.
-     */
-    public function rincianNTerkunci(): Collection
-    {
-        $tw = (int) $this->capaian->periode->triwulan;
-
-        return $this->rincianNList()->filter(fn (RincianN $n) => ! $this->rincianNBisaDiubah($n, $tw))->values();
-    }
-
-    /**
      * Rincian yang ditampilkan sebagai daftar terkunci (read-only): sudah
      * terealisasi di TW lain, atau sudah dilepas dari N. Rincian tambahan yang
      * belum berlaku pada TW ini (dan belum terealisasi) tidak ditampilkan.
@@ -692,6 +698,18 @@ class VerifikasiCapaian extends Component
         unset($this->rincianNPilih[$id], $this->rincianNTw[$id]);
         $this->cacheRincianNList = null;
         $this->recomputeXRealisasiLive();
+    }
+
+    /**
+     * Item yang SUDAH direalisasikan pada triwulan LAIN (sebelum triwulan
+     * berjalan) -- ditampilkan read-only di blade, tidak pernah masuk
+     * $rincianNPilih maupun bisa diubah dari sesi verifikasi ini.
+     */
+    public function rincianNTerkunci(): Collection
+    {
+        $tw = (int) $this->capaian->periode->triwulan;
+
+        return $this->rincianNList()->filter(fn (RincianN $n) => ! $this->rincianNBisaDiubah($n, $tw))->values();
     }
 
     /**
@@ -1107,12 +1125,14 @@ class VerifikasiCapaian extends Component
      */
     public function bagianKustomList()
     {
-        // Hanya bagian yang ditempatkan di menu Isian Kegiatan — bagian di menu lain
-        // tidak lewat verifikasi capaian (lihat IsianBagianKustom).
+        // Hanya bagian yang ditempatkan di menu Isian Kegiatan, dan hanya poin yang
+        // diisi Ketua Tim lewat menu itu — poin Tim SAKIP/Kepala di menu lain (walau
+        // bagiannya sama) tidak lewat verifikasi capaian (lihat IsianBagianKustom).
         return $this->cacheBagianKustomList ??= BagianKustomPoin::with('bagianKustom')
+            ->konteksIsianKegiatan()
             ->where('iku_id', $this->capaian->iku_id)
             ->where('periode_id', $this->capaian->periode_id)
-            ->whereHas('bagianKustom', fn ($q) => $q->whereJsonContains('penempatan', \App\Support\MenuBagianKustom::PENGISIAN))
+            ->whereHas('bagianKustom', fn ($q) => $q->whereJsonContains('penempatan', MenuBagianKustom::PENGISIAN))
             ->orderBy('id')
             ->get();
     }
@@ -1472,8 +1492,32 @@ class VerifikasiCapaian extends Component
         return $this->bisaDiverifikasi() && $this->bagianKustomList()->contains('id', $poinId);
     }
 
+    /**
+     * Penandaan poin Bagian Kustom hanya untuk Tim SAKIP — dicek ulang dari peran
+     * terkini di setiap aksi, jadi pengguna yang perannya dicabut saat halaman masih
+     * terbuka ditolak (dan percobaannya tercatat di log aktivitas).
+     */
+    protected function pastikanTimSakipUntukBagianKustom(int $poinId): void
+    {
+        if (auth()->user()?->namaRole() === 'Tim SAKIP') {
+            return;
+        }
+
+        $poin = BagianKustomPoin::find($poinId);
+
+        JejakAktivitasBagianKustom::ditolak($poin?->bagianKustom, 'hanya Tim SAKIP yang dapat menandai poin di halaman Verifikasi', [
+            'objek_id' => $poin?->id,
+            'menu' => MenuBagianKustom::PENGISIAN,
+            'iku_id' => $poin?->iku_id,
+            'periode_id' => $poin?->periode_id,
+        ]);
+        abort(403);
+    }
+
     public function tandaiBagianKustomSesuai(int $poinId): void
     {
+        $this->pastikanTimSakipUntukBagianKustom($poinId);
+
         if (! $this->bagianKustomBisaDiverifikasi($poinId)) {
             return;
         }
@@ -1481,22 +1525,34 @@ class VerifikasiCapaian extends Component
         $this->resetErrorBag('catatanBagianKustom.'.$poinId);
         $this->catatanBagianKustom[$poinId] = null;
 
+        $poin = BagianKustomPoin::findOrFail($poinId);
+        [$statusSebelum, $catatanSebelum] = [$poin->status_verifikasi, $poin->catatan];
+
         $this->tandaiSedangDitangani();
 
-        // catatan_bukti_dihapus (pengingat bukti tertolak yang sudah dihapus Ketua Tim,
-        // lihat App\Livewire\PengisianKegiatan::hapusBuktiLamaBagianKustom()) ikut
-        // dikosongkan — begitu poin ini "Sesuai", pengingatnya sudah tidak relevan.
-        BagianKustomPoin::whereKey($poinId)->update([
-            'status_verifikasi' => 'terverifikasi',
-            'catatan' => null,
-            'catatan_bukti_dihapus' => null,
-        ]);
+        DB::transaction(function () use ($poin, $statusSebelum, $catatanSebelum) {
+            // catatan_bukti_dihapus (pengingat bukti tertolak yang sudah dihapus Ketua Tim,
+            // lihat App\Livewire\PengisianKegiatan::hapusBuktiLamaBagianKustom()) ikut
+            // dikosongkan — begitu poin ini "Sesuai", pengingatnya sudah tidak relevan.
+            BagianKustomPoin::whereKey($poin->id)->update([
+                'status_verifikasi' => 'terverifikasi',
+                'catatan' => null,
+                'catatan_bukti_dihapus' => null,
+            ]);
+
+            // Menandai ulang dengan status yang sama tidak dicatat dua kali.
+            if ($statusSebelum !== 'terverifikasi' || filled($catatanSebelum)) {
+                JejakAktivitasBagianKustom::poinDitandai($poin, $statusSebelum, $catatanSebelum);
+            }
+        });
 
         $this->cacheBagianKustomList = null;
     }
 
     public function tandaiBagianKustomTolak(int $poinId): void
     {
+        $this->pastikanTimSakipUntukBagianKustom($poinId);
+
         if (! $this->bagianKustomBisaDiverifikasi($poinId)) {
             return;
         }
@@ -1512,12 +1568,21 @@ class VerifikasiCapaian extends Component
             return;
         }
 
+        $poin = BagianKustomPoin::findOrFail($poinId);
+        [$statusSebelum, $catatanSebelum] = [$poin->status_verifikasi, $poin->catatan];
+
         $this->tandaiSedangDitangani();
 
-        BagianKustomPoin::whereKey($poinId)->update([
-            'status_verifikasi' => 'ditolak',
-            'catatan' => $catatan,
-        ]);
+        DB::transaction(function () use ($poin, $catatan, $statusSebelum, $catatanSebelum) {
+            BagianKustomPoin::whereKey($poin->id)->update([
+                'status_verifikasi' => 'ditolak',
+                'catatan' => $catatan,
+            ]);
+
+            if ($statusSebelum !== 'ditolak' || $catatanSebelum !== $catatan) {
+                JejakAktivitasBagianKustom::poinDitandai($poin, $statusSebelum, $catatanSebelum);
+            }
+        });
 
         $this->cacheBagianKustomList = null;
     }
@@ -1791,13 +1856,13 @@ class VerifikasiCapaian extends Component
         $tahun = $periode->triwulan === 4 ? $periode->tahun + 1 : $periode->tahun;
         $bulanPertama = ($triwulan - 1) * 3 + 1;
 
-        $periodeTarget = \App\Models\Periode::firstOrCreate(
+        $periodeTarget = Periode::firstOrCreate(
             ['tahun' => $tahun, 'bulan' => $bulanPertama],
             ['triwulan' => $triwulan, 'bulan_ke' => 1, 'flag_bulan_terlewat' => false]
         );
 
         $namaBulan = collect([$bulanPertama, $bulanPertama + 1, $bulanPertama + 2])
-            ->map(fn ($b) => \Illuminate\Support\Carbon::create(2000, $b, 1)->locale('id')->translatedFormat('F'));
+            ->map(fn ($b) => Carbon::create(2000, $b, 1)->locale('id')->translatedFormat('F'));
 
         $pic = $this->picRtlBerikutnyaTerpilih !== []
             ? $this->picRtlBerikutnyaTerpilih
@@ -1810,7 +1875,7 @@ class VerifikasiCapaian extends Component
                 'rtl_teks' => $teks,
                 'berlaku_bulan' => 'RTL untuk '.$namaBulan->join(', ', ', dan '),
                 'pic' => $pic !== [] ? implode(', ', $pic) : null,
-                'batas_waktu' => \Illuminate\Support\Carbon::create($tahun, $bulanPertama + 2, 1)->endOfMonth()->toDateString(),
+                'batas_waktu' => Carbon::create($tahun, $bulanPertama + 2, 1)->endOfMonth()->toDateString(),
                 'status_dokumen' => RtlEvaluasi::STATUS_DIAJUKAN,
                 'status_verifikasi' => 'terverifikasi',
             ]);

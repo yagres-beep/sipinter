@@ -128,10 +128,11 @@
                         @enderror
                     </div>
 
-                    @foreach ($bagian->kolomList() as $kolom)
+                    @foreach ($bagian->kolomBerlaku($tahun, \App\Models\BagianKustom::triwulanDariBulan($bulan)) as $kolom)
                         <div class="field">
                             <label>{{ $kolom['label'] }}
                                 @if ($kolom['wajib'])<span class="req">*</span>@else<span style="color:var(--muted);font-weight:500">opsional</span>@endif
+                                @include('livewire.partials._petunjuk-kolom-angka', ['kolom' => $kolom])
                             </label>
                             @if ($kolom['tipe'] === 'pilihan')
                                 <select class="inp filled" wire:model.blur="baris.{{ $bagian->id }}.{{ $i }}.kolom.{{ $kolom['kunci'] }}">

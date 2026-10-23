@@ -120,7 +120,23 @@
         </div>
     @endif
 
-    @if ($errors->any())
+    @if ($bentrok !== [])
+        <div class="info red" style="margin-bottom:14px" wire:key="peringatan-bentrok">
+            ⚠️ <b>Belum tersimpan — data ini sudah diubah pengguna lain sejak halaman Anda dimuat.</b>
+            Tidak ada isian yang tersimpan (seluruh penyimpanan dibatalkan supaya perubahan orang lain tidak tertimpa). Isian Anda masih di layar.
+            <ul style="margin:6px 0 0 18px;padding:0">
+                @foreach (collect($bentrok)->flatten() as $labelBentrok)
+                    <li>{{ $labelBentrok }}</li>
+                @endforeach
+            </ul>
+            <div style="margin-top:8px">Salin perubahan Anda pada bagian di atas bila perlu, lalu muat data terbaru bagian tersebut (isian baru yang belum tersimpan tetap dipertahankan) dan simpan kembali.</div>
+            <div class="btn-row" style="margin-top:8px">
+                <button type="button" class="btn btn-primary btn-sm" wire:click="muatUlangBagianBentrok" wire:loading.attr="disabled" wire:target="muatUlangBagianBentrok">↻ Muat data terbaru</button>
+            </div>
+        </div>
+    @endif
+
+    @if ($errors->any() && ! ($errors->count() === 1 && $errors->has('bentrok')))
         <div class="info red">
             ⚠️ Belum bisa diajukan — {{ $errors->count() }} hal perlu dilengkapi:
             <ul style="margin:6px 0 0 18px;padding:0">
@@ -1487,7 +1503,7 @@
                                         <div>{{ $entri->teks }}</div>
                                         @foreach ($bagian->kolomList() as $kolom)
                                             @if (filled($entri->nilai_kolom[$kolom['kunci']] ?? null))
-                                                <div style="font-size:12px;color:var(--muted)">{{ $kolom['label'] }}: {{ $entri->nilai_kolom[$kolom['kunci']] }}</div>
+                                                <div style="font-size:12px;color:var(--muted)">{{ $kolom['label'] }}: {{ \App\Models\BagianKustom::nilaiTampil($kolom, $entri->nilai_kolom[$kolom['kunci']]) }}</div>
                                             @endif
                                         @endforeach
                                         @if ($entri->berkas->isNotEmpty())
@@ -1541,10 +1557,11 @@
                             @enderror
                         </div>
 
-                        @foreach ($bagian->kolomList() as $kolom)
+                        @foreach ($bagian->kolomBerlaku($tahun, \App\Models\BagianKustom::triwulanDariBulan($bulan)) as $kolom)
                             <div class="field">
                                 <label>{{ $kolom['label'] }}
                                     @if ($kolom['wajib'])<span class="req">*</span>@else<span style="color:var(--muted);font-weight:500">opsional</span>@endif
+                                    @include('livewire.partials._petunjuk-kolom-angka', ['kolom' => $kolom])
                                 </label>
                                 @if ($kolom['tipe'] === 'pilihan')
                                     <select class="inp filled" wire:model.blur="bagianKustomBlocks.{{ $bagian->id }}.{{ $i }}.kolom.{{ $kolom['kunci'] }}">

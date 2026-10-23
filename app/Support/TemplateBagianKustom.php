@@ -88,7 +88,7 @@ final class TemplateBagianKustom
         foreach ($kolom as $k) {
             $daftar[] = [
                 'kunci' => $k['kunci'],
-                'keterangan' => 'Isian kolom "'.$k['label'].'" ('.self::labelTipe($k['tipe']).')',
+                'keterangan' => 'Isian kolom "'.$k['label'].'" ('.self::labelTipe($k['tipe']).')'.(($k['aktif'] ?? true) ? '' : ' — nonaktif, hanya berisi data lama'),
                 'contoh' => self::contohKolom($k),
             ];
         }
@@ -104,7 +104,9 @@ final class TemplateBagianKustom
     public static function contohKolom(array $kolom): string
     {
         return match ($kolom['tipe']) {
-            'angka' => '12',
+            // Angka contoh mengikuti format kolom (desimal, pemisah, satuan) — sama
+            // dengan yang tercetak di notula sungguhan.
+            'angka' => FormatAngkaKolom::tampil(FormatAngkaKolom::diatur($kolom) ? '1234.5' : '12', $kolom),
             'pilihan' => $kolom['opsi'][0] ?? 'Pilihan 1',
             default => 'Contoh '.Str::lower($kolom['label']),
         };

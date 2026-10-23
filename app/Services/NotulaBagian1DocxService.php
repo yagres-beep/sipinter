@@ -10,6 +10,7 @@ use App\Models\PengaturanCapaian;
 use App\Models\Periode;
 use App\Models\RincianN;
 use App\Support\RumusMarkup;
+use App\Support\TemplateBagianKustom;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
@@ -721,7 +722,7 @@ class NotulaBagian1DocxService
                 .'</w:t></w:r></w:p>';
 
             foreach ($bagian->poin as $poin) {
-                $konteks = \App\Support\TemplateBagianKustom::konteks(
+                $konteks = TemplateBagianKustom::konteks(
                     $poin->masterIku->kode ?? null,
                     $poin->masterIku->indikator ?? null,
                     $poin->teks,
@@ -729,10 +730,12 @@ class NotulaBagian1DocxService
                     $poin->periode?->tahun,
                     $poin->periode?->triwulan,
                     $poin->periode?->bulan,
-                    $bagian->nilaiKolomLengkap($poin->nilai_kolom),
+                    // Format angka (desimal, pemisah, satuan) diatur per kolom; kolom
+                    // tanpa pengaturan format tercetak apa adanya seperti sebelumnya.
+                    $bagian->nilaiKolomTampil($poin->nilai_kolom),
                 );
 
-                $teks = \App\Support\TemplateBagianKustom::render($bagian->formatNotulaEfektif(), $konteks);
+                $teks = TemplateBagianKustom::render($bagian->formatNotulaEfektif(), $konteks);
                 $this->adaDaftarButir = true;
                 $xml .= '<w:p>'.$this->pPrDaftar('', self::NUM_ID_BUTIR).'<w:r><w:t xml:space="preserve">'
                     .htmlspecialchars($teks, ENT_QUOTES | ENT_XML1)
@@ -918,7 +921,7 @@ class NotulaBagian1DocxService
         $this->set($sub, 'batas_waktu_rtl_berikutnya', $rtlBerikutnyaIku->isNotEmpty()
             ? $this->akhirTriwulan($data['tahunTwBerikutnya'], $data['twBerikutnya'])->translatedFormat('F Y')
             : null);
-        $this->setTautan($sub, 'bukti_rtl_sebelumnya',$rtlSebelumnyaIku->isNotEmpty() ? $linkFolderTwSebelumnya : null);
+        $this->setTautan($sub, 'bukti_rtl_sebelumnya', $rtlSebelumnyaIku->isNotEmpty() ? $linkFolderTwSebelumnya : null);
         $this->setBerdaftar($sub, 'penjelasan_lainnya', $capaian?->catatan);
 
         return $this->getMainPart($sub);

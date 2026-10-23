@@ -5,12 +5,14 @@ namespace App\Models;
 use App\Services\FolderStructureService;
 use App\Services\GoogleDriveService;
 use App\Services\SinkronBuktiRtlService;
+use App\Support\JejakAktivitasBagianKustom;
 use App\Support\KodeAcak;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
@@ -265,19 +267,36 @@ class Berkas extends Model
         }
 
         if ($sudahAda) {
-            $this->update([
+            $this->catatHasilDrive([
                 'drive_file_id' => $sudahAda['id'],
                 'storage_account_id' => StorageAccount::aktif()?->id,
                 'nama_file' => $sudahAda['name'],
-            ]);
+            ], susulan: true);
             $this->sinkronkanSalinanRtl();
 
             return true;
         }
 
-        $this->unggahKeDrive();
+        $this->unggahKeDrive(susulan: true);
 
         return true;
+    }
+
+    /**
+     * Catat hasil Drive di baris ini bersama log "tersalin ke Google Drive" (bukti
+     * Bagian Kustom) dalam SATU transaksi — log tidak pernah menyebut tersalin bila
+     * pencatatannya batal, dan sebaliknya. Bila transaksi ini gagal, berkas Drive yang
+     * sudah terunggah tetap bertanda kode berkas ini, jadi percobaan berikutnya
+     * memakainya ulang (sinkronUlangKeDrive()), bukan mengunggah salinan kedua.
+     *
+     * @param  array{drive_file_id: string, storage_account_id: ?int, nama_file: string}  $hasil
+     */
+    protected function catatHasilDrive(array $hasil, bool $susulan): void
+    {
+        DB::transaction(function () use ($hasil, $susulan) {
+            $this->update($hasil);
+            JejakAktivitasBagianKustom::buktiTersinkron($this, $susulan);
+        });
     }
 
     /**
@@ -299,9 +318,12 @@ class Berkas extends Model
      * unggahan ulang tidak dobel (lihat sinkronUlangKeDrive()). Melempar exception
      * bila Drive gagal — baris tetap ada dengan drive_file_id kosong.
      *
+     * $susulan = unggahan ini percobaan ulang (sinkron susulan / tombol "Coba lagi"),
+     * hanya memengaruhi keterangan log.
+     *
      * @return array{drive_file_id: string, storage_account_id: ?int, nama_file: string}
      */
-    public function unggahKeDrive(): array
+    public function unggahKeDrive(bool $susulan = false): array
     {
         $ref = $this->ref ?? throw new \RuntimeException('Data pemilik berkas ini sudah tidak ada.');
         $folderService = app(FolderStructureService::class);
@@ -317,7 +339,7 @@ class Berkas extends Model
             default => throw new \RuntimeException('Jenis berkas ini tidak bisa diunggah ke Drive dari sini.'),
         };
 
-        $this->update($hasil);
+        $this->catatHasilDrive($hasil, $susulan);
         $this->sinkronkanSalinanRtl();
 
         return $hasil;
@@ -355,15 +377,37 @@ class Berkas extends Model
      * kegiatan) — baru salinan lokal. Bila Drive GAGAL, exception diteruskan dan
      * TIDAK ada yang dihapus, supaya pemanggil bisa membiarkan berkas tetap ada dan
      * menampilkan kegagalannya ke pengguna.
+     *
+     * Pemanggil yang perlu menyelipkan langkah database di antara keduanya (lihat
+     * PengisianKegiatan::hapusBuktiTersimpan()) memakai buangSalinanRtl() lalu
+     * buangSalinanDrive() secara terpisah, dan menghapus salinan lokal sendiri.
      */
     public function buangSalinan(bool $keSampah = false): void
     {
-        // Salinan di Evaluasi-RTL dibuang LEBIH DULU (cara yang sama: permanen atau ke
-        // Sampah) — bila gagal, exception diteruskan dan berkas sumber tetap utuh.
+        $this->buangSalinanRtl($keSampah);
+        $this->buangSalinanDrive($keSampah);
+
+        if ($this->path) {
+            Storage::disk('local')->delete($this->path);
+        }
+    }
+
+    /**
+     * Salinan berkas ini di folder Evaluasi-RTL dibuang (permanen atau ke Sampah) dan
+     * status salinannya dicatat — selalu LEBIH DULU dari berkas sumber, karena baris
+     * salinan ikut terhapus (FK cascade) begitu baris berkas ini dihapus. Bila gagal,
+     * exception diteruskan dan berkas sumber tetap utuh.
+     */
+    public function buangSalinanRtl(bool $keSampah = false): void
+    {
         if ($this->ref_type === Kegiatan::class) {
             app(SinkronBuktiRtlService::class)->buangSalinanBerkas($this, $keSampah);
         }
+    }
 
+    /** Salinan Drive berkas ini sendiri: dihapus permanen, atau ke Sampah bila $keSampah. */
+    public function buangSalinanDrive(bool $keSampah = false): void
+    {
         if ($this->drive_file_id) {
             try {
                 $drive = app(GoogleDriveService::class);
@@ -375,10 +419,6 @@ class Berkas extends Model
 
                 throw $e;
             }
-        }
-
-        if ($this->path) {
-            Storage::disk('local')->delete($this->path);
         }
     }
 }

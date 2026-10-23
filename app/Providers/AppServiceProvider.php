@@ -2,9 +2,11 @@
 
 namespace App\Providers;
 
+use App\Http\Middleware\EnsureUserHasRole;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
+use Livewire\Livewire;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -36,5 +38,11 @@ class AppServiceProvider extends ServiceProvider
             /** @var Carbon $this */
             return $this->copy()->setTimezone('Asia/Makassar');
         });
+
+        // Middleware peran rute (role:...) ikut dijalankan ulang di SETIAP request
+        // Livewire (klik, simpan, unggah), bukan hanya saat halaman dibuka — jadi
+        // pengguna yang perannya dicabut saat halaman masih terbuka langsung ditolak
+        // di aksi berikutnya, di komponen mana pun.
+        Livewire::addPersistentMiddleware([EnsureUserHasRole::class]);
     }
 }

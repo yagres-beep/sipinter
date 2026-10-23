@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Exceptions\KonflikPenyuntinganException;
 use App\Livewire\Concerns\GantiNamaBerkas;
 use App\Models\BagianKustom;
 use App\Models\BagianKustomPoin;
@@ -9,6 +10,7 @@ use App\Models\Berkas;
 use App\Models\Capaian;
 use App\Models\Kegiatan;
 use App\Models\KendalaSolusi as KendalaSolusiModel;
+use App\Models\LogAktivitas;
 use App\Models\MasterIku;
 use App\Models\Periode;
 use App\Models\RiwayatStatusCapaian;
@@ -16,6 +18,8 @@ use App\Models\RtlEvaluasi as RtlEvaluasiModel;
 use App\Models\SalinanBuktiRtl;
 use App\Services\FolderStructureService;
 use App\Services\SinkronBuktiRtlService;
+use App\Support\JejakAktivitasBagianKustom;
+use App\Support\MenuBagianKustom;
 use Illuminate\Contracts\Cache\Lock;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Arr;
@@ -28,6 +32,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Validator;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
@@ -51,6 +56,56 @@ class PengisianKegiatan extends Component
      * @var array<int, array{id: ?int, status_dokumen: ?string, uraian_kegiatan: string, jenis: string, tahapan_survei: ?string, bukti: array, existing_bukti: array}>
      */
     public array $blocks = [];
+
+    /**
+     * Versi (sidik jari isi) baris yang dimuat server ke formulir, per jenis:
+     * - kegiatan / kendala / rtl / poin: [id => sidik] untuk baris yang BISA diedit saat
+     *   dimuat — dibandingkan ulang (dengan kunci baris) saat menyimpan; bila berbeda,
+     *   seluruh penyimpanan dibatalkan supaya perubahan pengguna lain tidak tertimpa.
+     * - kegiatan_lain: [id] kegiatan hanya-baca yang ikut dimuat.
+     * Hanya id di sini yang boleh dikirim balik di formulir (bukan id sembarang dari
+     * browser). Dikunci: tidak bisa diubah lewat request.
+     *
+     * @var array<string, array<int|string, mixed>>
+     */
+    #[Locked]
+    public array $versiDimuat = [];
+
+    /**
+     * Bagian yang bentrok pada percobaan simpan terakhir: [jenis => [label]]. Dipakai
+     * layar untuk menampilkan peringatan + tombol muat ulang bagian tersebut.
+     *
+     * @var array<string, array<int, string>>
+     */
+    #[Locked]
+    public array $bentrok = [];
+
+    /**
+     * Berkas baru yang unggahan Drive-nya ditunda sampai transaksi simpan berhasil
+     * (lihat antreUnggah()/jalankanAntreanUnggah()). Hanya hidup selama satu request.
+     *
+     * @var array<int, array{berkas: Berkas, ref: \Illuminate\Database\Eloquent\Model, nama_asli: string, konteks: string, label_gagal: string}>
+     */
+    protected array $antreanUnggah = [];
+
+    /**
+     * Pekerjaan Google Drive lain yang ditunda sampai transaksi simpan berhasil (mis.
+     * menyusun ulang salinan bukti di folder Evaluasi-RTL saat tautan RTL berubah).
+     *
+     * @var list<\Closure>
+     */
+    protected array $tugasSetelahCommit = [];
+
+    /** Path lokal yang disimpan selama transaksi — dihapus bila transaksinya batal. */
+    protected array $berkasLokalBaru = [];
+
+    /**
+     * Baris yang dikunci & diperiksa versinya di awal transaksi simpan, per jenis
+     * [id => model] — sumber status sebenarnya (bukan status kiriman browser).
+     *
+     * @var array<string, Collection<int, \Illuminate\Database\Eloquent\Model>>
+     */
+    protected array $barisTerkunci = [];
 
     /**
      * Nama kustom untuk berkas bukti yang BARU dipilih (belum tersimpan), diisi
@@ -1591,19 +1646,15 @@ class PengisianKegiatan extends Component
             return;
         }
 
-        if ($this->blokTerkunci($block['status_dokumen'])) {
+        // Hanya kegiatan milik form ini (id dimuat server, IKU & periode cocok) dan status
+        // kuncinya dibaca dari database — id/status kiriman browser tidak dipercaya.
+        $kegiatan = $this->kegiatanMilikForm((int) $block['id']);
+
+        if (! $kegiatan || $this->blokTerkunci($kegiatan->status_dokumen)) {
             return;
         }
 
-        // Hanya kegiatan milik IKU & periode form ini — id dari browser tidak dipercaya.
-        $periode = $this->periodeSaatIni();
-        $kegiatan = $periode
-            ? Kegiatan::with('berkas')->where('iku_id', $this->iku_id)->where('periode_id', $periode->id)->find($block['id'])
-            : null;
-
-        if (! $kegiatan) {
-            return;
-        }
+        $kegiatan->load('berkas');
 
         // Bukti kegiatan TIDAK dihapus permanen dari Drive, hanya dipindah ke Sampah
         // (bisa dipulihkan 30 hari) — kegiatan bisa saja bagian dari RTL triwulan ini.
@@ -1611,12 +1662,11 @@ class PengisianKegiatan extends Component
         $gagal = [];
         $alasan = null;
         foreach ($kegiatan->berkas as $berkas) {
-            try {
-                $berkas->buangSalinan(keSampah: true);
-                $berkas->delete();
-            } catch (\Throwable $e) {
+            $alasanBerkas = null;
+
+            if (! $this->hapusBuktiTersimpan($berkas, keSampah: true, tampilkanGagal: false, alasanGagal: $alasanBerkas)) {
                 $gagal[$berkas->id] = $berkas->nama_file;
-                $alasan ??= self::alasanGagalDrive($e->getMessage());
+                $alasan ??= $alasanBerkas;
             }
         }
 
@@ -1635,6 +1685,7 @@ class PengisianKegiatan extends Component
         $jumlahBukti = $kegiatan->berkas->count();
         $kegiatan->delete();
 
+        unset($this->versiDimuat['kegiatan'][$kegiatan->id]);
         unset($this->blocks[$index]);
         $this->blocks = array_values($this->blocks);
 
@@ -1648,20 +1699,71 @@ class PengisianKegiatan extends Component
     }
 
     /**
-     * Hapus permanen salinan SATU bukti (Drive & lokal) lalu tampilkan hasilnya.
-     * false = Drive gagal: berkas dibiarkan utuh & alasan kegagalan ditampilkan.
+     * Hapus SATU bukti yang sudah tersimpan, dengan perilaku Drive yang sama seperti
+     * sebelumnya: salinan Drive dihapus permanen (atau dipindah ke Sampah bila
+     * $keSampah), dan bila Drive GAGAL bukti dibiarkan utuh.
+     *
+     * Urutannya:
+     * 1. salinan di folder Evaluasi-RTL dibuang lebih dulu (sama seperti sebelumnya;
+     *    status salinannya tercatat apa adanya, dan salinan dibuat ulang otomatis bila
+     *    sumbernya ternyata tidak jadi dihapus);
+     * 2. SATU transaksi: perubahan database pendamping + log ($sebelumHapus) → buang
+     *    salinan Drive berkas sumber → hapus baris berkas. Kegagalan database atau
+     *    pencatatan log terjadi SEBELUM salinan sumber disentuh dan membatalkan
+     *    semuanya; kegagalan Drive juga membatalkan seluruh transaksi;
+     * 3. berkas lokal baru dihapus setelah commit.
+     *
+     * @return bool false = Drive gagal (bila $tampilkanGagal, alasannya sudah ditampilkan)
+     *
+     * @throws \Throwable kegagalan database/log diteruskan apa adanya
      */
-    protected function hapusSalinanBukti(Berkas $berkas): bool
+    protected function hapusBuktiTersimpan(Berkas $berkas, ?\Closure $sebelumHapus = null, bool $keSampah = false, bool $tampilkanGagal = true, ?string &$alasanGagal = null): bool
     {
-        try {
-            $berkas->buangSalinan();
+        $galatDrive = null;
 
-            return true;
+        try {
+            try {
+                $berkas->buangSalinanRtl($keSampah);
+            } catch (\Throwable $e) {
+                $galatDrive = $e;
+
+                throw $e;
+            }
+
+            DB::transaction(function () use ($berkas, $sebelumHapus, $keSampah, &$galatDrive) {
+                if ($sebelumHapus) {
+                    $sebelumHapus();
+                }
+
+                try {
+                    $berkas->buangSalinanDrive($keSampah);
+                } catch (\Throwable $e) {
+                    $galatDrive = $e;
+
+                    throw $e;
+                }
+
+                $berkas->delete();
+            });
         } catch (\Throwable $e) {
-            $this->dispatch('notify', type: 'error', message: "Gagal menghapus \"{$berkas->nama_file}\" dari Google Drive — ".self::alasanGagalDrive($e->getMessage()).'. Bukti TIDAK dihapus dan masih ada di SIPINTER maupun Google Drive; coba lagi nanti.');
+            if ($galatDrive === null) {
+                throw $e;
+            }
+
+            $alasanGagal = self::alasanGagalDrive($galatDrive->getMessage());
+
+            if ($tampilkanGagal) {
+                $this->dispatch('notify', type: 'error', message: "Gagal menghapus \"{$berkas->nama_file}\" dari Google Drive — {$alasanGagal}. Bukti TIDAK dihapus dan masih ada di SIPINTER maupun Google Drive; coba lagi nanti.");
+            }
 
             return false;
         }
+
+        if ($berkas->path) {
+            Storage::disk('local')->delete($berkas->path);
+        }
+
+        return true;
     }
 
     /**
@@ -1831,16 +1933,20 @@ class PengisianKegiatan extends Component
             return;
         }
 
-        $berkas = Berkas::where('id', $berkasId)
-            ->where('ref_type', Kegiatan::class)
-            ->where('ref_id', $block['id'])
-            ->first();
+        // Kegiatan harus milik formulir ini (dimuat server, IKU & periode cocok) dan
+        // status kuncinya dibaca dari database — bukan dari data kiriman browser.
+        $kegiatan = $this->kegiatanMilikForm((int) $block['id']);
 
-        if (! $berkas || ! $this->buktiLamaBisaDikelola($berkas->status_verifikasi, $this->blokTerkunci($block['status_dokumen']), fresh: true)) {
+        if (! $kegiatan) {
             return;
         }
 
-        if (! $this->hapusSalinanBukti($berkas)) {
+        $berkas = Berkas::where('id', $berkasId)
+            ->where('ref_type', Kegiatan::class)
+            ->where('ref_id', $kegiatan->id)
+            ->first();
+
+        if (! $berkas || ! $this->buktiLamaBisaDikelola($berkas->status_verifikasi, $this->blokTerkunci($kegiatan->status_dokumen), fresh: true)) {
             return;
         }
 
@@ -1848,13 +1954,22 @@ class PengisianKegiatan extends Component
         // hilang — begitu berkas ini dihapus, baris & catatannya lenyap dari tabel
         // `berkas`, jadi Tim SAKIP tidak akan tahu lagi APA yang tadinya salah saat
         // memeriksa bukti pengganti. Pengingat ini dikosongkan lagi begitu Kegiatan
-        // ditandai "diverifikasi" (lihat Kegiatan::verifikasi()).
+        // ditandai "diverifikasi" (lihat Kegiatan::verifikasi()). Satu transaksi dengan
+        // penghapusan (lihat hapusBuktiTersimpan()).
+        $terhapus = $this->hapusBuktiTersimpan($berkas, function () use ($berkas, $kegiatan) {
+            if ($berkas->catatan) {
+                Kegiatan::whereKey($kegiatan->id)->update(['catatan_bukti_dihapus' => $berkas->catatan]);
+            }
+        });
+
+        if (! $terhapus) {
+            return;
+        }
+
         if ($berkas->catatan) {
-            Kegiatan::whereKey($block['id'])->update(['catatan_bukti_dihapus' => $berkas->catatan]);
             $this->blocks[$blockIndex]['catatan_bukti_dihapus'] = $berkas->catatan;
         }
 
-        $berkas->delete();
         $this->notifikasiBuktiDihapus($berkas);
 
         $this->blocks[$blockIndex]['existing_bukti'] = collect($this->blocks[$blockIndex]['existing_bukti'])
@@ -1868,6 +1983,107 @@ class PengisianKegiatan extends Component
     }
 
     /**
+     * Bagian kustom di Isian Kegiatan hanya diisi Ketua Tim — dicek dari peran terkini
+     * di setiap aksi yang mengubah poin/bukti, jadi pengguna yang kehilangan peran itu
+     * saat halaman masih terbuka tetap ditolak.
+     */
+    protected function penggunaKetuaTim(): bool
+    {
+        return BagianKustom::peranDariNama(auth()->user()?->namaRole()) === BagianKustom::PERAN_KETUA_TIM;
+    }
+
+    /**
+     * Poin bagian kustom milik form ini: bagian aktif untuk Ketua Tim di Isian
+     * Kegiatan, IKU + periode yang sedang dipilih, dan konteks Isian Kegiatan (bukan
+     * poin Tim SAKIP/Kepala di menu lain).
+     */
+    protected function poinBagianKustomForm(int $bagianId, int $poinId, Periode $periode): ?BagianKustomPoin
+    {
+        if (! $this->bagianKustomAktif()->contains('id', $bagianId)) {
+            return null;
+        }
+
+        return BagianKustomPoin::konteksIsianKegiatan()
+            ->whereKey($poinId)
+            ->where('bagian_kustom_id', $bagianId)
+            ->where('iku_id', $this->iku_id)
+            ->where('periode_id', $periode->id)
+            ->first();
+    }
+
+    /**
+     * Periksa SEMUA blok bagian kustom sebelum apa pun disimpan/diunggah: peran harus
+     * Ketua Tim, setiap id poin harus milik form ini (lihat poinBagianKustomForm()),
+     * tidak ganda, dan poin lama hanya boleh diubah selagi isian belum terkunci (status
+     * dibaca langsung dari DB, tanpa cache). Pelanggaran ditolak 403 tanpa mengubah
+     * data apa pun.
+     */
+    protected function pastikanPoinBagianKustomSah(?Periode $periode): void
+    {
+        $adaIsian = false;
+        $idDikirim = [];
+
+        foreach ($this->bagianKustomBlocks as $bagianId => $daftar) {
+            foreach ((array) $daftar as $blok) {
+                if (filled($blok['id'] ?? null)) {
+                    $idDikirim[] = [(int) $bagianId, (int) $blok['id']];
+                    $adaIsian = true;
+                } elseif (is_array($blok) && $this->blokBagianKustomTerisi($blok)) {
+                    $adaIsian = true;
+                }
+            }
+        }
+
+        if (! $adaIsian) {
+            return;
+        }
+
+        // Penolakan dicatat ke log aktivitas lebih dulu (di luar transaksi, belum ada
+        // data yang diubah atau berkas yang diunggah), baru kemudian 403.
+        $tolak = function (string $alasan, ?int $bagianId = null) use ($periode, $idDikirim): never {
+            JejakAktivitasBagianKustom::ditolak($bagianId ? BagianKustom::find($bagianId) : null, $alasan, [
+                'menu' => MenuBagianKustom::PENGISIAN,
+                'iku_id' => $this->iku_id,
+                'periode_id' => $periode?->id,
+                'perubahan' => ['id_poin_dikirim' => array_map(fn ($p) => $p[1], $idDikirim)],
+            ]);
+            abort(403);
+        };
+
+        if (! $this->penggunaKetuaTim()) {
+            $tolak('hanya Ketua Tim yang dapat mengisi bagian kustom di Isian Kegiatan');
+        }
+
+        if ($idDikirim === []) {
+            return;
+        }
+
+        if (collect($idDikirim)->pluck(1)->duplicates()->isNotEmpty()) {
+            $tolak('id poin dikirim ganda');
+        }
+
+        // Poin lama hanya ada pada periode yang sudah ada di database.
+        if (! $periode) {
+            $tolak('konteks data tidak sesuai (periode formulir belum ada, tetapi id poin dikirim)');
+        }
+
+        // Poin lama hanya dimuat ke form selagi isian belum terkunci (lihat
+        // muatBagianKustomBlocks()) — id poin yang dikirim saat terkunci pasti bukan
+        // dari form yang sah.
+        $status = Capaian::where('iku_id', $this->iku_id)->where('periode_id', $periode->id)->value('status');
+
+        if (in_array($status, [Capaian::STATUS_DIVERIFIKASI, Capaian::STATUS_DISETUJUI, Capaian::STATUS_SEDANG_DITANGANI], true)) {
+            $tolak('isian IKU ini sedang terkunci (status '.$status.')');
+        }
+
+        foreach ($idDikirim as [$bagianId, $poinId]) {
+            if (! $this->poinBagianKustomForm($bagianId, $poinId, $periode)) {
+                $tolak('konteks data tidak sesuai (poin bukan milik bagian, IKU, periode, atau menu Isian Kegiatan pada form ini)', $bagianId);
+            }
+        }
+    }
+
+    /**
      * Hapus SATU berkas bukti dukung bagian kustom (mis. Manajemen Risiko) yang SUDAH
      * TERSIMPAN dan ditandai "Tidak Sesuai" oleh Tim SAKIP — pasangan dari
      * hapusBuktiLama() di atas, tapi untuk BagianKustomPoin. Poin dicocokkan ke
@@ -1877,15 +2093,19 @@ class PengisianKegiatan extends Component
      */
     public function hapusBuktiLamaBagianKustom(int $poinId, int $berkasId): void
     {
+        abort_unless($this->penggunaKetuaTim(), 403);
+
         $periode = $this->iku_id ? $this->periodeSaatIni() : null;
 
         if (! $periode) {
             return;
         }
 
-        $poin = BagianKustomPoin::where('id', $poinId)
+        $poin = BagianKustomPoin::konteksIsianKegiatan()
+            ->where('id', $poinId)
             ->where('iku_id', $this->iku_id)
             ->where('periode_id', $periode->id)
+            ->whereIn('bagian_kustom_id', $this->bagianKustomAktif()->pluck('id'))
             ->first();
 
         if (! $poin) {
@@ -1901,18 +2121,23 @@ class PengisianKegiatan extends Component
             return;
         }
 
-        if (! $this->hapusSalinanBukti($berkas)) {
-            return;
-        }
-
         // Sama seperti hapusBuktiLama() untuk Kegiatan — salin catatan penolakan ke
         // poin ini sendiri sebelum berkasnya hilang. Dikosongkan lagi begitu poin
         // ditandai "Sesuai" (lihat VerifikasiCapaian::tandaiBagianKustomSesuai()).
-        if ($berkas->catatan) {
-            $poin->update(['catatan_bukti_dihapus' => $berkas->catatan]);
+        // Perubahan DB + log aktivitas satu transaksi dengan penghapusan, dan ditulis
+        // SEBELUM salinan Drive dibuang (lihat hapusBuktiTersimpan()).
+        $terhapus = $this->hapusBuktiTersimpan($berkas, function () use ($poin, $berkas) {
+            if ($berkas->catatan) {
+                $poin->update(['catatan_bukti_dihapus' => $berkas->catatan]);
+            }
+
+            JejakAktivitasBagianKustom::buktiDihapus($poin->bagianKustom, $poin, $berkas);
+        });
+
+        if (! $terhapus) {
+            return;
         }
 
-        $berkas->delete();
         $this->notifikasiBuktiDihapus($berkas);
 
         Cache::forget($this->cacheKeyPeriodeIku("riwayat-bagian-{$poin->bagian_kustom_id}"));
@@ -1962,18 +2187,19 @@ class PengisianKegiatan extends Component
             return;
         }
 
-        if (! $this->hapusSalinanBukti($berkas)) {
-            return;
-        }
-
         // Sama seperti hapusBuktiLama() untuk Kegiatan — salin catatan penolakan ke
         // poin RTL ini sendiri sebelum berkasnya hilang. Dikosongkan lagi begitu poin
         // ditandai "Sesuai" (lihat VerifikasiCapaian::tandaiRtlSesuai()).
-        if ($berkas->catatan) {
-            $poin->update(['catatan_bukti_dihapus' => $berkas->catatan]);
+        $terhapus = $this->hapusBuktiTersimpan($berkas, function () use ($poin, $berkas) {
+            if ($berkas->catatan) {
+                $poin->update(['catatan_bukti_dihapus' => $berkas->catatan]);
+            }
+        });
+
+        if (! $terhapus) {
+            return;
         }
 
-        $berkas->delete();
         $this->notifikasiBuktiDihapus($berkas);
 
         $this->cacheRtlBerjalan = null;
@@ -2053,55 +2279,114 @@ class PengisianKegiatan extends Component
         [$milikForm, $terkunci] = match (true) {
             $ref instanceof Kegiatan => [(int) $ref->iku_id === (int) $this->iku_id && (int) $ref->periode_id === (int) $periode->id, $this->blokTerkunci($ref->status_dokumen)],
             $ref instanceof RtlEvaluasiModel => [$this->rtlTriwulanBerjalan()->contains('id', $ref->id), $this->capaianTerkunci()],
-            $ref instanceof BagianKustomPoin => [(int) $ref->iku_id === (int) $this->iku_id && (int) $ref->periode_id === (int) $periode->id, $this->capaianTerkunci()],
+            $ref instanceof BagianKustomPoin => [
+                $this->penggunaKetuaTim() && $this->poinBagianKustomForm((int) $ref->bagian_kustom_id, (int) $ref->id, $periode) !== null,
+                $this->capaianTerkunci(),
+            ],
             default => [false, true],
         };
 
         if (! $milikForm || ! $this->buktiLamaBisaDikelola($lama->status_verifikasi, $terkunci, fresh: true)) {
+            // Ditolak SEBELUM berkas pengganti disimpan/diunggah ke Drive.
+            if ($ref instanceof BagianKustomPoin && ! $milikForm) {
+                JejakAktivitasBagianKustom::ditolak($ref->bagianKustom, 'penggantian bukti dukung untuk poin di luar form/konteks pengguna ini', [
+                    'objek_tipe' => LogAktivitas::OBJEK_BERKAS,
+                    'objek_id' => $lama->id,
+                    'menu' => MenuBagianKustom::PENGISIAN,
+                    'iku_id' => $this->iku_id,
+                    'periode_id' => $periode->id,
+                ]);
+            }
+
             return;
         }
 
-        $namaBerkas = $this->namaAsliBuktiBaru($file) ?: pathinfo($lama->nama_file, PATHINFO_FILENAME);
-        $path = $file->store(dirname((string) $lama->path) !== '.' ? dirname((string) $lama->path) : 'bukti-capaian', 'local');
+        // Satu penggantian per berkas lama dalam satu waktu (lintas pengguna/jendela) —
+        // tanpa ini dua penggantian bersamaan sama-sama membuat berkas pengganti.
+        $kunciGanti = Cache::lock('ganti-berkas-'.$lama->id, 120);
 
-        $baru = Berkas::create([
-            'ref_id' => $lama->ref_id,
-            'ref_type' => $lama->ref_type,
-            'kategori' => $lama->kategori,
-            'nama_file' => $namaBerkas.'.pdf',
-            'subfolder' => $lama->subfolder,
-            // Berkas pengganti menempati folder yang sama dengan berkas yang diganti.
-            'tahapan' => $lama->tahapan,
-            'periode_id' => $lama->periode_id,
-            'path' => $path,
-            'status_verifikasi' => 'menunggu',
-        ]);
+        if (! $kunciGanti->get()) {
+            $this->addError("gantiBerkas.{$berkasId}", 'Berkas ini sedang diganti dari jendela/pengguna lain. Muat ulang halaman sebentar lagi.');
 
-        try {
-            $baru->setRelation('ref', $ref)->unggahKeDrive();
-            $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'berkas pengganti', true);
-        } catch (\Throwable $e) {
-            Log::warning('Gagal mengunggah berkas pengganti ke Google Drive, disimpan lokal saja: '.$e->getMessage());
-            $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'berkas pengganti', false, $e->getMessage());
+            return;
         }
 
-        // Berkas lama baru dihapus bila salinan Drive-nya berhasil dihapus — bila gagal,
-        // berkas lama dibiarkan tetap ada (tampil di samping berkas pengganti).
-        $alasanLamaGagal = null;
         try {
-            $lama->buangSalinan();
-        } catch (\Throwable $e) {
-            $alasanLamaGagal = self::alasanGagalDrive($e->getMessage());
-        }
+            $namaBerkas = $this->namaAsliBuktiBaru($file) ?: pathinfo($lama->nama_file, PATHINFO_FILENAME);
+            $path = $file->store(dirname((string) $lama->path) !== '.' ? dirname((string) $lama->path) : 'bukti-capaian', 'local');
 
-        if ($alasanLamaGagal === null) {
-            // Alasan penolakan disimpan di kegiatan/poinnya supaya Tim SAKIP tetap tahu
-            // apa yang diperbaiki (sama seperti hapusBuktiLama()).
-            if ($lama->catatan) {
-                $ref->update(['catatan_bukti_dihapus' => $lama->catatan]);
+            // Berkas lama dibaca ulang & dikunci: bila sudah diganti/dihapus/berubah status
+            // sejak halaman dimuat, tidak ada berkas pengganti yang dibuat.
+            try {
+                $baru = DB::transaction(function () use ($lama, $namaBerkas, $path) {
+                    $lamaTerkunci = Berkas::whereKey($lama->id)->lockForUpdate()->first();
+
+                    if (! $lamaTerkunci || $lamaTerkunci->status_verifikasi !== 'ditolak') {
+                        return null;
+                    }
+
+                    return Berkas::create([
+                        'ref_id' => $lama->ref_id,
+                        'ref_type' => $lama->ref_type,
+                        'kategori' => $lama->kategori,
+                        'nama_file' => $namaBerkas.'.pdf',
+                        'subfolder' => $lama->subfolder,
+                        // Berkas pengganti menempati folder yang sama dengan berkas yang diganti.
+                        'tahapan' => $lama->tahapan,
+                        'periode_id' => $lama->periode_id,
+                        'path' => $path,
+                        'status_verifikasi' => 'menunggu',
+                    ]);
+                });
+            } catch (\Throwable $e) {
+                Storage::disk('local')->delete($path);
+
+                throw $e;
             }
-            $lama->delete();
+
+            if (! $baru) {
+                Storage::disk('local')->delete($path);
+                $this->addError("gantiBerkas.{$berkasId}", 'Berkas ini sudah diganti atau statusnya berubah. Muat ulang halaman untuk melihat keadaan terbaru.');
+
+                return;
+            }
+
+            // Unggah setelah baris pengganti tersimpan (commit). Gagal unggah tidak
+            // membatalkan apa pun: berkas aman di server dan bisa dicoba lagi.
+            $diDrive = false;
+            try {
+                $baru->setRelation('ref', $ref)->unggahKeDrive();
+                $diDrive = true;
+                $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'berkas pengganti', true);
+            } catch (\Throwable $e) {
+                Log::warning('Gagal mengunggah berkas pengganti ke Google Drive, disimpan lokal saja: '.$e->getMessage());
+                $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'berkas pengganti', false, $e->getMessage());
+            }
+
+            // Berkas lama baru dihapus bila salinan Drive-nya berhasil dihapus (permanen) —
+            // bila gagal, berkas lama dibiarkan tetap ada (tampil di samping berkas
+            // pengganti). Alasan penolakan disimpan di kegiatan/poinnya supaya Tim SAKIP
+            // tetap tahu apa yang diperbaiki (sama seperti hapusBuktiLama()); catatan, log
+            // penggantian, buang salinan Drive & hapus baris lama satu transaksi.
+            $alasanLamaGagal = null;
+            $this->hapusBuktiTersimpan($lama, function () use ($lama, $ref, $baru, $diDrive) {
+                if ($lama->catatan) {
+                    $ref->update(['catatan_bukti_dihapus' => $lama->catatan]);
+                }
+
+                if ($ref instanceof BagianKustomPoin) {
+                    JejakAktivitasBagianKustom::buktiDiganti($ref->bagianKustom, $ref, $lama, $baru, $diDrive);
+                }
+            }, tampilkanGagal: false, alasanGagal: $alasanLamaGagal);
+
+            if ($alasanLamaGagal !== null && $ref instanceof BagianKustomPoin) {
+                // Bukti lama masih ada (Drive gagal) — yang tercatat: bukti baru diunggah.
+                JejakAktivitasBagianKustom::buktiDiunggah($ref->bagianKustom, $ref, $baru, $diDrive);
+            }
+        } finally {
+            $kunciGanti->release();
         }
+
         $hapusLama = $alasanLamaGagal === null ? 1 : 0;
 
         $baru->refresh();
@@ -2304,6 +2589,13 @@ class PengisianKegiatan extends Component
         }
 
         $hasil = $kegiatan->gantiNamaFolder($namaBaru);
+
+        // gantiNamaFolder() juga menyamakan nama folder baris lain yang berbagi folder
+        // Drive yang sama — versinya diperbarui supaya simpanan berikutnya tidak
+        // dianggap bentrok dengan perubahan pengguna ini sendiri.
+        $this->segarkanVersiKegiatan(Kegiatan::whereKey($kegiatan->id)
+            ->when($kegiatan->drive_folder_id, fn ($q) => $q->orWhere('drive_folder_id', $kegiatan->drive_folder_id))
+            ->get());
 
         foreach ($this->blocks as $i => $block) {
             if ((int) ($block['id'] ?? 0) === $kegiatan->id) {
@@ -2737,6 +3029,7 @@ class PengisianKegiatan extends Component
             $terkunci = $this->capaianTerkunci();
 
             return BagianKustomPoin::with(['periode', 'berkas'])
+                ->konteksIsianKegiatan()
                 ->where('iku_id', $this->iku_id)
                 ->where('bagian_kustom_id', $bagian->id)
                 ->whereHas('periode', function ($q) use ($triwulanSekarang) {
@@ -2810,7 +3103,7 @@ class PengisianKegiatan extends Component
         return Cache::remember($this->cacheKeyPeriodeIku('catatan-penolakan'), self::CACHE_TTL_DETIK, function () use ($periode) {
             $kegiatanIds = collect($this->blocks)->pluck('id')->filter();
             $kendalaIds = KendalaSolusiModel::where('iku_id', $this->iku_id)->where('periode_id', $periode->id)->pluck('id');
-            $bagianKustomIds = BagianKustomPoin::where('iku_id', $this->iku_id)->where('periode_id', $periode->id)->pluck('id');
+            $bagianKustomIds = BagianKustomPoin::konteksIsianKegiatan()->where('iku_id', $this->iku_id)->where('periode_id', $periode->id)->pluck('id');
             $rtlIds = $this->rtlTriwulanBerjalan()->pluck('id');
 
             $catatanBerkas = Berkas::where('status_verifikasi', 'ditolak')
@@ -3144,6 +3437,8 @@ class PengisianKegiatan extends Component
     protected function muatBlocksKegiatan(): void
     {
         $periode = $this->iku_id ? $this->periodeSaatIni() : null;
+        $this->versiDimuat['kegiatan'] = [];
+        $this->versiDimuat['kegiatan_lain'] = [];
 
         if (! $periode) {
             $this->blocks = [$this->emptyBlock()];
@@ -3156,6 +3451,14 @@ class PengisianKegiatan extends Component
             ->with('berkas')
             ->orderBy('id')
             ->get();
+
+        foreach ($kegiatanList as $kegiatan) {
+            if ($this->blokTerkunci($kegiatan->status_dokumen)) {
+                $this->versiDimuat['kegiatan_lain'][] = $kegiatan->id;
+            } else {
+                $this->versiDimuat['kegiatan'][$kegiatan->id] = self::sidikBaris($kegiatan);
+            }
+        }
 
         if ($kegiatanList->isEmpty()) {
             $this->blocks = [$this->emptyBlock()];
@@ -3228,6 +3531,7 @@ class PengisianKegiatan extends Component
     protected function muatKendalaBlocks(): void
     {
         $periode = $this->iku_id ? $this->periodeSaatIni() : null;
+        $this->versiDimuat['kendala'] = [];
 
         if (! $periode) {
             $this->kendalaBlocks = [$this->emptyKendalaBlock()];
@@ -3263,6 +3567,8 @@ class PengisianKegiatan extends Component
 
             return;
         }
+
+        $this->versiDimuat['kendala'] = $editable->mapWithKeys(fn (KendalaSolusiModel $ks) => [$ks->id => self::sidikBaris($ks)])->all();
 
         $this->kendalaBlocks = $editable->map(fn (KendalaSolusiModel $ks) => [
             'id' => $ks->id,
@@ -3336,6 +3642,7 @@ class PengisianKegiatan extends Component
     {
         $periode = $this->iku_id ? $this->periodeSaatIni() : null;
         $terkunci = $this->capaianTerkunci();
+        $this->versiDimuat['poin'] = [];
 
         foreach ($this->bagianKustomAktif() as $bagian) {
             if (! $periode || $terkunci) {
@@ -3345,6 +3652,7 @@ class PengisianKegiatan extends Component
             }
 
             $daftar = BagianKustomPoin::with('berkas')
+                ->konteksIsianKegiatan()
                 ->where('iku_id', $this->iku_id)
                 ->where('bagian_kustom_id', $bagian->id)
                 ->where('periode_id', $periode->id)
@@ -3357,10 +3665,14 @@ class PengisianKegiatan extends Component
                 continue;
             }
 
+            foreach ($daftar as $poin) {
+                $this->versiDimuat['poin'][$poin->id] = self::sidikBaris($poin);
+            }
+
             $this->bagianKustomBlocks[$bagian->id] = $daftar->map(fn (BagianKustomPoin $poin) => [
                 'id' => $poin->id,
                 'teks' => $poin->teks,
-                'kolom' => collect($bagian->kolomList())->mapWithKeys(fn ($k) => [$k['kunci'] => (string) ($poin->nilai_kolom[$k['kunci']] ?? '')])->all(),
+                'kolom' => $bagian->nilaiKolomUntukForm($poin->nilai_kolom),
                 'bukti' => [],
                 'existing_bukti' => $poin->berkas->map(fn (Berkas $b) => $this->maskBerkas([
                     'id' => $b->id,
@@ -4020,29 +4332,22 @@ class PengisianKegiatan extends Component
     protected function muatRtlBaruBlocks(): void
     {
         $this->rtlBaruBatasWaktu = $this->akhirTriwulanBerikutnya()->toDateString();
+        $this->versiDimuat['rtl'] = [];
 
-        $ditolak = $this->rtlBerikutnyaDitolak();
+        // Urutan prioritas: ditolak → bisa disunting → draft sendiri; sumber berikutnya
+        // hanya dihitung bila sumber sebelumnya kosong.
+        foreach ([fn () => $this->rtlBerikutnyaDitolak(), fn () => $this->rtlBerikutnyaBisaDisunting(), fn () => $this->rtlBerikutnyaDraftSendiri()] as $sumber) {
+            $daftar = $sumber();
 
-        if ($ditolak->isNotEmpty()) {
-            $this->rtlBaru = $ditolak->map(fn ($poin) => ['id' => $poin->id, 'rtl_teks' => $poin->rtl_teks])->values()->all();
+            if ($daftar->isNotEmpty()) {
+                $this->rtlBaru = $daftar->map(fn ($poin) => ['id' => $poin->id, 'rtl_teks' => $poin->rtl_teks])->values()->all();
 
-            return;
-        }
+                // Versi dibaca langsung dari DB (bukan dari cache daftar di atas).
+                $this->versiDimuat['rtl'] = RtlEvaluasiModel::whereKey($daftar->pluck('id'))->get()
+                    ->mapWithKeys(fn ($rtl) => [$rtl->id => self::sidikBaris($rtl)])->all();
 
-        $bisaDisunting = $this->rtlBerikutnyaBisaDisunting();
-
-        if ($bisaDisunting->isNotEmpty()) {
-            $this->rtlBaru = $bisaDisunting->map(fn ($poin) => ['id' => $poin->id, 'rtl_teks' => $poin->rtl_teks])->values()->all();
-
-            return;
-        }
-
-        $draftSendiri = $this->rtlBerikutnyaDraftSendiri();
-
-        if ($draftSendiri->isNotEmpty()) {
-            $this->rtlBaru = $draftSendiri->map(fn ($poin) => ['id' => $poin->id, 'rtl_teks' => $poin->rtl_teks])->values()->all();
-
-            return;
+                return;
+            }
         }
 
         $this->rtlBaru = $this->rtlTriwulanBerikutnyaSudahAda() ? [] : [$this->emptyRtlBlock()];
@@ -4338,15 +4643,13 @@ class PengisianKegiatan extends Component
                         $validator->errors()->add("bagianKustomBlocks.{$bagian->id}.{$i}.teks", 'Isi '.mb_strtolower($bagian->labelUraianEfektif()).' untuk poin ini.');
                     }
 
-                    foreach ($bagian->kolomList() as $kolom) {
-                        $nilai = trim((string) ($blok['kolom'][$kolom['kunci']] ?? ''));
+                    // Hanya kolom yang berlaku pada periode ini (aktif & sudah mulai
+                    // berlaku) — kolom baru tidak menuntut isian periode sebelumnya.
+                    foreach ($bagian->kolomBerlaku($this->tahun, BagianKustom::triwulanDariBulan($this->bulan)) as $kolom) {
+                        $galat = BagianKustom::pesanGalatKolom($kolom, $blok['kolom'][$kolom['kunci']] ?? '');
 
-                        if ($nilai === '' && $kolom['wajib']) {
-                            $validator->errors()->add("bagianKustomBlocks.{$bagian->id}.{$i}.kolom.{$kolom['kunci']}", "Kolom \"{$kolom['label']}\" wajib diisi.");
-                        } elseif ($nilai !== '' && $kolom['tipe'] === 'pilihan' && ! in_array($nilai, $kolom['opsi'], true)) {
-                            $validator->errors()->add("bagianKustomBlocks.{$bagian->id}.{$i}.kolom.{$kolom['kunci']}", "Pilih salah satu opsi untuk \"{$kolom['label']}\".");
-                        } elseif ($nilai !== '' && $kolom['tipe'] === 'angka' && ! is_numeric(str_replace(',', '.', $nilai))) {
-                            $validator->errors()->add("bagianKustomBlocks.{$bagian->id}.{$i}.kolom.{$kolom['kunci']}", "\"{$kolom['label']}\" harus berupa angka.");
+                        if ($galat !== null) {
+                            $validator->errors()->add("bagianKustomBlocks.{$bagian->id}.{$i}.kolom.{$kolom['kunci']}", $galat);
                         }
                     }
                 }
@@ -4560,6 +4863,366 @@ class PengisianKegiatan extends Component
      * dengan status "draft" (belum diajukan ke Tim SAKIP); kendala-solusi, evaluasi
      * RTL, dan RTL baru baru divalidasi & disimpan saat benar-benar "Ajukan ke Tim SAKIP".
      */
+    /* ---------- Versi baris, bentrok penyuntingan, dan unggahan setelah commit ---------- */
+
+    /**
+     * Sidik jari ISI baris yang ditulis formulir ini (bukan waktu ubah) — berubah bila
+     * pengguna lain mengubah isinya atau statusnya. Aksi kecil milik pengguna sendiri
+     * (mis. menyalin catatan bukti yang dihapus) tidak mengubah sidik ini.
+     */
+    protected static function sidikBaris(\Illuminate\Database\Eloquent\Model $baris): string
+    {
+        $isi = match (true) {
+            $baris instanceof Kegiatan => [$baris->uraian_kegiatan, $baris->jenis, $baris->tahapan_survei, $baris->status_dokumen, $baris->rtl_evaluasi_id, $baris->nama_folder_kustom, $baris->iku_id, $baris->periode_id],
+            $baris instanceof KendalaSolusiModel => [$baris->kendala, $baris->solusi, $baris->status_dokumen, $baris->status_verifikasi, $baris->iku_id, $baris->periode_id],
+            $baris instanceof RtlEvaluasiModel => [$baris->rtl_teks, $baris->status_dokumen, $baris->status_verifikasi, $baris->iku_id, $baris->periode_id],
+            $baris instanceof BagianKustomPoin => [(int) $baris->iku_id, (string) $baris->teks, $baris->nilai_kolom ?? [], (string) $baris->status_verifikasi, $baris->periode_id, $baris->bagian_kustom_id],
+            default => throw new \InvalidArgumentException('Jenis baris tidak dikenal: '.$baris::class),
+        };
+
+        return sha1((string) json_encode($isi));
+    }
+
+    /**
+     * Perbarui versi kegiatan yang baru saja diubah oleh aksi pengguna ini sendiri di
+     * luar Simpan (mis. ganti nama folder lewat ✏️) — supaya simpanan berikutnya tidak
+     * dianggap bentrok dengan perubahannya sendiri. Hanya baris yang memang dimuat
+     * sebagai bisa-diedit.
+     *
+     * @param  iterable<int, Kegiatan>  $daftar
+     */
+    protected function segarkanVersiKegiatan(iterable $daftar): void
+    {
+        foreach ($daftar as $kegiatan) {
+            if (array_key_exists($kegiatan->id, $this->versiDimuat['kegiatan'] ?? [])) {
+                $this->versiDimuat['kegiatan'][$kegiatan->id] = self::sidikBaris($kegiatan->fresh() ?? $kegiatan);
+            }
+        }
+    }
+
+    /**
+     * Id baris yang dikirim browser per jenis (hanya blok yang punya id).
+     *
+     * @return array<string, array<int, int>>
+     */
+    protected function idDikirimPerJenis(): array
+    {
+        $ambil = fn (array $daftar) => collect($daftar)->pluck('id')->filter(fn ($id) => filled($id))->map(fn ($id) => (int) $id)->values()->all();
+
+        return [
+            'kegiatan' => $ambil($this->blocks),
+            'kendala' => $ambil($this->kendalaBlocks),
+            'rtl' => $ambil($this->rtlBaru),
+            'poin' => collect($this->bagianKustomBlocks)->flatMap(fn ($daftar) => $ambil((array) $daftar))->values()->all(),
+        ];
+    }
+
+    /**
+     * Semua id baris di formulir HARUS id yang dimuat server untuk IKU + periode ini —
+     * id lain (dari request yang dimanipulasi) ditolak 403 SEBELUM apa pun disimpan
+     * atau diunggah. Bukti Evaluasi RTL hanya untuk poin RTL triwulan berjalan form ini.
+     */
+    protected function pastikanIdFormSah(?Periode $periode): void
+    {
+        $id = $this->idDikirimPerJenis();
+        $sah = [
+            'kegiatan' => [...array_keys($this->versiDimuat['kegiatan'] ?? []), ...($this->versiDimuat['kegiatan_lain'] ?? [])],
+            'kendala' => array_keys($this->versiDimuat['kendala'] ?? []),
+            'rtl' => array_keys($this->versiDimuat['rtl'] ?? []),
+        ];
+
+        foreach ($sah as $jenis => $idSah) {
+            if (array_diff($id[$jenis], $idSah) !== [] || count($id[$jenis]) !== count(array_unique($id[$jenis]))) {
+                $this->tolakSimpan('id '.$jenis.' di formulir tidak sesuai data yang dimuat untuk IKU & periode ini', $periode);
+            }
+        }
+
+        $evaluasiDenganBukti = collect($this->evaluasi)->filter(fn ($data) => ! empty($data['bukti'] ?? []))->keys()->map(fn ($k) => (int) $k);
+
+        if ($evaluasiDenganBukti->isNotEmpty() && $evaluasiDenganBukti->diff($this->rtlTriwulanBerjalan()->pluck('id'))->isNotEmpty()) {
+            $this->tolakSimpan('bukti evaluasi RTL untuk poin RTL di luar formulir ini', $periode);
+        }
+    }
+
+    /** Catat percobaan simpan yang ditolak, lalu 403. */
+    protected function tolakSimpan(string $alasan, ?Periode $periode): never
+    {
+        LogAktivitas::catat('isian_kegiatan.simpan', 'Percobaan simpan Isian Kegiatan oleh '.LogAktivitas::pelaku().' ditolak: '.$alasan.'.', [
+            'iku_id' => $this->iku_id,
+            'periode_id' => $periode?->id,
+        ], LogAktivitas::STATUS_DITOLAK);
+
+        abort(403);
+    }
+
+    /**
+     * Dipanggil PALING AWAL di dalam transaksi simpan: kunci baris yang akan ditulis
+     * (FOR UPDATE) lalu bandingkan isinya dengan versi saat dimuat. Bila ada yang sudah
+     * diubah/dihapus pengguna lain, lempar KonflikPenyuntinganException — seluruh
+     * transaksi batal sebelum apa pun ditulis atau diunggah.
+     */
+    protected function kunciDanPeriksaVersi(Periode $periode): void
+    {
+        $model = ['kegiatan' => Kegiatan::class, 'kendala' => KendalaSolusiModel::class, 'rtl' => RtlEvaluasiModel::class, 'poin' => BagianKustomPoin::class];
+        $label = ['kegiatan' => 'Kegiatan', 'kendala' => 'Kendala & Solusi', 'rtl' => 'RTL triwulan berikutnya', 'poin' => 'Bagian Kustom'];
+        $bentrok = [];
+        $this->barisTerkunci = [];
+
+        foreach ($this->idDikirimPerJenis() as $jenis => $ids) {
+            $this->barisTerkunci[$jenis] = $ids === [] ? collect() : $model[$jenis]::whereKey($ids)->lockForUpdate()->get()->keyBy('id');
+
+            foreach ($ids as $id) {
+                // Kegiatan hanya-baca saat dimuat tidak ditulis ulang — tidak diperiksa.
+                if ($jenis === 'kegiatan' && ! array_key_exists($id, $this->versiDimuat['kegiatan'] ?? [])) {
+                    continue;
+                }
+
+                $baris = $this->barisTerkunci[$jenis]->get($id);
+
+                if (! $baris || self::sidikBaris($baris) !== ($this->versiDimuat[$jenis][$id] ?? null)) {
+                    $bentrok[$jenis][] = $this->labelBaris($jenis, $id, $baris) ?: $label[$jenis];
+                }
+            }
+        }
+
+        if ($bentrok !== []) {
+            throw new KonflikPenyuntinganException($bentrok);
+        }
+    }
+
+    protected function labelBaris(string $jenis, int $id, ?\Illuminate\Database\Eloquent\Model $baris): string
+    {
+        $teks = match ($jenis) {
+            'kegiatan' => collect($this->blocks)->firstWhere('id', $id)['uraian_kegiatan'] ?? null,
+            'kendala' => collect($this->kendalaBlocks)->firstWhere('id', $id)['kendala'] ?? null,
+            'rtl' => collect($this->rtlBaru)->firstWhere('id', $id)['rtl_teks'] ?? null,
+            'poin' => collect($this->bagianKustomBlocks)->flatten(1)->firstWhere('id', $id)['teks'] ?? null,
+            default => null,
+        };
+
+        $nama = ['kegiatan' => 'Kegiatan', 'kendala' => 'Kendala', 'rtl' => 'RTL', 'poin' => 'Poin'][$jenis] ?? $jenis;
+
+        return $nama.' "'.Str::limit(trim((string) $teks) ?: '(tanpa teks)', 60).'"'.($baris ? '' : ' (sudah dihapus)');
+    }
+
+    /**
+     * Jalankan $simpan dalam satu transaksi dengan pengaman:
+     * - versi baris dicek di awal (bentrok → batal seluruhnya, isian tetap di layar);
+     * - bila transaksi batal karena sebab apa pun, keadaan formulir dikembalikan seperti
+     *   sebelum simpan (id baris baru yang sempat diberikan tidak tertinggal → tidak ada
+     *   data ganda saat simpan diulang) dan berkas lokal yang sempat disimpan dihapus;
+     * - unggahan Google Drive (dan pekerjaan Drive lain) baru dijalankan SETELAH commit,
+     *   masih di request yang sama — berkas tetap "langsung tersimpan ke Drive" begitu
+     *   dipilih, tetapi transaksi yang batal tidak pernah meninggalkan berkas Drive yatim.
+     *
+     * @return bool false bila bentrok (pesan sudah ditampilkan)
+     */
+    protected function simpanDenganPengaman(Periode $periode, \Closure $simpan, array &$driveGagal): bool
+    {
+        $snapshot = [$this->blocks, $this->kendalaBlocks, $this->rtlBaru, $this->bagianKustomBlocks, $this->evaluasi];
+        $this->antreanUnggah = [];
+        $this->tugasSetelahCommit = [];
+        $this->berkasLokalBaru = [];
+
+        try {
+            DB::transaction(function () use ($periode, $simpan) {
+                $this->kunciDanPeriksaVersi($periode);
+                $simpan();
+            });
+        } catch (\Throwable $e) {
+            [$this->blocks, $this->kendalaBlocks, $this->rtlBaru, $this->bagianKustomBlocks, $this->evaluasi] = $snapshot;
+
+            foreach ($this->berkasLokalBaru as $path) {
+                Storage::disk('local')->delete($path);
+            }
+
+            $this->antreanUnggah = [];
+            $this->tugasSetelahCommit = [];
+            $this->berkasLokalBaru = [];
+
+            if (! $e instanceof KonflikPenyuntinganException) {
+                throw $e;
+            }
+
+            $this->tanganiBentrok($e, $periode);
+
+            return false;
+        }
+
+        $this->berkasLokalBaru = [];
+        $this->bentrok = [];
+        $idDiantre = collect($this->antreanUnggah)->map(fn ($item) => $item['berkas']->id)->all();
+
+        $this->jalankanAntreanUnggah($driveGagal);
+        $this->jalankanTugasSetelahCommit();
+        $this->susulkanBerkasBelumDiDrive($driveGagal, $idDiantre);
+
+        return true;
+    }
+
+    protected function tanganiBentrok(KonflikPenyuntinganException $e, Periode $periode): void
+    {
+        $this->bentrok = $e->bentrok;
+        $daftar = collect($e->bentrok)->flatten()->take(6)->implode('; ');
+
+        LogAktivitas::catat('isian_kegiatan.simpan', 'Penyimpanan Isian Kegiatan oleh '.LogAktivitas::pelaku().' dibatalkan karena bentrok: data sudah diubah pengguna lain sejak dimuat ('.$daftar.'). Tidak ada data yang diubah.', [
+            'iku_id' => $this->iku_id,
+            'periode_id' => $periode->id,
+            'perubahan' => ['bentrok' => $e->bentrok],
+        ], LogAktivitas::STATUS_DITOLAK);
+
+        $pesan = 'Belum tersimpan — sebagian isian ini sudah diubah pengguna lain sejak halaman Anda dimuat ('.$daftar.'). Isian Anda masih ada di layar dan TIDAK ada yang tersimpan (termasuk berkas yang baru dipilih). Salin perubahan Anda bila perlu, lalu klik "Muat data terbaru" pada peringatan di atas formulir.';
+
+        $this->addError('bentrok', $pesan);
+        $this->dispatch('notify', type: 'error', message: $pesan);
+    }
+
+    /**
+     * Muat ulang dari database HANYA bagian yang bentrok. Baris BARU (belum tersimpan)
+     * yang sudah diisi tetap dipertahankan di bawah data terbaru.
+     */
+    public function muatUlangBagianBentrok(): void
+    {
+        $jenis = array_keys($this->bentrok);
+
+        if (in_array('kegiatan', $jenis, true)) {
+            $baru = collect($this->blocks)->filter(fn ($b) => blank($b['id'] ?? null) && (trim((string) ($b['uraian_kegiatan'] ?? '')) !== '' || ! empty($b['bukti'])))->values()->all();
+            $this->muatBlocksKegiatan();
+            $this->blocks = $baru === [] ? $this->blocks : [...collect($this->blocks)->filter(fn ($b) => filled($b['id']))->values()->all(), ...$baru];
+        }
+
+        if (in_array('kendala', $jenis, true)) {
+            $baru = collect($this->kendalaBlocks)->filter(fn ($b) => blank($b['id'] ?? null) && (trim((string) $b['kendala']) !== '' || trim((string) $b['solusi']) !== ''))->values()->all();
+            $this->muatKendalaBlocks();
+            $this->kendalaBlocks = [...collect($this->kendalaBlocks)->filter(fn ($b) => filled($b['id'] ?? null))->values()->all(), ...$baru] ?: [$this->emptyKendalaBlock()];
+        }
+
+        if (in_array('rtl', $jenis, true)) {
+            $baru = collect($this->rtlBaru)->filter(fn ($b) => blank($b['id'] ?? null) && trim((string) ($b['rtl_teks'] ?? '')) !== '')->values()->all();
+            $this->muatRtlBaruBlocks();
+            $this->rtlBaru = [...collect($this->rtlBaru)->filter(fn ($b) => filled($b['id'] ?? null))->values()->all(), ...$baru] ?: $this->rtlBaru;
+        }
+
+        if (in_array('poin', $jenis, true)) {
+            $baru = collect($this->bagianKustomBlocks)->map(fn ($daftar) => collect((array) $daftar)->filter(fn ($b) => blank($b['id'] ?? null) && $this->blokBagianKustomTerisi($b))->values()->all());
+            $this->muatBagianKustomBlocks();
+
+            foreach ($baru as $bagianId => $daftarBaru) {
+                if ($daftarBaru !== []) {
+                    $lama = collect($this->bagianKustomBlocks[$bagianId] ?? [])->filter(fn ($b) => filled($b['id'] ?? null))->values()->all();
+                    $this->bagianKustomBlocks[$bagianId] = [...$lama, ...$daftarBaru];
+                }
+            }
+        }
+
+        $this->bentrok = [];
+        $this->resetErrorBag('bentrok');
+        $this->lupakanCachePeriodeIku();
+        $this->dispatch('notify', type: 'info', message: 'Data terbaru dimuat. Isian baru yang belum tersimpan tetap ada — periksa lalu simpan kembali.');
+    }
+
+    /**
+     * Simpan berkas unggahan ke disk lokal dan catat path-nya supaya ikut dihapus bila
+     * transaksi batal.
+     */
+    protected function simpanBerkasLokal($file, string $folder): string
+    {
+        $path = $file->store($folder, 'local');
+        $this->berkasLokalBaru[] = $path;
+
+        return $path;
+    }
+
+    /**
+     * Tunda unggahan Drive satu berkas yang baru dicatat di transaksi simpan sampai
+     * transaksi itu berhasil (lihat simpanDenganPengaman()).
+     */
+    protected function antreUnggah(Berkas $berkas, \Illuminate\Database\Eloquent\Model $ref, string $namaAsli, string $konteks, string $labelGagal): void
+    {
+        $this->antreanUnggah[] = ['berkas' => $berkas, 'ref' => $ref, 'nama_asli' => $namaAsli, 'konteks' => $konteks, 'label_gagal' => $labelGagal];
+    }
+
+    /**
+     * Unggah ke Drive berkas yang sudah tercatat di database (setelah commit) lewat
+     * Berkas::unggahKeDrive() — jalur yang sama dengan tombol "Coba lagi" & sinkron
+     * susulan: berkas diberi penanda kode berkasnya, hasil Drive + log "tersalin"
+     * dicatat dalam satu transaksi kecil. Gagal unggah tidak membatalkan apa pun:
+     * berkas tetap aman lokal, tampil "belum di Drive", dan disusulkan kemudian.
+     */
+    protected function jalankanAntreanUnggah(array &$driveGagal): void
+    {
+        foreach ($this->antreanUnggah as $item) {
+            /** @var Berkas $berkas */
+            $berkas = $item['berkas'];
+
+            try {
+                $this->streamProgresUnggah($item['nama_asli'], $item['konteks']);
+                $berkas->setRelation('ref', $item['ref'])->unggahKeDrive();
+                $this->notifikasiHasilUnggah($item['nama_asli'], $item['konteks'], true);
+            } catch (\Throwable $e) {
+                Log::warning("Gagal mengunggah {$item['konteks']} ke Google Drive, disimpan lokal saja: ".$e->getMessage());
+                $driveGagal[] = $item['label_gagal'];
+                $this->notifikasiHasilUnggah($item['nama_asli'], $item['konteks'], false, $e->getMessage());
+            }
+        }
+
+        $this->antreanUnggah = [];
+    }
+
+    /**
+     * Pekerjaan Drive non-unggah yang ditunda sampai commit (lihat $tugasSetelahCommit).
+     * Kegagalannya dicatat dan tidak membatalkan simpanan yang sudah berhasil.
+     */
+    protected function jalankanTugasSetelahCommit(): void
+    {
+        foreach ($this->tugasSetelahCommit as $tugas) {
+            try {
+                $tugas();
+            } catch (\Throwable $e) {
+                Log::warning('Pekerjaan Google Drive setelah simpan gagal: '.$e->getMessage());
+            }
+        }
+
+        $this->tugasSetelahCommit = [];
+    }
+
+    /**
+     * Kegiatan milik formulir ini (id dimuat server + IKU & periode cocok di database),
+     * atau null.
+     */
+    protected function kegiatanMilikForm(int $id): ?Kegiatan
+    {
+        $dimuat = array_key_exists($id, $this->versiDimuat['kegiatan'] ?? []) || in_array($id, $this->versiDimuat['kegiatan_lain'] ?? [], true);
+        $periode = $this->iku_id ? $this->periodeSaatIni() : null;
+
+        if (! $dimuat || ! $periode) {
+            return null;
+        }
+
+        return Kegiatan::where('iku_id', $this->iku_id)->where('periode_id', $periode->id)->find($id);
+    }
+
+    /**
+     * Periksa semua id di formulir lebih dulu (tanpa membuat apa pun), baru kemudian
+     * ambil/buat baris periode — permintaan yang ditolak tidak meninggalkan periode baru.
+     */
+    protected function periodeUntukSimpan(): Periode
+    {
+        $periode = Periode::where('tahun', $this->tahun)->where('bulan', $this->bulan)->first();
+
+        $this->pastikanIdFormSah($periode);
+        $this->pastikanPoinBagianKustomSah($periode);
+
+        return $periode ?? Periode::firstOrCreate(
+            ['tahun' => $this->tahun, 'bulan' => $this->bulan],
+            [
+                'triwulan' => $this->triwulanDari($this->bulan),
+                'bulan_ke' => $this->bulanKeDari($this->bulan),
+                'flag_bulan_terlewat' => $this->isBulanTerlewat(),
+            ]
+        );
+    }
+
     /**
      * @param  bool  $otomatis  true bila dipicu simpanOtomatisSetelahUnggah() — hanya
      *                          membedakan pesan yang tampil ke pengguna.
@@ -4611,15 +5274,7 @@ class PengisianKegiatan extends Component
             throw $e;
         }
 
-        $periode = Periode::firstOrCreate(
-            ['tahun' => $this->tahun, 'bulan' => $this->bulan],
-            [
-                'triwulan' => $this->triwulanDari($this->bulan),
-                'bulan_ke' => $this->bulanKeDari($this->bulan),
-                'flag_bulan_terlewat' => $this->isBulanTerlewat(),
-            ]
-        );
-
+        $periode = $this->periodeUntukSimpan();
         $iku = MasterIku::findOrFail($this->iku_id);
         $folderService = app(FolderStructureService::class);
 
@@ -4628,9 +5283,15 @@ class PengisianKegiatan extends Component
         $driveGagal = [];
         $belumTersimpan = $otomatis ? $this->catatIsianBelumTersimpan() : [];
 
-        DB::transaction(function () use ($periode, $iku, $folderService, &$driveGagal) {
-            $this->simpanBagianIsian($periode, $iku, $folderService, $driveGagal, ajukan: false);
-        });
+        $tersimpan = $this->simpanDenganPengaman(
+            $periode,
+            fn () => $this->simpanBagianIsian($periode, $iku, $folderService, ajukan: false),
+            $driveGagal,
+        );
+
+        if (! $tersimpan) {
+            return;
+        }
 
         if ($otomatis) {
             // Tanpa reload halaman — pengguna sedang mengisi; form dimuat ulang dari
@@ -4693,10 +5354,13 @@ class PengisianKegiatan extends Component
      * dipindahkan ke "diajukan" — supaya isian tetap dianggap draft dan tidak
      * masuk antrean verifikasi Tim SAKIP sebelum benar-benar diajukan.
      */
-    protected function simpanBagianIsian(Periode $periode, MasterIku $iku, FolderStructureService $folderService, array &$driveGagal, bool $ajukan): void
+    protected function simpanBagianIsian(Periode $periode, MasterIku $iku, FolderStructureService $folderService, bool $ajukan): void
     {
-        $this->susulkanBerkasBelumDiDrive($driveGagal);
-
+        // Unggahan ke Google Drive TIDAK dilakukan di sini (di dalam transaksi) —
+        // berkas dicatat di database lalu diantrekan lewat antreUnggah(), dan baru
+        // diunggah setelah transaksi berhasil (simpanDenganPengaman()), masih di request
+        // yang sama. Bila transaksi batal, tidak ada berkas Drive yatim dan berkas
+        // lokalnya ikut dihapus. Berkas lama yang belum di Drive disusulkan setelahnya.
         $capaian = Capaian::firstOrCreate([
             'iku_id' => $this->iku_id,
             'periode_id' => $periode->id,
@@ -4709,7 +5373,14 @@ class PengisianKegiatan extends Component
         foreach ($this->blocks as &$block) {
             // Blok yang sudah diajukan/diverifikasi/disetujui ditampilkan hanya-baca
             // di form (lihat muatBlocksKegiatan()) — tidak boleh ikut tertimpa di sini.
-            if ($this->blokTerkunci($block['status_dokumen'] ?? null)) {
+            // Status dibaca dari baris database yang sudah dikunci, bukan dari browser.
+            $kegiatanTersimpan = filled($block['id'] ?? null) ? ($this->barisTerkunci['kegiatan'] ?? collect())->get((int) $block['id']) : null;
+
+            if (filled($block['id'] ?? null) && (! $kegiatanTersimpan || ! array_key_exists((int) $block['id'], $this->versiDimuat['kegiatan'] ?? []) || $this->blokTerkunci($kegiatanTersimpan->status_dokumen))) {
+                continue;
+            }
+
+            if (blank($block['id'] ?? null) && $this->blokTerkunci($block['status_dokumen'] ?? null)) {
                 continue;
             }
 
@@ -4744,7 +5415,7 @@ class PengisianKegiatan extends Component
                     // supaya menyimpan/mengajukan ulang isian yang sudah ada tidak membuat
                     // baris duplikat. drive_folder_id SENGAJA tidak disentuh (dipakai ulang
                     // oleh FolderStructureService, lihat catatan di model Kegiatan).
-                    $kegiatan = Kegiatan::where('iku_id', $this->iku_id)->where('periode_id', $periode->id)->findOrFail($block['id']);
+                    $kegiatan = $kegiatanTersimpan;
                     $kegiatan->update([
                         'rtl_evaluasi_id' => $this->rtlEvaluasiIdUntukBlock($block),
                         'uraian_kegiatan' => $block['uraian_kegiatan'],
@@ -4755,8 +5426,14 @@ class PengisianKegiatan extends Component
 
                     // Tautan RTL berubah/dilepas: salinan bukti lama di Evaluasi-RTL poin
                     // sebelumnya dibuang ke Sampah, lalu disalin ke poin yang baru (bila ada).
+                    // Pekerjaan Drive ini dijalankan setelah transaksi berhasil.
                     if ($kegiatan->wasChanged('rtl_evaluasi_id')) {
-                        app(SinkronBuktiRtlService::class)->sinkronkanKegiatan($kegiatan);
+                        $idKegiatan = $kegiatan->id;
+                        $this->tugasSetelahCommit[] = function () use ($idKegiatan) {
+                            if ($kegiatanTerbaru = Kegiatan::find($idKegiatan)) {
+                                app(SinkronBuktiRtlService::class)->sinkronkanKegiatan($kegiatanTerbaru);
+                            }
+                        };
                     }
                 } else {
                     $kegiatan = Kegiatan::create([
@@ -4798,7 +5475,7 @@ class PengisianKegiatan extends Component
                     $file = $rencana['file'];
                     $namaBerkas = $rencana['nama'];
                     $subfolder = $rencana['subfolder'] !== '' ? $rencana['subfolder'] : null;
-                    $path = $file->store('bukti-capaian', 'local');
+                    $path = $this->simpanBerkasLokal($file, 'bukti-capaian');
 
                     $berkas = Berkas::create([
                         'ref_id' => $kegiatan->id,
@@ -4810,18 +5487,15 @@ class PengisianKegiatan extends Component
                         'status_verifikasi' => 'menunggu',
                     ]);
 
-                    // Dibungkus try/catch supaya penyimpanan TETAP berhasil walau Drive
-                    // belum terkonfigurasi — berkas tetap aman di disk lokal sebagai cadangan.
-                    try {
-                        $this->streamProgresUnggah($file->getClientOriginalName(), 'bukti kegiatan');
-                        $localFullPath = Storage::disk('local')->path($path);
-                        $this->dalamSavepoint(fn () => $berkas->setRelation('ref', $kegiatan)->unggahKeDrive());
-                        $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti kegiatan', true);
-                    } catch (\Throwable $e) {
-                        Log::warning('Gagal mengunggah berkas ke Google Drive, disimpan lokal saja: '.$e->getMessage());
-                        $driveGagal[] = "{$file->getClientOriginalName()} (bukti kegiatan: {$block['uraian_kegiatan']})";
-                        $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti kegiatan', false, $e->getMessage());
-                    }
+                    // Gagal unggah ke Drive tidak menggagalkan penyimpanan — berkas tetap
+                    // aman di disk lokal sebagai cadangan dan disusulkan kemudian.
+                    $this->antreUnggah(
+                        $berkas,
+                        $kegiatan,
+                        $file->getClientOriginalName(),
+                        'bukti kegiatan',
+                        "{$file->getClientOriginalName()} (bukti kegiatan: {$block['uraian_kegiatan']})",
+                    );
                 }
             }
 
@@ -4907,7 +5581,7 @@ class PengisianKegiatan extends Component
 
             foreach (array_values($data['bukti']) as $fi => $file) {
                 $namaBerkas = $this->namaBuktiBaruAtauDefault($file, $this->namaDefaultBuktiBaru($namaBerkasDasar, $jumlahBuktiLama, $fi, count($data['bukti'])));
-                $path = $file->store('bukti-evaluasi-rtl', 'local');
+                $path = $this->simpanBerkasLokal($file, 'bukti-evaluasi-rtl');
                 $subfolder = $this->subfolderBerkasBaruRtl((int) $rtlId, $file);
 
                 $berkas = Berkas::create([
@@ -4924,16 +5598,13 @@ class PengisianKegiatan extends Component
                     'status_verifikasi' => 'menunggu',
                 ]);
 
-                try {
-                    $this->streamProgresUnggah($file->getClientOriginalName(), 'bukti evaluasi RTL');
-                    $localFullPath = Storage::disk('local')->path($path);
-                    $this->dalamSavepoint(fn () => $berkas->setRelation('ref', $poin)->unggahKeDrive());
-                    $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti evaluasi RTL', true);
-                } catch (\Throwable $e) {
-                    Log::warning('Gagal mengunggah bukti evaluasi RTL ke Google Drive, disimpan lokal saja: '.$e->getMessage());
-                    $driveGagal[] = "{$file->getClientOriginalName()} (bukti evaluasi RTL)";
-                    $this->notifikasiHasilUnggah($file->getClientOriginalName(), 'bukti evaluasi RTL', false, $e->getMessage());
-                }
+                $this->antreUnggah(
+                    $berkas,
+                    $poin,
+                    $file->getClientOriginalName(),
+                    'bukti evaluasi RTL',
+                    "{$file->getClientOriginalName()} (bukti evaluasi RTL)",
+                );
             }
 
             $data['bukti'] = [];
@@ -5034,37 +5705,59 @@ class PengisianKegiatan extends Component
         // mengajukan. UPDATE, bukan create, bila blok ini punya id (poin lama yang
         // dimuat lewat muatBagianKustomBlocks() untuk diperbaiki teksnya) — supaya
         // tidak duplikat, mengikuti pola yang sama dengan Kendala & Solusi di atas.
+        // Log aktivitas poin & bukti ditulis di dalam transaksi pemanggil (simpanDraft/
+        // ajukanIsian) — ikut batal bila penyimpanan batal.
+        $korelasiBagianKustom = LogAktivitas::korelasiBaru();
+
         foreach ($this->bagianKustomAktif() as $bagian) {
             foreach ($this->bagianKustomBlocks[$bagian->id] ?? [] as $i => $blok) {
                 if (! $this->blokBagianKustomTerisi($blok)) {
                     continue;
                 }
 
-                $nilaiKolom = $bagian->bersihkanNilaiKolom($blok['kolom'] ?? []);
+                $triwulanIsian = BagianKustom::triwulanDariBulan($this->bulan);
 
                 if ($blok['id'] ?? null) {
-                    $poin = BagianKustomPoin::whereKey($blok['id'])
-                        ->where('bagian_kustom_id', $bagian->id)
-                        ->where('iku_id', $this->iku_id)
-                        ->where('periode_id', $periode->id)
-                        ->first();
+                    // Poin dicocokkan ke bagian + IKU + periode form ini dan konteks Isian
+                    // Kegiatan — bukan hanya id dari request (sudah diperiksa juga di
+                    // pastikanPoinBagianKustomSah() sebelum transaksi ini dimulai).
+                    $poin = $this->poinBagianKustomForm($bagian->id, (int) $blok['id'], $periode);
+                    abort_unless($poin, 403);
 
-                    if (! $poin) {
-                        continue;
-                    }
+                    // Nilai kolom yang tidak tampil di form (nonaktif / belum berlaku)
+                    // dipertahankan dari data tersimpan.
+                    $nilaiKolom = $bagian->bersihkanNilaiKolom($blok['kolom'] ?? [], $poin->nilai_kolom, $this->tahun, $triwulanIsian);
+
+                    $sebelum = JejakAktivitasBagianKustom::potret($poin);
 
                     // status_verifikasi & catatan SENGAJA TIDAK direset — sama seperti
                     // Kendala & Solusi/Evaluasi RTL di atas, lihat penjelasan di sana.
-                    $poin->update(['teks' => $blok['teks'], 'nilai_kolom' => $nilaiKolom]);
+                    $poin->update([
+                        'teks' => $blok['teks'],
+                        'nilai_kolom' => $nilaiKolom,
+                        'menu' => $poin->menu ?? MenuBagianKustom::PENGISIAN,
+                        'peran_pengisi' => $poin->peran_pengisi ?? BagianKustom::PERAN_KETUA_TIM,
+                        'diubah_oleh' => auth()->id(),
+                    ]);
+
+                    JejakAktivitasBagianKustom::poinDiubah($bagian, $poin, $sebelum, $korelasiBagianKustom);
                 } else {
+                    $nilaiKolom = $bagian->bersihkanNilaiKolom($blok['kolom'] ?? [], null, $this->tahun, $triwulanIsian);
+
                     $poin = BagianKustomPoin::create([
                         'bagian_kustom_id' => $bagian->id,
                         'iku_id' => $this->iku_id,
                         'periode_id' => $periode->id,
+                        'menu' => MenuBagianKustom::PENGISIAN,
+                        'peran_pengisi' => BagianKustom::PERAN_KETUA_TIM,
+                        'diisi_oleh' => auth()->id(),
+                        'diubah_oleh' => auth()->id(),
                         'teks' => $blok['teks'],
                         'nilai_kolom' => $nilaiKolom,
                     ]);
                     $this->bagianKustomBlocks[$bagian->id][$i]['id'] = $poin->id;
+
+                    JejakAktivitasBagianKustom::poinDibuat($bagian, $poin, $korelasiBagianKustom);
                 }
 
                 $adaPerbaikanLainDiajukan = true;
@@ -5074,7 +5767,7 @@ class PengisianKegiatan extends Component
 
                 foreach (array_values($blok['bukti']) as $fi => $file) {
                     $namaBerkas = $this->namaBuktiBaruAtauDefault($file, $this->namaDefaultBuktiBaru($namaBerkasDasar, $jumlahBuktiLama, $fi, count($blok['bukti'])));
-                    $path = $file->store('bukti-bagian-kustom', 'local');
+                    $path = $this->simpanBerkasLokal($file, 'bukti-bagian-kustom');
 
                     $berkas = Berkas::create([
                         'ref_id' => $poin->id,
@@ -5085,16 +5778,17 @@ class PengisianKegiatan extends Component
                         'status_verifikasi' => 'menunggu',
                     ]);
 
-                    try {
-                        $this->streamProgresUnggah($file->getClientOriginalName(), "bukti {$bagian->nama}");
-                        $localFullPath = Storage::disk('local')->path($path);
-                        $this->dalamSavepoint(fn () => $berkas->setRelation('ref', $poin)->unggahKeDrive());
-                        $this->notifikasiHasilUnggah($file->getClientOriginalName(), "bukti {$bagian->nama}", true);
-                    } catch (\Throwable $e) {
-                        Log::warning("Gagal mengunggah bukti {$bagian->nama} ke Google Drive, disimpan lokal saja: ".$e->getMessage());
-                        $driveGagal[] = "{$file->getClientOriginalName()} (bukti {$bagian->nama})";
-                        $this->notifikasiHasilUnggah($file->getClientOriginalName(), "bukti {$bagian->nama}", false, $e->getMessage());
-                    }
+                    // Dicatat di transaksi yang sama: "tersimpan di server". Salinan Drive
+                    // dicatat terpisah (bukti.tersinkron) begitu unggahannya berhasil.
+                    JejakAktivitasBagianKustom::buktiDiunggah($bagian, $poin, $berkas, false, $korelasiBagianKustom);
+
+                    $this->antreUnggah(
+                        $berkas,
+                        $poin,
+                        $file->getClientOriginalName(),
+                        "bukti {$bagian->nama}",
+                        "{$file->getClientOriginalName()} (bukti {$bagian->nama})",
+                    );
                 }
 
                 $this->bagianKustomBlocks[$bagian->id][$i]['bukti'] = [];
@@ -5127,7 +5821,7 @@ class PengisianKegiatan extends Component
     protected function adaBuktiPerbaikanSejak($sejak, Periode $periode): bool
     {
         $rtlIds = $this->rtlTriwulanBerjalan()->pluck('id');
-        $poinIds = BagianKustomPoin::where('iku_id', $this->iku_id)->where('periode_id', $periode->id)->pluck('id');
+        $poinIds = BagianKustomPoin::konteksIsianKegiatan()->where('iku_id', $this->iku_id)->where('periode_id', $periode->id)->pluck('id');
 
         return Berkas::where('created_at', '>=', $sejak)
             ->where(fn ($q) => $q
@@ -5229,13 +5923,14 @@ class PengisianKegiatan extends Component
         return DB::transaction(fn () => $aksi());
     }
 
-    protected function susulkanBerkasBelumDiDrive(array &$driveGagal): void
+    protected function susulkanBerkasBelumDiDrive(array &$driveGagal, array $kecuali = []): void
     {
         if (! auth()->id()) {
             return;
         }
 
-        foreach (Berkas::belumDiDrive()->where('diunggah_oleh', auth()->id())->get() as $berkas) {
+        // $kecuali = berkas yang baru saja dicoba diunggah di request ini — tidak dicoba dua kali.
+        foreach (Berkas::belumDiDrive()->where('diunggah_oleh', auth()->id())->whereNotIn('id', $kecuali)->get() as $berkas) {
             try {
                 if ($this->dalamSavepoint(fn () => $berkas->sinkronUlangKeDrive())) {
                     $this->notifikasiHasilUnggah($berkas->nama_file, 'simpanan sebelumnya', true);
@@ -5276,15 +5971,7 @@ class PengisianKegiatan extends Component
             throw $e;
         }
 
-        $periode = Periode::firstOrCreate(
-            ['tahun' => $this->tahun, 'bulan' => $this->bulan],
-            [
-                'triwulan' => $this->triwulanDari($this->bulan),
-                'bulan_ke' => $this->bulanKeDari($this->bulan),
-                'flag_bulan_terlewat' => $this->isBulanTerlewat(),
-            ]
-        );
-
+        $periode = $this->periodeUntukSimpan();
         $iku = MasterIku::findOrFail($this->iku_id);
         $folderService = app(FolderStructureService::class);
 
@@ -5294,11 +5981,17 @@ class PengisianKegiatan extends Component
         // semuanya sudah tersalin ke Drive padahal belum (lihat flash 'driveGagal' di bawah).
         $driveGagal = [];
 
-        DB::transaction(function () use ($periode, $iku, $folderService, &$driveGagal) {
-            $this->simpanBagianIsian($periode, $iku, $folderService, $driveGagal, ajukan: true);
-        });
+        $tersimpan = $this->simpanDenganPengaman(
+            $periode,
+            fn () => $this->simpanBagianIsian($periode, $iku, $folderService, ajukan: true),
+            $driveGagal,
+        );
 
         $this->stream(to: 'progres-unggah', content: '', replace: true);
+
+        if (! $tersimpan) {
+            return;
+        }
 
         // Menyebutkan IKU + triwulan/tahun secara eksplisit — Ketua Tim biasanya mengisi
         // beberapa IKU berturut-turut, jadi pesan generik "berhasil diajukan" saja tidak
