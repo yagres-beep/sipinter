@@ -76,6 +76,7 @@ class TargetTahunanTest extends TestCase
         $component = Livewire::test(TargetTahunan::class)
             ->set('tahun', 2026)
             ->set("nilai.{$iku->id}.x_alokasi_tw4", 3)
+            ->set("angkaN.{$iku->id}", 4)
             ->call('tambahN', $iku->id)
             ->call('tambahN', $iku->id)
             ->call('tambahN', $iku->id)
@@ -128,6 +129,7 @@ class TargetTahunanTest extends TestCase
         }
 
         $component
+            ->set("angkaN.{$iku->id}", 3)
             ->set("nilai.{$iku->id}.x_alokasi_tw1", 1)
             ->set("nilai.{$iku->id}.x_alokasi_tw2", 1)
             ->set("nilai.{$iku->id}.x_alokasi_tw3", 2)
@@ -188,7 +190,11 @@ class TargetTahunanTest extends TestCase
         $this->assertDatabaseCount('capaian_tahunan', 0);
     }
 
-    public function test_tambah_rincian_n_menentukan_alokasi_y_otomatis(): void
+    /**
+     * Angka N diketik eksplisit -- jumlah rincian tidak pernah menimpanya. Tombol
+     * "Pakai X sebagai N" hanya mengisi form, baru tersimpan saat Simpan.
+     */
+    public function test_jumlah_rincian_n_tidak_menentukan_angka_n(): void
     {
         $this->loginSebagaiTimSakip();
         $iku = MasterIku::create([
@@ -206,14 +212,66 @@ class TargetTahunanTest extends TestCase
             $component->set("rincianN.{$iku->id}.{$kunci}.uraian", 'Item '.($i + 1));
         }
 
-        $component->call('simpan')->assertHasNoErrors();
+        $component->set("angkaN.{$iku->id}", 5)->call('simpan')->assertHasNoErrors();
 
         $this->assertDatabaseCount('rincian_n', 2);
         $ct = CapaianTahunan::where('iku_id', $iku->id)->where('tahun', 2026)->first();
-        $this->assertEquals(2, $ct->y_alokasi_tw1);
-        $this->assertEquals(2, $ct->y_alokasi_tw2);
-        $this->assertEquals(2, $ct->y_realisasi_tw1);
-        $this->assertEquals(2, $ct->y_realisasi_tw2);
+        $this->assertEquals(5, $ct->y_alokasi_tw1, 'N = isian, bukan jumlah rincian (2)');
+        $this->assertEquals(5, $ct->y_alokasi_tw4);
+        $this->assertEquals(5, $ct->y_realisasi_tw1);
+        $this->assertEquals(5, $ct->y_realisasi_tw4);
+
+        // Tambah rincian ketiga: N tetap 5.
+        $component->call('tambahN', $iku->id);
+        $kunciBaru = array_key_last($component->get('rincianN')[$iku->id]);
+        $component->set("rincianN.{$iku->id}.{$kunciBaru}.uraian", 'Item 3')->call('simpan')->assertHasNoErrors();
+        $this->assertEquals(5, $ct->fresh()->y_alokasi_tw4);
+
+        // Bantuan "samakan" hanya mengisi form.
+        $component->call('samakanNDenganRincian', $iku->id);
+        $this->assertEquals(3, $component->get('angkaN')[$iku->id]);
+        $this->assertEquals(5, $ct->fresh()->y_alokasi_tw4);
+        $component->call('simpan')->assertHasNoErrors();
+        $this->assertEquals(3, $ct->fresh()->y_alokasi_tw4);
+    }
+
+    /**
+     * IKU hasil impor (N dari Excel, belum punya rincian) -- simpan Target Tahunan
+     * dulu menimpa N jadi 0 karena dihitung dari jumlah rincian. Kini N tetap.
+     */
+    public function test_simpan_tanpa_rincian_tidak_menimpa_n_hasil_impor(): void
+    {
+        $this->loginSebagaiTimSakip();
+        $iku = MasterIku::create([
+            'kode' => 'UJI-108', 'indikator' => 'IKU Impor', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
+            'metode_capaian' => MasterIku::METODE_RASIO,
+        ]);
+        CapaianTahunan::create([
+            'iku_id' => $iku->id, 'tahun' => 2026, 'x_alokasi_tw4' => 8,
+            'y_alokasi_tw1' => 10, 'y_alokasi_tw2' => 10, 'y_alokasi_tw3' => 10, 'y_alokasi_tw4' => 10,
+        ]);
+
+        Livewire::test(TargetTahunan::class)->set('tahun', 2026)->call('simpan')->assertHasNoErrors();
+
+        $ct = CapaianTahunan::where('iku_id', $iku->id)->where('tahun', 2026)->first();
+        $this->assertEquals(10, $ct->y_alokasi_tw4);
+        $this->assertEquals(10, $ct->y_realisasi_tw2, 'nilai dasar n diinisialisasi dari N');
+    }
+
+    public function test_angka_n_negatif_ditolak(): void
+    {
+        $this->loginSebagaiTimSakip();
+        $iku = MasterIku::create([
+            'kode' => 'UJI-109', 'indikator' => 'IKU N negatif', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
+            'metode_capaian' => MasterIku::METODE_RASIO,
+        ]);
+
+        Livewire::test(TargetTahunan::class)->set('tahun', 2026)
+            ->set("angkaN.{$iku->id}", -1)
+            ->call('simpan')
+            ->assertHasErrors(["angkaN.{$iku->id}"]);
+
+        $this->assertDatabaseCount('capaian_tahunan', 0);
     }
 
     public function test_hapus_rincian_n_yang_tersimpan_menghapus_dari_db(): void

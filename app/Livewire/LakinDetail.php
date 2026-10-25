@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use App\Exports\LakinExport;
+use App\Models\CapaianTahunan;
 use App\Models\Lakin;
 use App\Models\LakinBaris;
 use App\Models\MasterIku;
@@ -115,8 +116,19 @@ class LakinDetail extends Component
         abort_unless($this->isTimSakip(), 403, 'Hanya Tim SAKIP yang dapat mengubah rekap kinerja tahunan.');
     }
 
-    protected function hitungCapaianPersen(?string $target, ?string $realisasi): ?float
+    /**
+     * Capaian % satu baris setelah disunting. Baris yang terhubung ke IKU memakai
+     * rumus yang SAMA dengan saat baris itu ditambahkan/disegarkan dari data capaian
+     * (CapaianTahunan::capaianUntuk(): batas maksimal, aturan strip "-", rumus
+     * kustom) -- dulu memakai rasio polos, jadi angkanya berubah hanya karena baris
+     * disimpan ulang. Baris kustom (tanpa IKU) tetap rasio polos seperti sebelumnya.
+     */
+    protected function hitungCapaianPersen(?string $target, ?string $realisasi, ?int $ikuId = null): ?float
     {
+        if ($ikuId !== null && ($iku = MasterIku::find($ikuId))) {
+            return CapaianTahunan::capaianUntuk($iku, $target, $realisasi);
+        }
+
         if (! is_numeric($target) || (float) $target <= 0 || ! is_numeric($realisasi)) {
             return null;
         }
@@ -136,12 +148,14 @@ class LakinDetail extends Component
             return;
         }
 
+        $ikuId = LakinBaris::whereKey($id)->where('lakin_id', $this->lakin->id)->value('iku_id');
+
         LakinBaris::whereKey($id)->update([
             'sasaran' => trim($data['sasaran'] ?? '') ?: null,
             'indikator' => trim($data['indikator']),
             'target' => is_numeric($data['target']) ? $data['target'] : null,
             'realisasi' => is_numeric($data['realisasi']) ? $data['realisasi'] : null,
-            'capaian_persen' => $this->hitungCapaianPersen($data['target'] ?? null, $data['realisasi'] ?? null),
+            'capaian_persen' => $this->hitungCapaianPersen($data['target'] ?? null, $data['realisasi'] ?? null, $ikuId !== null ? (int) $ikuId : null),
             'kegiatan' => trim($data['kegiatan'] ?? '') ?: null,
             'solusi_kendala' => trim($data['solusi_kendala'] ?? '') ?: null,
             'rtl' => trim($data['rtl'] ?? '') ?: null,

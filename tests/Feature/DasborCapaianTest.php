@@ -178,4 +178,53 @@ class DasborCapaianTest extends TestCase
         $this->assertSame(100.0, $baris[$iku->id]['persentase']);
         $this->assertSame(100.0, $baris[$iku->id]['persentase_setahun']);
     }
+
+    /**
+     * Rekap per IKU memakai rumus yang sama dengan kartu rata-rata, Notula, dan LAKIN
+     * (CapaianTahunan::capaianTriwulanan()/capaianSetahun()) -- termasuk rumus kustom
+     * IKU Non % dan pembilang/penyebut IKU %.
+     */
+    public function test_data_rekap_sama_dengan_rumus_capaian_tahunan_termasuk_rumus_kustom_dan_rasio(): void
+    {
+        $this->loginSebagaiTimSakip();
+
+        $periode = Periode::create(['tahun' => 2026, 'triwulan' => 2, 'bulan' => 5, 'bulan_ke' => 5]);
+
+        // Non % dengan rumus kustom "lebih kecil lebih baik": alokasi/realisasi x 100.
+        $kustom = MasterIku::create(['kode' => '3101', 'indikator' => 'Uji Rumus Kustom', 'tim' => 'Uji', 'formula_capaian' => 'alokasi / realisasi * 100']);
+        CapaianTahunan::create(['iku_id' => $kustom->id, 'tahun' => 2026, 'alokasi_tw2' => 50, 'alokasi_tw4' => 50, 'realisasi_tw2' => 100]);
+
+        // % : N = 10, 4 rincian terealisasi s.d. TW II.
+        $rasio = MasterIku::create(['kode' => '3102', 'indikator' => 'Uji Rasio', 'tim' => 'Uji', 'metode_capaian' => MasterIku::METODE_RASIO]);
+        CapaianTahunan::create([
+            'iku_id' => $rasio->id, 'tahun' => 2026,
+            'x_alokasi_tw2' => 5, 'x_alokasi_tw4' => 10,
+            'y_alokasi_tw1' => 10, 'y_alokasi_tw2' => 10, 'y_alokasi_tw3' => 10, 'y_alokasi_tw4' => 10,
+            'y_realisasi_tw1' => 10, 'y_realisasi_tw2' => 10, 'y_realisasi_tw3' => 10, 'y_realisasi_tw4' => 10,
+            'x_realisasi_tw1' => 2, 'x_realisasi_tw2' => 2,
+        ]);
+
+        foreach ([$kustom, $rasio] as $iku) {
+            Kegiatan::create([
+                'iku_id' => $iku->id, 'periode_id' => $periode->id, 'jenis' => 'bukan_survei_sensus',
+                'uraian_kegiatan' => 'Kegiatan '.$iku->kode, 'status_dokumen' => Kegiatan::STATUS_DIVERIFIKASI,
+            ]);
+        }
+
+        $baris = Livewire::test(DasborCapaian::class)->set('tahun', 2026)->set('triwulan', 2)
+            ->viewData('rekap')->keyBy(fn ($r) => $r['iku']->id);
+
+        foreach ([$kustom, $rasio] as $iku) {
+            $ct = CapaianTahunan::with('masterIku')->where('iku_id', $iku->id)->first();
+            $this->assertSame($ct->capaianTriwulanan(2), $baris[$iku->id]['persentase'], $iku->kode);
+            $this->assertSame($ct->capaianSetahun(2), $baris[$iku->id]['persentase_setahun'], $iku->kode);
+        }
+
+        $this->assertSame(50.0, $baris[$kustom->id]['persentase'], 'rumus kustom dipakai, bukan realisasi/target');
+
+        // TW I realisasinya 0: rumus kustom "alokasi / realisasi" membagi nol ->
+        // "-" (belum dinilai), bukan galat halaman Dasbor.
+        $this->assertNull(CapaianTahunan::with('masterIku')->where('iku_id', $kustom->id)->first()->capaianTriwulanan(1));
+        $this->assertSame(80.0, $baris[$rasio->id]['persentase'], '40% / 50% = 80%');
+    }
 }

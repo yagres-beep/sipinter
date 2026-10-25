@@ -1051,7 +1051,7 @@ class NotulaBagian1DocxService
 
         $keterangan = "dimana:\ny = {$iku->indikator}\nn = {$iku->deskripsi_x}\nN = {$iku->deskripsi_y}";
 
-        $rincian = $this->rincianNMencakupTeks($iku, $periode);
+        $rincian = $this->rincianNMencakupTeks($iku, $periode, $rekap['y_target'] ?? null);
 
         return $rincian !== null ? "{$keterangan}\n\n{$rincian}" : $keterangan;
     }
@@ -1067,24 +1067,27 @@ class NotulaBagian1DocxService
      * Baris "n = ..." DIHILANGKAN SAMA SEKALI (bukan dicetak "n = 0") bila belum ada
      * satu pun item yang direalisasikan s.d. triwulan ini -- langsung lompat ke rincian N,
      * sesuai contoh dokumen resmi.
+     *
+     * Angka di "N = ..." adalah angka N yang ditetapkan di Target Tahunan ($angkaN,
+     * sama dengan rumus formulaBaris()), BUKAN jumlah baris rincian -- keduanya boleh
+     * berbeda; daftar di bawahnya tetap rincian target aktif. Angka "n = ..." adalah
+     * jumlah rincian unik yang terealisasi (sama dengan pembilang).
      */
-    private function rincianNMencakupTeks(MasterIku $iku, Periode $periode): ?string
+    private function rincianNMencakupTeks(MasterIku $iku, Periode $periode, mixed $angkaN = null): ?string
     {
         $semua = RincianN::milik($iku->id, (int) $periode->tahun)->orderBy('id')->get();
 
-        // N = rincian target yang belum dilepas; n = rincian sumber apa pun
+        // Daftar N = rincian target yang belum dilepas; n = rincian sumber apa pun
         // (termasuk rincian tambahan Verifikasi) yang terealisasi s.d. TW ini dan
         // tidak sebelum triwulan mulai berlakunya.
-        $penyebut = $semua->filter(fn (RincianN $r) => ! $r->isTambahan() && ! $r->isDilepas());
+        $rincianTarget = $semua->filter(fn (RincianN $r) => ! $r->isTambahan() && ! $r->isDilepas());
 
-        if ($penyebut->isEmpty()) {
+        if ($rincianTarget->isEmpty()) {
             return null;
         }
 
         $tw = (int) $periode->triwulan;
-        $terealisasi = $semua->filter(fn (RincianN $r) => $r->triwulan_realisasi !== null
-            && $r->triwulan_realisasi <= $tw
-            && $r->triwulan_realisasi >= $r->triwulan_mulai_berlaku);
+        $terealisasi = $semua->filter(fn (RincianN $r) => $r->terhitungSampai($tw));
 
         $daftar = fn (Collection $baris) => $baris->map(fn (RincianN $r) => '• '.$r->uraian)->implode("\n");
 
@@ -1092,7 +1095,11 @@ class NotulaBagian1DocxService
             ? "n = {$terealisasi->count()} mencakup:\n".$daftar($terealisasi)."\n\n"
             : '';
 
-        return "{$blokN}N = {$penyebut->count()} mencakup:\n".$daftar($penyebut);
+        $besarN = is_numeric($angkaN)
+            ? PengaturanCapaian::formatAngka((int) round((float) $angkaN))
+            : '(belum ditetapkan)';
+
+        return "{$blokN}N = {$besarN} mencakup:\n".$daftar($rincianTarget);
     }
 
     /**

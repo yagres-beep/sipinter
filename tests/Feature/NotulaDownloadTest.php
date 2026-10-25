@@ -853,8 +853,50 @@ class NotulaDownloadTest extends TestCase
         $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
 
         $this->assertStringNotContainsString('n = 0', $xml);
-        $this->assertStringContainsString('N = 2 mencakup:', $xml);
+        // Angka N = isian Target Tahunan (4), bukan jumlah rincian (2) -- sama dengan
+        // angka N di rumus "y = n/N".
+        $this->assertStringContainsString('N = 4 mencakup:', $xml);
+        $this->assertStringNotContainsString('N = 2 mencakup:', $xml);
         $this->assertStringContainsString('Publikasi Statistik Kesejahteraan Rakyat 2026', $xml);
+    }
+
+    /**
+     * Rincian tambahan n (dari Verifikasi) ikut tercetak di "n = ... mencakup:" bila
+     * sudah terealisasi s.d. TW notula, tapi TIDAK di daftar N; rincian target yang
+     * dilepas juga tidak di daftar N. Angka N tetap isian Target Tahunan.
+     */
+    public function test_docx_bagian1_rincian_tambahan_dan_dilepas_mengikuti_aturan_n(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+
+        $iku = MasterIku::create([
+            'kode' => '3012', 'indikator' => 'Persentase Uji Tambahan n', 'tim' => 'Uji', 'penanggung_jawab' => 'A',
+            'sasaran' => 'Sasaran Uji Tambahan n', 'satuan' => 'Persen', 'metode_capaian' => MasterIku::METODE_RASIO,
+            'deskripsi_x' => 'Jumlah Desa Pembina', 'deskripsi_y' => 'Jumlah Desa Sasaran',
+        ]);
+
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 8, 'triwulan' => 3, 'bulan_ke' => 2, 'flag_bulan_terlewat' => false]);
+        $this->verifikasiCapaian($iku, $periode);
+
+        CapaianTahunan::create(['iku_id' => $iku->id, 'tahun' => 2026, 'y_alokasi_tw4' => 10, 'x_realisasi_tw1' => 1, 'x_realisasi_tw3' => 1]);
+
+        RincianN::create(['iku_id' => $iku->id, 'tahun' => 2026, 'uraian' => 'Desa Target Aktif']);
+        RincianN::create(['iku_id' => $iku->id, 'tahun' => 2026, 'uraian' => 'Desa Dilepas', 'triwulan_realisasi' => 1, 'dilepas_dari_target_at' => now()]);
+        RincianN::create(['iku_id' => $iku->id, 'tahun' => 2026, 'uraian' => 'Desa Tambahan TW III', 'sumber' => RincianN::SUMBER_VERIFIKASI, 'triwulan_mulai_berlaku' => 3, 'triwulan_realisasi' => 3]);
+        RincianN::create(['iku_id' => $iku->id, 'tahun' => 2026, 'uraian' => 'Desa Tambahan TW IV', 'sumber' => RincianN::SUMBER_VERIFIKASI, 'triwulan_mulai_berlaku' => 4, 'triwulan_realisasi' => 4]);
+
+        $notula = Notula::create(['periode_id' => $periode->id]);
+        $xml = $this->documentXmlDariRespons($this->get(route('notula.unduh-bagian1-docx', $notula)));
+
+        $this->assertStringContainsString('n = 2 mencakup:', $xml);
+        $this->assertStringContainsString('N = 10 mencakup:', $xml);
+        $this->assertStringContainsString('Desa Tambahan TW III', $xml);
+        $this->assertStringNotContainsString('Desa Tambahan TW IV', $xml, 'belum berlaku/terealisasi di TW III');
+
+        $blokN = substr($xml, strpos($xml, 'N = 10 mencakup:'));
+        $this->assertStringContainsString('Desa Target Aktif', $blokN);
+        $this->assertStringNotContainsString('Desa Tambahan TW III', $blokN);
+        $this->assertStringNotContainsString('Desa Dilepas', $blokN);
     }
 
     /**

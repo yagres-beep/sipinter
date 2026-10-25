@@ -70,6 +70,27 @@ class LakinTest extends TestCase
         $this->assertEquals(50, $data->capaian_persen);
     }
 
+    /**
+     * Menyimpan ulang baris LAKIN yang terhubung ke IKU tidak boleh mengubah capaian %
+     * hanya karena rumusnya berbeda -- dulu rasio polos tanpa batas maksimal.
+     */
+    public function test_simpan_baris_iku_memakai_rumus_yang_sama_dengan_saat_ditambahkan(): void
+    {
+        $this->loginSebagai('Tim SAKIP');
+        $iku = MasterIku::create(['kode' => '1140', 'indikator' => 'Uji Plafon', 'tim' => 'Sosial', 'penanggung_jawab' => 'A', 'sasaran' => 'S']);
+        $this->buatCapaian($iku, 2026, 4, 100, 150);
+
+        $lakin = Lakin::create(['tahun' => 2026]);
+        app(LakinBuilderService::class)->tambahDariIku($lakin, [$iku->id]);
+        $baris = $lakin->baris()->sole();
+        $this->assertEquals(120, $baris->capaian_persen, 'dibatasi batas maksimal');
+
+        Livewire::test(LakinDetail::class, ['lakin' => $lakin->fresh()])
+            ->call('simpanBaris', $baris->id);
+
+        $this->assertEquals(120, $baris->fresh()->capaian_persen, 'tetap 120, bukan 150');
+    }
+
     public function test_iku_tersedia_untuk_tahun_menandai_terverifikasi_bila_seluruh_capaian_beres(): void
     {
         $iku = MasterIku::create(['kode' => '1131', 'indikator' => 'Uji', 'tim' => 'Sosial', 'penanggung_jawab' => 'A']);
