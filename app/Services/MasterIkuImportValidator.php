@@ -285,6 +285,10 @@ class MasterIkuImportValidator
                 ...self::alokasiKumulatifDariKontribusi($alokasi, 'x_alokasi_tw'),
                 'y_alokasi_tw1' => $penyebutY, 'y_alokasi_tw2' => $penyebutY,
                 'y_alokasi_tw3' => $penyebutY, 'y_alokasi_tw4' => $penyebutY,
+                // Nilai dasar n mengikuti angka N, sama seperti TargetTahunan::simpan()
+                // -- pembilang realisasi (x_realisasi_tw*) TIDAK disentuh impor.
+                'y_realisasi_tw1' => $penyebutY, 'y_realisasi_tw2' => $penyebutY,
+                'y_realisasi_tw3' => $penyebutY, 'y_realisasi_tw4' => $penyebutY,
             ] : [
                 'target_tahunan' => null,
                 'x_target' => null,

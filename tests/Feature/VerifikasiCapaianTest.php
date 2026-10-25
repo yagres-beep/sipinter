@@ -1414,17 +1414,26 @@ class VerifikasiCapaianTest extends TestCase
         // angka manual, lihat App\Livewire\VerifikasiCapaian::syncRincianN().
         $item = RincianN::create(['iku_id' => $data['iku']->id, 'tahun' => 2026, 'uraian' => 'Item A']);
 
+        // Alokasi X & angka N (Y) milik Target Tahunan -- payload dari Verifikasi
+        // yang mencoba mengubahnya diabaikan.
+        CapaianTahunan::create([
+            'iku_id' => $data['iku']->id, 'tahun' => 2026,
+            'x_alokasi_tw3' => 2, 'y_alokasi_tw3' => 3, 'y_realisasi_tw3' => 3,
+        ]);
+
         Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']->fresh()])
-            ->set('x_alokasi_tw3', 2)
-            ->set('y_alokasi_tw3', 3)
+            ->set('x_alokasi_tw3', 9)
+            ->set('y_alokasi_tw3', 9)
             ->set("rincianNPilih.{$item->id}", true)
-            ->set('y_realisasi_tw3', 3)
+            ->set('y_realisasi_tw3', 9)
             ->call('simpanPerubahan')
             ->assertHasNoErrors();
 
         $capaianTahunan = CapaianTahunan::where('iku_id', $data['iku']->id)->where('tahun', 2026)->first();
         $this->assertEquals(2, $capaianTahunan->x_alokasi_tw3);
         $this->assertEquals(3, $capaianTahunan->y_alokasi_tw3);
+        $this->assertEquals(3, $capaianTahunan->y_realisasi_tw3);
+        $this->assertEquals(1, $capaianTahunan->x_realisasi_tw3);
         $this->assertNull($capaianTahunan->alokasi_tw3);
 
         // TW III kumulatif: X=2,Y=3 -> 66.67% alokasi; X=1,Y=3 -> 33.33% realisasi.
@@ -1699,15 +1708,16 @@ class VerifikasiCapaianTest extends TestCase
             'tahun' => 2026,
             'x_alokasi_tw1' => 1,
             'y_alokasi_tw1' => 3,
+            'x_alokasi_tw3' => 2,
+            'y_alokasi_tw3' => 3,
         ]);
 
-        // Alokasi X/Y TW III diisi Tim SAKIP sebagai angka KUMULATIF langsung TW I
-        // s.d. TW III (lihat App\Models\CapaianTahunan::alokasiKumulatif(), dibaca
-        // apa adanya, TIDAK dijumlahkan lagi dengan TW I) -> 2/3=66.67%, TW I (sesi
-        // lain) TETAP 1/3=33.33%, tidak ikut tersentuh/berubah oleh simpanan ini.
+        // Alokasi X/Y (angka N) hanya diisi di Target Tahunan sebagai angka
+        // KUMULATIF -> TW III 2/3=66.67%, TW I 1/3=33.33%. Simpan dari Verifikasi
+        // (sekalipun payload-nya membawa nilai lain) tidak mengubah keduanya.
         Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']->fresh()])
-            ->set('x_alokasi_tw3', 2)
-            ->set('y_alokasi_tw3', 3)
+            ->set('x_alokasi_tw3', 5)
+            ->set('y_alokasi_tw3', 7)
             ->call('simpanPerubahan')
             ->assertHasNoErrors();
 
@@ -1732,9 +1742,9 @@ class VerifikasiCapaianTest extends TestCase
             'y_alokasi_tw1' => 3,
         ]);
 
-        // Coba "kirim" perubahan TW I dari sesi verifikasi TW III ini (menyimulasikan
-        // payload yang dimanipulasi — kolom TW I sudah dikunci read-only di tampilan
-        // blade) — HARUS diabaikan, hanya TW III (triwulan periode ini) yang tersimpan.
+        // Coba "kirim" perubahan Alokasi X/Y (angka N) TW I maupun TW III dari sesi
+        // verifikasi TW III ini (menyimulasikan payload yang dimanipulasi — kolomnya
+        // read-only di blade) — HARUS diabaikan: angka N hanya diubah di Target Tahunan.
         Livewire::test(VerifikasiCapaian::class, ['capaian' => $data['capaian']->fresh()])
             ->set('x_alokasi_tw1', 99)
             ->set('y_alokasi_tw1', 99)
@@ -1747,8 +1757,8 @@ class VerifikasiCapaianTest extends TestCase
 
         $this->assertEquals(1, $capaianTahunan->x_alokasi_tw1);
         $this->assertEquals(3, $capaianTahunan->y_alokasi_tw1);
-        $this->assertEquals(2, $capaianTahunan->x_alokasi_tw3);
-        $this->assertEquals(3, $capaianTahunan->y_alokasi_tw3);
+        $this->assertNull($capaianTahunan->x_alokasi_tw3);
+        $this->assertNull($capaianTahunan->y_alokasi_tw3);
     }
 
     public function test_realisasi_volume_ro_progres_dan_catatan_tersimpan_saat_verifikasi_selesai(): void

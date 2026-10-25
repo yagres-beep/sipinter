@@ -42,6 +42,10 @@ class LogAktivitas extends Model
 
     public const OBJEK_BERKAS = 'berkas';
 
+    public const OBJEK_RINCIAN_N = 'rincian_n';
+
+    public const OBJEK_CAPAIAN_TAHUNAN = 'capaian_tahunan';
+
     /** Kunci konteks yang boleh diisi pemanggil — selain ini diabaikan. */
     protected const KUNCI_KONTEKS = ['objek_tipe', 'objek_id', 'menu', 'bagian_kustom_id', 'iku_id', 'periode_id', 'perubahan', 'korelasi'];
 
@@ -69,6 +73,12 @@ class LogAktivitas extends Model
         'bukti.lokal_yatim_dibersihkan' => 'Pembersihan berkas lokal',
         'isian_kegiatan.simpan' => 'Percobaan simpan Isian Kegiatan',
         'akses.ditolak' => 'Akses ditolak',
+        'target_tahunan.n_diubah' => 'Angka N Target Tahunan diubah',
+        'rincian_n.dibuat' => 'Rincian n/N ditambahkan',
+        'rincian_n.diubah' => 'Uraian rincian n/N diubah',
+        'rincian_n.dilepas' => 'Rincian target dilepas dari N',
+        'rincian_n.dihapus' => 'Rincian n/N dihapus',
+        'rincian_n.realisasi_diubah' => 'Status realisasi rincian n diubah',
     ];
 
     protected const NAMA_BULAN = [1 => 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];

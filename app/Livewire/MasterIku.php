@@ -7,6 +7,7 @@ use App\Imports\MasterIkuImport;
 use App\Models\CapaianTahunan;
 use App\Models\MasterIku as MasterIkuModel;
 use App\Services\FormulaCapaianService;
+use App\Support\JejakRincianN;
 use App\Support\RumusMarkup;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -40,6 +41,22 @@ class MasterIku extends Component
      * valid tetap disimpan, baris error dilewati.
      */
     public bool $batalkanSemuaBilaError = true;
+
+    /**
+     * false (default): angka N (y_alokasi_tw1..4 + nilai dasar n y_realisasi_tw1..4)
+     * yang SUDAH tersimpan untuk tahun impor dipertahankan -- impor mode upsert tidak
+     * menimpanya diam-diam. true: N diganti nilai Excel, tiap perubahan dicatat di
+     * Log Aktivitas. N yang masih kosong selalu diisi dari Excel (bukan penggantian).
+     * Daftar IKU yang terdampak tampil di pratinjau (lihat perubahanNImpor()).
+     */
+    public bool $gantiNTersimpan = false;
+
+    private const MENU_IMPOR = 'Impor Excel Master IKU';
+
+    private const KOLOM_N = [
+        'y_alokasi_tw1', 'y_alokasi_tw2', 'y_alokasi_tw3', 'y_alokasi_tw4',
+        'y_realisasi_tw1', 'y_realisasi_tw2', 'y_realisasi_tw3', 'y_realisasi_tw4',
+    ];
 
     /**
      * Hasil pratinjauExcel() — daftar baris {baris, valid, data, errors} dari
@@ -244,7 +261,49 @@ class MasterIku extends Component
 
     public function batalkanPratinjau(): void
     {
-        $this->reset(['pratinjau', 'pratinjauErrorStruktural']);
+        $this->reset(['pratinjau', 'pratinjauErrorStruktural', 'gantiNTersimpan']);
+    }
+
+    /**
+     * Baris valid pratinjau yang angka N-nya SUDAH tersimpan untuk tahun impor dan
+     * berbeda dari nilai Excel -- yang akan tertimpa bila $gantiNTersimpan dicentang.
+     *
+     * @return list<array{kode: string, indikator: string, lama: float, baru: ?float}>
+     */
+    public function perubahanNImpor(): array
+    {
+        $hasil = [];
+
+        foreach (collect($this->pratinjau ?? [])->where('valid', true) as $baris) {
+            $ct = $this->capaianTahunanTersimpan($baris['data']['kode']);
+            $lama = $ct?->angkaN();
+            $baru = $this->nDariBaris($baris);
+
+            if ($lama !== null && ! $this->samaN($lama, $baru) && array_key_exists('y_alokasi_tw4', $baris['data']['capaian_tahunan'])) {
+                $hasil[] = ['kode' => $baris['data']['kode'], 'indikator' => $baris['data']['master_iku']['indikator'], 'lama' => $lama, 'baru' => $baru];
+            }
+        }
+
+        return $hasil;
+    }
+
+    private function capaianTahunanTersimpan(string $kode): ?CapaianTahunan
+    {
+        $ikuId = MasterIkuModel::where('kode', $kode)->value('id');
+
+        return $ikuId ? CapaianTahunan::where('iku_id', $ikuId)->where('tahun', $this->tahunImpor)->first() : null;
+    }
+
+    private function nDariBaris(array $baris): ?float
+    {
+        $nilai = $baris['data']['capaian_tahunan']['y_alokasi_tw4'] ?? null;
+
+        return is_numeric($nilai) ? (float) $nilai : null;
+    }
+
+    private function samaN(?float $a, ?float $b): bool
+    {
+        return $a === null || $b === null ? $a === $b : abs($a - $b) < 0.000001;
     }
 
     /**
@@ -275,9 +334,23 @@ class MasterIku extends Component
         }
 
         $tahun = $this->tahunImpor;
+        $nDipertahankan = 0;
 
-        DB::transaction(function () use ($barisValid, $tahun): void {
+        DB::transaction(function () use ($barisValid, $tahun, &$nDipertahankan): void {
             foreach ($barisValid as $baris) {
+                // Angka N tersimpan dibaca SEBELUM baris mana pun ditulis.
+                $nLama = $this->capaianTahunanTersimpan($baris['data']['kode'])?->angkaN();
+                $nBaru = $this->nDariBaris($baris);
+                $dataTahunan = $baris['data']['capaian_tahunan'];
+                $membawaN = array_key_exists('y_alokasi_tw4', $dataTahunan);
+
+                if ($membawaN && $nLama !== null && ! $this->samaN($nLama, $nBaru) && ! $this->gantiNTersimpan) {
+                    // Tanpa persetujuan eksplisit, N (dan nilai dasar n) tersimpan tetap.
+                    $dataTahunan = array_diff_key($dataTahunan, array_flip(self::KOLOM_N));
+                    $nDipertahankan++;
+                    $membawaN = false;
+                }
+
                 $iku = MasterIkuModel::updateOrCreate(
                     ['kode' => $baris['data']['kode']],
                     $baris['data']['master_iku']
@@ -285,16 +358,24 @@ class MasterIku extends Component
 
                 CapaianTahunan::updateOrCreate(
                     ['iku_id' => $iku->id, 'tahun' => $tahun],
-                    $baris['data']['capaian_tahunan']
+                    $dataTahunan
                 );
+
+                if ($membawaN && ! $this->samaN($nLama, $nBaru)) {
+                    JejakRincianN::nDiubah($iku, $tahun, $nLama, $nBaru, self::MENU_IMPOR);
+                }
             }
         });
 
         MasterIkuModel::lupakanCache();
 
-        session()->flash('status', "Berhasil mengimpor {$barisValid->count()} indikator untuk tahun {$tahun}.");
+        $pesan = "Berhasil mengimpor {$barisValid->count()} indikator untuk tahun {$tahun}.";
+        if ($nDipertahankan > 0) {
+            $pesan .= " Angka N tersimpan dipertahankan untuk {$nDipertahankan} IKU (tidak diganti nilai Excel).";
+        }
+        session()->flash('status', $pesan);
 
-        $this->reset(['pratinjau', 'pratinjauErrorStruktural']);
+        $this->reset(['pratinjau', 'pratinjauErrorStruktural', 'gantiNTersimpan']);
     }
 
     public function edit(int $id): void

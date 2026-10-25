@@ -165,6 +165,22 @@
                 </label>
             </div>
 
+            @php $perubahanN = $this->perubahanNImpor(); @endphp
+            @if ($perubahanN !== [])
+                <div class="info" style="margin-bottom:12px" wire:key="peringatan-n-impor">
+                    ⚠️ <strong>{{ count($perubahanN) }} IKU sudah punya angka N tersimpan untuk tahun {{ $tahunImpor }}</strong> yang berbeda dari Excel:
+                    <ul style="margin:6px 0 8px 18px">
+                        @foreach ($perubahanN as $p)
+                            <li><b>{{ $p['kode'] }}</b> — {{ \Illuminate\Support\Str::limit($p['indikator'], 70) }}: N {{ \App\Models\PengaturanCapaian::formatAngka($p['lama']) }} → {{ $p['baru'] !== null ? \App\Models\PengaturanCapaian::formatAngka($p['baru']) : 'kosong' }}</li>
+                        @endforeach
+                    </ul>
+                    <label class="fl-row" style="cursor:pointer;gap:8px">
+                        <input type="checkbox" wire:model.live="gantiNTersimpan">
+                        <span>Ganti angka N tersimpan dengan nilai Excel <span class="muted" style="font-weight:400">(bila tidak dicentang, N tersimpan dipertahankan; kolom lain tetap diimpor; setiap penggantian tercatat di Log Aktivitas)</span></span>
+                    </label>
+                </div>
+            @endif
+
             @if ($jumlahValid > 0)
                 <div class="card-h" style="font-size:13px">✓ Baris Valid ({{ $jumlahValid }})</div>
                 <div class="table-scroll" style="max-height:260px">

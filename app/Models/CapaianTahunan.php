@@ -35,6 +35,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *   nol berjenjang), dibaca APA ADANYA per TW oleh realisasiKumulatif() TANPA
  *   dijumlahkan, sesuai kolom Q-T "Realisasi (Kumulatif)" sheet resmi (Y-nya
  *   selalu konstan pada baris Penyebut, sama seperti Alokasi).
+ *
+ * Untuk IKU 'rasio': y_alokasi_twN = angka N yang DIKETIK Tim SAKIP di Target
+ * Tahunan (angkaN(), bukan jumlah baris RincianN); y_realisasi_twN = nilai dasar n
+ * yang mengikuti N (nDasar()); x_realisasi_twN = rincian n yang benar-benar
+ * terealisasi. Ketiganya sengaja tidak dipakai bergantian.
  */
 class CapaianTahunan extends Model
 {
@@ -185,6 +190,30 @@ class CapaianTahunan extends Model
         return $this->alokasiKumulatif(4);
     }
 
+    /**
+     * Angka total N (IKU 'rasio') yang ditetapkan eksplisit di App\Livewire\
+     * TargetTahunan -- penyebut persentase. Berlaku sama untuk keempat TW, jadi
+     * dibaca dari TW IV. BUKAN jumlah baris App\Models\RincianN (jumlah rincian
+     * boleh berbeda). Null bila belum ditetapkan.
+     */
+    public function angkaN(): ?float
+    {
+        return $this->y_alokasi_tw4 !== null ? (float) $this->y_alokasi_tw4 : null;
+    }
+
+    /**
+     * Nilai dasar n pada triwulan $tw (y_realisasi_tw{$tw}) -- mengikuti angka N
+     * (disinkronkan App\Livewire\TargetTahunan::simpan()), dipakai sebagai penyebut
+     * Realisasi Kumulatif. BUKAN tanda bahwa realisasi sudah terjadi: pembilangnya
+     * tetap x_realisasi_tw1..4 (rincian unik yang benar-benar terealisasi).
+     */
+    public function nDasar(int $tw): ?float
+    {
+        $nilai = $this->{"y_realisasi_tw{$tw}"};
+
+        return $nilai !== null ? (float) $nilai : null;
+    }
+
 
     /**
      * Rumus 2.2 (Nilai Tampil — toPersen) — X÷Y×100 — dipakai targetTahunan()
@@ -208,10 +237,7 @@ class CapaianTahunan extends Model
      */
     public function capaianTriwulanan(int $tw): ?float
     {
-        $alokasi = $this->alokasiKumulatif($tw);
-        $realisasi = $this->realisasiKumulatif($tw);
-
-        return $this->capaianFormula($alokasi, $realisasi) ?? Capaian::hitungPersentase($alokasi, $realisasi);
+        return self::capaianUntuk($this->masterIku, $this->alokasiKumulatif($tw), $this->realisasiKumulatif($tw));
     }
 
     /**
@@ -221,10 +247,40 @@ class CapaianTahunan extends Model
      */
     public function capaianSetahun(int $tw): ?float
     {
-        $target = $this->targetTahunan();
-        $realisasi = $this->realisasiKumulatif($tw);
+        return self::capaianUntuk($this->masterIku, $this->targetTahunan(), $this->realisasiKumulatif($tw));
+    }
 
-        return $this->capaianFormula($target, $realisasi) ?? Capaian::hitungPersentase($target, $realisasi);
+    /**
+     * SATU sumber rumus capaian (target vs realisasi) satu IKU -- dipakai
+     * capaianTriwulanan()/capaianSetahun() di sini, rekap App\Livewire\DasborCapaian,
+     * dan baris LAKIN yang disunting manual (App\Livewire\LakinDetail), supaya
+     * semuanya menerapkan batas maksimal, aturan strip "-", dan rumus kustom yang
+     * sama: rumus kustom bila ada (lihat capaianFormula()), selain itu rumus baku
+     * Capaian::hitungPersentase(). Null = belum ada capaian ("-").
+     */
+    public static function capaianUntuk(?MasterIku $iku, mixed $target, mixed $realisasi): ?float
+    {
+        if (! is_numeric($target) || ! is_numeric($realisasi)) {
+            return null;
+        }
+
+        if (self::pakaiRumusKustom($iku)) {
+            // Rumus kustom yang membagi dengan nol (mis. "alokasi / realisasi" saat
+            // realisasi masih 0) = belum bisa dinilai ("-"), bukan galat halaman --
+            // dan TIDAK jatuh ke rumus baku, karena IKU ini memang memakai rumusnya sendiri.
+            try {
+                return self::capaianFormula($iku, (float) $target, (float) $realisasi);
+            } catch (\DivisionByZeroError) {
+                return null;
+            }
+        }
+
+        return Capaian::hitungPersentase($target, $realisasi);
+    }
+
+    protected static function pakaiRumusKustom(?MasterIku $iku): bool
+    {
+        return $iku && ! $iku->pakaiRasio() && filled($iku->formula_capaian);
     }
 
     /**
@@ -235,11 +291,9 @@ class CapaianTahunan extends Model
      * kustom (yaitu SEMUA indikator yang sudah ada hari ini, tidak ada yang
      * berubah perilakunya kecuali eksplisit diisi Tim SAKIP).
      */
-    protected function capaianFormula(float $alokasi, float $realisasi): ?float
+    protected static function capaianFormula(?MasterIku $iku, float $alokasi, float $realisasi): ?float
     {
-        $iku = $this->masterIku;
-
-        if (! $iku || $iku->pakaiRasio() || blank($iku->formula_capaian)) {
+        if (! self::pakaiRumusKustom($iku)) {
             return null;
         }
 

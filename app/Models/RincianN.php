@@ -8,19 +8,29 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * Satu item rincian milik satu MasterIku pada satu tahun -- lihat migrasi
- * 2026_08_27_000014_buat_tabel_rincian_n dan
- * 2026_10_21_000001_tambah_sumber_dan_triwulan_mulai_ke_rincian_n.
+ * 2026_08_27_000014_buat_tabel_rincian_n,
+ * 2026_10_21_000001_tambah_sumber_dan_triwulan_mulai_ke_rincian_n dan
+ * 2026_10_23_000001_tambah_diubah_oleh_ke_rincian_n.
  *
- * Satu baris melayani N dan n sekaligus (tidak ada tabel salinan untuk n), jadi
- * rincian N yang ditambah/diubah di Target Tahunan otomatis ikut di daftar n
- * tanpa proses salin dan tanpa duplikasi.
+ * ANGKA N TIDAK berasal dari tabel ini. Angka total N diisi eksplisit di Target
+ * Tahunan dan disimpan di CapaianTahunan::y_alokasi_tw1..4 (lihat
+ * CapaianTahunan::angkaN()); jumlah baris di sini boleh berbeda dari angka itu.
  *
- * - N (penyebut)  = baris sumber 'target' yang belum dilepas, lihat scopePenyebut().
- * - n (pembilang) = baris SUMBER APA PUN yang sudah terealisasi, dihitung pada
- *                   triwulan_realisasi-nya, lihat jumlahRealisasiPerTw().
+ * Satu baris sumber 'target' adalah rincian N sekaligus rincian n yang mengikutinya
+ * (identitasnya sama, tanpa tabel salinan), jadi perubahan uraian di Target Tahunan
+ * langsung berlaku di daftar n tanpa proses salin dan tanpa duplikasi. Uraiannya
+ * hanya bisa diubah dari Target Tahunan; di Verifikasi hanya status realisasinya.
  *
- * Rincian tambahan (sumber 'verifikasi') tidak pernah masuk N dan tidak pernah
- * bisa direalisasikan sebelum triwulan_mulai_berlaku-nya.
+ * Empat jenis baris yang dibedakan:
+ * - target aktif          : sumber 'target', belum dilepas (scopeTargetAktif()).
+ * - target dilepas        : sumber 'target', dikeluarkan dari daftar target padahal
+ *                           sudah terealisasi -- realisasinya tetap tercatat.
+ * - tambahan              : sumber 'verifikasi', dibuat di halaman Verifikasi;
+ *                           tidak pernah termasuk daftar target.
+ * - terealisasi           : baris jenis apa pun yang triwulan_realisasi-nya terisi.
+ *
+ * Pembilang n per triwulan = baris unik yang terealisasi pada triwulan itu dan tidak
+ * sebelum triwulan_mulai_berlaku-nya (jumlahRealisasiPerTw()).
  */
 class RincianN extends Model
 {
@@ -39,6 +49,7 @@ class RincianN extends Model
         'triwulan_realisasi',
         'dilepas_dari_target_at',
         'dibuat_oleh',
+        'diubah_oleh',
     ];
 
     protected $attributes = [
@@ -65,10 +76,21 @@ class RincianN extends Model
         return $query->where('iku_id', $ikuId)->where('tahun', $tahun);
     }
 
-    /** Baris yang dihitung sebagai N: rincian target yang belum dilepas. */
-    public function scopePenyebut(Builder $query): Builder
+    /** Rincian target yang masih ada di daftar Target Tahunan (belum dilepas). */
+    public function scopeTargetAktif(Builder $query): Builder
     {
         return $query->where('sumber', self::SUMBER_TARGET)->whereNull('dilepas_dari_target_at');
+    }
+
+    /**
+     * Baris yang sah masuk pembilang n s.d. triwulan $tw: sudah terealisasi pada
+     * atau sebelum $tw, dan tidak sebelum triwulan mulai berlakunya.
+     */
+    public function scopeTerhitungSampai(Builder $query, int $tw): Builder
+    {
+        return $query->whereNotNull('triwulan_realisasi')
+            ->where('triwulan_realisasi', '<=', $tw)
+            ->whereColumn('triwulan_realisasi', '>=', 'triwulan_mulai_berlaku');
     }
 
     public function isTambahan(): bool
@@ -86,10 +108,45 @@ class RincianN extends Model
         return $this->triwulan_realisasi !== null;
     }
 
-    /** Angka N satu IKU pada satu tahun. */
-    public static function jumlahPenyebut(int $ikuId, int $tahun): int
+    /** Sama seperti scopeTerhitungSampai() untuk satu baris yang sudah dimuat. */
+    public function terhitungSampai(int $tw): bool
     {
-        return static::milik($ikuId, $tahun)->penyebut()->count();
+        return $this->triwulan_realisasi !== null
+            && $this->triwulan_realisasi <= $tw
+            && $this->triwulan_realisasi >= $this->triwulan_mulai_berlaku;
+    }
+
+    /**
+     * Jumlah rincian target aktif satu IKU pada satu tahun -- informasi daftar,
+     * BUKAN angka N (lihat docblock kelas).
+     */
+    public static function jumlahRincianTarget(int $ikuId, int $tahun): int
+    {
+        return static::milik($ikuId, $tahun)->targetAktif()->count();
+    }
+
+    /**
+     * Ringkasan daftar n satu IKU pada satu tahun, dilihat dari triwulan $tw --
+     * tiap angka punya satu arti, tidak dipakai bergantian:
+     * - terdaftar   : seluruh baris rincian n (target aktif + dilepas + tambahan)
+     * - target      : rincian target aktif
+     * - tambahan    : rincian tambahan dari Verifikasi
+     * - dilepas     : rincian target yang dilepas tapi realisasinya tetap tercatat
+     * - terealisasi : pembilang n kumulatif TW I s.d. $tw (baris unik yang sah)
+     *
+     * @return array{terdaftar: int, target: int, tambahan: int, dilepas: int, terealisasi: int}
+     */
+    public static function ringkasan(int $ikuId, int $tahun, int $tw): array
+    {
+        $baris = static::milik($ikuId, $tahun)->get();
+
+        return [
+            'terdaftar' => $baris->count(),
+            'target' => $baris->filter(fn (self $n) => ! $n->isTambahan() && ! $n->isDilepas())->count(),
+            'tambahan' => $baris->filter(fn (self $n) => $n->isTambahan())->count(),
+            'dilepas' => $baris->filter(fn (self $n) => ! $n->isTambahan() && $n->isDilepas())->count(),
+            'terealisasi' => $baris->filter(fn (self $n) => $n->terhitungSampai($tw))->count(),
+        ];
     }
 
     /**

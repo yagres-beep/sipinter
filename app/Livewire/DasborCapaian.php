@@ -318,9 +318,11 @@ class DasborCapaian extends Component
                     'realisasi' => $realisasi,
                     // Pembilang kedua kolom capaian di bawah SELALU $realisasiYtd
                     // (kumulatif s.d. triwulan ini), bukan $realisasi (triwulan ini saja).
-                    'persentase' => Capaian::hitungPersentase($targetTw, $realisasiYtd),
+                    // Satu sumber rumus (CapaianTahunan::capaianUntuk()) -- sama seperti
+                    // kartu rata-rata di atas, Notula, dan LAKIN, termasuk rumus kustom.
+                    'persentase' => CapaianTahunan::capaianUntuk($iku, $targetTw, $realisasiYtd),
                     'realisasi_ytd' => $realisasiYtd,
-                    'persentase_setahun' => Capaian::hitungPersentase($targetPk, $realisasiYtd),
+                    'persentase_setahun' => CapaianTahunan::capaianUntuk($iku, $targetPk, $realisasiYtd),
                 ];
             })
             ->sortBy(fn ($row) => $row['iku']->kode)

@@ -7,6 +7,7 @@ use App\Exports\MasterIkuTemplateSheet;
 use App\Imports\MasterIkuImport;
 use App\Livewire\MasterIku;
 use App\Models\CapaianTahunan;
+use App\Models\LogAktivitas;
 use App\Models\MasterIku as MasterIkuModel;
 use App\Models\Role;
 use App\Models\User;
@@ -224,6 +225,85 @@ class MasterIkuTest extends TestCase
 
         $this->assertSame(1, MasterIkuModel::where('kode', '3003')->count());
         $this->assertSame('Indikator Baru', MasterIkuModel::where('kode', '3003')->value('indikator'));
+    }
+
+    /**
+     * Impor upsert tidak boleh menimpa angka N tersimpan diam-diam: bawaannya N &
+     * nilai dasar n dipertahankan (kolom lain tetap diimpor), diganti hanya bila
+     * Tim SAKIP mencentang $gantiNTersimpan, dan penggantian itu tercatat di log.
+     * Realisasi (x_realisasi) tidak pernah tersentuh impor.
+     */
+    public function test_impor_upsert_mempertahankan_n_tersimpan_kecuali_dicentang_dan_mencatat_log(): void
+    {
+        $this->loginSebagaiTimSakip();
+
+        $iku = MasterIkuModel::create(['kode' => '3010', 'indikator' => 'IKU % lama', 'tim' => 'Tim Lama', 'metode_capaian' => MasterIkuModel::METODE_RASIO]);
+        CapaianTahunan::create([
+            'iku_id' => $iku->id, 'tahun' => 2026,
+            'y_alokasi_tw1' => 10, 'y_alokasi_tw2' => 10, 'y_alokasi_tw3' => 10, 'y_alokasi_tw4' => 10,
+            'y_realisasi_tw1' => 10, 'y_realisasi_tw2' => 10, 'y_realisasi_tw3' => 10, 'y_realisasi_tw4' => 10,
+            'x_realisasi_tw1' => 3,
+        ]);
+
+        // Excel membawa Y = 90 untuk IKU yang N-nya sudah 10.
+        $import = $this->importDanKembalikanHasil([$this->rowPersen([2 => '3010'])], modeUpsert: true);
+        $this->assertTrue($import->hasilValidasi[0]['valid'], implode(' | ', $import->hasilValidasi[0]['errors']));
+
+        $komponen = Livewire::test(MasterIku::class)
+            ->set('tahunImpor', 2026)
+            ->set('modeImpor', 'upsert')
+            ->set('pratinjau', $import->hasilValidasi);
+
+        $perubahan = $komponen->instance()->perubahanNImpor();
+        $this->assertCount(1, $perubahan);
+        $this->assertSame(['kode' => '3010', 'lama' => 10.0, 'baru' => 90.0], array_intersect_key($perubahan[0], array_flip(['kode', 'lama', 'baru'])));
+        $komponen->assertSee('N 10 → 90');
+
+        $komponen->call('konfirmasiImpor')->assertHasNoErrors();
+
+        $ct = CapaianTahunan::where('iku_id', $iku->id)->where('tahun', 2026)->first();
+        $this->assertEquals(10, $ct->y_alokasi_tw4, 'N tersimpan dipertahankan');
+        $this->assertEquals(10, $ct->y_realisasi_tw2);
+        $this->assertEqualsWithDelta(8.0, $ct->x_alokasi_tw4, 0.01, 'kolom lain tetap diimpor');
+        $this->assertEquals(3, $ct->x_realisasi_tw1);
+        $this->assertSame(0, LogAktivitas::where('aksi', 'target_tahunan.n_diubah')->count());
+
+        // Impor ulang dengan persetujuan eksplisit: N diganti dan tercatat.
+        Livewire::test(MasterIku::class)
+            ->set('tahunImpor', 2026)
+            ->set('modeImpor', 'upsert')
+            ->set('pratinjau', $import->hasilValidasi)
+            ->set('gantiNTersimpan', true)
+            ->call('konfirmasiImpor')
+            ->assertHasNoErrors();
+
+        $ct = $ct->fresh();
+        $this->assertEquals(90, $ct->y_alokasi_tw4);
+        $this->assertEquals(90, $ct->y_realisasi_tw4);
+        $this->assertEquals(3, $ct->x_realisasi_tw1, 'realisasi tidak tersentuh');
+        $log = LogAktivitas::where('aksi', 'target_tahunan.n_diubah')->sole();
+        $this->assertSame($iku->id, $log->iku_id);
+        $this->assertSame('Impor Excel Master IKU', $log->menu);
+        $this->assertEquals(['N' => ['sebelum' => 10, 'sesudah' => 90]], $log->perubahan);
+    }
+
+    public function test_impor_mengisi_n_yang_masih_kosong_dan_mencatat_log(): void
+    {
+        $this->loginSebagaiTimSakip();
+
+        $import = $this->importDanKembalikanHasil([$this->rowPersen([2 => '3011'])]);
+
+        Livewire::test(MasterIku::class)
+            ->set('tahunImpor', 2026)
+            ->set('pratinjau', $import->hasilValidasi)
+            ->call('konfirmasiImpor')
+            ->assertHasNoErrors();
+
+        $iku = MasterIkuModel::where('kode', '3011')->sole();
+        $ct = CapaianTahunan::where('iku_id', $iku->id)->where('tahun', 2026)->sole();
+        $this->assertEquals(90, $ct->y_alokasi_tw4);
+        $this->assertEquals(90, $ct->y_realisasi_tw1, 'nilai dasar n ikut N');
+        $this->assertEquals(['N' => ['sebelum' => null, 'sesudah' => 90]], LogAktivitas::where('aksi', 'target_tahunan.n_diubah')->sole()->perubahan);
     }
 
     public function test_batalkan_semua_bila_error_tidak_menyimpan_apa_pun(): void

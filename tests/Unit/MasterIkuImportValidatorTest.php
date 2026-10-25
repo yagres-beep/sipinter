@@ -65,6 +65,18 @@ class MasterIkuImportValidatorTest extends TestCase
         $this->assertSame(90.0, $hasil['data']['capaian_tahunan']['y_target']);
     }
 
+    /** Angka N impor menjadi Alokasi Y DAN nilai dasar n; pembilang realisasi tidak disentuh. */
+    public function test_baris_tipe_persen_mengisi_angka_n_dan_nilai_dasar_n(): void
+    {
+        $ct = $this->validasi($this->baseRowPersen())['data']['capaian_tahunan'];
+
+        foreach ([1, 2, 3, 4] as $tw) {
+            $this->assertSame(90.0, $ct["y_alokasi_tw{$tw}"]);
+            $this->assertSame(90.0, $ct["y_realisasi_tw{$tw}"]);
+            $this->assertArrayNotHasKey("x_realisasi_tw{$tw}", $ct);
+        }
+    }
+
     public function test_baris_tipe_persen_valid_seratus_persen(): void
     {
         $row = $this->baseRowPersen([10 => '100', 12 => '4', 14 => '4', 15 => '1', 16 => '1', 17 => '1', 18 => '1']);
