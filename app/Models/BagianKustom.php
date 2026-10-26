@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\FormatAngkaKolom;
+use App\Support\JenisKolomBagianKustom;
 use App\Support\MenuBagianKustom;
 use App\Support\TemplateBagianKustom;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -10,6 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 
 /**
  * Definisi bagian tambahan yang dibuat Tim SAKIP tanpa mengubah kode (mis.
@@ -48,19 +50,27 @@ class BagianKustom extends Model
         self::PERAN_KEPALA => 'Kepala',
     ];
 
-    public const TIPE_KOLOM = [
-        'teks' => 'Teks',
-        'angka' => 'Angka',
-        'pilihan' => 'Pilihan (daftar)',
-    ];
+    public const TIPE_KOLOM = JenisKolomBagianKustom::TIPE;
+
+    /** Batas kolom isian per bagian (semua subbagian). */
+    public const KOLOM_MAKS = 40;
+
+    /** Batas subbagian per bagian. */
+    public const SUBBAGIAN_MAKS = 15;
+
+    /** Pola kode internal: huruf kecil, angka, garis bawah; diawali huruf. */
+    public const POLA_KODE = '/^[a-z][a-z0-9_]{1,59}$/';
 
     protected $fillable = [
+        'kode',
         'nama',
+        'nama_folder',
         'deskripsi',
         'peran',
         'penempatan',
         'label_uraian',
         'kolom',
+        'subbagian',
         'frekuensi_wajib',
         'bukti_wajib',
         'masuk_notula',
@@ -76,10 +86,61 @@ class BagianKustom extends Model
             'peran' => 'array',
             'penempatan' => 'array',
             'kolom' => 'array',
+            'subbagian' => 'array',
             'bukti_wajib' => 'boolean',
             'masuk_notula' => 'boolean',
             'aktif' => 'boolean',
         ];
+    }
+
+    /**
+     * Kode internal dan nama folder Drive diisi sekali saat bagian dibuat, lalu tetap:
+     * mengganti nama bagian tidak mengubah keduanya.
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (self $bagian) {
+            if (blank($bagian->kode)) {
+                $bagian->kode = self::kodeBaru((string) $bagian->nama);
+            }
+
+            if (blank($bagian->nama_folder)) {
+                $bagian->nama_folder = $bagian->nama;
+            }
+        });
+    }
+
+    /**
+     * Kode unik dari nama (mis. "Manajemen Risiko" → manajemen_risiko), diberi akhiran
+     * _2, _3, … bila sudah dipakai bagian lain (aktif maupun nonaktif).
+     */
+    public static function kodeBaru(string $nama, ?int $kecualiId = null): string
+    {
+        $dasar = Str::of($nama)->ascii()->lower()->replaceMatches('/[^a-z0-9]+/', '_')->trim('_')->limit(50, '')->trim('_')->value();
+        $dasar = preg_match('/^[a-z]/', $dasar) ? $dasar : rtrim('bagian_'.$dasar, '_');
+
+        $terpakai = static::query()
+            ->when($kecualiId, fn ($q) => $q->where('id', '!=', $kecualiId))
+            // "_" di LIKE berarti satu karakter apa saja — hasilnya superset, dicocokkan
+            // persis di bawah.
+            ->where('kode', 'like', $dasar.'%')
+            ->pluck('kode')
+            ->all();
+
+        $kode = $dasar;
+        $n = 2;
+
+        while (in_array($kode, $terpakai, true)) {
+            $kode = $dasar.'_'.$n++;
+        }
+
+        return $kode;
+    }
+
+    /** Nama folder Drive tempat bukti dukung bagian ini diunggah. */
+    public function namaFolderEfektif(): string
+    {
+        return filled($this->nama_folder) ? $this->nama_folder : (string) $this->nama;
     }
 
     public function poin(): HasMany
@@ -188,11 +249,13 @@ class BagianKustom extends Model
         $mulaiTriwulan = filled($k['mulai_triwulan'] ?? null) ? (int) $k['mulai_triwulan'] : null;
         $berlakuLengkap = $mulaiTahun !== null && $mulaiTriwulan !== null;
 
+        $teks = JenisKolomBagianKustom::teks($tipe);
+
         return [
             'kunci' => (string) $k['kunci'],
             'label' => (string) $k['label'],
             'tipe' => $tipe,
-            'opsi' => array_values((array) ($k['opsi'] ?? [])),
+            'opsi' => in_array($tipe, ['pilihan', 'pilihan_ganda'], true) || ! empty($k['opsi']) ? array_values((array) ($k['opsi'] ?? [])) : [],
             'wajib' => (bool) ($k['wajib'] ?? false),
             'aktif' => (bool) ($k['aktif'] ?? true),
             'mulai_tahun' => $berlakuLengkap ? $mulaiTahun : null,
@@ -203,7 +266,117 @@ class BagianKustom extends Model
                 : null,
             'pemisah' => FormatAngkaKolom::pemisahDari($k),
             'ribuan' => (bool) ($k['ribuan'] ?? true),
+            // Struktur & petunjuk (opsional; kolom lama tanpa kunci ini = perilaku lama).
+            'subbagian' => filled($k['subbagian'] ?? null) ? (string) $k['subbagian'] : null,
+            'petunjuk' => filled($k['petunjuk'] ?? null) ? trim((string) $k['petunjuk']) : null,
+            'placeholder' => filled($k['placeholder'] ?? null) ? trim((string) $k['placeholder']) : null,
+            // Validasi tambahan.
+            'min' => $angka ? self::angkaAtauNull($k['min'] ?? null) : null,
+            'maks' => $angka ? self::angkaAtauNull($k['maks'] ?? null) : null,
+            'panjang_min' => $teks && filled($k['panjang_min'] ?? null) ? max(0, (int) $k['panjang_min']) : null,
+            'panjang_maks' => $teks && filled($k['panjang_maks'] ?? null) ? max(1, (int) $k['panjang_maks']) : null,
+            'pesan' => filled($k['pesan'] ?? null) ? trim((string) $k['pesan']) : null,
+            'format_tanggal' => $tipe === 'tanggal' && array_key_exists((string) ($k['format_tanggal'] ?? ''), JenisKolomBagianKustom::FORMAT_TANGGAL)
+                ? (string) $k['format_tanggal']
+                : ($tipe === 'tanggal' ? 'panjang' : null),
         ];
+    }
+
+    /** Batas angka kanonik ("-12.5") dari pengaturan, null bila kosong/tidak sah. */
+    private static function angkaAtauNull(mixed $nilai): ?string
+    {
+        if ($nilai === null || trim((string) $nilai) === '') {
+            return null;
+        }
+
+        return FormatAngkaKolom::urai((string) $nilai, null);
+    }
+
+    /**
+     * Subbagian dalam bentuk seragam, urut sesuai tampilan. Bagian tanpa subbagian
+     * (semua bagian lama) mengembalikan daftar kosong.
+     *
+     * @return array<int, array{kunci: string, nama: string, deskripsi: ?string, aktif: bool}>
+     */
+    public function subbagianList(): array
+    {
+        return collect($this->subbagian ?? [])
+            ->filter(fn ($s) => filled($s['kunci'] ?? null) && filled($s['nama'] ?? null))
+            ->map(fn ($s) => self::normalkanSubbagian($s))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $s
+     * @return array{kunci: string, nama: string, deskripsi: ?string, aktif: bool}
+     */
+    public static function normalkanSubbagian(array $s): array
+    {
+        return [
+            'kunci' => (string) $s['kunci'],
+            'nama' => trim((string) $s['nama']),
+            'deskripsi' => filled($s['deskripsi'] ?? null) ? trim((string) $s['deskripsi']) : null,
+            'aktif' => (bool) ($s['aktif'] ?? true),
+        ];
+    }
+
+    /**
+     * Kolom berlaku di bagian ini: berlaku pada periodenya DAN subbagiannya (bila ada)
+     * masih aktif. Kolom yang menunjuk subbagian yang tidak ada dianggap kolom langsung.
+     *
+     * @param  array<string, mixed>  $kolom  hasil kolomList()
+     */
+    public function kolomBerlakuDi(array $kolom, ?int $tahun, ?int $triwulan): bool
+    {
+        if (! self::kolomBerlakuPada($kolom, $tahun, $triwulan)) {
+            return false;
+        }
+
+        $sub = $kolom['subbagian'] ?? null;
+
+        if ($sub === null) {
+            return true;
+        }
+
+        $subbagian = collect($this->subbagianList())->firstWhere('kunci', $sub);
+
+        return $subbagian === null || $subbagian['aktif'];
+    }
+
+    /**
+     * Kolom berlaku untuk formulir, dikelompokkan: kolom langsung di bagian lebih dulu,
+     * lalu tiap subbagian aktif sesuai urutannya. Kelompok tanpa kolom berlaku dilewati.
+     *
+     * @return array<int, array{subbagian: ?array{kunci: string, nama: string, deskripsi: ?string, aktif: bool}, kolom: array<int, array<string, mixed>>}>
+     */
+    public function kelompokKolomBerlaku(?int $tahun, ?int $triwulan): array
+    {
+        $berlaku = $this->kolomBerlaku($tahun, $triwulan);
+
+        return self::kelompokkan($berlaku, $this->subbagianList());
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $kolom
+     * @param  array<int, array<string, mixed>>  $subbagian
+     * @return array<int, array{subbagian: ?array<string, mixed>, kolom: array<int, array<string, mixed>>}>
+     */
+    public static function kelompokkan(array $kolom, array $subbagian): array
+    {
+        $kunciSub = array_column($subbagian, 'kunci');
+        $langsung = array_values(array_filter($kolom, fn ($k) => ! in_array($k['subbagian'] ?? null, $kunciSub, true)));
+        $hasil = $langsung !== [] ? [['subbagian' => null, 'kolom' => $langsung]] : [];
+
+        foreach ($subbagian as $s) {
+            $isi = array_values(array_filter($kolom, fn ($k) => ($k['subbagian'] ?? null) === $s['kunci']));
+
+            if ($isi !== []) {
+                $hasil[] = ['subbagian' => $s, 'kolom' => $isi];
+            }
+        }
+
+        return $hasil;
     }
 
     /**
@@ -233,7 +406,7 @@ class BagianKustom extends Model
      */
     public function kolomBerlaku(?int $tahun, ?int $triwulan): array
     {
-        return array_values(array_filter($this->kolomList(), fn ($k) => self::kolomBerlakuPada($k, $tahun, $triwulan)));
+        return array_values(array_filter($this->kolomList(), fn ($k) => $this->kolomBerlakuDi($k, $tahun, $triwulan)));
     }
 
     /** Triwulan (1-4) dari nomor bulan (1-12). */
@@ -243,24 +416,20 @@ class BagianKustom extends Model
     }
 
     /**
-     * Pesan galat satu nilai kolom (wajib, pilihan, angka), null bila sah — aturan yang
-     * sama untuk Isian Kegiatan dan Isian Bagian Kustom.
+     * Pesan galat satu nilai kolom (wajib, jenis, rentang, panjang), null bila sah —
+     * aturan yang sama untuk Isian Kegiatan dan Isian Bagian Kustom.
      *
      * @param  array<string, mixed>  $kolom  hasil kolomList()
      */
     public static function pesanGalatKolom(array $kolom, mixed $nilai): ?string
     {
-        $nilai = trim((string) $nilai);
+        return JenisKolomBagianKustom::pesanGalat(self::normalkanKolom($kolom + ['kunci' => '', 'label' => 'Kolom']), $nilai);
+    }
 
-        if ($nilai === '') {
-            return $kolom['wajib'] ? "Kolom \"{$kolom['label']}\" wajib diisi." : null;
-        }
-
-        return match ($kolom['tipe']) {
-            'pilihan' => in_array($nilai, $kolom['opsi'], true) ? null : "Pilih salah satu opsi untuk \"{$kolom['label']}\".",
-            'angka' => FormatAngkaKolom::pesanGalat($nilai, $kolom),
-            default => null,
-        };
+    /** Nilai formulir satu poin sudah berisi (teks atau daftar centang). */
+    public static function nilaiFormTerisi(mixed $nilai): bool
+    {
+        return JenisKolomBagianKustom::terisi($nilai);
     }
 
     /**
@@ -279,8 +448,8 @@ class BagianKustom extends Model
         foreach ($this->kolomList() as $kolom) {
             $kunci = $kolom['kunci'];
 
-            $nilai = self::kolomBerlakuPada($kolom, $tahun, $triwulan)
-                ? FormatAngkaKolom::untukDisimpan((string) ($mentah[$kunci] ?? ''), $kolom)
+            $nilai = $this->kolomBerlakuDi($kolom, $tahun, $triwulan)
+                ? JenisKolomBagianKustom::untukDisimpan($mentah[$kunci] ?? '', $kolom)
                 : trim((string) ($tersimpan[$kunci] ?? ''));
 
             if ($nilai !== '') {
@@ -307,20 +476,34 @@ class BagianKustom extends Model
     }
 
     /**
-     * Nilai tersimpan dalam bentuk yang diketik ulang di formulir.
+     * Nilai kosong untuk poin baru di formulir ('' atau [] untuk pilihan ganda).
      *
-     * @param  array<string, mixed>|null  $tersimpan
-     * @return array<string, string>
+     * @return array<string, string|array<int, string>>
      */
-    public function nilaiKolomUntukForm(?array $tersimpan): array
+    public function nilaiKolomKosongForm(): array
     {
         return collect($this->kolomList())
-            ->mapWithKeys(fn ($k) => [$k['kunci'] => FormatAngkaKolom::untukInput((string) ($tersimpan[$k['kunci']] ?? ''), $k)])
+            ->mapWithKeys(fn ($k) => [$k['kunci'] => JenisKolomBagianKustom::kosong($k)])
             ->all();
     }
 
     /**
-     * Nilai semua kolom dalam format tampilan (satuan, desimal, pemisah) — dipakai notula.
+     * Nilai tersimpan dalam bentuk yang diketik ulang di formulir (pilihan ganda =
+     * daftar centang).
+     *
+     * @param  array<string, mixed>|null  $tersimpan
+     * @return array<string, string|array<int, string>>
+     */
+    public function nilaiKolomUntukForm(?array $tersimpan): array
+    {
+        return collect($this->kolomList())
+            ->mapWithKeys(fn ($k) => [$k['kunci'] => JenisKolomBagianKustom::untukForm((string) ($tersimpan[$k['kunci']] ?? ''), $k)])
+            ->all();
+    }
+
+    /**
+     * Nilai semua kolom dalam format tampilan (satuan, desimal, pemisah, tanggal,
+     * pilihan ganda) — dipakai notula.
      *
      * @param  array<string, mixed>|null  $tersimpan
      * @return array<string, string>
@@ -328,7 +511,7 @@ class BagianKustom extends Model
     public function nilaiKolomTampil(?array $tersimpan): array
     {
         return collect($this->kolomList())
-            ->mapWithKeys(fn ($k) => [$k['kunci'] => FormatAngkaKolom::tampil((string) ($tersimpan[$k['kunci']] ?? ''), $k)])
+            ->mapWithKeys(fn ($k) => [$k['kunci'] => JenisKolomBagianKustom::tampil((string) ($tersimpan[$k['kunci']] ?? ''), $k)])
             ->all();
     }
 
@@ -339,7 +522,7 @@ class BagianKustom extends Model
      */
     public static function nilaiTampil(array $kolom, mixed $nilai): string
     {
-        return FormatAngkaKolom::tampil((string) $nilai, $kolom);
+        return JenisKolomBagianKustom::tampil(is_array($nilai) ? (string) json_encode($nilai) : (string) $nilai, self::normalkanKolom($kolom + ['kunci' => '', 'label' => 'Kolom']));
     }
 
     /**
@@ -360,6 +543,18 @@ class BagianKustom extends Model
             if ($kolom['satuan'] !== null) {
                 $bagian[] = 'satuan '.$kolom['satuan'];
             }
+
+            if (($kolom['min'] ?? null) !== null || ($kolom['maks'] ?? null) !== null) {
+                $bagian[] = 'rentang '.($kolom['min'] ?? '…').'–'.($kolom['maks'] ?? '…');
+            }
+        }
+
+        if (($kolom['panjang_min'] ?? null) !== null || ($kolom['panjang_maks'] ?? null) !== null) {
+            $bagian[] = 'panjang '.($kolom['panjang_min'] ?? 0).'–'.($kolom['panjang_maks'] ?? '…').' karakter';
+        }
+
+        if (($kolom['tipe'] ?? '') === 'tanggal') {
+            $bagian[] = 'format '.(JenisKolomBagianKustom::FORMAT_TANGGAL[$kolom['format_tanggal'] ?? 'panjang'] ?? '');
         }
 
         if ($kolom['mulai_tahun'] !== null) {
@@ -381,7 +576,9 @@ class BagianKustom extends Model
     public function potretDefinisi(): array
     {
         return [
+            'kode' => $this->kode,
             'nama' => $this->nama,
+            'nama_folder' => $this->nama_folder,
             'deskripsi' => $this->deskripsi,
             'peran' => array_values($this->peran ?? []),
             'penempatan' => array_values($this->penempatan ?? []),
@@ -392,6 +589,7 @@ class BagianKustom extends Model
             'judul_notula' => $this->judul_notula,
             'format_notula' => $this->format_notula,
             'aktif' => (bool) $this->aktif,
+            'subbagian' => $this->subbagianList(),
             'kolom' => $this->kolomList(),
         ];
     }

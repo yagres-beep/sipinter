@@ -705,7 +705,7 @@ class FolderStructureService
      */
     public function unggahBerkasBagianKustom(BagianKustomPoin $poin, string $localPath, ?string $namaBerkasOverride = null, ?string $kodeBerkas = null): array
     {
-        return $this->unggahBerkas($poin->periode, $poin->masterIku, 'bagian_kustom', $localPath, namaFolderOverride: $poin->bagianKustom->nama, namaBerkasOverride: $namaBerkasOverride, namaItem: $poin->teks, kodeBerkas: $kodeBerkas);
+        return $this->unggahBerkas($poin->periode, $poin->masterIku, 'bagian_kustom', $localPath, namaFolderOverride: $poin->bagianKustom->namaFolderEfektif(),namaBerkasOverride: $namaBerkasOverride, namaItem: $poin->teks, kodeBerkas: $kodeBerkas);
     }
 
     // ================================================================

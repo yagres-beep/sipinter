@@ -746,7 +746,7 @@
                         <p style="font-size:13px;margin-bottom:8px">{{ $poin->teks }}</p>
                         @foreach ($poinPerBagian->first()->bagianKustom->kolomList() as $kolom)
                             @if (filled($poin->nilai_kolom[$kolom['kunci']] ?? null))
-                                <div style="font-size:12px;color:var(--muted);margin-bottom:4px">{{ $kolom['label'] }}: {{ \App\Models\BagianKustom::nilaiTampil($kolom, $poin->nilai_kolom[$kolom['kunci']]) }}</div>
+                                <div style="font-size:12px;color:var(--muted);margin-bottom:4px;white-space:pre-line">{{ $kolom['label'] }}: {{ \App\Models\BagianKustom::nilaiTampil($kolom, $poin->nilai_kolom[$kolom['kunci']]) }}</div>
                             @endif
                         @endforeach
 
