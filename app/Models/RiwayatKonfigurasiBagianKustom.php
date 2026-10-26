@@ -115,6 +115,31 @@ class RiwayatKonfigurasiBagianKustom extends Model
             };
         }
 
+        $subLama = collect($sebelum['subbagian'] ?? [])->keyBy('kunci');
+        $subBaru = collect($sesudah['subbagian'] ?? [])->keyBy('kunci');
+
+        foreach ($subBaru as $kunci => $s) {
+            $l = $subLama->get($kunci);
+
+            if ($l === null) {
+                $bagian[] = "subbagian \"{$s['nama']}\" ditambah";
+            } elseif (($l['aktif'] ?? true) !== ($s['aktif'] ?? true)) {
+                $bagian[] = "subbagian \"{$s['nama']}\" ".(($s['aktif'] ?? true) ? 'diaktifkan lagi' : 'dinonaktifkan');
+            } elseif (($l['nama'] ?? null) !== ($s['nama'] ?? null) || ($l['deskripsi'] ?? null) !== ($s['deskripsi'] ?? null)) {
+                $bagian[] = "subbagian \"{$s['nama']}\" diubah";
+            }
+        }
+
+        foreach ($subLama as $kunci => $l) {
+            if (! $subBaru->has($kunci)) {
+                $bagian[] = "subbagian \"{$l['nama']}\" dihapus";
+            }
+        }
+
+        if ($subLama->keys()->intersect($subBaru->keys())->values()->all() !== $subBaru->keys()->intersect($subLama->keys())->values()->all()) {
+            $bagian[] = 'urutan subbagian diubah';
+        }
+
         $kolomLama = collect($sebelum['kolom'] ?? [])->keyBy('kunci');
         $kolomBaru = collect($sesudah['kolom'] ?? [])->keyBy('kunci');
 
@@ -133,7 +158,8 @@ class RiwayatKonfigurasiBagianKustom extends Model
                 $bagian[] = "kolom \"{$k['label']}\" diaktifkan lagi";
             }
 
-            $berubah = collect(['label', 'tipe', 'opsi', 'wajib', 'mulai_tahun', 'mulai_triwulan', 'satuan', 'desimal', 'pemisah', 'ribuan'])
+            $berubah = collect(['label', 'tipe', 'opsi', 'wajib', 'mulai_tahun', 'mulai_triwulan', 'satuan', 'desimal', 'pemisah', 'ribuan',
+                'subbagian', 'petunjuk', 'placeholder', 'min', 'maks', 'panjang_min', 'panjang_maks', 'pesan', 'format_tanggal'])
                 ->filter(fn ($f) => ($l[$f] ?? null) != ($k[$f] ?? null))
                 ->values()
                 ->all();

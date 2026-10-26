@@ -10,7 +10,7 @@
 
     <div class="info">ℹ️ Bagian yang <b>aktif</b> muncul di menu peran pengisinya (Ketua Tim di Isian Kegiatan; Tim SAKIP/Kepala di 🧩 Isian Bagian Kustom). Data yang sudah tersimpan tetap tampil di notula meski bagiannya kemudian dinonaktifkan.</div>
 
-    <div class="card">
+    <div class="card" id="form-tambah-bagian" style="scroll-margin-top:90px">
         <div class="sec"><span>Tambah Bagian Baru</span></div>
         <div class="row2">
             <div class="field">
@@ -49,15 +49,26 @@
                             <span style="color:var(--muted)">— {{ $ringkasanSalin['kolom_nonaktif'] }} kolom nonaktif tidak disalin</span>
                         @endif
                     </li>
+                    <li>Subbagian ({{ count($ringkasanSalin['subbagian']) }}): {{ implode(', ', $ringkasanSalin['subbagian']) ?: 'tidak ada' }}.</li>
                     <li>Notula: {{ $ringkasanSalin['notula'] }} (judul notula memakai nama bagian baru).</li>
                     <li>Bukti dukung: {{ $ringkasanSalin['bukti'] ? 'wajib' : 'tidak wajib' }}.</li>
                 </ul>
                 <div style="margin-top:6px"><b>Tidak disalin:</b> {{ $ringkasanSalin['poin_sumber'] }} poin isian, bukti dukung, status verifikasi, dan riwayat milik "{{ $ringkasanSalin['nama'] }}". Bagian baru mulai tanpa data.</div>
             </div>
         @endif
-        <div class="field">
-            <label>Deskripsi (opsional)</label>
-            <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model="deskripsiBaru" placeholder="Petunjuk singkat untuk pengisi bagian ini"></textarea>
+        <div class="row2">
+            <div class="field">
+                <label>Deskripsi (opsional)</label>
+                <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model="deskripsiBaru" placeholder="Petunjuk singkat untuk pengisi bagian ini"></textarea>
+            </div>
+            <div class="field">
+                <label>Kode internal <span style="color:var(--muted);font-weight:500">(opsional)</span></label>
+                <input type="text" class="inp filled" style="font-family:monospace" wire:model="kodeBaru" placeholder="kosong = dibuat dari nama, mis. manajemen_risiko">
+                @error('kodeBaru')
+                    <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
+                @enderror
+                <div class="fhint" style="margin-top:4px">Identitas tetap bagian (dipakai variabel notula). Tidak berubah walau nama bagian diganti, dan tidak bisa diubah setelah dibuat.</div>
+            </div>
         </div>
         @include('livewire.partials._peran-penempatan', ['modelPeran' => 'peranBaru', 'modelMenu' => 'penempatanBaru', 'peranDipilih' => $peranBaru, 'namaPeran' => $namaPeran, 'katalogMenu' => $katalogMenu])
         @error('penempatanBaru')
@@ -80,51 +91,151 @@
     </div>
 
     <div class="card" style="margin-top:16px">
-        <div class="sec"><span>Daftar Bagian Kustom</span></div>
+        <div class="sec"><span>Daftar Bagian Kustom</span><span style="margin-left:auto;font-size:12px;color:var(--muted);font-weight:500">{{ $daftarTampil->count() }} dari {{ $daftar->count() }} bagian</span></div>
+
+        {{-- Pencarian, filter, urutan --}}
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:12px">
+            <div class="field" style="margin-bottom:0;grid-column:span 2;min-width:0">
+                <label for="cari-bagian">Cari</label>
+                <input id="cari-bagian" type="search" class="inp filled" wire:model.live.debounce.300ms="cari" placeholder="Nama, kode, atau deskripsi">
+            </div>
+            <div class="field" style="margin-bottom:0">
+                <label for="filter-status">Status</label>
+                <select id="filter-status" class="inp filled" wire:model.live="filterStatus">
+                    <option value="semua">Semua</option>
+                    <option value="aktif">Aktif</option>
+                    <option value="nonaktif">Nonaktif</option>
+                </select>
+            </div>
+            <div class="field" style="margin-bottom:0">
+                <label for="filter-peran">Peran</label>
+                <select id="filter-peran" class="inp filled" wire:model.live="filterPeran">
+                    <option value="">Semua peran</option>
+                    @foreach ($namaPeran as $kunci => $label)
+                        <option value="{{ $kunci }}">{{ $label }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="field" style="margin-bottom:0">
+                <label for="filter-menu">Penempatan</label>
+                <select id="filter-menu" class="inp filled" wire:model.live="filterMenu">
+                    <option value="">Semua menu</option>
+                    @foreach ($katalogMenu as $kunci => $menu)
+                        <option value="{{ $kunci }}">{{ $menu['label'] }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="field" style="margin-bottom:0">
+                <label for="urut-bagian">Urutkan</label>
+                <select id="urut-bagian" class="inp filled" wire:model.live="urut">
+                    <option value="urutan">Urutan tampil</option>
+                    <option value="nama">Nama (A–Z)</option>
+                    <option value="diubah">Terakhir diperbarui</option>
+                </select>
+            </div>
+        </div>
+        @if ($filterAktif)
+            <div class="fhint" style="margin:-4px 0 10px">Tombol ↑↓ untuk mengatur urutan tampil hanya tersedia tanpa pencarian/filter dan dengan urutan "Urutan tampil". <button type="button" class="btn btn-ghost btn-sm" wire:click="resetFilter">Hapus filter</button></div>
+        @endif
 
         @error('hapus')
             <div style="color:var(--red);font-size:11.5px;margin-bottom:10px">{{ $message }}</div>
         @enderror
 
-        @forelse ($daftar as $i => $bagian)
-            @php $f = $form[$bagian->id] ?? null; @endphp
-            <div style="border-top:1px solid var(--line2);padding:12px 0">
+        @forelse ($daftarTampil as $i => $bagian)
+            @php
+                $f = $form[$bagian->id] ?? null;
+                $semuaKolom = $bagian->kolomList();
+                $kolomAktif = count($bagian->kolomBerlaku(null, null));
+            @endphp
+            <div style="border-top:1px solid var(--line2);padding:12px 0" wire:key="daftar-bagian-{{ $bagian->id }}">
                 <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start">
-                    <span class="fl-move" style="margin-top:2px">
-                        <button type="button" wire:click="naikkan({{ $bagian->id }})" wire:loading.attr="disabled" wire:target="naikkan({{ $bagian->id }})" @disabled($i === 0)>↑</button>
-                        <button type="button" wire:click="turunkan({{ $bagian->id }})" wire:loading.attr="disabled" wire:target="turunkan({{ $bagian->id }})" @disabled($i === $daftar->count() - 1)>↓</button>
-                    </span>
+                    @unless ($filterAktif)
+                        <span class="fl-move" style="margin-top:2px">
+                            <button type="button" wire:click="naikkan({{ $bagian->id }})" wire:loading.attr="disabled" wire:target="naikkan({{ $bagian->id }})" @disabled($i === 0) aria-label="Naikkan {{ $bagian->nama }}">↑</button>
+                            <button type="button" wire:click="turunkan({{ $bagian->id }})" wire:loading.attr="disabled" wire:target="turunkan({{ $bagian->id }})" @disabled($i === $daftar->count() - 1) aria-label="Turunkan {{ $bagian->nama }}">↓</button>
+                        </span>
+                    @endunless
 
                     <div style="flex:1;min-width:240px">
-                        <div style="font-weight:700;font-size:14px">🧩 {{ $bagian->nama }}</div>
+                        <div style="font-weight:700;font-size:14px">🧩 {{ $bagian->nama }} <code style="font-size:11px;font-weight:500;color:var(--muted)">{{ $bagian->kode }}</code></div>
+                        @if ($bagian->deskripsi)
+                            <div style="font-size:12px;color:var(--muted);margin-top:2px">{{ \Illuminate\Support\Str::limit($bagian->deskripsi, 140) }}</div>
+                        @endif
                         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
                             <span class="badge {{ $bagian->aktif ? 'b-approve' : 'b-draft' }}">{{ $bagian->aktif ? '✓ Aktif' : 'Nonaktif' }}</span>
-                            <span class="badge b-verif">Peran: {{ $bagian->labelPeran() }}</span>
+                            <span class="badge b-verif" title="Peran yang dapat melihat dan mengisi">Peran: {{ $bagian->labelPeran() }}</span>
                             <span class="badge b-verif">Menu: {{ $bagian->labelPenempatan() }}</span>
-                            <span class="badge {{ $bagian->frekuensi_wajib === 'opsional' ? 'b-draft' : 'b-ajukan' }}">{{ $bagian->labelFrekuensi() }}</span>
+                            <span class="badge {{ $bagian->frekuensi_wajib === 'opsional' ? 'b-draft' : 'b-ajukan' }}">Periode: {{ $bagian->labelFrekuensi() }}</span>
                             <span class="badge {{ $bagian->masuk_notula ? 'b-approve' : 'b-draft' }}">{{ $bagian->masuk_notula ? '📄 Masuk notula' : 'Tidak masuk notula' }}</span>
-                            @php $jumlahKolomNonaktif = collect($bagian->kolomList())->where('aktif', false)->count(); @endphp
-                            <span class="badge b-draft">{{ count($bagian->kolomList()) - $jumlahKolomNonaktif }} kolom tambahan{{ $jumlahKolomNonaktif > 0 ? ' (+'.$jumlahKolomNonaktif.' nonaktif)' : '' }}</span>
+                            <span class="badge b-draft">{{ count($bagian->subbagianList()) }} subbagian</span>
+                            <span class="badge b-draft">{{ $kolomAktif }} kolom{{ count($semuaKolom) > $kolomAktif ? ' (+'.(count($semuaKolom) - $kolomAktif).' nonaktif)' : '' }}</span>
                             <span class="badge b-draft">{{ $bagian->poin_count }} poin tersimpan</span>
                         </div>
+                        <div style="font-size:11px;color:var(--faint);margin-top:4px">Diperbarui {{ $bagian->updated_at?->wita()->format('d/m/Y H:i') }} WITA</div>
                     </div>
 
                     <div class="btn-row" style="margin-top:0;flex-wrap:wrap">
                         <button type="button" class="btn {{ $bukaId === $bagian->id ? 'btn-primary' : 'btn-ghost' }} btn-sm" wire:click="buka({{ $bagian->id }})" wire:loading.attr="disabled" wire:target="buka({{ $bagian->id }})">
-                            {{ $bukaId === $bagian->id ? '✕ Tutup' : '✎ Atur' }}
+                            {{ $bukaId === $bagian->id ? '✕ Tutup' : '✎ Edit' }}
                         </button>
-                        <button type="button" class="btn btn-ghost btn-sm" wire:click="toggleAktif({{ $bagian->id }}, {{ $bagian->aktif ? 'false' : 'true' }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="toggleAktif">{{ $bagian->aktif ? 'Nonaktifkan' : 'Aktifkan' }}</button>
+                        <button type="button" class="btn {{ $detailId === $bagian->id ? 'btn-primary' : 'btn-ghost' }} btn-sm" wire:click="lihatDetail({{ $bagian->id }})" wire:loading.attr="disabled" wire:target="lihatDetail({{ $bagian->id }})">👁 Detail</button>
+                        <button type="button" class="btn btn-ghost btn-sm" wire:click="duplikasi({{ $bagian->id }})" x-on:click="$nextTick(() => document.getElementById('form-tambah-bagian')?.scrollIntoView({ behavior: 'smooth' }))" wire:loading.attr="disabled" wire:target="duplikasi({{ $bagian->id }})" title="Isi form Tambah dengan pengaturan bagian ini — tanpa isian, bukti, maupun riwayatnya">⧉ Duplikasi</button>
+                        <button type="button" class="btn btn-ghost btn-sm" wire:click="toggleAktif({{ $bagian->id }}, {{ $bagian->aktif ? 'false' : 'true' }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="toggleAktif" @if ($bagian->aktif) wire:confirm="Nonaktifkan bagian &quot;{{ $bagian->nama }}&quot;? Bagian tidak lagi tampil untuk diisi. Isian, bukti, dan riwayat yang sudah ada TIDAK dihapus dan tetap masuk notula." @endif>{{ $bagian->aktif ? 'Nonaktifkan' : 'Aktifkan kembali' }}</button>
                         @if ($bagian->poin_count === 0)
                             <button type="button" class="btn btn-red btn-sm" wire:click="confirmHapus({{ $bagian->id }})" wire:loading.attr="disabled" wire:target="confirmHapus({{ $bagian->id }})">🗑 Hapus</button>
                         @endif
                     </div>
                 </div>
 
+                @if ($detailId === $bagian->id && $detail)
+                    <div style="margin-top:12px;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);font-size:12.5px">
+                        <div style="font-weight:700;margin-bottom:8px">Detail "{{ $detail->nama }}" <span style="font-weight:500;color:var(--muted)">(baca-saja)</span></div>
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:4px 16px;line-height:1.7">
+                            <div><span style="color:var(--muted)">ID:</span> {{ $detail->id }}</div>
+                            <div><span style="color:var(--muted)">Kode internal:</span> <code>{{ $detail->kode }}</code></div>
+                            <div><span style="color:var(--muted)">Folder Drive bukti:</span> {{ $detail->namaFolderEfektif() }}</div>
+                            <div><span style="color:var(--muted)">Status:</span> {{ $detail->aktif ? 'Aktif' : 'Nonaktif' }} · urutan {{ $detail->urutan }}</div>
+                            <div><span style="color:var(--muted)">Peran (melihat &amp; mengisi):</span> {{ $detail->labelPeran() }}</div>
+                            <div><span style="color:var(--muted)">Menu:</span> {{ $detail->labelPenempatan() }}</div>
+                            <div><span style="color:var(--muted)">Periode pengisian:</span> {{ $detail->labelFrekuensi() }}</div>
+                            <div><span style="color:var(--muted)">Bukti dukung:</span> {{ $detail->bukti_wajib ? 'Wajib per poin (PDF, Isian Kegiatan)' : 'Tidak wajib' }}</div>
+                            <div><span style="color:var(--muted)">Notula:</span> {{ $detail->masuk_notula ? 'Masuk, judul "'.$detail->judulNotulaEfektif().'"' : 'Tidak masuk' }}</div>
+                            <div><span style="color:var(--muted)">Format baris notula:</span> <code>{{ $detail->formatNotulaEfektif() }}</code></div>
+                            <div><span style="color:var(--muted)">Label uraian:</span> {{ $detail->labelUraianEfektif() }}</div>
+                            <div><span style="color:var(--muted)">Poin tersimpan:</span> {{ $detail->poin_count }}</div>
+                            <div><span style="color:var(--muted)">Dibuat:</span> {{ $detail->created_at?->wita()->format('d/m/Y H:i') }} WITA</div>
+                            <div><span style="color:var(--muted)">Diperbarui:</span> {{ $detail->updated_at?->wita()->format('d/m/Y H:i') }} WITA</div>
+                        </div>
+                        @if ($detail->deskripsi)
+                            <div style="margin-top:8px"><span style="color:var(--muted)">Deskripsi:</span> {{ $detail->deskripsi }}</div>
+                        @endif
+
+                        <div style="font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 6px">Struktur isian</div>
+                        <div style="padding-left:4px">• {{ $detail->labelUraianEfektif() }} <span style="color:var(--muted)">(uraian utama, wajib)</span></div>
+                        @forelse ($kelompokDetail as $grup)
+                            @if ($grup['subbagian'])
+                                <div style="margin-top:6px;font-weight:700">▸ Subbagian: {{ $grup['subbagian']['nama'] }} @unless ($grup['subbagian']['aktif'])<span class="badge b-draft">nonaktif</span>@endunless</div>
+                            @endif
+                            @foreach ($grup['kolom'] as $k)
+                                <div style="padding-left:{{ $grup['subbagian'] ? '18px' : '4px' }}">• {{ $k['label'] }} <code style="font-size:11px">{{ $k['kunci'] }}</code>
+                                    <span style="color:var(--muted)">— {{ $tipeKolom[$k['tipe']] ?? $k['tipe'] }}{{ $k['wajib'] ? ', wajib' : ', opsional' }}{{ \App\Models\BagianKustom::ringkasanKolom($k) !== '' ? ', '.\App\Models\BagianKustom::ringkasanKolom($k) : '' }}{{ $k['opsi'] ? ' · opsi: '.implode(' / ', $k['opsi']) : '' }}</span>
+                                </div>
+                            @endforeach
+                        @empty
+                            <div style="color:var(--muted);padding-left:4px">Tidak ada kolom tambahan.</div>
+                        @endforelse
+                        @foreach (collect($detail->subbagianList())->filter(fn ($s) => ! collect($kelompokDetail)->pluck('subbagian.kunci')->contains($s['kunci'])) as $kosong)
+                            <div style="margin-top:6px;font-weight:700">▸ Subbagian: {{ $kosong['nama'] }} <span style="color:var(--muted);font-weight:500">(belum ada kolom)</span></div>
+                        @endforeach
+                    </div>
+                @endif
+
                 @if ($bukaId === $bagian->id && $f)
                     <div style="margin-top:14px;padding:16px;background:var(--bg);border:1px solid var(--line);border-radius:12px">
                         {{-- Tab --}}
                         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
-                            @foreach (['dasar' => '⚙️ Dasar & Peran', 'isian' => '🧾 Kolom Isian', 'notula' => '📄 Notula & Variabel', 'pratinjau' => '👁 Pratinjau', 'riwayat' => '🕘 Riwayat'] as $kunciTab => $labelTab)
+                            @foreach (['dasar' => '⚙️ Informasi, Peran & Penempatan', 'isian' => '🧾 Struktur Isian & Validasi', 'notula' => '📄 Notula & Variabel', 'pratinjau' => '👁 Pratinjau', 'riwayat' => '🕘 Riwayat'] as $kunciTab => $labelTab)
                                 <button type="button" class="btn {{ $tab === $kunciTab ? 'btn-primary' : 'btn-ghost' }} btn-sm" wire:click="setTab('{{ $kunciTab }}')">{{ $labelTab }}</button>
                             @endforeach
                         </div>
@@ -138,6 +249,11 @@
                                 <div class="field">
                                     <label>Nama Bagian <span class="req">*</span></label>
                                     <input type="text" class="inp filled" wire:model="form.{{ $bagian->id }}.nama">
+                                    <div class="fhint" style="margin-top:4px">Nama boleh diganti — kode, data isian, bukti, dan folder Drive tetap sama.</div>
+                                </div>
+                                <div class="field">
+                                    <label>Kode internal &amp; folder Drive <span style="color:var(--muted);font-weight:500">(tetap)</span></label>
+                                    <div class="inp filled" style="font-size:12.5px;color:var(--muted)"><code>{{ $bagian->kode }}</code> · folder "{{ $bagian->namaFolderEfektif() }}"</div>
                                 </div>
                             </div>
                             <div class="field">
@@ -172,114 +288,73 @@
 
                         {{-- TAB 2: KOLOM ISIAN --}}
                         @elseif ($tab === 'isian')
-                            <div class="info" style="font-size:12px">🧾 Kolom isian membuat tiap poin punya beberapa isian, seperti tabel (mis. <i>Nama Risiko | Level | Mitigasi</i>). <b>Uraian</b> selalu ada sebagai isian utama. Setiap kolom otomatis jadi <b>variabel</b> yang bisa dipakai di format notula, dengan nama seperti tertulis di kotak "Variabel".</div>
+                            <div class="info" style="font-size:12px">🧾 Susun isian bagian ini: <b>Uraian</b> selalu ada sebagai isian utama, lalu kolom tambahan — langsung di bagian atau dikelompokkan ke <b>subbagian</b>. Setiap kolom otomatis menjadi <b>variabel</b> notula dengan nama seperti tertulis di "Variabel", dan tetap terhubung ke data lama walau labelnya diganti.</div>
 
                             <div class="field">
                                 <label>Label untuk isian Uraian <span style="color:var(--muted);font-weight:500">(opsional, default "Uraian")</span></label>
                                 <input type="text" class="inp filled" wire:model.live.debounce.300ms="form.{{ $bagian->id }}.label_uraian" placeholder="mis. Nama Risiko">
                             </div>
 
-                            <div style="font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px">Kolom tambahan</div>
+                            @php
+                                $barisKolom = $f['kolom'] ?? [];
+                                $kunciSubForm = array_column($f['subbagian'] ?? [], 'kunci');
+                                $kelompokForm = ['' => []];
+                                foreach ($f['subbagian'] ?? [] as $s) { $kelompokForm[$s['kunci']] = []; }
+                                foreach ($barisKolom as $j => $kol) {
+                                    $g = in_array($kol['subbagian'] ?? '', $kunciSubForm, true) ? $kol['subbagian'] : '';
+                                    $kelompokForm[$g][] = $j;
+                                }
+                                $kartu = ['idBagian' => $bagian->id, 'f' => $f, 'tipeKolom' => $tipeKolom, 'pilihanPemisah' => $pilihanPemisah, 'formatTanggal' => $formatTanggal];
+                            @endphp
 
-                            @forelse (($f['kolom'] ?? []) as $j => $kol)
-                                <div style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--surface-2)">
+                            <div style="font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px">Kolom langsung di bagian</div>
+                            @forelse ($kelompokForm[''] as $urutDiGrup => $j)
+                                @include('livewire.partials._kartu-kolom-bagian-kustom', $kartu + ['j' => $j, 'kol' => $barisKolom[$j], 'pertama' => $urutDiGrup === 0, 'terakhir' => $urutDiGrup === count($kelompokForm['']) - 1])
+                            @empty
+                                <p style="color:var(--muted);font-size:12.5px;margin:0 0 8px">Belum ada kolom langsung di bagian.</p>
+                            @endforelse
+                            <button type="button" class="btn btn-ghost btn-sm" wire:click="tambahKolom({{ $bagian->id }})">＋ Tambah kolom</button>
+
+                            <div style="font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin:20px 0 8px">Subbagian <span style="text-transform:none;font-weight:500">(opsional)</span></div>
+                            @error("form.{$bagian->id}.subbagian")<div style="color:var(--red);font-size:11.5px;margin-bottom:8px">{{ $message }}</div>@enderror
+                            @forelse ($f['subbagian'] ?? [] as $si => $sub)
+                                <div style="border:1px solid var(--line);border-left:4px solid var(--blue);border-radius:10px;padding:12px;margin-bottom:12px" wire:key="sub-{{ $bagian->id }}-{{ $sub['kunci'] }}">
                                     <div class="row2">
                                         <div class="field" style="margin-bottom:8px">
-                                            <label>Label kolom <span class="req">*</span></label>
-                                            <input type="text" class="inp filled" wire:model.live.debounce.300ms="form.{{ $bagian->id }}.kolom.{{ $j }}.label" placeholder="mis. Level Risiko">
-                                            @error("form.{$bagian->id}.kolom.{$j}.label")<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>@enderror
+                                            <label>Nama subbagian <span class="req">*</span></label>
+                                            <input type="text" class="inp filled" wire:model.live.debounce.300ms="form.{{ $bagian->id }}.subbagian.{{ $si }}.nama" placeholder="mis. Identifikasi Risiko">
+                                            @error("form.{$bagian->id}.subbagian.{$si}.nama")<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>@enderror
                                         </div>
                                         <div class="field" style="margin-bottom:8px">
-                                            <label>Jenis isian</label>
-                                            <select class="inp filled" wire:model.live="form.{{ $bagian->id }}.kolom.{{ $j }}.tipe">
-                                                @foreach ($tipeKolom as $nilai => $label)
-                                                    <option value="{{ $nilai }}">{{ $label }}</option>
-                                                @endforeach
-                                            </select>
+                                            <label>Deskripsi / petunjuk <span style="color:var(--muted);font-weight:500">(opsional)</span></label>
+                                            <input type="text" class="inp filled" wire:model.blur="form.{{ $bagian->id }}.subbagian.{{ $si }}.deskripsi">
                                         </div>
                                     </div>
-                                    @if (($kol['tipe'] ?? '') === 'pilihan')
-                                        <div class="field" style="margin-bottom:8px">
-                                            <label>Pilihan jawaban <span style="color:var(--muted);font-weight:500">(pisahkan dengan koma)</span></label>
-                                            <input type="text" class="inp filled" wire:model.live.debounce.300ms="form.{{ $bagian->id }}.kolom.{{ $j }}.opsi_teks" placeholder="mis. Rendah, Sedang, Tinggi">
-                                            @error("form.{$bagian->id}.kolom.{$j}.opsi_teks")<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>@enderror
-                                        </div>
-                                    @endif
-                                    @if (($kol['tipe'] ?? '') === 'angka')
-                                        @php $kolomContoh = \App\Models\BagianKustom::normalkanKolom(['kunci' => 'contoh', 'label' => 'contoh'] + $kol); @endphp
-                                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:8px">
-                                            <div class="field" style="margin-bottom:0">
-                                                <label>Satuan</label>
-                                                <input type="text" class="inp filled" wire:model.live.debounce.300ms="form.{{ $bagian->id }}.kolom.{{ $j }}.satuan" placeholder="mis. persen, orang">
-                                                @error("form.{$bagian->id}.kolom.{$j}.satuan")<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>@enderror
-                                            </div>
-                                            <div class="field" style="margin-bottom:0">
-                                                <label>Angka di belakang koma</label>
-                                                <select class="inp filled" wire:model.live="form.{{ $bagian->id }}.kolom.{{ $j }}.desimal">
-                                                    <option value="">Tampil apa adanya</option>
-                                                    @for ($d = 0; $d <= \App\Support\FormatAngkaKolom::DESIMAL_MAKS; $d++)
-                                                        <option value="{{ $d }}">{{ $d }} desimal</option>
-                                                    @endfor
-                                                </select>
-                                            </div>
-                                            @if (($kol['desimal'] ?? '') !== '')
-                                                <div class="field" style="margin-bottom:0">
-                                                    <label>Pemisah desimal</label>
-                                                    <select class="inp filled" wire:model.live="form.{{ $bagian->id }}.kolom.{{ $j }}.pemisah">
-                                                        @foreach ($pilihanPemisah as $nilai => $label)
-                                                            <option value="{{ $nilai }}">{{ $label }}</option>
-                                                        @endforeach
-                                                    </select>
-                                                </div>
-                                                <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;align-self:end;padding-bottom:10px">
-                                                    <input type="checkbox" wire:model.live="form.{{ $bagian->id }}.kolom.{{ $j }}.ribuan"> Pakai pemisah ribuan
-                                                </label>
-                                            @endif
-                                        </div>
-                                        @if ($kolomContoh)
-                                            <div class="fhint" style="margin:0 0 8px">Contoh tampilan: <b>{{ \App\Support\TemplateBagianKustom::contohKolom($kolomContoh) }}</b>. Format hanya mengubah tampilan — angka yang sudah tersimpan tidak diubah atau dibulatkan.</div>
-                                        @endif
-                                    @endif
-                                    <div class="row2">
-                                        <div class="field" style="margin-bottom:8px">
-                                            <label>Mulai berlaku <span style="color:var(--muted);font-weight:500">(kosong = sejak awal)</span></label>
-                                            <div style="display:flex;gap:6px">
-                                                <select class="inp filled" wire:model="form.{{ $bagian->id }}.kolom.{{ $j }}.mulai_triwulan" style="flex:1">
-                                                    <option value="">—</option>
-                                                    @foreach (['I', 'II', 'III', 'IV'] as $n => $romawi)
-                                                        <option value="{{ $n + 1 }}">TW {{ $romawi }}</option>
-                                                    @endforeach
-                                                </select>
-                                                <input type="number" class="inp filled" style="flex:1" min="2020" max="2100" wire:model="form.{{ $bagian->id }}.kolom.{{ $j }}.mulai_tahun" placeholder="Tahun">
-                                            </div>
-                                            @error("form.{$bagian->id}.kolom.{$j}.mulai_triwulan")<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>@enderror
-                                            @error("form.{$bagian->id}.kolom.{$j}.mulai_tahun")<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>@enderror
-                                            <div class="fhint" style="margin-top:4px">Sebelum periode ini kolom tidak tampil dan tidak diwajibkan, jadi isian lama tidak dianggap kurang.</div>
-                                        </div>
-                                    </div>
-                                    @if (! ($kol['aktif'] ?? true))
-                                        <div class="info warn" style="font-size:11.5px;margin-bottom:8px">Kolom nonaktif: tidak lagi tampil di formulir isian. Data yang sudah tersimpan tetap ada, tetap tampil di Verifikasi, dan tetap tercetak di notula bila variabelnya dipakai.</div>
-                                    @endif
-                                    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between">
+                                    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:10px">
                                         <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
-                                            <input type="checkbox" wire:model="form.{{ $bagian->id }}.kolom.{{ $j }}.wajib"> Wajib diisi
+                                            <input type="checkbox" wire:model.live="form.{{ $bagian->id }}.subbagian.{{ $si }}.aktif"> Aktif
                                         </label>
-                                        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
-                                            <input type="checkbox" wire:model.live="form.{{ $bagian->id }}.kolom.{{ $j }}.aktif"> Aktif
-                                        </label>
-                                        <span style="font-size:11px;color:var(--muted)">Variabel: <code>{{ $kol['kunci'] ?? '' }}</code>@if (! ($kol['kunci'] ?? null)) <i>(dibuat otomatis saat disimpan)</i>@endif</span>
+                                        <span style="font-size:11px;color:var(--muted)">Kode: <code>{{ $sub['kunci'] }}</code></span>
                                         <div class="btn-row" style="margin-top:0;gap:4px">
-                                            <button type="button" class="btn btn-ghost btn-sm" wire:click="naikkanKolom({{ $bagian->id }}, {{ $j }})" @disabled($j === 0)>↑</button>
-                                            <button type="button" class="btn btn-ghost btn-sm" wire:click="turunkanKolom({{ $bagian->id }}, {{ $j }})" @disabled($j === count($f['kolom']) - 1)>↓</button>
-                                            <button type="button" class="btn btn-red btn-sm" wire:click="hapusKolom({{ $bagian->id }}, {{ $j }})">🗑</button>
+                                            <button type="button" class="btn btn-ghost btn-sm" wire:click="naikkanSubbagian({{ $bagian->id }}, {{ $si }})" @disabled($si === 0) aria-label="Naikkan subbagian">↑</button>
+                                            <button type="button" class="btn btn-ghost btn-sm" wire:click="turunkanSubbagian({{ $bagian->id }}, {{ $si }})" @disabled($si === count($f['subbagian']) - 1) aria-label="Turunkan subbagian">↓</button>
+                                            <button type="button" class="btn btn-red btn-sm" wire:click="hapusSubbagian({{ $bagian->id }}, {{ $si }})" aria-label="Hapus subbagian">🗑</button>
                                         </div>
                                     </div>
+                                    @unless ($sub['aktif'] ?? true)
+                                        <div class="info warn" style="font-size:11.5px;margin-bottom:8px">Subbagian nonaktif: kolom di dalamnya tidak tampil di formulir isian. Data yang sudah tersimpan tetap ada dan tetap masuk notula.</div>
+                                    @endunless
+                                    @forelse ($kelompokForm[$sub['kunci']] ?? [] as $urutDiGrup => $j)
+                                        @include('livewire.partials._kartu-kolom-bagian-kustom', $kartu + ['j' => $j, 'kol' => $barisKolom[$j], 'pertama' => $urutDiGrup === 0, 'terakhir' => $urutDiGrup === count($kelompokForm[$sub['kunci']]) - 1])
+                                    @empty
+                                        <p style="color:var(--muted);font-size:12.5px;margin:0 0 8px">Belum ada kolom di subbagian ini.</p>
+                                    @endforelse
+                                    <button type="button" class="btn btn-ghost btn-sm" wire:click="tambahKolom({{ $bagian->id }}, '{{ $sub['kunci'] }}')">＋ Tambah kolom di subbagian ini</button>
                                 </div>
                             @empty
-                                <p style="color:var(--muted);font-size:12.5px;margin:0 0 8px">Belum ada kolom tambahan — isian hanya berupa Uraian.</p>
+                                <p style="color:var(--muted);font-size:12.5px;margin:0 0 8px">Bagian ini tidak memakai subbagian. Tambahkan bila kolom perlu dikelompokkan.</p>
                             @endforelse
-
-                            <button type="button" class="btn btn-ghost btn-sm" wire:click="tambahKolom({{ $bagian->id }})">＋ Tambah kolom</button>
+                            <button type="button" class="btn btn-ghost btn-sm" wire:click="tambahSubbagian({{ $bagian->id }})">＋ Tambah subbagian</button>
 
                         {{-- TAB 3: NOTULA & VARIABEL --}}
                         @elseif ($tab === 'notula')
@@ -380,11 +455,24 @@
                                         <label style="font-size:11px">{{ filled($f['label_uraian'] ?? null) ? $f['label_uraian'] : 'Uraian' }} <span class="req">*</span></label>
                                         <div class="inp filled" style="color:var(--muted);font-style:italic">Contoh isian uraian…</div>
                                     </div>
-                                    @foreach ($kolomTampil as $kol)
-                                        <div class="field" style="margin-bottom:8px">
-                                            <label style="font-size:11px">{{ $kol['label'] }} @if ($kol['wajib'])<span class="req">*</span>@endif</label>
-                                            <div class="inp filled" style="color:var(--muted);font-style:italic">{{ $kol['tipe'] === 'pilihan' ? 'Pilih: '.implode(' / ', $kol['opsi']) : ($kol['tipe'] === 'angka' ? 'Isi angka…' : 'Isi teks…') }}</div>
-                                        </div>
+                                    @foreach ($kelompokPratinjau as $grup)
+                                        @if ($grup['subbagian'])
+                                            <div style="margin:12px 0 6px;padding-top:8px;border-top:1px dashed var(--line);font-weight:700;font-size:12px">{{ $grup['subbagian']['nama'] }}</div>
+                                            @if ($grup['subbagian']['deskripsi'])<div class="fhint" style="margin:0 0 6px">{{ $grup['subbagian']['deskripsi'] }}</div>@endif
+                                        @endif
+                                        @foreach ($grup['kolom'] as $kol)
+                                            <div class="field" style="margin-bottom:8px">
+                                                <label style="font-size:11px">{{ $kol['label'] }} @if ($kol['wajib'])<span class="req">*</span>@endif</label>
+                                                @if ($kol['petunjuk'])<div class="fhint" style="margin:0 0 4px">{{ $kol['petunjuk'] }}</div>@endif
+                                                <div class="inp filled" style="color:var(--muted);font-style:italic;{{ $kol['tipe'] === 'teks_panjang' ? 'height:64px' : '' }}">{{ match ($kol['tipe']) {
+                                                    'pilihan' => 'Pilih: '.implode(' / ', $kol['opsi']),
+                                                    'pilihan_ganda' => 'Centang satu atau lebih: '.implode(' / ', $kol['opsi']),
+                                                    'angka' => $kol['placeholder'] ?? 'Isi angka…',
+                                                    'tanggal' => 'Pilih tanggal (tampil: '.\App\Support\TemplateBagianKustom::contohKolom($kol).')',
+                                                    default => $kol['placeholder'] ?? 'Isi teks…',
+                                                } }}</div>
+                                            </div>
+                                        @endforeach
                                     @endforeach
                                     @if (in_array(\App\Support\MenuBagianKustom::PENGISIAN, $f['penempatan'] ?? []) && in_array(\App\Models\BagianKustom::PERAN_KETUA_TIM, $f['peran'] ?? []) && ($f['bukti_wajib'] ?? false))
                                         <div class="filechip ok" style="font-size:11px"><span class="nm">📄 contoh-bukti-dukung.pdf</span></div>

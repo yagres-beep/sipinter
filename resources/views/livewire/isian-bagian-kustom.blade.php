@@ -128,29 +128,10 @@
                         @enderror
                     </div>
 
-                    @foreach ($bagian->kolomBerlaku($tahun, \App\Models\BagianKustom::triwulanDariBulan($bulan)) as $kolom)
-                        <div class="field">
-                            <label>{{ $kolom['label'] }}
-                                @if ($kolom['wajib'])<span class="req">*</span>@else<span style="color:var(--muted);font-weight:500">opsional</span>@endif
-                                @include('livewire.partials._petunjuk-kolom-angka', ['kolom' => $kolom])
-                            </label>
-                            @if ($kolom['tipe'] === 'pilihan')
-                                <select class="inp filled" wire:model.blur="baris.{{ $bagian->id }}.{{ $i }}.kolom.{{ $kolom['kunci'] }}">
-                                    <option value="">— pilih —</option>
-                                    @foreach ($kolom['opsi'] as $opsi)
-                                        <option value="{{ $opsi }}">{{ $opsi }}</option>
-                                    @endforeach
-                                </select>
-                            @elseif ($kolom['tipe'] === 'angka')
-                                <input type="text" inputmode="decimal" class="inp filled" wire:model.blur="baris.{{ $bagian->id }}.{{ $i }}.kolom.{{ $kolom['kunci'] }}" placeholder="Angka">
-                            @else
-                                <input type="text" class="inp filled" wire:model.blur="baris.{{ $bagian->id }}.{{ $i }}.kolom.{{ $kolom['kunci'] }}">
-                            @endif
-                            @error("baris.{$bagian->id}.{$i}.kolom.{$kolom['kunci']}")
-                                <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
-                            @enderror
-                        </div>
-                    @endforeach
+                    @include('livewire.partials._isian-kolom-bagian-kustom', [
+                        'kelompok' => $bagian->kelompokKolomBerlaku($tahun, \App\Models\BagianKustom::triwulanDariBulan($bulan)),
+                        'model' => "baris.{$bagian->id}.{$i}.kolom",
+                    ])
                 </div>
             @endforeach
 

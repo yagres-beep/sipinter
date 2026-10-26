@@ -131,7 +131,7 @@ class IsianBagianKustom extends Component
     protected function terisi(array $row): bool
     {
         return trim((string) $row['teks']) !== ''
-            || collect($row['kolom'] ?? [])->contains(fn ($v) => trim((string) $v) !== '');
+            || collect($row['kolom'] ?? [])->contains(fn ($v) => BagianKustom::nilaiFormTerisi($v));
     }
 
     public function muat(): void

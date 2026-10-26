@@ -108,6 +108,8 @@ final class TemplateBagianKustom
             // dengan yang tercetak di notula sungguhan.
             'angka' => FormatAngkaKolom::tampil(FormatAngkaKolom::diatur($kolom) ? '1234.5' : '12', $kolom),
             'pilihan' => $kolom['opsi'][0] ?? 'Pilihan 1',
+            'pilihan_ganda' => implode(', ', array_slice($kolom['opsi'] ?? [], 0, 2)) ?: 'Pilihan 1, Pilihan 2',
+            'tanggal' => JenisKolomBagianKustom::tampilTanggal('2026-03-31', (string) ($kolom['format_tanggal'] ?? 'panjang')),
             default => 'Contoh '.Str::lower($kolom['label']),
         };
     }
@@ -117,6 +119,9 @@ final class TemplateBagianKustom
         return match ($tipe) {
             'angka' => 'angka',
             'pilihan' => 'pilihan',
+            'pilihan_ganda' => 'pilihan ganda',
+            'tanggal' => 'tanggal',
+            'teks_panjang' => 'teks panjang',
             default => 'teks',
         };
     }

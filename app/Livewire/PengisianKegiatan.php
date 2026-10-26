@@ -1486,7 +1486,7 @@ class PengisianKegiatan extends Component
     protected function blokBagianKustomTerisi(array $blok): bool
     {
         return filled(trim((string) ($blok['teks'] ?? '')))
-            || collect($blok['kolom'] ?? [])->contains(fn ($v) => filled(trim((string) $v)));
+            || collect($blok['kolom'] ?? [])->contains(fn ($v) => BagianKustom::nilaiFormTerisi($v));
     }
 
     /**
@@ -4426,7 +4426,9 @@ class PengisianKegiatan extends Component
         // aturan blocks.*.bukti untuk Kegiatan di atas.
         foreach ($this->bagianKustomAktif() as $bagian) {
             $rules["bagianKustomBlocks.{$bagian->id}.*.teks"] = ['nullable', 'string'];
-            $rules["bagianKustomBlocks.{$bagian->id}.*.kolom.*"] = ['nullable', 'string', 'max:500'];
+            // Panjang per jenis kolom (teks pendek 500, teks panjang 5000, atau batas
+            // yang diatur Tim SAKIP) diperiksa BagianKustom::pesanGalatKolom().
+            $rules["bagianKustomBlocks.{$bagian->id}.*.kolom.*"] = ['nullable', 'string', 'max:5000'];
 
             foreach ($this->bagianKustomBlocks[$bagian->id] ?? [] as $i => $blok) {
                 $adaBuktiLama = ! empty($blok['existing_bukti']);
