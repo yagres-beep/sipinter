@@ -9,6 +9,8 @@ use App\Models\Capaian;
 use App\Models\FolderConfig;
 use App\Models\LogAktivitas;
 use App\Models\RiwayatKonfigurasiBagianKustom;
+use App\Models\VariabelKatalog;
+use App\Support\AturanBuktiBagianKustom;
 use App\Support\FormatAngkaKolom;
 use App\Support\MenuBagianKustom;
 use App\Support\TemplateBagianKustom;
@@ -209,10 +211,13 @@ class BagianKustomManager extends Component
             'nama' => $bagian->nama,
             'deskripsi' => $bagian->deskripsi,
             'peran' => $bagian->peran ?? [],
+            'peran_pembaca' => array_values($bagian->peran_pembaca ?? []),
             'penempatan' => $bagian->penempatan ?? [],
             'label_uraian' => $bagian->label_uraian,
             'frekuensi_wajib' => $bagian->frekuensi_wajib,
             'bukti_wajib' => (bool) $bagian->bukti_wajib,
+            'aturan_bukti' => self::aturanBuktiForm($bagian->aturanBukti()),
+            'tampilan' => ['isian' => $bagian->tampilanIsian(), 'baca' => $bagian->tampilanBaca()],
             'masuk_notula' => (bool) $bagian->masuk_notula,
             'judul_notula' => $bagian->judul_notula,
             'format_notula' => $bagian->format_notula,
@@ -244,7 +249,27 @@ class BagianKustomManager extends Component
                 'panjang_maks' => $k['panjang_maks'] !== null ? (string) $k['panjang_maks'] : '',
                 'pesan' => (string) $k['pesan'],
                 'format_tanggal' => (string) ($k['format_tanggal'] ?? 'panjang'),
+                'variabel' => (string) ($k['variabel'] ?? ''),
+                'ringkasan' => (string) ($k['ringkasan'] ?? ''),
             ])->values()->all(),
+        ];
+    }
+
+    /**
+     * Aturan bukti dalam bentuk form (semua nilai teks/daftar untuk wire:model).
+     *
+     * @param  array<string, mixed>  $aturan  hasil AturanBuktiBagianKustom::normalkan()
+     * @return array<string, mixed>
+     */
+    protected static function aturanBuktiForm(array $aturan): array
+    {
+        return [
+            'mode' => $aturan['mode'],
+            'min' => (string) $aturan['min'],
+            'maks' => $aturan['maks'] !== null ? (string) $aturan['maks'] : '',
+            'format' => $aturan['format'],
+            'ukuran_maks_mb' => $aturan['ukuran_maks_mb'] !== null ? (string) $aturan['ukuran_maks_mb'] : '',
+            'petunjuk' => (string) $aturan['petunjuk'],
         ];
     }
 
@@ -288,6 +313,7 @@ class BagianKustomManager extends Component
             'satuan' => '', 'desimal' => '', 'pemisah' => FormatAngkaKolom::PEMISAH_KOMA, 'ribuan' => true,
             'subbagian' => $subbagian, 'petunjuk' => '', 'placeholder' => '', 'min' => '', 'maks' => '',
             'panjang_min' => '', 'panjang_maks' => '', 'pesan' => '', 'format_tanggal' => 'panjang',
+            'variabel' => '', 'ringkasan' => '',
         ];
     }
 
@@ -306,7 +332,7 @@ class BagianKustomManager extends Component
 
     public function setTab(string $tab): void
     {
-        if (in_array($tab, ['dasar', 'isian', 'notula', 'pratinjau', 'riwayat'], true)) {
+        if (in_array($tab, ['dasar', 'isian', 'bukti', 'notula', 'pratinjau', 'riwayat'], true)) {
             $this->tab = $tab;
         }
     }
@@ -390,6 +416,7 @@ class BagianKustomManager extends Component
             'label_uraian' => $sumber->labelUraianEfektif(),
             'notula' => $sumber->masuk_notula ? 'Masuk notula, format: '.$sumber->formatNotulaEfektif() : 'Tidak masuk notula',
             'bukti' => (bool) $sumber->bukti_wajib,
+            'aturan_bukti' => AturanBuktiBagianKustom::ringkasan($sumber->aturanBukti()),
             'poin_sumber' => (int) $sumber->poin_count,
         ];
     }
@@ -498,7 +525,13 @@ class BagianKustomManager extends Component
                 'frekuensi_wajib' => $this->frekuensiWajibBaru,
                 // Bagian baru dari kosong: bukti wajib bila memang didukung (perilaku lama).
                 // Salinan: ikut pengaturan sumber, tetap hanya bila didukung peran & menu.
-                'bukti_wajib' => $this->bukti_wajib_boleh($peran, $penempatan) && ($sumber ? (bool) $sumber->bukti_wajib : true),
+                'bukti_wajib' => $sumber && $sumber->aturan_bukti !== null
+                    ? (bool) $sumber->bukti_wajib
+                    : $this->bukti_wajib_boleh($peran, $penempatan) && ($sumber ? (bool) $sumber->bukti_wajib : true),
+                // Aturan bukti, peran pembaca, dan bentuk tampilan ikut disalin (definisi saja).
+                'aturan_bukti' => $sumber?->aturan_bukti,
+                'peran_pembaca' => $sumber ? (array_values(array_diff($sumber->peran_pembaca ?? [], $peran)) ?: null) : null,
+                'tampilan' => $sumber?->tampilan,
                 'masuk_notula' => $sumber ? (bool) $sumber->masuk_notula : true,
                 'label_uraian' => $sumber?->label_uraian,
                 // Judul notula TIDAK disalin: kosong = memakai nama bagian baru.
@@ -709,6 +742,43 @@ class BagianKustomManager extends Component
     }
 
     /**
+     * Form bagian ini berbeda dari pengaturan tersimpan (dipakai peringatan "belum
+     * disimpan" saat menutup editor atau meninggalkan halaman).
+     */
+    public function adaPerubahanBelumDisimpan(int $id): bool
+    {
+        if (! isset($this->form[$id]) || ! BagianKustom::whereKey($id)->exists()) {
+            return false;
+        }
+
+        // muatForm() juga memperbarui versiForm — dipulihkan supaya deteksi bentrok
+        // tetap memakai versi saat form dibuka.
+        $sekarang = $this->form[$id];
+        $versi = $this->versiForm[$id] ?? null;
+        $this->muatForm($id);
+        $tersimpan = $this->form[$id];
+        $this->form[$id] = $sekarang;
+
+        if ($versi !== null) {
+            $this->versiForm[$id] = $versi;
+        } else {
+            unset($this->versiForm[$id]);
+        }
+
+        return self::bandingkan($sekarang) !== self::bandingkan($tersimpan);
+    }
+
+    /** Bentuk pembanding: nilai skalar sebagai teks, supaya "1" dan 1 dianggap sama. */
+    protected static function bandingkan(mixed $nilai): mixed
+    {
+        if (is_array($nilai)) {
+            return array_map(fn ($v) => self::bandingkan($v), $nilai);
+        }
+
+        return is_bool($nilai) ? ($nilai ? '1' : '0') : trim((string) $nilai);
+    }
+
+    /**
      * Batalkan perubahan yang belum disimpan pada satu bagian.
      */
     public function batalUbah(int $id): void
@@ -760,6 +830,22 @@ class BagianKustomManager extends Component
             "form.{$id}.kolom.*.desimal" => ['nullable', 'integer', 'min:0', 'max:'.FormatAngkaKolom::DESIMAL_MAKS],
             "form.{$id}.kolom.*.pemisah" => ['nullable', Rule::in(array_keys(FormatAngkaKolom::PEMISAH))],
             "form.{$id}.kolom.*.ribuan" => ['boolean'],
+            "form.{$id}.kolom.*.variabel" => ['nullable', 'string', 'max:60'],
+            "form.{$id}.kolom.*.ringkasan" => ['nullable', Rule::in(array_keys(BagianKustom::RINGKASAN))],
+            // Peran pembaca, aturan bukti, dan bentuk tampilan — semua dibatasi daftar tetap.
+            "form.{$id}.peran_pembaca" => ['array'],
+            "form.{$id}.peran_pembaca.*" => [Rule::in(array_keys(BagianKustom::NAMA_PERAN))],
+            "form.{$id}.aturan_bukti" => ['nullable', 'array'],
+            "form.{$id}.aturan_bukti.mode" => ['nullable', Rule::in(array_keys(AturanBuktiBagianKustom::MODE))],
+            "form.{$id}.aturan_bukti.min" => ['nullable', 'integer', 'min:0', 'max:'.AturanBuktiBagianKustom::JUMLAH_MAKS],
+            "form.{$id}.aturan_bukti.maks" => ['nullable', 'integer', 'min:1', 'max:'.AturanBuktiBagianKustom::JUMLAH_MAKS],
+            "form.{$id}.aturan_bukti.format" => ['nullable', 'array'],
+            "form.{$id}.aturan_bukti.format.*" => [Rule::in(array_keys(AturanBuktiBagianKustom::FORMAT))],
+            "form.{$id}.aturan_bukti.ukuran_maks_mb" => ['nullable', 'integer', 'min:1', 'max:'.AturanBuktiBagianKustom::UKURAN_MAKS_MB],
+            "form.{$id}.aturan_bukti.petunjuk" => ['nullable', 'string', 'max:500'],
+            "form.{$id}.tampilan" => ['nullable', 'array'],
+            "form.{$id}.tampilan.isian" => ['nullable', Rule::in(array_keys(BagianKustom::TAMPILAN_ISIAN))],
+            "form.{$id}.tampilan.baca" => ['nullable', Rule::in(array_keys(BagianKustom::TAMPILAN_BACA))],
         ];
     }
 
@@ -771,6 +857,8 @@ class BagianKustomManager extends Component
             "form.{$id}.subbagian.*.nama.required" => 'Nama subbagian wajib diisi (atau hapus subbagiannya).',
             "form.{$id}.kolom.max" => 'Maksimal '.BagianKustom::KOLOM_MAKS.' kolom per bagian.',
             "form.{$id}.subbagian.max" => 'Maksimal '.BagianKustom::SUBBAGIAN_MAKS.' subbagian per bagian.',
+            "form.{$id}.aturan_bukti.maks.min" => 'Jumlah maksimal bukti minimal 1.',
+            "form.{$id}.aturan_bukti.ukuran_maks_mb.max" => 'Ukuran maksimal per berkas paling besar '.AturanBuktiBagianKustom::UKURAN_MAKS_MB.' MB.',
         ];
     }
 
@@ -813,11 +901,13 @@ class BagianKustomManager extends Component
 
             $opsi = $this->opsiDariTeks((string) ($row['opsi_teks'] ?? ''));
 
-            if ($row['tipe'] === 'pilihan' && count($opsi) < 2) {
+            $bertautKatalog = filled($row['variabel'] ?? null);
+
+            if (! $bertautKatalog && $row['tipe'] === 'pilihan' && count($opsi) < 2) {
                 $this->addError("form.{$id}.kolom.{$i}.opsi_teks", 'Kolom pilihan butuh minimal dua opsi, dipisah koma.');
             }
 
-            if ($row['tipe'] === 'pilihan_ganda' && count($opsi) < 2) {
+            if (! $bertautKatalog && $row['tipe'] === 'pilihan_ganda' && count($opsi) < 2) {
                 $this->addError("form.{$id}.kolom.{$i}.opsi_teks", 'Kolom pilihan ganda butuh minimal dua opsi, dipisah koma.');
             }
 
@@ -848,6 +938,17 @@ class BagianKustomManager extends Component
                 $this->addError("form.{$id}.kolom.{$i}.panjang_maks", 'Panjang maksimal harus lebih besar atau sama dengan panjang minimal.');
             }
 
+            // Variabel katalog harus ada; menautkan BARU hanya ke variabel aktif. Tautan
+            // lama ke variabel yang kemudian dinonaktifkan tetap boleh dipertahankan.
+            if (filled($row['variabel'] ?? null)) {
+                $var = VariabelKatalog::where('kode', $row['variabel'])->first();
+                $tautanLama = collect(BagianKustom::find($id)?->kolom ?? [])->contains(fn ($k) => ($k['kunci'] ?? null) === $kunci && ($k['variabel'] ?? null) === $row['variabel']);
+
+                if (! $var || (! $var->aktif && ! $tautanLama)) {
+                    $this->addError("form.{$id}.kolom.{$i}.variabel", 'Variabel katalog tidak ditemukan atau sudah nonaktif.');
+                }
+            }
+
             $hasil[] = $this->kolomTersimpan($kunci, $row, $opsi);
         }
 
@@ -864,10 +965,27 @@ class BagianKustomManager extends Component
      */
     protected function kolomTersimpan(string $kunci, array $row, array $opsi): array
     {
+        $variabel = filled($row['variabel'] ?? null) ? (string) $row['variabel'] : null;
+        $katalog = $variabel !== null ? VariabelKatalog::peta() : [];
+
+        // Kolom bertaut katalog: definisinya (jenis, opsi, format, batas) disalin dari
+        // katalog saat disimpan dan tetap diikuti saat dibaca (BagianKustom::kolomList()).
+        if ($variabel !== null && isset($katalog[$variabel])) {
+            $def = $katalog[$variabel];
+            $row = array_merge($row, [
+                'tipe' => $def['tipe'], 'satuan' => $def['satuan'], 'desimal' => $def['desimal'], 'pemisah' => $def['pemisah'],
+                'ribuan' => $def['ribuan'], 'min' => $def['min'], 'maks' => $def['maks'],
+                'panjang_min' => $def['panjang_min'], 'panjang_maks' => $def['panjang_maks'],
+            ]);
+            $opsi = $def['opsi'];
+        }
+
         $tipe = (string) ($row['tipe'] ?? 'teks');
         $angka = $tipe === 'angka';
 
         return BagianKustom::normalkanKolom([
+            'variabel' => $variabel,
+            'ringkasan' => $row['ringkasan'] ?? null,
             'kunci' => $kunci,
             'label' => trim((string) ($row['label'] ?? '')),
             'tipe' => $tipe,
@@ -977,6 +1095,45 @@ class BagianKustomManager extends Component
             return;
         }
 
+        // Peran pembaca: hanya melihat. Harus bisa membuka minimal satu menu penempatan.
+        $pembaca = array_values(array_diff(array_unique((array) ($f['peran_pembaca'] ?? [])), $peran));
+
+        foreach ($pembaca as $p) {
+            if (! collect($penempatan)->contains(fn ($menu) => in_array($p, MenuBagianKustom::peranDiizinkan($menu), true))) {
+                $this->addError("form.{$id}.peran_pembaca", 'Peran pembaca '.(BagianKustom::NAMA_PERAN[$p] ?? $p).' tidak bisa membuka menu mana pun yang dipilih. Tambahkan menu yang bisa dibukanya, atau hapus centangnya.');
+
+                return;
+            }
+        }
+
+        // Aturan bukti: bagian yang belum pernah diatur dan formnya tidak diubah tetap
+        // NULL (perilaku lama, bukti hanya di Isian Kegiatan). Selain itu disimpan eksplisit.
+        $aturanLama = $bagian->aturanBukti();
+        $aturanForm = (array) ($f['aturan_bukti'] ?? self::aturanBuktiForm($aturanLama));
+        $aturanBaru = ! $aturanLama['diatur'] && $aturanForm == self::aturanBuktiForm($aturanLama)
+            ? null
+            : AturanBuktiBagianKustom::untukDisimpan($aturanForm);
+
+        if ($aturanBaru !== null && $aturanBaru['mode'] !== AturanBuktiBagianKustom::MODE_TIDAK && filled($aturanForm['maks'] ?? null) && (int) ($aturanForm['min'] ?? 0) > (int) $aturanForm['maks']) {
+            $this->addError("form.{$id}.aturan_bukti.maks", 'Jumlah maksimal bukti harus lebih besar atau sama dengan jumlah minimal.');
+
+            return;
+        }
+
+        $buktiWajib = $aturanBaru === null
+            ? $this->bukti_wajib_boleh($peran, $penempatan) && (bool) $f['bukti_wajib']
+            : $aturanBaru['mode'] === AturanBuktiBagianKustom::MODE_WAJIB;
+
+        $tampilan = [
+            'isian' => array_key_exists((string) ($f['tampilan']['isian'] ?? ''), BagianKustom::TAMPILAN_ISIAN) ? $f['tampilan']['isian'] : 'kartu',
+            'baca' => array_key_exists((string) ($f['tampilan']['baca'] ?? ''), BagianKustom::TAMPILAN_BACA) ? $f['tampilan']['baca'] : 'daftar',
+        ];
+        $tampilan = $tampilan === ['isian' => 'kartu', 'baca' => 'daftar'] && $bagian->tampilan === null ? null : $tampilan;
+
+        // Berkas lama yang tidak cocok dengan aturan baru TIDAK diubah/dihapus — hanya
+        // diberitahukan supaya Tim SAKIP tahu.
+        $peringatanBukti = $aturanBaru !== null ? $this->peringatanBerkasLama($bagian, AturanBuktiBagianKustom::normalkan($aturanBaru, false)) : null;
+
         // Menu/peran yang dilepas tetapi masih punya poin tersimpan: datanya tetap ada
         // dan tetap masuk notula, hanya tidak tampil lagi untuk diisi.
         $konteksDilepas = $this->konteksDilepasBerisi($bagian, $peran, $penempatan);
@@ -985,7 +1142,7 @@ class BagianKustomManager extends Component
         // dicocokkan dengan versi saat form dimuat: bila Tim SAKIP lain sudah mengubah
         // bagian ini, simpan dibatalkan (isian form tetap di layar).
         try {
-            $this->dalamTransaksi(function () use ($id, $f, $peran, $penempatan, $kolom) {
+            $this->dalamTransaksi(function () use ($id, $f, $peran, $penempatan, $kolom, $pembaca, $aturanBaru, $buktiWajib, $tampilan) {
                 $bagian = BagianKustom::whereKey($id)->lockForUpdate()->firstOrFail();
 
                 if (! isset($this->versiForm[$id]) || self::versi($bagian) !== $this->versiForm[$id]) {
@@ -998,11 +1155,14 @@ class BagianKustomManager extends Component
                     'nama' => trim($f['nama']),
                     'deskripsi' => trim((string) ($f['deskripsi'] ?? '')) ?: null,
                     'peran' => $peran,
+                    'peran_pembaca' => $pembaca === [] ? null : $pembaca,
                     'penempatan' => $penempatan,
                     'label_uraian' => trim((string) ($f['label_uraian'] ?? '')) ?: null,
                     'frekuensi_wajib' => $f['frekuensi_wajib'],
-                    // Bukti dukung (PDF) hanya didukung untuk isian di menu Isian Kegiatan (Ketua Tim).
-                    'bukti_wajib' => $this->bukti_wajib_boleh($peran, $penempatan) && (bool) $f['bukti_wajib'],
+                    // bukti_wajib tetap diisi (dibaca kode lama) — selaras dengan aturan bukti.
+                    'bukti_wajib' => $buktiWajib,
+                    'aturan_bukti' => $aturanBaru,
+                    'tampilan' => $tampilan,
                     'masuk_notula' => (bool) $f['masuk_notula'],
                     'judul_notula' => trim((string) ($f['judul_notula'] ?? '')) ?: null,
                     'format_notula' => trim((string) ($f['format_notula'] ?? '')) ?: null,
@@ -1027,7 +1187,40 @@ class BagianKustomManager extends Component
         $this->muatForm($id);
 
         session()->flash('status', 'Perubahan "'.$bagian->nama.'" disimpan. Isian yang sudah tersimpan tetap ada di notula.'
-            .($konteksDilepas !== [] ? ' Perhatian: poin yang sudah diisi di '.implode(', ', $konteksDilepas).' tetap tersimpan, tetapi tidak tampil lagi untuk diisi.' : ''));
+            .($konteksDilepas !== [] ? ' Perhatian: poin yang sudah diisi di '.implode(', ', $konteksDilepas).' tetap tersimpan, tetapi tidak tampil lagi untuk diisi.' : '')
+            .($peringatanBukti !== null ? ' '.$peringatanBukti : ''));
+    }
+
+    /**
+     * Peringatan bila bukti dukung yang SUDAH tersimpan tidak cocok dengan aturan baru
+     * (format di luar daftar, atau jumlah per poin melebihi batas). Tidak mengubah apa pun.
+     */
+    protected function peringatanBerkasLama(BagianKustom $bagian, array $aturan): ?string
+    {
+        $poinIds = BagianKustomPoin::where('bagian_kustom_id', $bagian->id)->pluck('id');
+
+        if ($poinIds->isEmpty()) {
+            return null;
+        }
+
+        $berkas = \App\Models\Berkas::where('ref_type', BagianKustomPoin::class)->whereIn('ref_id', $poinIds)->get(['id', 'ref_id', 'nama_file']);
+        $formatLain = $berkas->reject(fn ($b) => AturanBuktiBagianKustom::namaCocok($aturan, $b->nama_file))->count();
+        $lebih = $aturan['maks'] !== null ? $berkas->groupBy('ref_id')->filter(fn ($g) => $g->count() > $aturan['maks'])->count() : 0;
+        $pesan = [];
+
+        if (! AturanBuktiBagianKustom::dipakai($aturan) && $berkas->isNotEmpty()) {
+            $pesan[] = "{$berkas->count()} bukti dukung lama tetap tersimpan dan tetap bisa dibuka, walau bagian ini kini tidak memakai bukti";
+        } else {
+            if ($formatLain > 0) {
+                $pesan[] = "{$formatLain} bukti lama berformat di luar aturan baru";
+            }
+
+            if ($lebih > 0) {
+                $pesan[] = "{$lebih} poin punya bukti melebihi batas maksimal baru";
+            }
+        }
+
+        return $pesan === [] ? null : 'Catatan bukti dukung: '.implode('; ', $pesan).'. Berkas lama tidak diubah maupun dihapus.';
     }
 
     /**
@@ -1289,6 +1482,10 @@ class BagianKustomManager extends Component
         $detail = $this->detailId ? BagianKustom::withCount('poin')->find($this->detailId) : null;
 
         return view('livewire.bagian-kustom-manager', [
+            'katalogVariabel' => VariabelKatalog::orderBy('nama')->get(),
+            'belumDisimpan' => $this->bukaId !== null && $this->adaPerubahanBelumDisimpan($this->bukaId),
+            'modeBukti' => AturanBuktiBagianKustom::MODE,
+            'formatBukti' => AturanBuktiBagianKustom::FORMAT,
             'daftar' => $this->daftar(),
             'daftarTampil' => $this->daftarTampil(),
             'filterAktif' => $this->filterAktif(),

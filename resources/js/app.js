@@ -126,6 +126,11 @@ document.addEventListener('alpine:init', () => {
         ubahStatus(ke) {
             this.antrean.forEach((b) => { if (b.status === 'mengunggah') b.status = ke; });
             this.sibuk = false;
+            // Kosongkan pilihan input supaya berkas yang SAMA bisa dipilih lagi (mis. untuk
+            // poin/bulan berikutnya) — tanpa ini browser tidak mengirim event change.
+            // Berkas yang sudah terunggah tetap tersimpan di Livewire; "Coba lagi" memakai
+            // salinan di this.terakhir.
+            this.$refs.input.value = '';
             const n = (s) => this.antrean.filter((b) => b.status === s).length;
             const bagian = [
                 n('tersimpan') && `${n('tersimpan')} terunggah`,

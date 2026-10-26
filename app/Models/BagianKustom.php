@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\AturanBuktiBagianKustom;
 use App\Support\FormatAngkaKolom;
 use App\Support\JenisKolomBagianKustom;
 use App\Support\MenuBagianKustom;
@@ -67,12 +68,15 @@ class BagianKustom extends Model
         'nama_folder',
         'deskripsi',
         'peran',
+        'peran_pembaca',
         'penempatan',
         'label_uraian',
         'kolom',
         'subbagian',
+        'tampilan',
         'frekuensi_wajib',
         'bukti_wajib',
+        'aturan_bukti',
         'masuk_notula',
         'judul_notula',
         'format_notula',
@@ -87,6 +91,9 @@ class BagianKustom extends Model
             'penempatan' => 'array',
             'kolom' => 'array',
             'subbagian' => 'array',
+            'peran_pembaca' => 'array',
+            'tampilan' => 'array',
+            'aturan_bukti' => 'array',
             'bukti_wajib' => 'boolean',
             'masuk_notula' => 'boolean',
             'aktif' => 'boolean',
@@ -191,6 +198,135 @@ class BagianKustom extends Model
             && in_array($peran, MenuBagianKustom::peranDiizinkan($menu), true);
     }
 
+    /**
+     * Peran pembaca: boleh MELIHAT isian bagian ini (semua konteks pengisi) di menu
+     * tempat bagian ditempatkan, tanpa hak mengubah. Peran yang juga pengisi tidak
+     * dihitung sebagai pembaca (formulir isiannya sudah tampil).
+     */
+    public function bisaDibacaDi(string $peran, string $menu): bool
+    {
+        return in_array($peran, $this->peran_pembaca ?? [], true)
+            && ! in_array($peran, $this->peran ?? [], true)
+            && in_array($menu, $this->penempatan ?? [], true)
+            && in_array($peran, MenuBagianKustom::peranDiizinkan($menu), true);
+    }
+
+    /** Peran pembaca dalam bentuk nama tampilan. */
+    public function labelPeranPembaca(): string
+    {
+        return collect($this->peran_pembaca ?? [])->map(fn ($p) => self::NAMA_PERAN[$p] ?? $p)->implode(', ') ?: '—';
+    }
+
+    /**
+     * Aturan bukti dukung bagian ini (lihat AturanBuktiBagianKustom::normalkan()).
+     *
+     * @return array{mode: string, min: int, maks: ?int, format: array<int, string>, ukuran_maks_mb: ?int, petunjuk: ?string, diatur: bool}
+     */
+    public function aturanBukti(): array
+    {
+        return AturanBuktiBagianKustom::normalkan($this->aturan_bukti, (bool) $this->bukti_wajib);
+    }
+
+    /**
+     * Aturan bukti yang berlaku di satu menu. Bagian yang belum pernah diatur aturan
+     * buktinya mempertahankan perilaku lama: bukti hanya ada di Isian Kegiatan.
+     *
+     * @return array<string, mixed>
+     */
+    public function aturanBuktiDi(string $menu): array
+    {
+        $aturan = $this->aturanBukti();
+
+        if (! $aturan['diatur'] && $menu !== MenuBagianKustom::PENGISIAN) {
+            $aturan['mode'] = AturanBuktiBagianKustom::MODE_TIDAK;
+            $aturan['min'] = 0;
+        }
+
+        return $aturan;
+    }
+
+    public const TAMPILAN_ISIAN = ['kartu' => 'Kartu per poin', 'tabel' => 'Tabel (satu baris per poin)'];
+
+    public const TAMPILAN_BACA = ['daftar' => 'Daftar berbutir', 'tabel' => 'Tabel', 'paragraf' => 'Paragraf'];
+
+    /** Bentuk formulir isian di menu Isian Bagian Kustom: kartu (bawaan) atau tabel. */
+    public function tampilanIsian(): string
+    {
+        $v = (string) ($this->tampilan['isian'] ?? 'kartu');
+
+        return array_key_exists($v, self::TAMPILAN_ISIAN) ? $v : 'kartu';
+    }
+
+    /** Bentuk penyajian isian tersimpan (baca-saja): daftar (bawaan), tabel, paragraf. */
+    public function tampilanBaca(): string
+    {
+        $v = (string) ($this->tampilan['baca'] ?? 'daftar');
+
+        return array_key_exists($v, self::TAMPILAN_BACA) ? $v : 'daftar';
+    }
+
+    /**
+     * Ringkasan kolom angka untuk sekumpulan poin, mis. ["Nilai risiko" => "Jumlah: 12,5"].
+     * Dihitung dari nilai tersimpan (kanonik) tanpa mengubahnya; tampil memakai format
+     * kolomnya. Nilai yang bukan angka dilewati.
+     *
+     * @param  iterable<int, BagianKustomPoin>  $poin
+     * @return array<int, array{label: string, jenis: string, nilai: string, jumlah_data: int}>
+     */
+    public function ringkasanNilai(iterable $poin): array
+    {
+        $hasil = [];
+
+        foreach ($this->kolomList() as $kolom) {
+            if ($kolom['tipe'] !== 'angka' || ($kolom['ringkasan'] ?? null) === null) {
+                continue;
+            }
+
+            $angka = [];
+
+            foreach ($poin as $p) {
+                $v = FormatAngkaKolom::urai(trim((string) (($p->nilai_kolom ?? [])[$kolom['kunci']] ?? '')), null);
+
+                if ($v !== null) {
+                    $angka[] = $v;
+                }
+            }
+
+            if ($angka === []) {
+                continue;
+            }
+
+            $nilai = match ($kolom['ringkasan']) {
+                'rata_rata' => self::bagiDesimal(self::jumlahDesimal($angka), count($angka)),
+                'min' => (string) array_reduce($angka, fn ($a, $b) => $a === null || bccomp($b, $a, 12) < 0 ? $b : $a),
+                'maks' => (string) array_reduce($angka, fn ($a, $b) => $a === null || bccomp($b, $a, 12) > 0 ? $b : $a),
+                default => self::jumlahDesimal($angka),
+            };
+
+            $hasil[] = [
+                'label' => $kolom['label'],
+                'jenis' => self::RINGKASAN[$kolom['ringkasan']] ?? $kolom['ringkasan'],
+                'nilai' => JenisKolomBagianKustom::tampil(FormatAngkaKolom::urai($nilai, null) ?? $nilai, $kolom),
+                'jumlah_data' => count($angka),
+            ];
+        }
+
+        return $hasil;
+    }
+
+    public const RINGKASAN = ['jumlah' => 'Jumlah', 'rata_rata' => 'Rata-rata', 'min' => 'Terkecil', 'maks' => 'Terbesar'];
+
+    /** @param  array<int, string>  $angka  angka kanonik */
+    private static function jumlahDesimal(array $angka): string
+    {
+        return array_reduce($angka, fn ($a, $b) => bcadd($a, $b, 12), '0');
+    }
+
+    private static function bagiDesimal(string $a, int $b): string
+    {
+        return bcdiv($a, (string) $b, 12);
+    }
+
     public static function peranDariNama(?string $namaRole): ?string
     {
         return array_flip(self::NAMA_PERAN)[$namaRole ?? ''] ?? null;
@@ -230,11 +366,35 @@ class BagianKustom extends Model
      */
     public function kolomList(): array
     {
+        $katalog = collect($this->kolom ?? [])->contains(fn ($k) => filled($k['variabel'] ?? null)) ? VariabelKatalog::peta() : [];
+
         return collect($this->kolom ?? [])
             ->filter(fn ($k) => filled($k['kunci'] ?? null) && filled($k['label'] ?? null))
-            ->map(fn ($k) => self::normalkanKolom($k))
+            ->map(fn ($k) => self::normalkanKolom(self::gabungKatalog($k, $katalog)))
             ->values()
             ->all();
+    }
+
+    /**
+     * Kolom yang menautkan variabel katalog mengikuti definisi katalog (jenis, opsi,
+     * format angka, batas). Label, kunci, wajib, subbagian, petunjuk tetap milik kolom.
+     * Variabel yang tidak ditemukan = definisi lokal kolom tetap dipakai.
+     *
+     * @param  array<string, mixed>  $k
+     * @param  array<string, array<string, mixed>>  $katalog
+     * @return array<string, mixed>
+     */
+    public static function gabungKatalog(array $k, array $katalog): array
+    {
+        $kode = $k['variabel'] ?? null;
+
+        if (! filled($kode) || ! isset($katalog[$kode])) {
+            return $k;
+        }
+
+        $definisi = array_diff_key($katalog[$kode], ['aktif_katalog' => 1, 'nama_katalog' => 1]);
+
+        return array_merge($k, $definisi);
     }
 
     /**
@@ -279,6 +439,9 @@ class BagianKustom extends Model
             'format_tanggal' => $tipe === 'tanggal' && array_key_exists((string) ($k['format_tanggal'] ?? ''), JenisKolomBagianKustom::FORMAT_TANGGAL)
                 ? (string) $k['format_tanggal']
                 : ($tipe === 'tanggal' ? 'panjang' : null),
+            // Katalog variabel (kode) dan ringkasan nilai angka di tampilan tabel.
+            'variabel' => filled($k['variabel'] ?? null) ? (string) $k['variabel'] : null,
+            'ringkasan' => $angka && array_key_exists((string) ($k['ringkasan'] ?? ''), self::RINGKASAN) ? (string) $k['ringkasan'] : null,
         ];
     }
 
@@ -581,10 +744,13 @@ class BagianKustom extends Model
             'nama_folder' => $this->nama_folder,
             'deskripsi' => $this->deskripsi,
             'peran' => array_values($this->peran ?? []),
+            'peran_pembaca' => array_values($this->peran_pembaca ?? []),
             'penempatan' => array_values($this->penempatan ?? []),
             'label_uraian' => $this->label_uraian,
             'frekuensi_wajib' => $this->frekuensi_wajib,
             'bukti_wajib' => (bool) $this->bukti_wajib,
+            'aturan_bukti' => $this->aturan_bukti,
+            'tampilan' => $this->tampilan,
             'masuk_notula' => (bool) $this->masuk_notula,
             'judul_notula' => $this->judul_notula,
             'format_notula' => $this->format_notula,

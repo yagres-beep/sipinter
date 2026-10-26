@@ -5,9 +5,11 @@
 
     Parameter: $kelompok (hasil kelompokKolomBerlaku), $model (awalan wire:model, mis.
     "baris.5.0.kolom"). Galat dibaca dari kunci "{$model}.{kunci}".
+    $ringkas (opsional) = tanpa label/judul subbagian, untuk sel tabel (label lewat aria-label).
 --}}
+@php $ringkas ??= false; @endphp
 @foreach ($kelompok as $grup)
-    @if ($grup['subbagian'])
+    @if ($grup['subbagian'] && ! $ringkas)
         <div class="sub-bagian-kustom" style="margin:14px 0 8px;padding-top:10px;border-top:1px dashed var(--line)">
             <div style="font-weight:700;font-size:12.5px">{{ $grup['subbagian']['nama'] }}</div>
             @if ($grup['subbagian']['deskripsi'])
@@ -21,12 +23,16 @@
             $jalur = $model.'.'.$kolom['kunci'];
             $idKolom = 'kol-'.str_replace('.', '-', $jalur);
         @endphp
-        <div class="field">
+        <div class="field" @if ($ringkas) style="margin-bottom:0;min-width:140px" @endif>
+            @if ($ringkas)
+                <label for="{{ $idKolom }}" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">{{ $kolom['label'] }}</label>
+            @else
             <label for="{{ $idKolom }}">{{ $kolom['label'] }}
                 @if ($kolom['wajib'])<span class="req">*</span>@else<span style="color:var(--muted);font-weight:500">opsional</span>@endif
                 @include('livewire.partials._petunjuk-kolom-angka', ['kolom' => $kolom])
             </label>
-            @if ($kolom['petunjuk'] ?? null)
+            @endif
+            @if (($kolom['petunjuk'] ?? null) && ! $ringkas)
                 <div class="fhint" style="margin:0 0 6px">{{ $kolom['petunjuk'] }}</div>
             @endif
 

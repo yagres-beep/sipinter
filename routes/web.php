@@ -38,7 +38,9 @@ Route::middleware(['auth', 'profile.complete'])->group(function () {
     // Pratinjau/unduh satu berkas bukti — dipakai Tim SAKIP saat verifikasi MAUPUN
     // Ketua Tim untuk melihat kembali bukti yang sudah diunggahnya sendiri (RF-40a
     // + permintaan supaya Ketua Tim tidak perlu hanya mengandalkan nama berkas).
-    Route::middleware('role:Tim SAKIP,Ketua Tim')
+    // Kepala hanya untuk bukti Bagian Kustom yang diisi/dibaca perannya — diperiksa
+    // per berkas di BerkasDownloadController::bolehMembuka().
+    Route::middleware('role:Tim SAKIP,Ketua Tim,Kepala')
         ->get('/berkas/{berkas}/buka', [BerkasDownloadController::class, 'show'])
         ->name('berkas.show');
 
