@@ -1,5 +1,6 @@
 <?php
 
+use App\Support\MigrasiKunciSingkat;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -11,10 +12,15 @@ return new class extends Migration
      * yang menautkan variabel mengikuti jenis, format angka, dan aturan validasinya;
      * nilainya tetap disimpan per poin seperti kolom biasa. Tabel baru — tidak ada data
      * lama yang disentuh.
+     *
+     * Kunci asing ke users butuh kunci singkat di tabel users — ditunggu sebentar lalu
+     * dicoba ulang (MigrasiKunciSingkat).
      */
+    public $withinTransaction = false;
+
     public function up(): void
     {
-        Schema::create('variabel_katalog', function (Blueprint $table) {
+        MigrasiKunciSingkat::jalankan(fn () => Schema::create('variabel_katalog', function (Blueprint $table) {
             $table->id();
             $table->string('kode', 60)->unique();
             $table->string('nama', 150);
@@ -34,7 +40,7 @@ return new class extends Migration
             $table->foreignId('dibuat_oleh')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('diubah_oleh')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
-        });
+        }));
     }
 
     public function down(): void
