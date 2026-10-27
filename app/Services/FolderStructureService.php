@@ -703,9 +703,14 @@ class FolderStructureService
      * Risiko") — dalam folder bernama teks poinnya bila Tim SAKIP mengaktifkan subfolder
      * per kegiatan di kategori itu.
      */
-    public function unggahBerkasBagianKustom(BagianKustomPoin $poin, string $localPath, ?string $namaBerkasOverride = null, ?string $kodeBerkas = null): array
+    public function unggahBerkasBagianKustom(BagianKustomPoin $poin, string $localPath, ?string $namaBerkasOverride = null, ?string $kodeBerkas = null, ?string $namaFile = null): array
     {
-        return $this->unggahBerkas($poin->periode, $poin->masterIku, 'bagian_kustom', $localPath, namaFolderOverride: $poin->bagianKustom->namaFolderEfektif(),namaBerkasOverride: $namaBerkasOverride, namaItem: $poin->teks, kodeBerkas: $kodeBerkas);
+        // Ekstensi & MIME mengikuti berkas tersimpan (bukti Bagian Kustom bisa selain
+        // PDF sesuai aturan bukti bagiannya); tanpa nama = PDF seperti sebelumnya.
+        $ekstensi = $namaFile !== null && pathinfo($namaFile, PATHINFO_EXTENSION) !== '' ? '.'.strtolower(pathinfo($namaFile, PATHINFO_EXTENSION)) : '.pdf';
+        $mime = $namaFile !== null ? \App\Support\AturanBuktiBagianKustom::mimeDariNama($namaFile) : 'application/pdf';
+
+        return $this->unggahBerkas($poin->periode, $poin->masterIku, 'bagian_kustom', $localPath, ekstensi: $ekstensi, mimeType: $mime, namaFolderOverride: $poin->bagianKustom->namaFolderEfektif(), namaBerkasOverride: $namaBerkasOverride, namaItem: $poin->teks, kodeBerkas: $kodeBerkas);
     }
 
     // ================================================================

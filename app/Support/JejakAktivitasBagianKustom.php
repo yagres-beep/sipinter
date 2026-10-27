@@ -44,6 +44,53 @@ final class JejakAktivitasBagianKustom
     }
 
     /**
+     * Poin baru yang melanjutkan poin periode sebelumnya (relasi antarperiode). Poin
+     * asal tidak berubah; yang dicatat adalah asal, akar rangkaian, dan isi awal.
+     */
+    public static function poinDilanjutkan(BagianKustom $bagian, BagianKustomPoin $poin, BagianKustomPoin $sumber, ?string $korelasi = null): void
+    {
+        LogAktivitas::catat(
+            'bagian_kustom_poin.dilanjutkan',
+            LogAktivitas::pelaku().' melanjutkan poin isian "'.$bagian->nama.'" dari '.LogAktivitas::labelPeriode(Periode::find($sumber->periode_id))
+                .' ke '.self::lokasi($poin).'. Poin asal dan bukti dukungnya tidak diubah.',
+            self::konteks($bagian, $poin, $korelasi, [
+                'sesudah' => self::potret($poin) + ['lanjutan_dari_id' => $sumber->id, 'akar_id' => $poin->akar_id],
+            ]),
+        );
+    }
+
+    /**
+     * Bukti dukung dihapus pengisinya sendiri di menu Isian Bagian Kustom. Ditulis di
+     * transaksi yang sama dengan penghapusan baris; salinan Drive dipindah ke Sampah
+     * (bisa dipulihkan), bukan dihapus permanen.
+     */
+    public static function buktiDihapusPengisi(BagianKustom $bagian, BagianKustomPoin $poin, Berkas $berkas): void
+    {
+        LogAktivitas::catat(
+            'bukti.dihapus',
+            LogAktivitas::pelaku().' menghapus bukti dukung "'.$berkas->nama_file.'" dari poin isian "'.$bagian->nama.'", '.self::lokasi($poin).'. '
+                .($berkas->drive_file_id ? 'Salinan di Google Drive dipindah ke Sampah (masih bisa dipulihkan dari Drive).' : 'Berkas ini belum punya salinan di Google Drive.'),
+            self::konteksBerkas($bagian, $poin, $berkas, null, [
+                'sebelum' => ['berkas_id' => $berkas->id, 'kode' => $berkas->kode, 'nama_file' => $berkas->nama_file, 'drive_file_id' => $berkas->drive_file_id],
+            ]),
+        );
+    }
+
+    /**
+     * Perubahan katalog variabel (dibuat/diubah/aktif/nonaktif).
+     *
+     * @param  array<string, mixed>  $perubahan
+     */
+    public static function variabel(string $aksi, \App\Models\VariabelKatalog $variabel, string $uraian, array $perubahan = []): void
+    {
+        LogAktivitas::catat(
+            'variabel_katalog.'.$aksi,
+            LogAktivitas::pelaku().' '.$uraian.' variabel katalog "'.$variabel->nama.'" ('.$variabel->kode.').',
+            ['objek_tipe' => LogAktivitas::OBJEK_VARIABEL, 'objek_id' => $variabel->id, 'perubahan' => $perubahan],
+        );
+    }
+
+    /**
      * Catat perubahan poin — TIDAK mencatat apa pun bila isinya sama persis (simpan
      * ulang tanpa perubahan tidak menghasilkan catatan ganda).
      *

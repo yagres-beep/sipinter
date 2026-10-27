@@ -5,6 +5,13 @@
 --}}
 @php
     $m = "form.{$idBagian}.kolom.{$j}";
+    $katalogVariabel ??= collect();
+    $varTerpilih = filled($kol['variabel'] ?? null) ? $katalogVariabel->firstWhere('kode', $kol['variabel']) : null;
+    // Kolom bertaut katalog: jenis, opsi, format, dan batas mengikuti katalog.
+    if ($varTerpilih) {
+        $def = $varTerpilih->definisiKolom();
+        $kol = array_merge($kol, ['tipe' => $def['tipe'], 'opsi_teks' => implode(', ', $def['opsi']), 'satuan' => (string) $def['satuan'], 'desimal' => $def['desimal'] !== null ? (string) $def['desimal'] : '', 'pemisah' => $def['pemisah'], 'ribuan' => $def['ribuan']]);
+    }
     $tipe = $kol['tipe'] ?? 'teks';
     $galat = fn ($k) => $errors->first("{$m}.{$k}");
 @endphp
@@ -17,13 +24,35 @@
         </div>
         <div class="field" style="margin-bottom:8px">
             <label>Jenis isian</label>
-            <select class="inp filled" wire:model.live="{{ $m }}.tipe">
-                @foreach ($tipeKolom as $nilai => $label)
-                    <option value="{{ $nilai }}">{{ $label }}</option>
-                @endforeach
-            </select>
+            @if ($varTerpilih)
+                <div class="inp filled" style="color:var(--muted)">{{ $tipeKolom[$tipe] ?? $tipe }} <span style="font-size:11px">(mengikuti katalog)</span></div>
+            @else
+                <select class="inp filled" wire:model.live="{{ $m }}.tipe">
+                    @foreach ($tipeKolom as $nilai => $label)
+                        <option value="{{ $nilai }}">{{ $label }}</option>
+                    @endforeach
+                </select>
+            @endif
         </div>
     </div>
+
+    @if ($katalogVariabel->isNotEmpty() || filled($kol['variabel'] ?? null))
+        <div class="field" style="margin-bottom:8px">
+            <label>Variabel katalog <span style="color:var(--muted);font-weight:500">(opsional — pakai definisi bersama)</span></label>
+            <select class="inp filled" wire:model.live="{{ $m }}.variabel">
+                <option value="">Tidak — kolom lokal bagian ini</option>
+                @foreach ($katalogVariabel as $v)
+                    @if ($v->aktif || ($kol['variabel'] ?? null) === $v->kode)
+                        <option value="{{ $v->kode }}">{{ $v->nama }} ({{ $v->kode }}){{ $v->aktif ? '' : ' — nonaktif' }}</option>
+                    @endif
+                @endforeach
+            </select>
+            @if ($galat('variabel'))<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $galat('variabel') }}</div>@endif
+            @if ($varTerpilih)
+                <div class="fhint" style="margin-top:4px">Jenis, pilihan, satuan, format angka, dan batas nilai mengikuti katalog "{{ $varTerpilih->nama }}": {{ $varTerpilih->ringkasan() }}. Label, wajib, letak, dan petunjuk tetap diatur di sini. Nilai tetap tersimpan per isian bagian ini.</div>
+            @endif
+        </div>
+    @endif
 
     <div class="row2">
         <div class="field" style="margin-bottom:8px">
@@ -47,6 +76,19 @@
         <input type="text" class="inp filled" wire:model.blur="{{ $m }}.petunjuk" placeholder="mis. Isi sesuai register risiko terbaru">
     </div>
 
+    @if ($varTerpilih)
+        @if ($tipe === 'angka')
+            <div class="field" style="margin-bottom:8px;max-width:320px">
+                <label>Ringkasan di tampilan tabel</label>
+                <select class="inp filled" wire:model.live="{{ $m }}.ringkasan">
+                    <option value="">Tidak ada</option>
+                    @foreach (\App\Models\BagianKustom::RINGKASAN as $nilai => $label)
+                        <option value="{{ $nilai }}">{{ $label }}</option>
+                    @endforeach
+                </select>
+            </div>
+        @endif
+    @else
     @if (in_array($tipe, ['pilihan', 'pilihan_ganda'], true))
         <div class="field" style="margin-bottom:8px">
             <label>Pilihan jawaban <span style="color:var(--muted);font-weight:500">(pisahkan dengan koma)</span></label>
@@ -95,6 +137,15 @@
                 <input type="text" inputmode="decimal" class="inp filled" wire:model.blur="{{ $m }}.maks" placeholder="kosong = bebas">
                 @if ($galat('maks'))<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $galat('maks') }}</div>@endif
             </div>
+            <div class="field" style="margin-bottom:0">
+                <label>Ringkasan nilai</label>
+                <select class="inp filled" wire:model.live="{{ $m }}.ringkasan">
+                    <option value="">Tidak ada</option>
+                    @foreach (\App\Models\BagianKustom::RINGKASAN as $nilai => $label)
+                        <option value="{{ $nilai }}">{{ $label }}</option>
+                    @endforeach
+                </select>
+            </div>
         </div>
         <div class="fhint" style="margin:0 0 8px">Contoh tampilan: <b>{{ \App\Support\TemplateBagianKustom::contohKolom($kolomContoh) }}</b>. Format hanya mengubah tampilan — angka yang sudah tersimpan tidak diubah atau dibulatkan.</div>
     @endif
@@ -125,6 +176,7 @@
             <div class="fhint" style="margin-top:4px">Tanggal disimpan sebagai tahun-bulan-hari; format hanya mengatur tampilannya.</div>
         </div>
     @endif
+    @endif {{-- /kolom lokal (tanpa katalog) --}}
 
     <div class="row2">
         <div class="field" style="margin-bottom:8px">

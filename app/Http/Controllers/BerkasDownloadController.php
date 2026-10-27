@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\BagianKustom;
+use App\Models\BagianKustomPoin;
 use App\Models\Berkas;
+use App\Models\LogAktivitas;
 use App\Services\GoogleDriveService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -22,6 +25,11 @@ class BerkasDownloadController extends Controller
      */
     public function show(Berkas $berkas): Response
     {
+        if (! $this->bolehMembuka($berkas)) {
+            LogAktivitas::aksesDitolak('bukti dukung '.$berkas->kode);
+            abort(403);
+        }
+
         if ($berkas->path && Storage::disk('local')->exists($berkas->path)) {
             return Storage::disk('local')->response($berkas->path, $berkas->nama_file);
         }
@@ -52,6 +60,38 @@ class BerkasDownloadController extends Controller
             'Content-Type' => $mime,
             'Content-Disposition' => 'inline; filename="'.addcslashes($berkas->nama_file, '"\\').'"',
         ]);
+    }
+
+    /**
+     * Hak membuka satu berkas, diperiksa di server untuk setiap permintaan.
+     *
+     * - Bukti Bagian Kustom: Tim SAKIP (pengelola & verifikator); peran pengisi konteks
+     *   poin itu (data tim — peran yang sama berbagi isian); atau peran pembaca bagian.
+     * - Berkas lain: perilaku lama — Tim SAKIP & Ketua Tim (Kepala tidak).
+     */
+    protected function bolehMembuka(Berkas $berkas): bool
+    {
+        $user = auth()->user();
+        $namaRole = $user?->namaRole();
+
+        if ($namaRole === BagianKustom::NAMA_PERAN[BagianKustom::PERAN_TIM_SAKIP]) {
+            return true;
+        }
+
+        if ($berkas->ref_type !== BagianKustomPoin::class) {
+            return $namaRole === BagianKustom::NAMA_PERAN[BagianKustom::PERAN_KETUA_TIM];
+        }
+
+        $poin = BagianKustomPoin::with('bagianKustom')->find($berkas->ref_id);
+        $peran = BagianKustom::peranDariNama($namaRole);
+
+        if (! $poin || ! $poin->bagianKustom || $peran === null) {
+            return false;
+        }
+
+        $peranPengisi = $poin->peran_pengisi ?? BagianKustom::PERAN_KETUA_TIM;
+
+        return $peran === $peranPengisi || in_array($peran, $poin->bagianKustom->peran_pembaca ?? [], true);
     }
 
     /**

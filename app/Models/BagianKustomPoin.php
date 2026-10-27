@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 /**
@@ -24,6 +25,8 @@ class BagianKustomPoin extends Model
         'bagian_kustom_id',
         'iku_id',
         'periode_id',
+        'lanjutan_dari_id',
+        'akar_id',
         'menu',
         'peran_pengisi',
         'diisi_oleh',
@@ -80,6 +83,27 @@ class BagianKustomPoin extends Model
             (string) $this->status_verifikasi,
             optional($this->updated_at)->format('Y-m-d H:i:s.u'),
         ]));
+    }
+
+    /**
+     * Identitas objek yang tetap antarperiode: id poin pertama rangkaian lanjutannya.
+     * Poin yang bukan lanjutan (termasuk semua poin lama) adalah akarnya sendiri.
+     */
+    public function identitasObjek(): int
+    {
+        return (int) ($this->akar_id ?? $this->id);
+    }
+
+    /** Poin periode sebelumnya yang dilanjutkan oleh poin ini. */
+    public function lanjutanDari(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'lanjutan_dari_id');
+    }
+
+    /** Poin periode berikutnya yang melanjutkan poin ini. */
+    public function lanjutan(): HasMany
+    {
+        return $this->hasMany(self::class, 'lanjutan_dari_id');
     }
 
     public function bagianKustom(): BelongsTo

@@ -1481,7 +1481,15 @@
                 @if ($bagian->deskripsi)
                     <div class="info">ℹ️ {{ $bagian->deskripsi }}</div>
                 @endif
-                @php $labelBukti = $bagian->bukti_wajib ? 'Tiap poin yang diisi wajib dilampiri bukti dukung (PDF).' : 'Bukti dukung (PDF) opsional untuk bagian ini.'; @endphp
+                @php
+                    $aturanBukti = $bagian->aturanBuktiDi(\App\Support\MenuBagianKustom::PENGISIAN);
+                    $pakaiBukti = \App\Support\AturanBuktiBagianKustom::dipakai($aturanBukti);
+                    $labelBukti = ! $pakaiBukti
+                        ? 'Bagian ini tidak memakai bukti dukung.'
+                        : ($aturanBukti['mode'] === 'wajib'
+                            ? 'Tiap poin yang diisi wajib dilampiri bukti dukung ('.\App\Support\AturanBuktiBagianKustom::labelFormat($aturanBukti).').'
+                            : 'Bukti dukung ('.\App\Support\AturanBuktiBagianKustom::labelFormat($aturanBukti).') opsional untuk bagian ini.');
+                @endphp
                 @if ($bagian->frekuensi_wajib === 'setiap_bulan')
                     <div class="info warn">⚠️ Minimal satu poin wajib diisi setiap bulan. {{ $labelBukti }}</div>
                 @elseif ($bagian->frekuensi_wajib === 'akhir_triwulan')
@@ -1500,7 +1508,16 @@
                                 </div>
                                 @foreach ($entriTriwulan as $entri)
                                     <div style="padding:8px 0;border-bottom:1px solid var(--line2);font-size:13px">
-                                        <div>{{ $entri->teks }}</div>
+                                        <div style="display:flex;gap:8px;justify-content:space-between;align-items:flex-start">
+                                            <div>{{ $entri->teks }}
+                                                @if ($entri->lanjutan_dari_id)<span class="badge b-draft" style="font-size:10px" title="Lanjutan dari periode sebelumnya">↪ lanjutan</span>@endif
+                                                <span style="font-size:11px;color:var(--faint)">· {{ \App\Support\LanjutanBagianKustom::labelPeriode($entri->periode) }}</span>
+                                            </div>
+                                            @if (isset($bisaDilanjutkanBagianKustom[$bagian->id][$entri->id]))
+                                                <button type="button" class="btn btn-ghost btn-sm" style="flex-shrink:0" title="Isi poin baru periode ini dengan isi poin ini (poin lama & buktinya tidak diubah)"
+                                                    wire:click="lanjutkanPoinBagianKustom({{ $bagian->id }}, {{ $entri->id }})" wire:loading.attr="disabled" wire:target="lanjutkanPoinBagianKustom({{ $bagian->id }}, {{ $entri->id }})">↪ Lanjutkan ke periode ini</button>
+                                            @endif
+                                        </div>
                                         @foreach ($bagian->kolomList() as $kolom)
                                             @if (filled($entri->nilai_kolom[$kolom['kunci']] ?? null))
                                                 <div style="font-size:12px;color:var(--muted);white-space:pre-line">{{ $kolom['label'] }}: {{ \App\Models\BagianKustom::nilaiTampil($kolom, $entri->nilai_kolom[$kolom['kunci']]) }}</div>
@@ -1544,6 +1561,9 @@
                 @foreach ($bagianKustomBlocks[$bagian->id] ?? [] as $i => $blok)
                     <div class="poin-single" wire:key="bagian-{{ $bagian->id }}-{{ $i }}" x-data="{ pendingBuktiBagianNames: [] }">
                         <span class="k-num stat-in">Poin {{ $i + 1 }}</span>
+                        @if (! empty($blok['lanjutan_dari_id']))
+                            <span class="badge b-draft" style="margin-left:6px">↪ Lanjutan dari periode sebelumnya</span>
+                        @endif
                         @if (count($bagianKustomBlocks[$bagian->id]) > 1 && ! $blok['id'])
                             <button type="button" class="btn btn-red btn-sm" style="position:absolute;top:8px;right:8px" wire:click="removeBagianKustomBlock({{ $bagian->id }}, {{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="removeBagianKustomBlock({{ $bagian->id }}, {{ $i }})">🗑</button>
                         @endif
@@ -1562,14 +1582,18 @@
                             'model' => "bagianKustomBlocks.{$bagian->id}.{$i}.kolom",
                         ])
 
+                        @if ($pakaiBukti || ! empty($blok['existing_bukti']))
                         <div class="field" style="margin-bottom:0">
-                            <label>Bukti Dukung (PDF)
-                                @if ($bagian->bukti_wajib)
-                                    <span class="req">wajib bila poin diisi</span>
-                                @else
+                            <label>Bukti Dukung ({{ \App\Support\AturanBuktiBagianKustom::labelFormat($aturanBukti) }})
+                                @if ($aturanBukti['mode'] === 'wajib')
+                                    <span class="req">wajib bila poin diisi{{ $aturanBukti['min'] > 1 ? ', min. '.$aturanBukti['min'].' berkas' : '' }}</span>
+                                @elseif ($pakaiBukti)
                                     <span style="color:var(--muted);font-weight:500">opsional</span>
                                 @endif
                             </label>
+                            @if ($aturanBukti['diatur'])
+                                <div class="fhint" style="margin:0 0 6px">{{ \App\Support\AturanBuktiBagianKustom::ringkasan($aturanBukti) }}@if ($aturanBukti['petunjuk']) — {{ $aturanBukti['petunjuk'] }}@endif</div>
+                            @endif
 
                             @if ($blok['catatan_bukti_dihapus'] ?? null)
                                 <div class="info red" style="margin-bottom:8px;font-size:11.5px">
@@ -1610,7 +1634,7 @@
                                         @endphp
                                         <div class="filechip" wire:key="bukti-baru-{{ $kunciBaru }}">
                                             <span class="nm">
-                                                <x-nama-berkas :id="$kunciBaru" :nama="$namaTampil.'.pdf'" aksi="aturNamaBuktiBaru" :bisa-ubah="true" />
+                                                <x-nama-berkas :id="$kunciBaru" :nama="$namaTampil.'.'.\App\Support\AturanBuktiBagianKustom::ekstensiUnggahan($file)" aksi="aturNamaBuktiBaru" :bisa-ubah="true" />
                                                 <span class="sub">Berkas asli: {{ $file->getClientOriginalName() }}</span>
                                             </span>
                                             <span class="x" style="cursor:pointer" title="Hapus bukti" wire:click="removeBuktiBagianKustom({{ $bagian->id }}, {{ $i }}, {{ $fi }})" wire:loading.class="btn-busy" wire:target="removeBuktiBagianKustom({{ $bagian->id }}, {{ $i }}, {{ $fi }})">🗑️</span>
@@ -1618,7 +1642,11 @@
                                     @endforeach
                                 </div>
                             @endif
-                            <x-zona-unggah :model="'bagianKustomBlocks.'.$bagian->id.'.'.$i.'.bukti'" label="Seret PDF bukti dukung ke sini atau klik untuk memilih" style="margin-top:8px" />
+                            @if ($pakaiBukti)
+                                <x-zona-unggah :model="'bagianKustomBlocks.'.$bagian->id.'.'.$i.'.bukti'"
+                                    :accept="\App\Support\AturanBuktiBagianKustom::accept($aturanBukti)" :ekstensi="\App\Support\AturanBuktiBagianKustom::ekstensi($aturanBukti)"
+                                    :label="'Seret '.\App\Support\AturanBuktiBagianKustom::labelFormat($aturanBukti).' bukti dukung ke sini atau klik untuk memilih'" style="margin-top:8px" />
+                            @endif
                             @error("bagianKustomBlocks.{$bagian->id}.{$i}.bukti")
                                 <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                             @enderror
@@ -1626,6 +1654,7 @@
                                 <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
                             @enderror
                         </div>
+                        @endif
                     </div>
                 @endforeach
 

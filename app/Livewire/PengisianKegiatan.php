@@ -18,7 +18,9 @@ use App\Models\RtlEvaluasi as RtlEvaluasiModel;
 use App\Models\SalinanBuktiRtl;
 use App\Services\FolderStructureService;
 use App\Services\SinkronBuktiRtlService;
+use App\Support\AturanBuktiBagianKustom;
 use App\Support\JejakAktivitasBagianKustom;
+use App\Support\LanjutanBagianKustom;
 use App\Support\MenuBagianKustom;
 use Illuminate\Contracts\Cache\Lock;
 use Illuminate\Contracts\Cache\LockTimeoutException;
@@ -1188,10 +1190,36 @@ class PengisianKegiatan extends Component
             return;
         }
 
+        // Bukti Bagian Kustom mengikuti aturan bagiannya (format, ukuran, jumlah
+        // maksimal, atau tidak memakai bukti); bukti evaluasi RTL tetap PDF. Kekurangan
+        // jumlah minimal baru diperiksa saat diajukan.
+        $aturanBukti = null;
+
+        if (preg_match('/^bagianKustomBlocks\.(\d+)\.(\d+)$/', $jalur, $cocokBagian)) {
+            $aturanBukti = $this->bagianKustomAktif()->firstWhere('id', (int) $cocokBagian[1])?->aturanBuktiDi(MenuBagianKustom::PENGISIAN);
+            $jumlahLama = count(data_get($this, "{$jalur}.existing_bukti", []));
+            $galatJumlah = match (true) {
+                $aturanBukti === null => 'Bagian ini tidak tersedia untuk Anda.',
+                ! AturanBuktiBagianKustom::dipakai($aturanBukti) => 'Bagian ini tidak memakai bukti dukung.',
+                $aturanBukti['maks'] !== null && $jumlahLama + count($daftarBerkas) > $aturanBukti['maks'] => AturanBuktiBagianKustom::galatJumlah($aturanBukti, $jumlahLama, count($daftarBerkas)),
+                default => null,
+            };
+
+            if ($galatJumlah !== null) {
+                data_set($this, "{$jalur}.bukti", []);
+                $this->addError("{$jalur}.bukti", $galatJumlah);
+
+                return;
+            }
+        }
+
         $validator = \Illuminate\Support\Facades\Validator::make(
             ['bukti' => $daftarBerkas],
-            ['bukti.*' => ['file', 'mimes:pdf']],
-            ['bukti.*.mimes' => 'Bukti harus berupa PDF.']
+            ['bukti.*' => $aturanBukti !== null ? AturanBuktiBagianKustom::aturanBerkas($aturanBukti) : ['file', 'mimes:pdf']],
+            [
+                'bukti.*.mimes' => $aturanBukti !== null ? 'Bukti harus berformat '.AturanBuktiBagianKustom::labelFormat($aturanBukti).'.' : 'Bukti harus berupa PDF.',
+                'bukti.*.max' => 'Ukuran bukti melebihi batas '.($aturanBukti['ukuran_maks_mb'] ?? '').' MB.',
+            ]
         );
 
         if ($validator->fails()) {
@@ -2686,6 +2714,73 @@ class PengisianKegiatan extends Component
     }
 
     /**
+     * Periode tujuan untuk relasi antarperiode. Baris periode baru dibuat saat simpan,
+     * jadi bila belum ada dipakai objek periode sementara (tanpa id, tidak disimpan).
+     */
+    protected function periodeTujuanLanjutan(): Periode
+    {
+        return $this->periodeSaatIni() ?? (new Periode)->forceFill(['tahun' => $this->tahun, 'bulan' => $this->bulan]);
+    }
+
+    /**
+     * Poin periode sebelumnya (tahun yang sama, IKU ini) yang bisa dilanjutkan ke
+     * periode ini, per bagian — id poin => true. Dipakai tombol "Lanjutkan" di riwayat.
+     *
+     * @return array<int, array<int, bool>>
+     */
+    protected function bisaDilanjutkanBagianKustom(): array
+    {
+        if (! $this->iku_id || $this->capaianTerkunci()) {
+            return [];
+        }
+
+        $periode = $this->periodeTujuanLanjutan();
+        $dipakai = collect($this->bagianKustomBlocks)->flatten(1)->pluck('lanjutan_dari_id')->filter()->map(fn ($id) => (int) $id)->all();
+        $hasil = [];
+
+        foreach ($this->bagianKustomAktif() as $bagian) {
+            $hasil[$bagian->id] = LanjutanBagianKustom::objekTerbuka($bagian, MenuBagianKustom::PENGISIAN, BagianKustom::PERAN_KETUA_TIM, $periode, (int) $this->iku_id)
+                ->reject(fn ($p) => in_array($p->id, $dipakai, true))
+                ->mapWithKeys(fn ($p) => [$p->id => true])
+                ->all();
+        }
+
+        return $hasil;
+    }
+
+    /**
+     * Isi poin BARU periode ini dengan isi poin periode sebelumnya (relasi antarperiode).
+     * Belum tersimpan sampai Simpan Draf/Ajukan; asal diperiksa ulang saat simpan.
+     */
+    public function lanjutkanPoinBagianKustom(int $bagianId, int $poinId): void
+    {
+        if (! $this->penggunaKetuaTim() || $this->formTerkunciSedangDitangani() || $this->capaianTerkunci() || ! $this->iku_id) {
+            return;
+        }
+
+        $bagian = $this->bagianKustomAktif()->firstWhere('id', $bagianId);
+        abort_unless($bagian, 403);
+
+        if (collect($this->bagianKustomBlocks[$bagianId] ?? [])->contains(fn ($b) => (int) ($b['lanjutan_dari_id'] ?? 0) === $poinId)) {
+            return;
+        }
+
+        $sumber = LanjutanBagianKustom::sumberSah($bagian, $poinId, MenuBagianKustom::PENGISIAN, BagianKustom::PERAN_KETUA_TIM, $this->periodeTujuanLanjutan(), (int) $this->iku_id);
+
+        if (! $sumber) {
+            $this->addError("bagianKustomBlocks.{$bagianId}", 'Poin tersebut tidak bisa dilanjutkan (sudah dilanjutkan ke periode ini atau bukan milik IKU ini).');
+
+            return;
+        }
+
+        $blok = ['id' => null, 'teks' => (string) $sumber->teks, 'kolom' => $bagian->nilaiKolomUntukForm($sumber->nilai_kolom), 'lanjutan_dari_id' => $sumber->id] + $this->emptyBagianKustomBlock();
+
+        // Satu blok kosong bawaan diganti, bukan ditambah di bawahnya.
+        $daftar = collect($this->bagianKustomBlocks[$bagianId] ?? [])->filter(fn ($b) => filled($b['id'] ?? null) || $this->blokBagianKustomTerisi($b) || ! empty($b['bukti']))->values()->all();
+        $this->bagianKustomBlocks[$bagianId] = [...$daftar, $blok];
+    }
+
+    /**
      * Hanya poin yang belum tersimpan (id === null) yang boleh dihapus dari sini —
      * sama seperti removeBlock() untuk Kegiatan: poin yang sudah tersimpan di DB
      * hanya boleh diedit teksnya, tidak dihapus (lihat muatBagianKustomBlocks()).
@@ -3684,6 +3779,8 @@ class PengisianKegiatan extends Component
                     'catatan' => $b->catatan,
                 ]))->all(),
                 'catatan_bukti_dihapus' => $poin->catatan_bukti_dihapus,
+                // Hanya penanda tampilan — untuk poin tersimpan nilainya tidak dipakai saat simpan.
+                'lanjutan_dari_id' => $poin->lanjutan_dari_id,
             ])->values()->all();
         }
     }
@@ -4430,15 +4527,21 @@ class PengisianKegiatan extends Component
             // yang diatur Tim SAKIP) diperiksa BagianKustom::pesanGalatKolom().
             $rules["bagianKustomBlocks.{$bagian->id}.*.kolom.*"] = ['nullable', 'string', 'max:5000'];
 
+            // Aturan bukti diatur Tim SAKIP per bagian (AturanBuktiBagianKustom); bagian
+            // yang belum diatur = perilaku lama (PDF, wajib bila bukti_wajib).
+            $aturanBukti = $bagian->aturanBuktiDi(MenuBagianKustom::PENGISIAN);
+
             foreach ($this->bagianKustomBlocks[$bagian->id] ?? [] as $i => $blok) {
                 $adaBuktiLama = ! empty($blok['existing_bukti']);
 
-                $rules["bagianKustomBlocks.{$bagian->id}.{$i}.bukti"] = ($bagian->bukti_wajib && ! $adaBuktiLama)
-                    ? ['required_with:bagianKustomBlocks.'.$bagian->id.'.'.$i.'.teks', 'array']
-                    : ['nullable', 'array'];
+                $rules["bagianKustomBlocks.{$bagian->id}.{$i}.bukti"] = match (true) {
+                    ! AturanBuktiBagianKustom::dipakai($aturanBukti) => ['nullable', 'array', 'max:0'],
+                    $aturanBukti['mode'] === AturanBuktiBagianKustom::MODE_WAJIB && ! $adaBuktiLama => ['required_with:bagianKustomBlocks.'.$bagian->id.'.'.$i.'.teks', 'array'],
+                    default => ['nullable', 'array'],
+                };
             }
 
-            $rules["bagianKustomBlocks.{$bagian->id}.*.bukti.*"] = ['file', 'mimes:pdf'];
+            $rules["bagianKustomBlocks.{$bagian->id}.*.bukti.*"] = AturanBuktiBagianKustom::aturanBerkas($aturanBukti);
         }
 
         // RF-29/31: poin RTL triwulan sebelumnya cukup ditampilkan + tempat unggah bukti —
@@ -4500,6 +4603,13 @@ class PengisianKegiatan extends Component
 
         foreach ($this->bagianKustomAktif() as $bagian) {
             $messages["bagianKustomBlocks.{$bagian->id}.*.bukti.required_with"] = 'Bukti dukung wajib diunggah untuk tiap poin '.$bagian->nama.' yang diisi.';
+            $messages["bagianKustomBlocks.{$bagian->id}.*.bukti.max"] = 'Bagian '.$bagian->nama.' tidak memakai bukti dukung.';
+            $aturanBukti = $bagian->aturanBuktiDi(MenuBagianKustom::PENGISIAN);
+            $messages["bagianKustomBlocks.{$bagian->id}.*.bukti.*.mimes"] = 'Format bukti '.$bagian->nama.' harus: '.AturanBuktiBagianKustom::labelFormat($aturanBukti).'.';
+
+            if ($aturanBukti['ukuran_maks_mb'] !== null) {
+                $messages["bagianKustomBlocks.{$bagian->id}.*.bukti.*.max"] = 'Ukuran tiap bukti '.$bagian->nama.' maksimal '.$aturanBukti['ukuran_maks_mb'].' MB.';
+            }
         }
 
         return $messages;
@@ -4653,6 +4763,15 @@ class PengisianKegiatan extends Component
                         if ($galat !== null) {
                             $validator->errors()->add("bagianKustomBlocks.{$bagian->id}.{$i}.kolom.{$kolom['kunci']}", $galat);
                         }
+                    }
+
+                    // Jumlah bukti (minimal/maksimal) sesuai aturan bukti bagian. Poin
+                    // tanpa bukti sama sekali sudah ditangani aturan required_with di rules().
+                    $lama = count($blok['existing_bukti'] ?? []);
+                    $baru = count($blok['bukti'] ?? []);
+
+                    if ($lama + $baru > 0 && ($galat = AturanBuktiBagianKustom::galatJumlah($bagian->aturanBuktiDi(MenuBagianKustom::PENGISIAN), $lama, $baru)) !== null) {
+                        $validator->errors()->add("bagianKustomBlocks.{$bagian->id}.{$i}.bukti", $galat);
                     }
                 }
 
@@ -5746,7 +5865,21 @@ class PengisianKegiatan extends Component
                 } else {
                     $nilaiKolom = $bagian->bersihkanNilaiKolom($blok['kolom'] ?? [], null, $this->tahun, $triwulanIsian);
 
-                    $poin = BagianKustomPoin::create([
+                    // Lanjutan dari poin periode sebelumnya: asal diperiksa ulang di server
+                    // (id dari browser tidak dipercaya). Asal yang tidak sah = ditolak.
+                    $sumberLanjutan = null;
+
+                    if (filled($blok['lanjutan_dari_id'] ?? null)) {
+                        $sumberLanjutan = LanjutanBagianKustom::sumberSah($bagian, (int) $blok['lanjutan_dari_id'], MenuBagianKustom::PENGISIAN, BagianKustom::PERAN_KETUA_TIM, $periode, (int) $this->iku_id);
+
+                        // Ditangani seperti bentrok: seluruh penyimpanan batal, isian tetap di
+                        // layar, dan penolakannya dicatat (tanganiBentrok()).
+                        if (! $sumberLanjutan) {
+                            throw new \App\Exceptions\KonflikPenyuntinganException(['poin' => ['"'.$bagian->nama.'": poin asal dari periode sebelumnya sudah dilanjutkan atau tidak tersedia']]);
+                        }
+                    }
+
+                    $poin = BagianKustomPoin::create(($sumberLanjutan ? LanjutanBagianKustom::atribut($sumberLanjutan) : []) + [
                         'bagian_kustom_id' => $bagian->id,
                         'iku_id' => $this->iku_id,
                         'periode_id' => $periode->id,
@@ -5759,7 +5892,9 @@ class PengisianKegiatan extends Component
                     ]);
                     $this->bagianKustomBlocks[$bagian->id][$i]['id'] = $poin->id;
 
-                    JejakAktivitasBagianKustom::poinDibuat($bagian, $poin, $korelasiBagianKustom);
+                    $sumberLanjutan
+                        ? JejakAktivitasBagianKustom::poinDilanjutkan($bagian, $poin, $sumberLanjutan, $korelasiBagianKustom)
+                        : JejakAktivitasBagianKustom::poinDibuat($bagian, $poin, $korelasiBagianKustom);
                 }
 
                 $adaPerbaikanLainDiajukan = true;
@@ -5775,7 +5910,9 @@ class PengisianKegiatan extends Component
                         'ref_id' => $poin->id,
                         'ref_type' => BagianKustomPoin::class,
                         'kategori' => 'bagian_kustom',
-                        'nama_file' => $namaBerkas.'.pdf',
+                        // Ekstensi mengikuti berkas yang diunggah (format sudah divalidasi
+                        // sesuai aturan bukti bagian; bawaan PDF).
+                        'nama_file' => $namaBerkas.'.'.AturanBuktiBagianKustom::ekstensiUnggahan($file),
                         'path' => $path,
                         'status_verifikasi' => 'menunggu',
                     ]);
@@ -6052,6 +6189,7 @@ class PengisianKegiatan extends Component
             'rtlBerjalanBelumTerlaksana' => $this->poinRtlBerjalanBelumTerlaksana(),
             'bagianKustomAktif' => $bagianKustomAktif,
             'riwayatBagianKustom' => $bagianKustomAktif->mapWithKeys(fn ($b) => [$b->id => $this->riwayatBagianKustom($b)]),
+            'bisaDilanjutkanBagianKustom' => $bagianKustomAktif->isNotEmpty() ? $this->bisaDilanjutkanBagianKustom() : [],
             'statusKegiatanTerkunci' => self::STATUS_KEGIATAN_TERKUNCI,
             'catatanPenolakan' => $this->catatanPenolakan(),
             'pengembalianTerakhir' => $this->pengembalianTerakhir(),

@@ -42,6 +42,8 @@ class LogAktivitas extends Model
 
     public const OBJEK_BERKAS = 'berkas';
 
+    public const OBJEK_VARIABEL = 'variabel_katalog';
+
     public const OBJEK_RINCIAN_N = 'rincian_n';
 
     public const OBJEK_CAPAIAN_TAHUNAN = 'capaian_tahunan';
@@ -71,6 +73,11 @@ class LogAktivitas extends Model
         'bukti.dihapus' => 'Bukti dukung dihapus',
         'bukti.tersinkron' => 'Bukti tersalin ke Google Drive',
         'bukti.lokal_yatim_dibersihkan' => 'Pembersihan berkas lokal',
+        'bagian_kustom_poin.dilanjutkan' => 'Poin isian dilanjutkan dari periode sebelumnya',
+        'variabel_katalog.dibuat' => 'Variabel katalog dibuat',
+        'variabel_katalog.diubah' => 'Variabel katalog diubah',
+        'variabel_katalog.dinonaktifkan' => 'Variabel katalog dinonaktifkan',
+        'variabel_katalog.diaktifkan' => 'Variabel katalog diaktifkan',
         'isian_kegiatan.simpan' => 'Percobaan simpan Isian Kegiatan',
         'akses.ditolak' => 'Akses ditolak',
         'target_tahunan.n_diubah' => 'Angka N Target Tahunan diubah',

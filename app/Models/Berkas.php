@@ -335,7 +335,7 @@ class Berkas extends Model
                 $ref, $this->kategori, $localPath, namaBerkasOverride: $namaDasar, subfolder: $this->subfolder, kodeBerkas: $this->kode,
             ),
             $ref instanceof RtlEvaluasi => $folderService->unggahBerkasRtl($ref, $localPath, namaBerkasOverride: $namaDasar, kodeBerkas: $this->kode, tahapan: $this->tahapan, subfolder: $this->subfolder, periode: $this->periode_id ? Periode::find($this->periode_id) : null),
-            $ref instanceof BagianKustomPoin => $folderService->unggahBerkasBagianKustom($ref, $localPath, namaBerkasOverride: $namaDasar, kodeBerkas: $this->kode),
+            $ref instanceof BagianKustomPoin => $folderService->unggahBerkasBagianKustom($ref, $localPath, namaBerkasOverride: $namaDasar, kodeBerkas: $this->kode, namaFile: $this->nama_file),
             default => throw new \RuntimeException('Jenis berkas ini tidak bisa diunggah ke Drive dari sini.'),
         };
 

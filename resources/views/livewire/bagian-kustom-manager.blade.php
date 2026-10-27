@@ -51,7 +51,7 @@
                     </li>
                     <li>Subbagian ({{ count($ringkasanSalin['subbagian']) }}): {{ implode(', ', $ringkasanSalin['subbagian']) ?: 'tidak ada' }}.</li>
                     <li>Notula: {{ $ringkasanSalin['notula'] }} (judul notula memakai nama bagian baru).</li>
-                    <li>Bukti dukung: {{ $ringkasanSalin['bukti'] ? 'wajib' : 'tidak wajib' }}.</li>
+                    <li>Bukti dukung: {{ $ringkasanSalin['aturan_bukti'] }}.</li>
                 </ul>
                 <div style="margin-top:6px"><b>Tidak disalin:</b> {{ $ringkasanSalin['poin_sumber'] }} poin isian, bukti dukung, status verifikasi, dan riwayat milik "{{ $ringkasanSalin['nama'] }}". Bagian baru mulai tanpa data.</div>
             </div>
@@ -176,7 +176,8 @@
                     </div>
 
                     <div class="btn-row" style="margin-top:0;flex-wrap:wrap">
-                        <button type="button" class="btn {{ $bukaId === $bagian->id ? 'btn-primary' : 'btn-ghost' }} btn-sm" wire:click="buka({{ $bagian->id }})" wire:loading.attr="disabled" wire:target="buka({{ $bagian->id }})">
+                        <button type="button" class="btn {{ $bukaId === $bagian->id ? 'btn-primary' : 'btn-ghost' }} btn-sm" wire:click="buka({{ $bagian->id }})" wire:loading.attr="disabled" wire:target="buka({{ $bagian->id }})"
+                            @if ($bukaId === $bagian->id && $belumDisimpan) wire:confirm="Ada perubahan pengaturan yang belum disimpan. Tutup editor? Perubahan tetap ada di formulir sampai halaman dimuat ulang, tetapi belum tersimpan." @endif>
                             {{ $bukaId === $bagian->id ? '✕ Tutup' : '✎ Edit' }}
                         </button>
                         <button type="button" class="btn {{ $detailId === $bagian->id ? 'btn-primary' : 'btn-ghost' }} btn-sm" wire:click="lihatDetail({{ $bagian->id }})" wire:loading.attr="disabled" wire:target="lihatDetail({{ $bagian->id }})">👁 Detail</button>
@@ -199,7 +200,9 @@
                             <div><span style="color:var(--muted)">Peran (melihat &amp; mengisi):</span> {{ $detail->labelPeran() }}</div>
                             <div><span style="color:var(--muted)">Menu:</span> {{ $detail->labelPenempatan() }}</div>
                             <div><span style="color:var(--muted)">Periode pengisian:</span> {{ $detail->labelFrekuensi() }}</div>
-                            <div><span style="color:var(--muted)">Bukti dukung:</span> {{ $detail->bukti_wajib ? 'Wajib per poin (PDF, Isian Kegiatan)' : 'Tidak wajib' }}</div>
+                            <div><span style="color:var(--muted)">Peran pembaca (baca-saja):</span> {{ $detail->labelPeranPembaca() }}</div>
+                            <div><span style="color:var(--muted)">Bukti dukung:</span> {{ \App\Support\AturanBuktiBagianKustom::ringkasan($detail->aturanBukti()) }}{{ $detail->aturanBukti()['diatur'] ? '' : ' (aturan lama: hanya di Isian Kegiatan)' }}</div>
+                            <div><span style="color:var(--muted)">Tampilan:</span> isian {{ mb_strtolower(\App\Models\BagianKustom::TAMPILAN_ISIAN[$detail->tampilanIsian()]) }}, penyajian {{ mb_strtolower(\App\Models\BagianKustom::TAMPILAN_BACA[$detail->tampilanBaca()]) }}</div>
                             <div><span style="color:var(--muted)">Notula:</span> {{ $detail->masuk_notula ? 'Masuk, judul "'.$detail->judulNotulaEfektif().'"' : 'Tidak masuk' }}</div>
                             <div><span style="color:var(--muted)">Format baris notula:</span> <code>{{ $detail->formatNotulaEfektif() }}</code></div>
                             <div><span style="color:var(--muted)">Label uraian:</span> {{ $detail->labelUraianEfektif() }}</div>
@@ -219,6 +222,7 @@
                             @endif
                             @foreach ($grup['kolom'] as $k)
                                 <div style="padding-left:{{ $grup['subbagian'] ? '18px' : '4px' }}">• {{ $k['label'] }} <code style="font-size:11px">{{ $k['kunci'] }}</code>
+                                    @if ($k['variabel'] ?? null)<span class="badge b-verif" style="font-size:10px">katalog: {{ $k['variabel'] }}</span>@endif
                                     <span style="color:var(--muted)">— {{ $tipeKolom[$k['tipe']] ?? $k['tipe'] }}{{ $k['wajib'] ? ', wajib' : ', opsional' }}{{ \App\Models\BagianKustom::ringkasanKolom($k) !== '' ? ', '.\App\Models\BagianKustom::ringkasanKolom($k) : '' }}{{ $k['opsi'] ? ' · opsi: '.implode(' / ', $k['opsi']) : '' }}</span>
                                 </div>
                             @endforeach
@@ -235,10 +239,13 @@
                     <div style="margin-top:14px;padding:16px;background:var(--bg);border:1px solid var(--line);border-radius:12px">
                         {{-- Tab --}}
                         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
-                            @foreach (['dasar' => '⚙️ Informasi, Peran & Penempatan', 'isian' => '🧾 Struktur Isian & Validasi', 'notula' => '📄 Notula & Variabel', 'pratinjau' => '👁 Pratinjau', 'riwayat' => '🕘 Riwayat'] as $kunciTab => $labelTab)
-                                <button type="button" class="btn {{ $tab === $kunciTab ? 'btn-primary' : 'btn-ghost' }} btn-sm" wire:click="setTab('{{ $kunciTab }}')">{{ $labelTab }}</button>
+                            @foreach (['dasar' => '⚙️ Informasi, Peran & Penempatan', 'isian' => '🧾 Struktur Isian & Tampilan', 'bukti' => '📎 Bukti Dukung', 'notula' => '📄 Notula & Variabel', 'pratinjau' => '👁 Pratinjau', 'riwayat' => '🕘 Riwayat'] as $kunciTab => $labelTab)
+                                <button type="button" class="btn {{ $tab === $kunciTab ? 'btn-primary' : 'btn-ghost' }} btn-sm" wire:click="setTab('{{ $kunciTab }}')" @if ($tab === $kunciTab) aria-current="true" @endif>{{ $labelTab }}</button>
                             @endforeach
                         </div>
+                        @if ($belumDisimpan)
+                            <div class="info warn" role="status" style="font-size:12px" data-belum-disimpan="1">✎ Ada perubahan yang <b>belum disimpan</b>. Klik "💾 Simpan Pengaturan" untuk menyimpan, atau "Batal ubah" untuk membuangnya.</div>
+                        @endif
 
                         @error("form.{$bagian->id}.nama")<div style="color:var(--red);font-size:11.5px;margin-bottom:8px">{{ $message }}</div>@enderror
                         @error("form.{$bagian->id}.kolom")<div style="color:var(--red);font-size:11.5px;margin-bottom:8px">{{ $message }}</div>@enderror
@@ -274,21 +281,103 @@
                                     </select>
                                 </div>
                                 <div class="field">
-                                    <label>Bukti dukung (PDF)</label>
-                                    @if (in_array(\App\Support\MenuBagianKustom::PENGISIAN, $f['penempatan'] ?? []) && in_array(\App\Models\BagianKustom::PERAN_KETUA_TIM, $f['peran'] ?? []))
-                                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;padding:8px 0">
-                                            <input type="checkbox" wire:model="form.{{ $bagian->id }}.bukti_wajib">
-                                            Wajib dilampirkan per poin yang diisi
-                                        </label>
-                                    @else
-                                        <div class="fhint" style="margin:6px 0 0">Bukti PDF hanya tersedia untuk isian di menu Isian Kegiatan oleh Ketua Tim. Di menu lain, isian berupa teks dan kolom saja.</div>
-                                    @endif
+                                    <label>Bukti dukung</label>
+                                    <div class="inp filled" style="font-size:12.5px;height:auto;min-height:38px">{{ \App\Support\AturanBuktiBagianKustom::ringkasan(\App\Support\AturanBuktiBagianKustom::normalkan(($f['aturan_bukti'] ?? null) ?: null, (bool) ($f['bukti_wajib'] ?? false))) }}</div>
+                                    <div class="fhint" style="margin-top:4px">Atur di tab 📎 Bukti Dukung.</div>
                                 </div>
                             </div>
+
+                            <div class="field">
+                                <label>Peran pembaca <span style="color:var(--muted);font-weight:500">(opsional — hanya melihat, tidak bisa mengubah)</span></label>
+                                <div style="display:flex;gap:16px;flex-wrap:wrap">
+                                    @foreach ($namaPeran as $nilai => $label)
+                                        @php $sudahPengisi = in_array($nilai, $f['peran'] ?? [], true); @endphp
+                                        <label style="display:flex;gap:6px;align-items:center;font-size:13px;cursor:{{ $sudahPengisi ? 'not-allowed' : 'pointer' }};opacity:{{ $sudahPengisi ? '.5' : '1' }}" title="{{ $sudahPengisi ? 'Sudah menjadi pengisi' : '' }}">
+                                            <input type="checkbox" value="{{ $nilai }}" wire:model.live="form.{{ $bagian->id }}.peran_pembaca" @disabled($sudahPengisi)> {{ $label }}
+                                        </label>
+                                    @endforeach
+                                </div>
+                                @error("form.{$bagian->id}.peran_pembaca")<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>@enderror
+                                <div class="fhint" style="margin-top:4px">Pembaca melihat isian semua pengisi bagian ini (beserta bukti dukungnya) di menu penempatan yang bisa dibukanya.</div>
+                            </div>
+
+                        {{-- TAB: BUKTI DUKUNG --}}
+                        @elseif ($tab === 'bukti')
+                            @php $ab = $f['aturan_bukti'] ?? []; @endphp
+                            <div class="info" style="font-size:12px">📎 Aturan bukti dukung berlaku untuk setiap poin yang diisi, di semua menu tempat bagian ini ditempatkan. Semua aturan diperiksa di server. Mengubah aturan <b>tidak</b> mengubah, memindahkan, atau menghapus bukti yang sudah diunggah — berkas lama tetap tersimpan di Google Drive dan tetap bisa dibuka.</div>
+                            <div class="row2">
+                                <div class="field">
+                                    <label for="mode-bukti-{{ $bagian->id }}">Kebutuhan bukti</label>
+                                    <select id="mode-bukti-{{ $bagian->id }}" class="inp filled" wire:model.live="form.{{ $bagian->id }}.aturan_bukti.mode">
+                                        @foreach ($modeBukti as $nilai => $label)
+                                            <option value="{{ $nilai }}">{{ $label }}</option>
+                                        @endforeach
+                                    </select>
+                                    @error("form.{$bagian->id}.aturan_bukti.mode")<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>@enderror
+                                </div>
+                                <div class="field">
+                                    <label for="ukuran-bukti-{{ $bagian->id }}">Ukuran maksimal per berkas (MB)</label>
+                                    <input id="ukuran-bukti-{{ $bagian->id }}" type="number" min="1" max="{{ \App\Support\AturanBuktiBagianKustom::UKURAN_MAKS_MB }}" class="inp filled" wire:model.blur="form.{{ $bagian->id }}.aturan_bukti.ukuran_maks_mb" placeholder="kosong = tanpa batas khusus" @disabled(($ab['mode'] ?? '') === 'tidak')>
+                                    @error("form.{$bagian->id}.aturan_bukti.ukuran_maks_mb")<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>@enderror
+                                </div>
+                            </div>
+                            @if (($ab['mode'] ?? '') !== 'tidak')
+                                <div class="row2">
+                                    <div class="field">
+                                        <label for="min-bukti-{{ $bagian->id }}">Jumlah minimal berkas per poin</label>
+                                        <input id="min-bukti-{{ $bagian->id }}" type="number" min="0" max="{{ \App\Support\AturanBuktiBagianKustom::JUMLAH_MAKS }}" class="inp filled" wire:model.blur="form.{{ $bagian->id }}.aturan_bukti.min">
+                                        <div class="fhint" style="margin-top:4px">Untuk "Wajib", minimal 1. Untuk "Opsional", berlaku bila pengisi melampirkan bukti.</div>
+                                        @error("form.{$bagian->id}.aturan_bukti.min")<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>@enderror
+                                    </div>
+                                    <div class="field">
+                                        <label for="maks-bukti-{{ $bagian->id }}">Jumlah maksimal berkas per poin</label>
+                                        <input id="maks-bukti-{{ $bagian->id }}" type="number" min="1" max="{{ \App\Support\AturanBuktiBagianKustom::JUMLAH_MAKS }}" class="inp filled" wire:model.blur="form.{{ $bagian->id }}.aturan_bukti.maks" placeholder="kosong = tanpa batas">
+                                        @error("form.{$bagian->id}.aturan_bukti.maks")<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>@enderror
+                                    </div>
+                                </div>
+                                <div class="field">
+                                    <label>Format yang diizinkan</label>
+                                    <div style="display:flex;gap:16px;flex-wrap:wrap">
+                                        @foreach ($formatBukti as $nilai => $fmt)
+                                            <label style="display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer">
+                                                <input type="checkbox" value="{{ $nilai }}" wire:model.live="form.{{ $bagian->id }}.aturan_bukti.format"> {{ $fmt['label'] }}
+                                            </label>
+                                        @endforeach
+                                    </div>
+                                    <div class="fhint" style="margin-top:4px">Tanpa centang = PDF. Isi berkas juga diperiksa, bukan hanya nama berkasnya.</div>
+                                    @error("form.{$bagian->id}.aturan_bukti.format")<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>@enderror
+                                </div>
+                                <div class="field">
+                                    <label for="petunjuk-bukti-{{ $bagian->id }}">Petunjuk pengunggahan <span style="color:var(--muted);font-weight:500">(opsional)</span></label>
+                                    <input id="petunjuk-bukti-{{ $bagian->id }}" type="text" class="inp filled" wire:model.blur="form.{{ $bagian->id }}.aturan_bukti.petunjuk" placeholder="mis. Unggah notulen rapat dan daftar hadir">
+                                </div>
+                            @endif
+                            <div class="fhint">Ringkasan: <b>{{ \App\Support\AturanBuktiBagianKustom::ringkasan(\App\Support\AturanBuktiBagianKustom::normalkan($ab ?: null, (bool) ($f['bukti_wajib'] ?? false))) }}</b>. Bukti disimpan di folder Google Drive "{{ $bagian->namaFolderEfektif() }}" (mekanisme Drive yang sama dengan bukti lain).</div>
 
                         {{-- TAB 2: KOLOM ISIAN --}}
                         @elseif ($tab === 'isian')
                             <div class="info" style="font-size:12px">🧾 Susun isian bagian ini: <b>Uraian</b> selalu ada sebagai isian utama, lalu kolom tambahan — langsung di bagian atau dikelompokkan ke <b>subbagian</b>. Setiap kolom otomatis menjadi <b>variabel</b> notula dengan nama seperti tertulis di "Variabel", dan tetap terhubung ke data lama walau labelnya diganti.</div>
+
+                            <div class="row2">
+                                <div class="field">
+                                    <label for="tampilan-isian-{{ $bagian->id }}">Bentuk formulir isian</label>
+                                    <select id="tampilan-isian-{{ $bagian->id }}" class="inp filled" wire:model.live="form.{{ $bagian->id }}.tampilan.isian">
+                                        @foreach (\App\Models\BagianKustom::TAMPILAN_ISIAN as $nilai => $label)
+                                            <option value="{{ $nilai }}">{{ $label }}</option>
+                                        @endforeach
+                                    </select>
+                                    <div class="fhint" style="margin-top:4px">Tabel berlaku di menu selain Isian Kegiatan (Isian Kegiatan selalu kartu). Di layar kecil tabel bisa digeser ke samping.</div>
+                                </div>
+                                <div class="field">
+                                    <label for="tampilan-baca-{{ $bagian->id }}">Bentuk penyajian isian tersimpan</label>
+                                    <select id="tampilan-baca-{{ $bagian->id }}" class="inp filled" wire:model.live="form.{{ $bagian->id }}.tampilan.baca">
+                                        @foreach (\App\Models\BagianKustom::TAMPILAN_BACA as $nilai => $label)
+                                            <option value="{{ $nilai }}">{{ $label }}</option>
+                                        @endforeach
+                                    </select>
+                                    <div class="fhint" style="margin-top:4px">Dipakai pada ringkasan isian dan tampilan pembaca. Tidak mengubah notula.</div>
+                                </div>
+                            </div>
 
                             <div class="field">
                                 <label>Label untuk isian Uraian <span style="color:var(--muted);font-weight:500">(opsional, default "Uraian")</span></label>
@@ -304,7 +393,7 @@
                                     $g = in_array($kol['subbagian'] ?? '', $kunciSubForm, true) ? $kol['subbagian'] : '';
                                     $kelompokForm[$g][] = $j;
                                 }
-                                $kartu = ['idBagian' => $bagian->id, 'f' => $f, 'tipeKolom' => $tipeKolom, 'pilihanPemisah' => $pilihanPemisah, 'formatTanggal' => $formatTanggal];
+                                $kartu = ['idBagian' => $bagian->id, 'f' => $f, 'tipeKolom' => $tipeKolom, 'pilihanPemisah' => $pilihanPemisah, 'formatTanggal' => $formatTanggal, 'katalogVariabel' => $katalogVariabel];
                             @endphp
 
                             <div style="font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px">Kolom langsung di bagian</div>
@@ -474,8 +563,10 @@
                                             </div>
                                         @endforeach
                                     @endforeach
-                                    @if (in_array(\App\Support\MenuBagianKustom::PENGISIAN, $f['penempatan'] ?? []) && in_array(\App\Models\BagianKustom::PERAN_KETUA_TIM, $f['peran'] ?? []) && ($f['bukti_wajib'] ?? false))
-                                        <div class="filechip ok" style="font-size:11px"><span class="nm">📄 contoh-bukti-dukung.pdf</span></div>
+                                    @php $aturanPratinjau = \App\Support\AturanBuktiBagianKustom::normalkan(($f['aturan_bukti'] ?? null) ?: null, (bool) ($f['bukti_wajib'] ?? false)); @endphp
+                                    @if (\App\Support\AturanBuktiBagianKustom::dipakai($aturanPratinjau))
+                                        <div class="fhint" style="margin:0 0 4px">Bukti dukung: {{ \App\Support\AturanBuktiBagianKustom::ringkasan($aturanPratinjau) }}</div>
+                                        <div class="filechip ok" style="font-size:11px"><span class="nm">📄 contoh-bukti-dukung.{{ $aturanPratinjau['format'][0] ?? 'pdf' }}</span></div>
                                     @endif
                                 </div>
                             </div>
@@ -531,6 +622,25 @@
             <p style="color:var(--muted);font-size:13px">Belum ada bagian kustom. Tambahkan lewat form di atas.</p>
         @endforelse
     </div>
+
+    {{-- Peringatan meninggalkan halaman saat ada pengaturan yang belum disimpan
+         (penanda data-belum-disimpan dirender server dari perbandingan form vs database). --}}
+    @script
+    <script>
+        if (! window.__jagaBagianKustomBelumDisimpan) {
+            window.__jagaBagianKustomBelumDisimpan = true;
+            const adaPerubahan = () => document.querySelector('[data-belum-disimpan="1"]') !== null;
+            window.addEventListener('beforeunload', (e) => {
+                if (adaPerubahan()) { e.preventDefault(); e.returnValue = ''; }
+            });
+            document.addEventListener('livewire:navigate', (e) => {
+                if (adaPerubahan() && ! confirm('Ada perubahan pengaturan Bagian Kustom yang belum disimpan. Tinggalkan halaman ini dan buang perubahannya?')) {
+                    e.preventDefault();
+                }
+            });
+        }
+    </script>
+    @endscript
 
     <x-confirm-modal :show="$pendingHapusId !== null" title="Hapus Bagian?" :message="'Hapus bagian \''.$pendingHapusNama.'\'?'">
         <button type="button" class="btn btn-ghost" wire:click="batalkanHapus" wire:loading.attr="disabled" wire:target="hapus">Batal</button>

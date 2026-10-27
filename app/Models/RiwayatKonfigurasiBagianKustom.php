@@ -34,6 +34,9 @@ class RiwayatKonfigurasiBagianKustom extends Model
         'label_uraian' => 'label uraian',
         'frekuensi_wajib' => 'kewajiban isi',
         'bukti_wajib' => 'bukti wajib',
+        'aturan_bukti' => 'aturan bukti dukung',
+        'peran_pembaca' => 'peran pembaca',
+        'tampilan' => 'bentuk tampilan',
         'masuk_notula' => 'masuk notula',
         'judul_notula' => 'judul notula',
         'format_notula' => 'format notula',
@@ -111,6 +114,8 @@ class RiwayatKonfigurasiBagianKustom extends Model
                 'nama' => "nama \"{$lama}\" → \"{$baru}\"",
                 'peran' => 'peran → '.self::daftar($baru, fn ($p) => BagianKustom::NAMA_PERAN[$p] ?? $p),
                 'penempatan' => 'menu → '.self::daftar($baru, fn ($m) => MenuBagianKustom::label($m)),
+                'peran_pembaca' => 'peran pembaca → '.self::daftar($baru, fn ($p) => BagianKustom::NAMA_PERAN[$p] ?? $p),
+                'aturan_bukti' => 'aturan bukti dukung → '.\App\Support\AturanBuktiBagianKustom::ringkasan(\App\Support\AturanBuktiBagianKustom::normalkan(is_array($baru) ? $baru : null, (bool) ($sesudah['bukti_wajib'] ?? false))),
                 default => $label.' diubah',
             };
         }
@@ -159,7 +164,7 @@ class RiwayatKonfigurasiBagianKustom extends Model
             }
 
             $berubah = collect(['label', 'tipe', 'opsi', 'wajib', 'mulai_tahun', 'mulai_triwulan', 'satuan', 'desimal', 'pemisah', 'ribuan',
-                'subbagian', 'petunjuk', 'placeholder', 'min', 'maks', 'panjang_min', 'panjang_maks', 'pesan', 'format_tanggal'])
+                'subbagian', 'petunjuk', 'placeholder', 'min', 'maks', 'panjang_min', 'panjang_maks', 'pesan', 'format_tanggal', 'variabel', 'ringkasan'])
                 ->filter(fn ($f) => ($l[$f] ?? null) != ($k[$f] ?? null))
                 ->values()
                 ->all();
