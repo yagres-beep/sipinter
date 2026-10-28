@@ -558,7 +558,8 @@ class BagianKustomLanjutanTest extends TestCase
         $sumber = $this->bagian(['aturan_bukti' => ['mode' => 'opsional', 'format' => ['png']], 'tampilan' => ['isian' => 'tabel', 'baca' => 'tabel'], 'peran_pembaca' => ['kepala']]);
         $this->poin($sumber, 4, 'Data sumber');
 
-        Livewire::test(BagianKustomManager::class)->call('duplikasi', $sumber->id)->call('tambah')->assertHasNoErrors();
+        // Duplikasi langsung membuat bagian baru (tanpa harus menekan "Tambah Bagian").
+        Livewire::test(BagianKustomManager::class)->call('duplikasi', $sumber->id)->assertHasNoErrors();
 
         $salinan = BagianKustom::where('id', '!=', $sumber->id)->sole();
         $this->assertNotSame($sumber->kode, $salinan->kode);

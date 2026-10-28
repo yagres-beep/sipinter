@@ -45,6 +45,13 @@ class BagianKustomManager extends Component
      */
     public ?int $sumberSalinId = null;
 
+    /**
+     * Deskripsi yang diisikan otomatis dari bagian sumber (null = tidak ada). Dipakai
+     * untuk membersihkannya lagi bila pilihan diganti ke "Pengaturan kosong" atau ke
+     * sumber lain — deskripsi yang diketik sendiri oleh pengguna tidak disentuh.
+     */
+    public ?string $deskripsiDariSumber = null;
+
     /** Kode internal bagian baru (opsional; kosong = dibentuk dari nama). */
     public string $kodeBaru = '';
 
@@ -176,26 +183,172 @@ class BagianKustomManager extends Component
     }
 
     /**
-     * Isi form Tambah dengan pengaturan bagian ini (identitas baru, tanpa data). Bagian
-     * baru baru dibuat setelah Tim SAKIP memeriksa dan menekan "Tambah Bagian".
+     * Duplikasi: langsung membuat bagian BARU dari pengaturan bagian ini (identitas,
+     * kode, dan folder Drive baru; tanpa isian, bukti, maupun riwayatnya). Salinan
+     * dibuat NONAKTIF supaya tidak langsung muncul ke pengisi sebelum diperiksa, lalu
+     * editornya dibuka untuk diganti nama/disesuaikan. Form Tambah tidak disentuh.
      */
     public function duplikasi(int $id): void
     {
         $sumber = BagianKustom::findOrFail($id);
+        $nama = $this->namaSalinanUnik($sumber->nama);
 
-        $nama = $sumber->nama.' (salinan)';
+        $peran = array_values($sumber->peran ?? []) ?: [BagianKustom::PERAN_KETUA_TIM];
+        $penempatan = array_values($sumber->penempatan ?? []) ?: [MenuBagianKustom::PENGISIAN];
+
+        $this->resetErrorBag('duplikasi');
+
+        try {
+            $bagian = $this->buatBagianBaru([
+                'kode' => null,
+                'nama' => $nama,
+                'deskripsi' => $sumber->deskripsi,
+                'peran' => $peran,
+                'penempatan' => $penempatan,
+                'frekuensi_wajib' => (string) $sumber->frekuensi_wajib,
+                'aktif' => false,
+            ], $sumber);
+        } catch (\Throwable $e) {
+            report($e);
+            $this->addError('duplikasi', 'Duplikasi "'.$sumber->nama.'" gagal, tidak ada bagian baru yang dibuat dan "'.$sumber->nama.'" tidak berubah. Coba lagi; bila berulang, laporkan ke pengelola aplikasi.');
+
+            return;
+        }
+
+        $this->setelahDibuat($bagian, 'dasar');
+
+        session()->flash('status', 'Bagian "'.$bagian->nama.'" dibuat dari duplikasi "'.$sumber->nama.'" dalam keadaan NONAKTIF (belum tampil ke pengisi). Ganti nama dan periksa pengaturannya di bawah, simpan, lalu klik "Aktifkan kembali" bila sudah siap. Isian, bukti, dan riwayat "'.$sumber->nama.'" tidak ikut disalin.');
+    }
+
+    /** Setelah bagian baru tersimpan: muat form-nya, buka editornya, segarkan daftar lain. */
+    protected function setelahDibuat(BagianKustom $bagian, string $tab): void
+    {
+        BagianKustom::lupakanCache();
+        $this->muatForm($bagian->id);
+        $this->bukaId = $bagian->id;
+        $this->tab = $tab;
+        $this->detailId = null;
+        $this->beritahuDaftar();
+    }
+
+    /** Daftar "Seluruh Bagian" (komponen lain di halaman yang sama) ikut diperbarui. */
+    protected function beritahuDaftar(): void
+    {
+        $this->dispatch('bagian-kustom-berubah');
+    }
+
+    /** Nama "X (salinan)", "X (salinan 2)", … yang belum dipakai bagian lain. */
+    protected function namaSalinanUnik(string $namaSumber): string
+    {
+        $nama = $namaSumber.' (salinan)';
         $n = 2;
 
         while (BagianKustom::whereRaw('LOWER(nama) = ?', [mb_strtolower($nama)])->exists()) {
-            $nama = $sumber->nama.' (salinan '.$n++.')';
+            $nama = $namaSumber.' (salinan '.$n++.')';
         }
 
-        $this->deskripsiBaru = '';
-        $this->kodeBaru = '';
-        $this->namaBaru = $nama;
-        $this->sumberSalinId = $sumber->id;
-        $this->updatedSumberSalinId($sumber->id);
-        $this->resetErrorBag(['namaBaru', 'kodeBaru']);
+        return $nama;
+    }
+
+    /**
+     * Buat bagian baru (kosong atau salinan $sumber) + riwayat + kategori folder dalam
+     * SATU transaksi: bila salah satu gagal, tidak ada yang tersimpan. Pengaturan sumber
+     * selalu dibaca ulang dari database (tidak dari isian browser).
+     *
+     * @param  array<string, mixed>  $identitas  kode, nama, deskripsi, peran, penempatan, frekuensi_wajib, aktif
+     */
+    protected function buatBagianBaru(array $identitas, ?BagianKustom $sumber): BagianKustom
+    {
+        return $this->dalamTransaksi(function () use ($identitas, $sumber) {
+            $sumber = $sumber ? BagianKustom::whereKey($sumber->id)->firstOrFail() : null;
+
+            $konfigurasi = $sumber
+                ? $this->konfigurasiSalinan($sumber, $identitas['peran'], $identitas['penempatan'])
+                : [
+                    // Bagian baru dari kosong: bukti wajib bila memang didukung (perilaku lama).
+                    'bukti_wajib' => $this->bukti_wajib_boleh($identitas['peran'], $identitas['penempatan']),
+                    'aturan_bukti' => null, 'peran_pembaca' => null, 'hak_aksi' => null, 'tampilan' => null,
+                    'masuk_notula' => true, 'label_uraian' => null, 'format_notula' => null,
+                    'kolom' => [], 'subbagian' => [],
+                ];
+
+            $bagian = BagianKustom::create($identitas + $konfigurasi + [
+                // Judul notula TIDAK disalin: kosong = memakai nama bagian baru.
+                'judul_notula' => null,
+                'urutan' => ((int) BagianKustom::max('urutan')) + 1,
+            ]);
+
+            RiwayatKonfigurasiBagianKustom::catat(
+                $bagian,
+                $bagian->nama,
+                $sumber ? 'salin' : 'buat',
+                null,
+                $bagian->potretDefinisi(),
+                $sumber ? 'Dibuat dengan menyalin pengaturan "'.$sumber->nama.'" (tanpa isian, bukti, maupun riwayatnya)' : 'Dibuat dari kosong',
+            );
+
+            FolderConfig::tambahKategoriDariBagianKustom($bagian->nama);
+
+            return $bagian;
+        });
+    }
+
+    /**
+     * SATU-SATUNYA tempat yang menentukan pengaturan apa yang disalin dari bagian sumber
+     * — dipakai "Mulai dari: Salin pengaturan" maupun tombol Duplikasi. Hanya definisi:
+     * tidak pernah poin isian, bukti dukung/ID Drive, status verifikasi, atau riwayat.
+     *
+     * @param  array<int, string>  $peran  peran pengisi bagian baru
+     * @param  array<int, string>  $penempatan  menu bagian baru
+     * @return array<string, mixed>
+     */
+    protected function konfigurasiSalinan(BagianKustom $sumber, array $peran, array $penempatan): array
+    {
+        $subbagian = $this->subbagianSalinan($sumber);
+        $kolom = $this->kolomSalinan($sumber, array_column($subbagian, 'kunci'));
+        $format = $this->formatNotulaSalinan($sumber, $kolom);
+
+        // Peran pembaca hanya yang bukan pengisi dan masih bisa membuka salah satu menu.
+        $pembaca = array_values(array_filter(
+            array_diff($sumber->peran_pembaca ?? [], $peran),
+            fn ($p) => collect($penempatan)->contains(fn ($m) => in_array($p, MenuBagianKustom::peranDiizinkan($m), true))
+        ));
+
+        return [
+            // Aturan bukti eksplisit ikut sumber; aturan lama (NULL) hanya bila didukung peran & menu.
+            'bukti_wajib' => $sumber->aturan_bukti !== null
+                ? (bool) $sumber->bukti_wajib
+                : $this->bukti_wajib_boleh($peran, $penempatan) && (bool) $sumber->bukti_wajib,
+            'aturan_bukti' => $sumber->aturan_bukti,
+            'peran_pembaca' => $pembaca ?: null,
+            // Hak aksi ikut disalin hanya untuk peran pengisi yang sama; peran lain = penuh.
+            'hak_aksi' => is_array($sumber->hak_aksi)
+                ? (array_intersect_key($sumber->hak_aksi, array_flip($peran)) ?: null)
+                : null,
+            'tampilan' => $sumber->tampilan,
+            'masuk_notula' => (bool) $sumber->masuk_notula,
+            'label_uraian' => $sumber->label_uraian,
+            'format_notula' => $format,
+            'kolom' => $kolom,
+            'subbagian' => $subbagian,
+        ];
+    }
+
+    /**
+     * Format notula sumber, atau null (format standar) bila merujuk kolom yang tidak ikut
+     * disalin — supaya salinan tidak lahir dengan format yang tidak bisa disimpan.
+     *
+     * @param  array<int, array<string, mixed>>  $kolom
+     */
+    protected function formatNotulaSalinan(BagianKustom $sumber, array $kolom): ?string
+    {
+        $format = trim((string) $sumber->format_notula);
+
+        if ($format === '') {
+            return null;
+        }
+
+        return TemplateBagianKustom::variabelTidakDikenal($format, array_column($kolom, 'kunci')) === [] ? $format : null;
     }
 
     /**
@@ -385,8 +538,24 @@ class BagianKustomManager extends Component
     public function updatedSumberSalinId($nilai): void
     {
         $this->resetErrorBag('sumberSalinId');
+
+        // Deskripsi yang tadi diisikan otomatis dari sumber sebelumnya (bukan ketikan
+        // pengguna) ikut diganti/dibersihkan; ketikan pengguna dipertahankan.
+        $deskripsiOtomatis = trim($this->deskripsiBaru) === '' || $this->deskripsiBaru === $this->deskripsiDariSumber;
+
         if (blank($nilai)) {
+            // "Pengaturan kosong": kembalikan semua yang tadi dimuat dari sumber ke awal.
             $this->sumberSalinId = null;
+            $this->peranBaru = [BagianKustom::PERAN_KETUA_TIM];
+            $this->penempatanBaru = [MenuBagianKustom::PENGISIAN];
+            $this->frekuensiWajibBaru = BagianKustom::FREKUENSI_OPSIONAL;
+
+            if ($deskripsiOtomatis) {
+                $this->deskripsiBaru = '';
+            }
+
+            $this->deskripsiDariSumber = null;
+            $this->resetErrorBag(['peranBaru', 'penempatanBaru']);
 
             return;
         }
@@ -395,33 +564,43 @@ class BagianKustomManager extends Component
 
         if (! $sumber) {
             // Dibiarkan apa adanya supaya tambah() menolaknya lewat validasi exists.
-            $this->addError('sumberSalinId', 'Bagian sumber tidak ditemukan.');
+            $this->addError('sumberSalinId', 'Bagian sumber tidak ditemukan. Pilih bagian lain atau "Pengaturan kosong".');
 
             return;
         }
 
         $this->sumberSalinId = $sumber->id;
-        $this->peranBaru = array_values($sumber->peran ?? []);
-        $this->penempatanBaru = array_values($sumber->penempatan ?? []);
+        $this->peranBaru = array_values($sumber->peran ?? []) ?: [BagianKustom::PERAN_KETUA_TIM];
+        $this->penempatanBaru = array_values($sumber->penempatan ?? []) ?: [MenuBagianKustom::PENGISIAN];
         $this->frekuensiWajibBaru = (string) $sumber->frekuensi_wajib;
 
-        if (trim($this->deskripsiBaru) === '') {
+        if ($deskripsiOtomatis) {
             $this->deskripsiBaru = (string) $sumber->deskripsi;
+            $this->deskripsiDariSumber = $this->deskripsiBaru;
         }
+
+        $this->resetErrorBag(['peranBaru', 'penempatanBaru']);
     }
 
     /**
      * Kolom yang ikut disalin: hanya kolom AKTIF, dengan kunci yang sama (kunci hanya
      * berlaku di dalam satu bagian, jadi data dua bagian tidak pernah tercampur) dan
-     * tanpa periode mulai berlaku (bagian baru belum punya riwayat).
+     * tanpa periode mulai berlaku (bagian baru belum punya riwayat). Kolom yang menunjuk
+     * subbagian yang tidak ikut tersalin dipindah menjadi kolom langsung di bagian.
      *
+     * @param  array<int, string>|null  $kunciSubbagian  kunci subbagian yang ikut disalin
      * @return array<int, array<string, mixed>>
      */
-    protected function kolomSalinan(BagianKustom $sumber): array
+    protected function kolomSalinan(BagianKustom $sumber, ?array $kunciSubbagian = null): array
     {
+        $kunciSubbagian ??= array_column($this->subbagianSalinan($sumber), 'kunci');
+
         return collect($sumber->kolomList())
             ->filter(fn ($k) => $sumber->kolomBerlakuDi(['mulai_tahun' => null] + $k, null, null))
             ->map(fn ($k) => ['mulai_tahun' => null, 'mulai_triwulan' => null] + $k)
+            ->map(fn ($k) => filled($k['subbagian'] ?? null) && ! in_array($k['subbagian'], $kunciSubbagian, true)
+                ? array_merge($k, ['subbagian' => null])
+                : $k)
             ->values()
             ->all();
     }
@@ -449,13 +628,25 @@ class BagianKustomManager extends Component
             return null;
         }
 
+        $kolom = $this->kolomSalinan($sumber);
+        $formatSalinan = $this->formatNotulaSalinan($sumber, $kolom);
+
         return [
             'nama' => $sumber->nama,
-            'kolom' => $this->kolomSalinan($sumber),
-            'kolom_nonaktif' => count($sumber->kolomList()) - count($this->kolomSalinan($sumber)),
+            'peran' => $sumber->labelPeran(),
+            'menu' => $sumber->labelPenempatan(),
+            'frekuensi' => $sumber->labelFrekuensi(),
+            'pembaca' => $sumber->labelPeranPembaca(),
+            'hak_aksi' => RiwayatKonfigurasiBagianKustom::ringkasHak($sumber->matriksAksi()),
+            'tampilan' => 'isian '.mb_strtolower(BagianKustom::TAMPILAN_ISIAN[$sumber->tampilanIsian()]).', penyajian '.mb_strtolower(BagianKustom::TAMPILAN_BACA[$sumber->tampilanBaca()]),
+            'kolom' => $kolom,
+            'kolom_nonaktif' => count($sumber->kolomList()) - count($kolom),
             'subbagian' => array_column($this->subbagianSalinan($sumber), 'nama'),
             'label_uraian' => $sumber->labelUraianEfektif(),
-            'notula' => $sumber->masuk_notula ? 'Masuk notula, format: '.$sumber->formatNotulaEfektif() : 'Tidak masuk notula',
+            'notula' => $sumber->masuk_notula
+                ? 'Masuk notula, format: '.($formatSalinan ?? TemplateBagianKustom::FORMAT_STANDAR)
+                : 'Tidak masuk notula',
+            'format_diganti' => filled($sumber->format_notula) && $formatSalinan === null,
             'bukti' => (bool) $sumber->bukti_wajib,
             'aturan_bukti' => AturanBuktiBagianKustom::ringkasan($sumber->aturanBukti()),
             'poin_sumber' => (int) $sumber->poin_count,
@@ -500,6 +691,7 @@ class BagianKustomManager extends Component
         });
 
         BagianKustom::lupakanCache();
+        $this->beritahuDaftar();
     }
 
     /**
@@ -553,10 +745,10 @@ class BagianKustomManager extends Component
             return;
         }
 
-        // Bagian baru, riwayatnya, dan kategori foldernya dibuat dalam satu transaksi:
-        // bila salah satu gagal, tidak ada yang tersimpan.
-        $bagian = $this->dalamTransaksi(function () use ($sumber, $peran, $penempatan) {
-            $bagian = BagianKustom::create([
+        // Bagian baru, riwayatnya, dan kategori foldernya dibuat dalam satu transaksi
+        // (buatBagianBaru): bila salah satu gagal, tidak ada yang tersimpan.
+        try {
+            $bagian = $this->buatBagianBaru([
                 // Kosong = dibentuk dari nama oleh model (unik). Tetap walau nama diganti.
                 'kode' => trim($this->kodeBaru) ?: null,
                 'nama' => trim($this->namaBaru),
@@ -564,52 +756,21 @@ class BagianKustomManager extends Component
                 'peran' => $peran,
                 'penempatan' => $penempatan,
                 'frekuensi_wajib' => $this->frekuensiWajibBaru,
-                // Bagian baru dari kosong: bukti wajib bila memang didukung (perilaku lama).
-                // Salinan: ikut pengaturan sumber, tetap hanya bila didukung peran & menu.
-                'bukti_wajib' => $sumber && $sumber->aturan_bukti !== null
-                    ? (bool) $sumber->bukti_wajib
-                    : $this->bukti_wajib_boleh($peran, $penempatan) && ($sumber ? (bool) $sumber->bukti_wajib : true),
-                // Aturan bukti, peran pembaca, dan bentuk tampilan ikut disalin (definisi saja).
-                'aturan_bukti' => $sumber?->aturan_bukti,
-                'peran_pembaca' => $sumber ? (array_values(array_diff($sumber->peran_pembaca ?? [], $peran)) ?: null) : null,
-                // Hak aksi ikut disalin hanya untuk peran pengisi yang sama; peran lain = penuh.
-                'hak_aksi' => $sumber && is_array($sumber->hak_aksi)
-                    ? (array_intersect_key($sumber->hak_aksi, array_flip($peran)) ?: null)
-                    : null,
-                'tampilan' => $sumber?->tampilan,
-                'masuk_notula' => $sumber ? (bool) $sumber->masuk_notula : true,
-                'label_uraian' => $sumber?->label_uraian,
-                // Judul notula TIDAK disalin: kosong = memakai nama bagian baru.
-                'format_notula' => $sumber?->format_notula,
-                'kolom' => $sumber ? $this->kolomSalinan($sumber) : [],
-                'subbagian' => $sumber ? $this->subbagianSalinan($sumber) : [],
                 'aktif' => true,
-                'urutan' => ((int) BagianKustom::max('urutan')) + 1,
-            ]);
+            ], $sumber);
+        } catch (\Throwable $e) {
+            report($e);
+            $this->addError('tambah', 'Bagian baru gagal dibuat — tidak ada yang tersimpan'.($sumber ? ' dan "'.$sumber->nama.'" tidak berubah' : '').'. Coba lagi; bila berulang, laporkan ke pengelola aplikasi.');
 
-            RiwayatKonfigurasiBagianKustom::catat(
-                $bagian,
-                $bagian->nama,
-                $sumber ? 'salin' : 'buat',
-                null,
-                $bagian->potretDefinisi(),
-                $sumber ? 'Dibuat dengan menyalin pengaturan "'.$sumber->nama.'" (tanpa isian, bukti, maupun riwayatnya)' : 'Dibuat dari kosong',
-            );
+            return;
+        }
 
-            FolderConfig::tambahKategoriDariBagianKustom($bagian->nama);
-
-            return $bagian;
-        });
-
-        $this->reset(['namaBaru', 'deskripsiBaru', 'sumberSalinId', 'kodeBaru']);
+        $this->reset(['namaBaru', 'deskripsiBaru', 'sumberSalinId', 'kodeBaru', 'deskripsiDariSumber']);
         $this->peranBaru = [BagianKustom::PERAN_KETUA_TIM];
         $this->penempatanBaru = [MenuBagianKustom::PENGISIAN];
         $this->frekuensiWajibBaru = BagianKustom::FREKUENSI_OPSIONAL;
 
-        BagianKustom::lupakanCache();
-        $this->muatForm($bagian->id);
-        $this->bukaId = $bagian->id;
-        $this->tab = 'isian';
+        $this->setelahDibuat($bagian, 'isian');
 
         session()->flash('status', $sumber
             ? 'Bagian "'.$bagian->nama.'" dibuat dari salinan pengaturan "'.$sumber->nama.'". Periksa kolom, peran, dan notula di bawah ini — isian milik "'.$sumber->nama.'" tidak ikut disalin.'
@@ -1235,6 +1396,7 @@ class BagianKustomManager extends Component
         $bagian->refresh();
         BagianKustom::lupakanCache();
         $this->muatForm($id);
+        $this->beritahuDaftar();
 
         session()->flash('status', 'Perubahan "'.$bagian->nama.'" disimpan. Isian yang sudah tersimpan tetap ada di notula.'
             .($konteksDilepas !== [] ? ' Perhatian: poin yang sudah diisi di '.implode(', ', $konteksDilepas).' tetap tersimpan, tetapi tidak tampil lagi untuk diisi.' : '')
@@ -1382,6 +1544,7 @@ class BagianKustomManager extends Component
         }
 
         BagianKustom::lupakanCache();
+        $this->beritahuDaftar();
     }
 
     public function confirmHapus(int $id): void
@@ -1441,6 +1604,7 @@ class BagianKustomManager extends Component
         $this->batalkanHapus();
 
         BagianKustom::lupakanCache();
+        $this->beritahuDaftar();
         session()->flash('status', 'Bagian kustom dihapus.');
     }
 

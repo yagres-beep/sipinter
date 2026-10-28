@@ -9,6 +9,7 @@ use App\Models\RiwayatKonfigurasiBagianKustom;
 use App\Support\RegistriBagian;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Locked;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 /**
@@ -40,6 +41,13 @@ class DaftarBagianSipinter extends Component
             abort(403);
         }
     }
+
+    /**
+     * Dipicu BagianKustomManager setelah bagian kustom dibuat, diduplikasi, diubah,
+     * diurutkan, diaktifkan/nonaktifkan, atau dihapus — cukup render ulang daftar.
+     */
+    #[On('bagian-kustom-berubah')]
+    public function segarkan(): void {}
 
     public function lihat(string $kode): void
     {

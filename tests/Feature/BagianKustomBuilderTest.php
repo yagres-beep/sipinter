@@ -142,7 +142,7 @@ class BagianKustomBuilderTest extends TestCase
         $this->assertEquals($sebelum, $b->fresh()->updated_at);
     }
 
-    public function test_duplikasi_mengisi_form_tambah_dan_tidak_menyalin_isian(): void
+    public function test_duplikasi_langsung_membuat_bagian_baru_tanpa_menyalin_isian(): void
     {
         $this->actingAsPeran('Tim SAKIP');
         $iku = $this->iku();
@@ -156,13 +156,15 @@ class BagianKustomBuilderTest extends TestCase
         BagianKustomPoin::create(['bagian_kustom_id' => $sumber->id, 'iku_id' => $iku->id, 'periode_id' => $this->periode(2026, 4)->id, 'teks' => 'Risiko', 'status_verifikasi' => 'terverifikasi']);
 
         Livewire::test(BagianKustomManager::class)
+            ->set('namaBaru', 'Ketikan pengguna')
             ->call('duplikasi', $sumber->id)
-            ->assertSet('namaBaru', 'Manajemen Risiko (salinan)')
-            ->assertSet('sumberSalinId', $sumber->id)
-            ->call('tambah')
-            ->assertHasNoErrors();
+            ->assertHasNoErrors()
+            // Form Tambah tidak disentuh oleh Duplikasi.
+            ->assertSet('namaBaru', 'Ketikan pengguna')
+            ->assertSet('sumberSalinId', null);
 
         $baru = BagianKustom::where('nama', 'Manajemen Risiko (salinan)')->firstOrFail();
+        $this->assertFalse($baru->aktif, 'salinan dibuat nonaktif sampai diperiksa');
         $this->assertNotSame($sumber->id, $baru->id);
         $this->assertSame('manajemen_risiko_salinan', $baru->kode);
         $this->assertSame(['sub_1'], array_column($baru->subbagianList(), 'kunci'), 'subbagian nonaktif tidak disalin');

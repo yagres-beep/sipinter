@@ -107,7 +107,10 @@ class RiwayatKonfigurasiTransaksiTest extends TestCase
         $this->riwayatGagal($gagal);
         $polaAwal = FolderConfig::current()->pola_json;
 
-        $this->harusGagal(fn () => Livewire::test(BagianKustomManager::class)->set('namaBaru', 'Bagian Baru')->call('tambah'));
+        // Kegagalan dicatat (report) dan ditampilkan sebagai pesan, tanpa pesan berhasil.
+        Livewire::test(BagianKustomManager::class)->set('namaBaru', 'Bagian Baru')->call('tambah')
+            ->assertHasErrors('tambah')
+            ->assertDontSee('dibuat. Atur kolom isian');
 
         $this->assertSame(0, BagianKustom::count());
         $this->assertEquals($polaAwal, FolderConfig::current()->fresh()->pola_json);

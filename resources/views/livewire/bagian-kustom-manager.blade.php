@@ -37,7 +37,9 @@
             <div class="info" style="font-size:12px">
                 <b>Yang akan disalin dari "{{ $ringkasanSalin['nama'] }}"</b> (bisa diubah setelah dibuat):
                 <ul style="margin:6px 0 0;padding-left:18px;line-height:1.6">
-                    <li>Peran, menu, dan kewajiban isi — sudah diisikan ke form di bawah.</li>
+                    <li>Peran pengisi ({{ $ringkasanSalin['peran'] }}), menu ({{ $ringkasanSalin['menu'] }}), dan kapan wajib diisi ({{ $ringkasanSalin['frekuensi'] }}) — sudah diisikan ke form di bawah dan masih bisa diubah.</li>
+                    <li>Peran pembaca: {{ $ringkasanSalin['pembaca'] }}. Hak aksi: {{ $ringkasanSalin['hak_aksi'] }}.</li>
+                    <li>Tampilan: {{ $ringkasanSalin['tampilan'] }}.</li>
                     <li>Label uraian: {{ $ringkasanSalin['label_uraian'] }}.</li>
                     <li>Kolom isian ({{ count($ringkasanSalin['kolom']) }}):
                         @forelse ($ringkasanSalin['kolom'] as $k)
@@ -50,9 +52,12 @@
                         @endif
                     </li>
                     <li>Subbagian ({{ count($ringkasanSalin['subbagian']) }}): {{ implode(', ', $ringkasanSalin['subbagian']) ?: 'tidak ada' }}.</li>
-                    <li>Notula: {{ $ringkasanSalin['notula'] }} (judul notula memakai nama bagian baru).</li>
+                    <li>Notula: {{ $ringkasanSalin['notula'] }} (judul notula memakai nama bagian baru){{ $ringkasanSalin['format_diganti'] ? ' — format notula sumber memakai kolom yang tidak ikut disalin, jadi salinan memakai format standar' : '' }}.</li>
                     <li>Bukti dukung: {{ $ringkasanSalin['aturan_bukti'] }}.</li>
                 </ul>
+                @if (count($ringkasanSalin['kolom']) === 0 && count($ringkasanSalin['subbagian']) === 0)
+                    <div style="margin-top:6px">ℹ️ "{{ $ringkasanSalin['nama'] }}" belum punya kolom isian maupun subbagian, jadi bagian baru juga dimulai hanya dengan isian Uraian. Kolom bisa ditambahkan setelah dibuat.</div>
+                @endif
                 <div style="margin-top:6px"><b>Tidak disalin:</b> {{ $ringkasanSalin['poin_sumber'] }} poin isian, bukti dukung, status verifikasi, dan riwayat milik "{{ $ringkasanSalin['nama'] }}". Bagian baru mulai tanpa data.</div>
             </div>
         @endif
@@ -82,6 +87,9 @@
                 <option value="akhir_triwulan">Wajib hanya bulan terakhir triwulan</option>
             </select>
         </div>
+        @error('tambah')
+            <div class="info red" role="alert" style="margin-bottom:8px">⚠️ {{ $message }}</div>
+        @enderror
         <div class="btn-row">
             <button type="button" class="btn btn-primary" wire:click="tambah" wire:loading.attr="disabled" wire:target="tambah">
                 <span wire:loading.remove wire:target="tambah">＋ Tambah Bagian</span>
@@ -141,6 +149,9 @@
         @error('hapus')
             <div style="color:var(--red);font-size:11.5px;margin-bottom:10px">{{ $message }}</div>
         @enderror
+        @error('duplikasi')
+            <div class="info red" role="alert" style="margin-bottom:10px">⚠️ {{ $message }}</div>
+        @enderror
 
         @forelse ($daftarTampil as $i => $bagian)
             @php
@@ -181,7 +192,10 @@
                             {{ $bukaId === $bagian->id ? '✕ Tutup' : '✎ Edit' }}
                         </button>
                         <button type="button" class="btn {{ $detailId === $bagian->id ? 'btn-primary' : 'btn-ghost' }} btn-sm" wire:click="lihatDetail({{ $bagian->id }})" wire:loading.attr="disabled" wire:target="lihatDetail({{ $bagian->id }})">👁 Detail</button>
-                        <button type="button" class="btn btn-ghost btn-sm" wire:click="duplikasi({{ $bagian->id }})" x-on:click="$nextTick(() => document.getElementById('form-tambah-bagian')?.scrollIntoView({ behavior: 'smooth' }))" wire:loading.attr="disabled" wire:target="duplikasi({{ $bagian->id }})" title="Isi form Tambah dengan pengaturan bagian ini — tanpa isian, bukti, maupun riwayatnya">⧉ Duplikasi</button>
+                        <button type="button" class="btn btn-ghost btn-sm" wire:click="duplikasi({{ $bagian->id }})" wire:confirm="Buat bagian baru dari pengaturan &quot;{{ $bagian->nama }}&quot;? Salinan dibuat NONAKTIF (belum tampil ke pengisi) dengan nama &quot;… (salinan)&quot; yang bisa diganti. Isian, bukti, dan riwayat tidak ikut disalin." wire:loading.attr="disabled" wire:target="duplikasi({{ $bagian->id }})" title="Buat bagian baru dari pengaturan bagian ini — tanpa isian, bukti, maupun riwayatnya">
+                            <span wire:loading.remove wire:target="duplikasi({{ $bagian->id }})">⧉ Duplikasi</span>
+                            <span wire:loading wire:target="duplikasi({{ $bagian->id }})"><i class="spin"></i> Menduplikasi…</span>
+                        </button>
                         <button type="button" class="btn btn-ghost btn-sm" wire:click="toggleAktif({{ $bagian->id }}, {{ $bagian->aktif ? 'false' : 'true' }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="toggleAktif" @if ($bagian->aktif) wire:confirm="Nonaktifkan bagian &quot;{{ $bagian->nama }}&quot;? Bagian tidak lagi tampil untuk diisi. Isian, bukti, dan riwayat yang sudah ada TIDAK dihapus dan tetap masuk notula." @endif>{{ $bagian->aktif ? 'Nonaktifkan' : 'Aktifkan kembali' }}</button>
                         @if ($bagian->poin_count === 0)
                             <button type="button" class="btn btn-red btn-sm" wire:click="confirmHapus({{ $bagian->id }})" wire:loading.attr="disabled" wire:target="confirmHapus({{ $bagian->id }})">🗑 Hapus</button>
