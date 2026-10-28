@@ -201,6 +201,7 @@
                             <div><span style="color:var(--muted)">Menu:</span> {{ $detail->labelPenempatan() }}</div>
                             <div><span style="color:var(--muted)">Periode pengisian:</span> {{ $detail->labelFrekuensi() }}</div>
                             <div><span style="color:var(--muted)">Peran pembaca (baca-saja):</span> {{ $detail->labelPeranPembaca() }}</div>
+                            <div><span style="color:var(--muted)">Hak aksi:</span> {{ \App\Models\RiwayatKonfigurasiBagianKustom::ringkasHak($detail->matriksAksi()) }}</div>
                             <div><span style="color:var(--muted)">Bukti dukung:</span> {{ \App\Support\AturanBuktiBagianKustom::ringkasan($detail->aturanBukti()) }}{{ $detail->aturanBukti()['diatur'] ? '' : ' (aturan lama: hanya di Isian Kegiatan)' }}</div>
                             <div><span style="color:var(--muted)">Tampilan:</span> isian {{ mb_strtolower(\App\Models\BagianKustom::TAMPILAN_ISIAN[$detail->tampilanIsian()]) }}, penyajian {{ mb_strtolower(\App\Models\BagianKustom::TAMPILAN_BACA[$detail->tampilanBaca()]) }}</div>
                             <div><span style="color:var(--muted)">Notula:</span> {{ $detail->masuk_notula ? 'Masuk, judul "'.$detail->judulNotulaEfektif().'"' : 'Tidak masuk' }}</div>
@@ -299,6 +300,47 @@
                                 </div>
                                 @error("form.{$bagian->id}.peran_pembaca")<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>@enderror
                                 <div class="fhint" style="margin-top:4px">Pembaca melihat isian semua pengisi bagian ini (beserta bukti dukungnya) di menu penempatan yang bisa dibukanya.</div>
+                            </div>
+
+                            {{-- Matriks hak aksi per peran pengisi. Diperiksa ulang di server pada
+                                 setiap aksi (IsianBagianKustom, PengisianKegiatan). --}}
+                            <div class="field" data-matriks-hak="{{ $bagian->id }}">
+                                <label>Hak akses per peran</label>
+                                <div style="overflow-x:auto;max-width:100%">
+                                    <table style="border-collapse:collapse;font-size:12.5px;min-width:520px">
+                                        <thead>
+                                            <tr style="text-align:center;color:var(--muted)">
+                                                <th scope="col" style="text-align:left;padding:4px 8px;border-bottom:1px solid var(--line)">Peran</th>
+                                                <th scope="col" style="padding:4px 8px;border-bottom:1px solid var(--line)">Lihat</th>
+                                                @foreach (\App\Models\BagianKustom::AKSI as $labelAksi)
+                                                    <th scope="col" style="padding:4px 8px;border-bottom:1px solid var(--line)">{{ $labelAksi }}</th>
+                                                @endforeach
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach ($namaPeran as $nilai => $label)
+                                                @php
+                                                    $pengisi = in_array($nilai, $f['peran'] ?? [], true);
+                                                    $pembaca = ! $pengisi && in_array($nilai, $f['peran_pembaca'] ?? [], true);
+                                                @endphp
+                                                <tr style="text-align:center" wire:key="hak-{{ $bagian->id }}-{{ $nilai }}">
+                                                    <th scope="row" style="text-align:left;padding:4px 8px;border-bottom:1px solid var(--line2);font-weight:600">{{ $label }}</th>
+                                                    <td style="padding:4px 8px;border-bottom:1px solid var(--line2)">{{ $pengisi ? '✓ isi' : ($pembaca ? '✓ baca' : '—') }}</td>
+                                                    @foreach (\App\Models\BagianKustom::AKSI as $aksi => $labelAksi)
+                                                        <td style="padding:4px 8px;border-bottom:1px solid var(--line2)">
+                                                            @if ($pengisi)
+                                                                <input type="checkbox" aria-label="{{ $label }}: {{ $labelAksi }}" wire:model.live="form.{{ $bagian->id }}.hak_aksi.{{ $nilai }}.{{ $aksi }}">
+                                                            @else
+                                                                <span style="color:var(--faint)" title="Hanya peran pengisi yang punya aksi">—</span>
+                                                            @endif
+                                                        </td>
+                                                    @endforeach
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="fhint" style="margin-top:4px">Lihat diatur lewat peran pengisi dan peran pembaca di atas. Aksi lain hanya untuk peran pengisi, dan semuanya diperiksa di server. Menghapus centang tidak menghapus data yang sudah ada. Di Isian Kegiatan, poin tidak pernah dihapus dan pengajuan/verifikasi tetap mengikuti alur Isian Kegiatan.</div>
                             </div>
 
                         {{-- TAB: BUKTI DUKUNG --}}

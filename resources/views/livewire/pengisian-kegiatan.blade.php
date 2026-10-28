@@ -224,17 +224,19 @@
     </div>
 
     {{-- Bagian 2–5 & bagian kustom terkunci selama IKU belum dipilih — tombolnya tetap
-         menggulir ke judul bagian (yang menampilkan pesan kunci), hanya diberi tanda 🔒.
-         Judul bagian kustom ikut tersembunyi selama IKU belum dipilih, begitu pula
-         tombolnya. --}}
+         tampil dan menggulir ke judul bagian (yang menampilkan pesan kunci), hanya diberi
+         tanda 🔒. Keberadaan menu TIDAK bergantung pada IKU maupun data isian: bagian
+         kustom aktif selalu terdaftar di sini sejak halaman dibuka. --}}
     <nav class="nav-bagian" x-ref="daftar" aria-label="Lompat ke bagian isian">
         @php
+            // Label bagian bawaan bisa diganti Tim SAKIP (Data Master > Pengelolaan Bagian);
+            // id anchor, urutan, dan logika bagian tetap dari kode.
             $navBagian = [
-                ['id' => 'bagian-iku', 'n' => '1', 'label' => 'IKU', 'judul' => 'Indikator Kinerja (IKU)', 'butuhIku' => false],
-                ['id' => 'bagian-kegiatan', 'n' => '2', 'label' => 'Kegiatan', 'judul' => 'Kegiatan', 'butuhIku' => true],
-                ['id' => 'bagian-kendala', 'n' => '3', 'label' => 'Kendala & Solusi', 'judul' => 'Kendala & Solusi', 'butuhIku' => true],
-                ['id' => 'bagian-evaluasi-rtl', 'n' => '4', 'label' => 'Evaluasi RTL', 'judul' => 'Evaluasi RTL Triwulan Sebelumnya', 'butuhIku' => true],
-                ['id' => 'bagian-rtl', 'n' => '5', 'label' => 'RTL '.$labelBerikutnya, 'judul' => 'Rencana Tindak Lanjut ('.$labelBerikutnya.')', 'butuhIku' => true],
+                ['id' => 'bagian-iku', 'n' => '1', 'label' => $labelBawaan['iku']['label'], 'judul' => $labelBawaan['iku']['judul'], 'butuhIku' => false],
+                ['id' => 'bagian-kegiatan', 'n' => '2', 'label' => $labelBawaan['kegiatan']['label'], 'judul' => $labelBawaan['kegiatan']['judul'], 'butuhIku' => true],
+                ['id' => 'bagian-kendala', 'n' => '3', 'label' => $labelBawaan['kendala_solusi']['label'], 'judul' => $labelBawaan['kendala_solusi']['judul'], 'butuhIku' => true],
+                ['id' => 'bagian-evaluasi-rtl', 'n' => '4', 'label' => $labelBawaan['evaluasi_rtl']['label'], 'judul' => $labelBawaan['evaluasi_rtl']['judul'], 'butuhIku' => true],
+                ['id' => 'bagian-rtl', 'n' => '5', 'label' => $labelBawaan['rtl_triwulan']['label'].' '.$labelBerikutnya, 'judul' => $labelBawaan['rtl_triwulan']['judul'].' ('.$labelBerikutnya.')', 'butuhIku' => true],
             ];
         @endphp
         @foreach ($navBagian as $nav)
@@ -249,17 +251,19 @@
         @endforeach
         @foreach ($bagianKustomAktif as $bagian)
             <button type="button" class="nb-item" data-bagian="bagian-kustom-{{ $bagian->id }}" title="{{ $bagian->nama }}"
-                wire:key="nav-bagian-kustom-{{ $bagian->id }}" x-show="$wire.iku_id" @unless ($iku_id) x-cloak @endunless
+                wire:key="nav-bagian-kustom-{{ $bagian->id }}"
                 :class="{ on: aktif === 'bagian-kustom-{{ $bagian->id }}' }" :aria-current="aktif === 'bagian-kustom-{{ $bagian->id }}' ? 'true' : null"
                 @click="lompatKe('bagian-kustom-{{ $bagian->id }}')">
                 <span class="nb-n">🧩</span><span class="nb-teks">{{ $bagian->nama }}</span>
+                <span class="nb-kunci" x-show="! $wire.iku_id" @if ($iku_id) x-cloak @endif title="Pilih IKU terlebih dahulu">🔒</span>
             </button>
         @endforeach
     </nav>
     </div>
 
     <div class="card" x-data="{ ikuDipilih: {{ $iku_id ? 'true' : 'false' }} }">
-        <div class="sec" id="bagian-iku"><span class="n">1</span><span>IKU</span></div>
+        <div class="sec" id="bagian-iku"><span class="n">1</span><span>{{ $labelBawaan['iku']['judul'] }}</span></div>
+        @if ($labelBawaan['iku']['petunjuk'])<div class="info" data-petunjuk-bawaan="iku">ℹ️ {{ $labelBawaan['iku']['petunjuk'] }}</div>@endif
         <div class="field">
             <label>Indikator Kinerja (IKU) <span class="req">*</span></label>
             <select class="inp filled" data-abaikan-perubahan
@@ -296,7 +300,8 @@
             @endif
         </div>
 
-        <div class="sec" id="bagian-kegiatan" style="margin-top:20px"><span class="n">2</span><span>Kegiatan (bisa lebih dari satu)</span></div>
+        <div class="sec" id="bagian-kegiatan" style="margin-top:20px"><span class="n">2</span><span>{{ $labelBawaan['kegiatan']['judul'] }}</span></div>
+        @if ($labelBawaan['kegiatan']['petunjuk'])<div class="info" data-petunjuk-bawaan="kegiatan">ℹ️ {{ $labelBawaan['kegiatan']['petunjuk'] }}</div>@endif
 
         {{-- Tampil/sembunyi INSTAN di sisi klien (Alpine) begitu IKU dipilih — tidak
              menunggu balasan server, karena isi bagian ini (form kegiatan kosong)
@@ -954,7 +959,8 @@
         </div>
         </div>
 
-        <div class="sec" id="bagian-kendala" style="margin-top:20px"><span class="n">3</span><span>Kendala &amp; Solusi</span></div>
+        <div class="sec" id="bagian-kendala" style="margin-top:20px"><span class="n">3</span><span>{{ $labelBawaan['kendala_solusi']['judul'] }}</span></div>
+        @if ($labelBawaan['kendala_solusi']['petunjuk'])<div class="info" data-petunjuk-bawaan="kendala_solusi">ℹ️ {{ $labelBawaan['kendala_solusi']['petunjuk'] }}</div>@endif
 
         <div x-show="!ikuDipilih" class="info warn">🔒 Pilih IKU terlebih dahulu (Bagian 1) untuk mengisi kendala &amp; solusi.</div>
 
@@ -1068,7 +1074,8 @@
         </div>
         </div>
 
-        <div class="sec" id="bagian-evaluasi-rtl" style="margin-top:20px"><span class="n">4</span><span>Evaluasi RTL Triwulan Sebelumnya</span></div>
+        <div class="sec" id="bagian-evaluasi-rtl" style="margin-top:20px"><span class="n">4</span><span>{{ $labelBawaan['evaluasi_rtl']['judul'] }}</span></div>
+        @if ($labelBawaan['evaluasi_rtl']['petunjuk'])<div class="info" data-petunjuk-bawaan="evaluasi_rtl">ℹ️ {{ $labelBawaan['evaluasi_rtl']['petunjuk'] }}</div>@endif
 
         <div x-show="!ikuDipilih" class="info warn">🔒 Pilih IKU terlebih dahulu (Bagian 1) untuk melihat evaluasi RTL.</div>
 
@@ -1344,7 +1351,8 @@
             </div>
         </div>
 
-        <div class="sec" id="bagian-rtl" style="margin-top:20px"><span class="n">5</span><span>Rencana Tindak Lanjut ({{ $labelBerikutnya }})</span></div>
+        <div class="sec" id="bagian-rtl" style="margin-top:20px"><span class="n">5</span><span>{{ $labelBawaan['rtl_triwulan']['judul'] }} ({{ $labelBerikutnya }})</span></div>
+        @if ($labelBawaan['rtl_triwulan']['petunjuk'])<div class="info" data-petunjuk-bawaan="rtl_triwulan">ℹ️ {{ $labelBawaan['rtl_triwulan']['petunjuk'] }}</div>@endif
 
         <div x-show="!ikuDipilih" class="info warn">🔒 Pilih IKU terlebih dahulu (Bagian 1) untuk mengisi RTL.</div>
 
@@ -1475,9 +1483,15 @@
                 </div>
             @endunless
             </div>
+            </div>
+        </div>
 
+        {{-- Bagian kustom berdiri sendiri, BUKAN di dalam pembungkus Bagian 5 (RTL): judul,
+             deskripsi, dan aturannya (metadata) selalu tampil sejak halaman dibuka. Isian
+             bagian ini disimpan per IKU, jadi hanya formulirnya yang menunggu IKU dipilih —
+             tanpa IKU tidak ada data yang dimuat atau dibuat. --}}
             @foreach ($bagianKustomAktif as $bagian)
-                <div class="sec" id="bagian-kustom-{{ $bagian->id }}" style="margin-top:20px"><span class="n">🧩</span><span>{{ $bagian->nama }}</span></div>
+                <div class="sec" id="bagian-kustom-{{ $bagian->id }}" wire:key="sec-bagian-kustom-{{ $bagian->id }}" style="margin-top:20px"><span class="n">🧩</span><span>{{ $bagian->nama }}</span></div>
                 @if ($bagian->deskripsi)
                     <div class="info">ℹ️ {{ $bagian->deskripsi }}</div>
                 @endif
@@ -1489,7 +1503,12 @@
                         : ($aturanBukti['mode'] === 'wajib'
                             ? 'Tiap poin yang diisi wajib dilampiri bukti dukung ('.\App\Support\AturanBuktiBagianKustom::labelFormat($aturanBukti).').'
                             : 'Bukti dukung ('.\App\Support\AturanBuktiBagianKustom::labelFormat($aturanBukti).') opsional untuk bagian ini.');
+                    // Hak aksi Ketua Tim (matriks Data Master) — tampilan saja, server memeriksa ulang.
+                    $hakK = $hakBagianKustom[$bagian->id] ?? array_fill_keys(array_keys(\App\Models\BagianKustom::AKSI), true);
                 @endphp
+                @if (in_array(false, $hakK, true))
+                    <div class="info" data-hak-terbatas="{{ $bagian->id }}" style="font-size:12px">🔐 Hak Anda di bagian ini: {{ collect($hakK)->filter()->keys()->map(fn ($a) => mb_strtolower(\App\Models\BagianKustom::AKSI[$a]))->implode(', ') ?: 'hanya melihat' }}.</div>
+                @endif
                 @if ($bagian->frekuensi_wajib === 'setiap_bulan')
                     <div class="info warn">⚠️ Minimal satu poin wajib diisi setiap bulan. {{ $labelBukti }}</div>
                 @elseif ($bagian->frekuensi_wajib === 'akhir_triwulan')
@@ -1497,6 +1516,12 @@
                 @else
                     <div class="info">ℹ️ Bagian ini opsional. {{ $labelBukti }}</div>
                 @endif
+
+                <div x-show="!ikuDipilih" class="info warn" data-kunci-iku="bagian-kustom-{{ $bagian->id }}">🔒 Pilih IKU terlebih dahulu (<a href="#bagian-iku" @click.prevent="document.getElementById('bagian-iku')?.scrollIntoView({ behavior: 'smooth', block: 'center' })">Bagian 1</a>) untuk mengisi {{ $bagian->nama }}.</div>
+
+                <div x-show="ikuDipilih" x-cloak>
+                <div wire:loading wire:target="iku_id,bulan,tahun" class="info">⏳ Memuat…</div>
+                <div wire:loading.remove wire:target="iku_id,bulan,tahun">
 
                 @if (($riwayatBagianKustom[$bagian->id] ?? collect())->isNotEmpty())
                     <div style="margin-bottom:14px">
@@ -1513,7 +1538,7 @@
                                                 @if ($entri->lanjutan_dari_id)<span class="badge b-draft" style="font-size:10px" title="Lanjutan dari periode sebelumnya">↪ lanjutan</span>@endif
                                                 <span style="font-size:11px;color:var(--faint)">· {{ \App\Support\LanjutanBagianKustom::labelPeriode($entri->periode) }}</span>
                                             </div>
-                                            @if (isset($bisaDilanjutkanBagianKustom[$bagian->id][$entri->id]))
+                                            @if (isset($bisaDilanjutkanBagianKustom[$bagian->id][$entri->id]) && $hakK['buat'])
                                                 <button type="button" class="btn btn-ghost btn-sm" style="flex-shrink:0" title="Isi poin baru periode ini dengan isi poin ini (poin lama & buktinya tidak diubah)"
                                                     wire:click="lanjutkanPoinBagianKustom({{ $bagian->id }}, {{ $entri->id }})" wire:loading.attr="disabled" wire:target="lanjutkanPoinBagianKustom({{ $bagian->id }}, {{ $entri->id }})">↪ Lanjutkan ke periode ini</button>
                                             @endif
@@ -1540,8 +1565,12 @@
                                                         </span>
                                                         @if ((int) $entri->periode?->tahun === (int) $tahun && (int) $entri->periode?->bulan === (int) $bulan
                                                             && $file->status_verifikasi === 'ditolak' && $this->buktiLamaBisaDikelola($file->status_verifikasi, true))
-                                                            @include('livewire.partials._ganti-berkas', ['berkasId' => $file->id])
-                                                            <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLamaBagianKustom', args: [{{ $entri->id }}, {{ $file->id }}] }" wire:loading.class="btn-busy" wire:target="hapusBuktiLamaBagianKustom({{ $entri->id }}, {{ $file->id }})">🗑️</span>
+                                                            @if ($hakK['unggah_bukti'])
+                                                                @include('livewire.partials._ganti-berkas', ['berkasId' => $file->id])
+                                                            @endif
+                                                            @if ($hakK['hapus_bukti'])
+                                                                <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLamaBagianKustom', args: [{{ $entri->id }}, {{ $file->id }}] }" wire:loading.class="btn-busy" wire:target="hapusBuktiLamaBagianKustom({{ $entri->id }}, {{ $file->id }})">🗑️</span>
+                                                            @endif
                                                         @endif
                                                     </div>
                                                 @endforeach
@@ -1568,6 +1597,7 @@
                             <button type="button" class="btn btn-red btn-sm" style="position:absolute;top:8px;right:8px" wire:click="removeBagianKustomBlock({{ $bagian->id }}, {{ $i }})" wire:loading.attr="disabled" wire:loading.class="btn-busy" wire:target="removeBagianKustomBlock({{ $bagian->id }}, {{ $i }})">🗑</button>
                         @endif
 
+                        <fieldset @disabled(($blok['id'] ?? null) ? ! $hakK['ubah'] : ! $hakK['buat']) style="border:0;padding:0;margin:0;min-width:0">
                         <div class="field">
                             <label>{{ $bagian->labelUraianEfektif() }} <span class="req">*</span></label>
                             <textarea class="inp filled" style="height:auto;display:block" rows="2" wire:model.live.blur="bagianKustomBlocks.{{ $bagian->id }}.{{ $i }}.teks"
@@ -1581,6 +1611,7 @@
                             'kelompok' => $bagian->kelompokKolomBerlaku($tahun, \App\Models\BagianKustom::triwulanDariBulan($bulan)),
                             'model' => "bagianKustomBlocks.{$bagian->id}.{$i}.kolom",
                         ])
+                        </fieldset>
 
                         @if ($pakaiBukti || ! empty($blok['existing_bukti']))
                         <div class="field" style="margin-bottom:0">
@@ -1611,10 +1642,10 @@
                                                     <span class="sub" style="color:var(--red)">{{ $file['catatan'] }}</span>
                                                 @endif
                                             </span>
-                                            @if ($file['status_verifikasi'] === 'ditolak')
+                                            @if ($file['status_verifikasi'] === 'ditolak' && $hakK['unggah_bukti'])
                                                 @include('livewire.partials._ganti-berkas', ['berkasId' => $file['id']])
                                             @endif
-                                            @if ($file['status_verifikasi'] !== 'terverifikasi')
+                                            @if ($file['status_verifikasi'] !== 'terverifikasi' && $hakK['hapus_bukti'])
                                                 <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLamaBagianKustom', args: [{{ $blok['id'] }}, {{ $file['id'] }}] }" wire:loading.class="btn-busy" wire:target="hapusBuktiLamaBagianKustom({{ $blok['id'] }}, {{ $file['id'] }})">🗑️</span>
                                             @endif
                                         </div>
@@ -1642,7 +1673,7 @@
                                     @endforeach
                                 </div>
                             @endif
-                            @if ($pakaiBukti)
+                            @if ($pakaiBukti && $hakK['unggah_bukti'])
                                 <x-zona-unggah :model="'bagianKustomBlocks.'.$bagian->id.'.'.$i.'.bukti'"
                                     :accept="\App\Support\AturanBuktiBagianKustom::accept($aturanBukti)" :ekstensi="\App\Support\AturanBuktiBagianKustom::ekstensi($aturanBukti)"
                                     :label="'Seret '.\App\Support\AturanBuktiBagianKustom::labelFormat($aturanBukti).' bukti dukung ke sini atau klik untuk memilih'" style="margin-top:8px" />
@@ -1658,15 +1689,17 @@
                     </div>
                 @endforeach
 
+                @if ($hakK['buat'])
                 <button type="button" class="btn btn-ghost btn-sm" x-on:click="jagaScroll(() => $wire.addBagianKustomBlock({{ $bagian->id }}))" wire:loading.attr="disabled" wire:target="addBagianKustomBlock({{ $bagian->id }})" @disabled($formTerkunciSedangDitangani)>
                     <span wire:loading.remove wire:target="addBagianKustomBlock({{ $bagian->id }})">＋ Tambah Poin {{ $bagian->nama }}</span>
                     <span wire:loading wire:target="addBagianKustomBlock({{ $bagian->id }})">Menambahkan…</span>
                 </button>
+                @endif
+                </div>
+                </div>
             @endforeach
 
-            <div class="info teal" style="margin-top:12px">✅ Analisis capaian &amp; angka akan diisi oleh Tim SAKIP saat verifikasi.</div>
-            </div>
-        </div>
+        <div x-show="ikuDipilih" x-cloak class="info teal" style="margin-top:12px">✅ Analisis capaian &amp; angka akan diisi oleh Tim SAKIP saat verifikasi.</div>
     </div>
 
     <div class="btn-row">

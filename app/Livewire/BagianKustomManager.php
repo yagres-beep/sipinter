@@ -212,6 +212,7 @@ class BagianKustomManager extends Component
             'deskripsi' => $bagian->deskripsi,
             'peran' => $bagian->peran ?? [],
             'peran_pembaca' => array_values($bagian->peran_pembaca ?? []),
+            'hak_aksi' => self::hakAksiForm($bagian),
             'penempatan' => $bagian->penempatan ?? [],
             'label_uraian' => $bagian->label_uraian,
             'frekuensi_wajib' => $bagian->frekuensi_wajib,
@@ -253,6 +254,46 @@ class BagianKustomManager extends Component
                 'ringkasan' => (string) ($k['ringkasan'] ?? ''),
             ])->values()->all(),
         ];
+    }
+
+    /**
+     * Matriks hak aksi dalam bentuk form: [peran][aksi] => bool untuk SEMUA peran.
+     * Peran yang belum menjadi pengisi diisi penuh, jadi saat dicentang sebagai pengisi
+     * hak awalnya sama dengan perilaku lama (semua aksi).
+     *
+     * @return array<string, array<string, bool>>
+     */
+    protected static function hakAksiForm(BagianKustom $bagian): array
+    {
+        return collect(array_keys(BagianKustom::NAMA_PERAN))->mapWithKeys(fn ($p) => [
+            $p => in_array($p, $bagian->peran ?? [], true)
+                ? $bagian->petaAksi($p)
+                : array_fill_keys(array_keys(BagianKustom::AKSI), true),
+        ])->all();
+    }
+
+    /**
+     * Hak aksi yang disimpan dari form: hanya peran pengisi, hanya aksi yang dikenal.
+     * Bagian lama (hak_aksi NULL) yang semua pengisinya tetap berhak penuh dibiarkan
+     * NULL supaya tidak ada perubahan data tanpa perubahan arti.
+     *
+     * @param  array<int, string>  $peran
+     * @return array<string, array<int, string>>|null
+     */
+    protected static function hakAksiDariForm(BagianKustom $bagian, array $form, array $peran): ?array
+    {
+        $hak = [];
+
+        foreach ($peran as $p) {
+            $hak[$p] = array_values(array_filter(
+                array_keys(BagianKustom::AKSI),
+                fn ($a) => (bool) ($form[$p][$a] ?? true)
+            ));
+        }
+
+        $semuaPenuh = collect($hak)->every(fn ($aksi) => count($aksi) === count(BagianKustom::AKSI));
+
+        return $bagian->hak_aksi === null && $semuaPenuh ? null : $hak;
     }
 
     /**
@@ -531,6 +572,10 @@ class BagianKustomManager extends Component
                 // Aturan bukti, peran pembaca, dan bentuk tampilan ikut disalin (definisi saja).
                 'aturan_bukti' => $sumber?->aturan_bukti,
                 'peran_pembaca' => $sumber ? (array_values(array_diff($sumber->peran_pembaca ?? [], $peran)) ?: null) : null,
+                // Hak aksi ikut disalin hanya untuk peran pengisi yang sama; peran lain = penuh.
+                'hak_aksi' => $sumber && is_array($sumber->hak_aksi)
+                    ? (array_intersect_key($sumber->hak_aksi, array_flip($peran)) ?: null)
+                    : null,
                 'tampilan' => $sumber?->tampilan,
                 'masuk_notula' => $sumber ? (bool) $sumber->masuk_notula : true,
                 'label_uraian' => $sumber?->label_uraian,
@@ -835,6 +880,10 @@ class BagianKustomManager extends Component
             // Peran pembaca, aturan bukti, dan bentuk tampilan — semua dibatasi daftar tetap.
             "form.{$id}.peran_pembaca" => ['array'],
             "form.{$id}.peran_pembaca.*" => [Rule::in(array_keys(BagianKustom::NAMA_PERAN))],
+            // Matriks hak aksi: hanya kunci peran & aksi yang dikenal yang dibaca saat simpan.
+            "form.{$id}.hak_aksi" => ['nullable', 'array'],
+            "form.{$id}.hak_aksi.*" => ['array'],
+            "form.{$id}.hak_aksi.*.*" => ['boolean'],
             "form.{$id}.aturan_bukti" => ['nullable', 'array'],
             "form.{$id}.aturan_bukti.mode" => ['nullable', Rule::in(array_keys(AturanBuktiBagianKustom::MODE))],
             "form.{$id}.aturan_bukti.min" => ['nullable', 'integer', 'min:0', 'max:'.AturanBuktiBagianKustom::JUMLAH_MAKS],
@@ -1156,6 +1205,7 @@ class BagianKustomManager extends Component
                     'deskripsi' => trim((string) ($f['deskripsi'] ?? '')) ?: null,
                     'peran' => $peran,
                     'peran_pembaca' => $pembaca === [] ? null : $pembaca,
+                    'hak_aksi' => self::hakAksiDariForm($bagian, (array) ($f['hak_aksi'] ?? []), $peran),
                     'penempatan' => $penempatan,
                     'label_uraian' => trim((string) ($f['label_uraian'] ?? '')) ?: null,
                     'frekuensi_wajib' => $f['frekuensi_wajib'],

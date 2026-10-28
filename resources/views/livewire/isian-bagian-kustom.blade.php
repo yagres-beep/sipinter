@@ -92,11 +92,18 @@
             $kolomBerlaku = collect($kelompokBerlaku)->flatMap(fn ($g) => $g['kolom'])->values()->all();
             $terbuka = $objekTerbuka[$bagian->id] ?? collect();
             $tabel = $bagian->tampilanIsian() === 'tabel';
+            // Hak aksi peran ini (matriks Data Master). Hanya untuk tampilan — semua aksi
+            // diperiksa ulang di server (IsianBagianKustom::pastikanBoleh()).
+            $hak = $hakSaya[$bagian->id] ?? array_fill_keys(array_keys(\App\Models\BagianKustom::AKSI), true);
+            $hakTerbatas = in_array(false, $hak, true);
         @endphp
         <div class="card" style="margin-bottom:16px" wire:key="bagian-{{ $bagian->id }}">
             <div class="sec" @if ($halamanSendiri) id="bagian-kustom-{{ $bagian->id }}" style="scroll-margin-top:var(--offset-lengket, 200px)" @endif><span class="n">🧩</span><span>{{ $bagian->nama }}</span></div>
             @if ($bagian->deskripsi)
                 <div class="info">ℹ️ {{ $bagian->deskripsi }}</div>
+            @endif
+            @if ($hakTerbatas)
+                <div class="info" data-hak-terbatas="{{ $bagian->id }}" style="font-size:12px">🔐 Hak Anda di bagian ini: {{ collect($hak)->filter()->keys()->map(fn ($a) => mb_strtolower(\App\Models\BagianKustom::AKSI[$a]))->implode(', ') ?: 'hanya melihat isian sendiri' }}.</div>
             @endif
             @if ($bagian->frekuensi_wajib === 'setiap_bulan')
                 <div class="info warn">⚠️ Minimal satu poin wajib diisi setiap bulan.</div>
@@ -112,7 +119,7 @@
             @enderror
 
             {{-- Relasi antarperiode: isian periode sebelumnya (tahun yang sama) yang belum ada di periode ini. --}}
-            @if ($terbuka->isNotEmpty())
+            @if ($terbuka->isNotEmpty() && $hak['buat'])
                 <details class="lanjutan-periode" style="margin-bottom:12px;border:1px dashed var(--line);border-radius:10px;padding:10px 12px">
                     <summary style="cursor:pointer;font-size:12.5px;font-weight:700">↪ {{ $terbuka->count() }} isian periode sebelumnya bisa dilanjutkan ke {{ $namaBulan[$bulan] }} {{ $tahun }}</summary>
                     <div class="fhint" style="margin:6px 0 8px">Melanjutkan membuat poin baru di periode ini dengan isi awal dari poin sebelumnya (bisa diubah sebelum disimpan). Poin lama, bukti dukungnya, dan riwayatnya tidak diubah; bukti tidak disalin.</div>
@@ -152,12 +159,13 @@
                         </thead>
                         <tbody>
                             @foreach ($baris[$bagian->id] ?? [] as $i => $row)
+                                @php $kunciBaris = filled($row['id'] ?? null) ? ! $hak['ubah'] : ! $hak['buat']; @endphp
                                 <tr wire:key="baris-{{ $bagian->id }}-{{ $i }}" style="vertical-align:top">
                                     <td style="padding:6px;border-bottom:1px solid var(--line2)">{{ $i + 1 }}
                                         @if (! empty($row['lanjutan_dari_id']))<div class="badge b-draft" style="font-size:10px" title="Lanjutan dari periode sebelumnya">↪ {{ \App\Support\LanjutanBagianKustom::labelPeriode($sumberLanjutan[(int) $row['lanjutan_dari_id']]?->periode ?? null) }}</div>@endif
                                     </td>
                                     <td style="padding:6px;border-bottom:1px solid var(--line2)">
-                                        <select class="inp filled" aria-label="IKU poin {{ $i + 1 }}" wire:model="baris.{{ $bagian->id }}.{{ $i }}.iku_id">
+                                        <select class="inp filled" aria-label="IKU poin {{ $i + 1 }}" wire:model="baris.{{ $bagian->id }}.{{ $i }}.iku_id" @disabled($kunciBaris)>
                                             <option value="">— pilih IKU —</option>
                                             @foreach ($ikuList as $iku)
                                                 <option value="{{ $iku->id }}">{{ $iku->kode }} — {{ \Illuminate\Support\Str::limit($iku->indikator, 60) }}</option>
@@ -166,21 +174,25 @@
                                         @error("baris.{$bagian->id}.{$i}.iku_id")<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>@enderror
                                     </td>
                                     <td style="padding:6px;border-bottom:1px solid var(--line2)">
-                                        <textarea class="inp filled" style="height:auto;display:block" rows="2" aria-label="{{ $bagian->labelUraianEfektif() }} poin {{ $i + 1 }}" wire:model.blur="baris.{{ $bagian->id }}.{{ $i }}.teks"></textarea>
+                                        <textarea class="inp filled" style="height:auto;display:block" rows="2" aria-label="{{ $bagian->labelUraianEfektif() }} poin {{ $i + 1 }}" wire:model.blur="baris.{{ $bagian->id }}.{{ $i }}.teks" @disabled($kunciBaris)></textarea>
                                         @error("baris.{$bagian->id}.{$i}.teks")<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>@enderror
                                     </td>
                                     @foreach ($kolomBerlaku as $k)
                                         <td style="padding:6px;border-bottom:1px solid var(--line2)">
-                                            @include('livewire.partials._isian-kolom-bagian-kustom', ['kelompok' => [['subbagian' => null, 'kolom' => [$k]]], 'model' => "baris.{$bagian->id}.{$i}.kolom", 'ringkas' => true])
+                                            <fieldset @disabled($kunciBaris) style="border:0;padding:0;margin:0;min-width:0">
+                                                @include('livewire.partials._isian-kolom-bagian-kustom', ['kelompok' => [['subbagian' => null, 'kolom' => [$k]]], 'model' => "baris.{$bagian->id}.{$i}.kolom", 'ringkas' => true])
+                                            </fieldset>
                                         </td>
                                     @endforeach
                                     @if ($pakaiBukti)
                                         <td style="padding:6px;border-bottom:1px solid var(--line2)">
-                                            @include('livewire.partials._bukti-isian-bagian-kustom', ['bagianId' => $bagian->id, 'i' => $i, 'aturan' => $aturan, 'poinId' => $row['id'] ?? null, 'tersimpan' => filled($row['id'] ?? null) ? ($buktiTersimpan[(int) $row['id']] ?? collect()) : collect(), 'baru' => $bukti[$bagian->id][$i] ?? [], 'ringkas' => true])
+                                            @include('livewire.partials._bukti-isian-bagian-kustom', ['bagianId' => $bagian->id, 'i' => $i, 'aturan' => $aturan, 'poinId' => $row['id'] ?? null, 'tersimpan' => filled($row['id'] ?? null) ? ($buktiTersimpan[(int) $row['id']] ?? collect()) : collect(), 'baru' => $bukti[$bagian->id][$i] ?? [], 'ringkas' => true, 'bolehUnggah' => $hak['unggah_bukti'], 'bolehHapus' => $hak['hapus_bukti']])
                                         </td>
                                     @endif
                                     <td style="padding:6px;border-bottom:1px solid var(--line2)">
+                                        @if (blank($row['id'] ?? null) || $hak['hapus'])
                                         <button type="button" class="btn btn-red btn-sm" aria-label="Hapus poin {{ $i + 1 }}" wire:click="hapusBaris({{ $bagian->id }}, {{ $i }})" wire:loading.attr="disabled" wire:target="hapusBaris({{ $bagian->id }}, {{ $i }})" @if (filled($row['id'] ?? null)) wire:confirm="Hapus poin {{ $i + 1 }} dari daftar? Poin baru benar-benar terhapus setelah Simpan; poin yang punya bukti atau sudah dilanjutkan tidak dihapus." @endif>🗑</button>
+                                        @endif
                                     </td>
                                 </tr>
                             @endforeach
@@ -192,13 +204,17 @@
                 @endif
             @else
                 @foreach ($baris[$bagian->id] ?? [] as $i => $row)
+                    @php $kunciBaris = filled($row['id'] ?? null) ? ! $hak['ubah'] : ! $hak['buat']; @endphp
                     <div class="poin-single" wire:key="baris-{{ $bagian->id }}-{{ $i }}">
                         <span class="k-num stat-in">Poin {{ $i + 1 }}</span>
                         @if (! empty($row['lanjutan_dari_id']))
                             <span class="badge b-draft" style="margin-left:6px" title="Poin ini melanjutkan isian periode sebelumnya">↪ Lanjutan dari {{ \App\Support\LanjutanBagianKustom::labelPeriode($sumberLanjutan[(int) $row['lanjutan_dari_id']]?->periode ?? null) }}</span>
                         @endif
+                        @if (blank($row['id'] ?? null) || $hak['hapus'])
                         <button type="button" class="btn btn-red btn-sm" style="position:absolute;top:8px;right:8px" aria-label="Hapus poin {{ $i + 1 }}" wire:click="hapusBaris({{ $bagian->id }}, {{ $i }})" wire:loading.attr="disabled" wire:target="hapusBaris({{ $bagian->id }}, {{ $i }})" @if (filled($row['id'] ?? null)) wire:confirm="Hapus poin {{ $i + 1 }} dari daftar? Poin baru benar-benar terhapus setelah Simpan; poin yang punya bukti atau sudah dilanjutkan tidak dihapus." @endif>🗑</button>
+                        @endif
 
+                        <fieldset @disabled($kunciBaris) style="border:0;padding:0;margin:0;min-width:0">
                         <div class="field">
                             <label for="iku-{{ $bagian->id }}-{{ $i }}">IKU <span class="req">*</span></label>
                             <select id="iku-{{ $bagian->id }}-{{ $i }}" class="inp filled" wire:model="baris.{{ $bagian->id }}.{{ $i }}.iku_id">
@@ -224,16 +240,19 @@
                             'kelompok' => $kelompokBerlaku,
                             'model' => "baris.{$bagian->id}.{$i}.kolom",
                         ])
+                        </fieldset>
 
                         @if ($pakaiBukti)
-                            @include('livewire.partials._bukti-isian-bagian-kustom', ['bagianId' => $bagian->id, 'i' => $i, 'aturan' => $aturan, 'poinId' => $row['id'] ?? null, 'tersimpan' => filled($row['id'] ?? null) ? ($buktiTersimpan[(int) $row['id']] ?? collect()) : collect(), 'baru' => $bukti[$bagian->id][$i] ?? []])
+                            @include('livewire.partials._bukti-isian-bagian-kustom', ['bagianId' => $bagian->id, 'i' => $i, 'aturan' => $aturan, 'poinId' => $row['id'] ?? null, 'tersimpan' => filled($row['id'] ?? null) ? ($buktiTersimpan[(int) $row['id']] ?? collect()) : collect(), 'baru' => $bukti[$bagian->id][$i] ?? [], 'bolehUnggah' => $hak['unggah_bukti'], 'bolehHapus' => $hak['hapus_bukti']])
                         @endif
                     </div>
                 @endforeach
             @endif
 
             <div class="btn-row" style="flex-wrap:wrap">
+                @if ($hak['buat'])
                 <button type="button" class="btn btn-ghost btn-sm" wire:click="tambahBaris({{ $bagian->id }})" wire:loading.attr="disabled" wire:target="tambahBaris({{ $bagian->id }})" @disabled(! $periodeAda)>＋ Tambah Poin</button>
+                @endif
                 <button type="button" class="btn btn-primary btn-sm" wire:click="simpan({{ $bagian->id }})" wire:loading.attr="disabled" wire:target="simpan({{ $bagian->id }})" @disabled(! $periodeAda)>
                     <span wire:loading.remove wire:target="simpan({{ $bagian->id }})">💾 Simpan {{ $bagian->nama }}</span>
                     <span wire:loading wire:target="simpan({{ $bagian->id }})"><i class="spin"></i> Menyimpan…</span>

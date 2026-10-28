@@ -24,7 +24,7 @@
             <button type="button" class="subtab" :class="tab === 'target' ? 'on' : ''" @click="tab = 'target'; window.location.hash = 'target'">🎯 Target Tahunan</button>
             <button type="button" class="subtab" :class="tab === 'rumus' ? 'on' : ''" @click="tab = 'rumus'; window.location.hash = 'rumus'">🧮 Rumus Capaian</button>
             <button type="button" class="subtab" :class="tab === 'folder' ? 'on' : ''" @click="tab = 'folder'; window.location.hash = 'folder'">📁 Struktur Folder</button>
-            <button type="button" class="subtab" :class="tab === 'bagian' ? 'on' : ''" @click="tab = 'bagian'; window.location.hash = 'bagian'">🧩 Bagian Kustom</button>
+            <button type="button" class="subtab" :class="tab === 'bagian' ? 'on' : ''" @click="tab = 'bagian'; window.location.hash = 'bagian'">🧩 Pengelolaan Bagian</button>
             <button type="button" class="subtab" :class="tab === 'variabel' ? 'on' : ''" @click="tab = 'variabel'; window.location.hash = 'variabel'">🔣 Katalog Variabel</button>
             <button type="button" class="subtab" :class="tab === 'log' ? 'on' : ''" @click="tab = 'log'; window.location.hash = 'log'">📜 Log Aktivitas</button>
         </div>
@@ -42,6 +42,9 @@
             <livewire:folder-config-manager />
         </div>
         <div x-show="tab === 'bagian'" x-cloak>
+            {{-- Pusat pengelolaan: daftar seluruh bagian (bawaan + kustom), lalu editor Bagian Kustom. --}}
+            <livewire:daftar-bagian-sipinter />
+            <div style="margin-top:20px"></div>
             <livewire:bagian-kustom-manager />
         </div>
         <div x-show="tab === 'variabel'" x-cloak>

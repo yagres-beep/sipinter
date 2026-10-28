@@ -8,6 +8,9 @@
 --}}
 @php
     $ringkas ??= false;
+    // Hak aksi peran (matriks Data Master); bawaan = boleh. Diperiksa ulang di server.
+    $bolehUnggah ??= true;
+    $bolehHapus ??= true;
     $berkasTidakSesuai = $tersimpan->reject(fn ($b) => \App\Support\AturanBuktiBagianKustom::namaCocok($aturan, $b->nama_file));
 @endphp
 <div class="field" style="margin-bottom:0">
@@ -28,7 +31,7 @@
                             <span class="sub" style="color:var(--amber, #b45309)">Belum tersalin ke Google Drive — disalin otomatis.</span>
                         @endunless
                     </span>
-                    @if ($poinId)
+                    @if ($poinId && $bolehHapus)
                         <button type="button" class="x" style="background:none;border:0;cursor:pointer" title="Hapus bukti ini" aria-label="Hapus bukti {{ $file->nama_file }}"
                             wire:click="hapusBukti({{ $bagianId }}, {{ $poinId }}, {{ $file->id }})"
                             wire:confirm="Hapus bukti &quot;{{ $file->nama_file }}&quot;? Berkas dilepas dari poin ini dan salinan Google Drive-nya dipindah ke Sampah (masih bisa dipulihkan dari Drive)."
@@ -58,8 +61,10 @@
         </div>
     @endif
 
+    @if ($bolehUnggah)
     <x-zona-unggah :model="'bukti.'.$bagianId.'.'.$i" :accept="\App\Support\AturanBuktiBagianKustom::accept($aturan)" :ekstensi="\App\Support\AturanBuktiBagianKustom::ekstensi($aturan)"
         :label="'Seret bukti ('.\App\Support\AturanBuktiBagianKustom::labelFormat($aturan).') ke sini atau klik untuk memilih'" :ringkas="$ringkas" style="margin-top:6px" />
+    @endif
     @error("bukti.{$bagianId}.{$i}")
         <div style="color:var(--red);font-size:11.5px;margin-top:5px">{{ $message }}</div>
     @enderror

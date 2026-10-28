@@ -159,6 +159,67 @@ class IsianBagianKustom extends Component
         return $bagian;
     }
 
+    /**
+     * Tolak (403 + catatan log) bila peran yang login tidak punya hak $aksi di bagian ini
+     * (matriks hak akses di Data Master). Dibaca dari definisi terkini setiap aksi.
+     */
+    protected function pastikanBoleh(BagianKustom $bagian, string $aksi, array $konteks = []): void
+    {
+        if ($bagian->bolehAksi($this->peran(), $aksi)) {
+            return;
+        }
+
+        JejakAktivitasBagianKustom::ditolak($bagian, 'peran pengguna tidak punya hak "'.(BagianKustom::AKSI[$aksi] ?? $aksi).'" di bagian ini', ['menu' => $this->menu] + $konteks);
+        abort(403);
+    }
+
+    /**
+     * Periksa hak setiap perubahan yang akan disimpan sebelum apa pun ditulis: poin baru
+     * (buat), poin lama yang isinya berubah (ubah), poin lama yang dibuang dari daftar
+     * (hapus), dan berkas baru (unggah bukti).
+     *
+     * @param  array<int, string>  $dimuat
+     */
+    protected function pastikanHakSimpan(BagianKustom $bagian, Periode $periode, array $dimuat): void
+    {
+        $tersimpan = $dimuat === [] ? collect() : BagianKustomPoin::whereKey(array_keys($dimuat))->get()->keyBy('id');
+        $triwulan = BagianKustom::triwulanDariBulan($this->bulan);
+        $idDipertahankan = [];
+        $konteks = ['periode_id' => $periode->id];
+
+        foreach ($this->baris[$bagian->id] ?? [] as $i => $row) {
+            $adaBerkasBaru = collect((array) ($this->bukti[$bagian->id][$i] ?? []))->contains(fn ($f) => $f instanceof \Illuminate\Http\UploadedFile);
+
+            if ($adaBerkasBaru) {
+                $this->pastikanBoleh($bagian, 'unggah_bukti', $konteks);
+            }
+
+            if (filled($row['id'] ?? null)) {
+                $poin = $tersimpan->get((int) $row['id']);
+
+                if (! $this->terisi($row)) {
+                    continue;
+                }
+
+                $idDipertahankan[] = (int) $row['id'];
+
+                if ($poin && (
+                    (int) $row['iku_id'] !== (int) $poin->iku_id
+                    || trim((string) $row['teks']) !== trim((string) $poin->teks)
+                    || $bagian->bersihkanNilaiKolom($row['kolom'] ?? [], $poin->nilai_kolom, $this->tahun, $triwulan) != array_filter((array) ($poin->nilai_kolom ?? []), fn ($v) => trim((string) $v) !== '')
+                )) {
+                    $this->pastikanBoleh($bagian, 'ubah', $konteks + ['perubahan' => ['poin_id' => $poin->id]]);
+                }
+            } elseif ($this->terisi($row)) {
+                $this->pastikanBoleh($bagian, 'buat', $konteks);
+            }
+        }
+
+        if (array_diff(array_keys($dimuat), $idDipertahankan) !== []) {
+            $this->pastikanBoleh($bagian, 'hapus', $konteks);
+        }
+    }
+
     protected function periode(): ?Periode
     {
         return Periode::where('tahun', $this->tahun)->where('bulan', $this->bulan)->first();
@@ -210,6 +271,7 @@ class IsianBagianKustom extends Component
     public function tambahBaris(int $bagianId): void
     {
         $bagian = $this->bagianDiizinkanAtau403($bagianId);
+        $this->pastikanBoleh($bagian, 'buat');
 
         $this->baris[$bagianId][] = $this->barisKosong($bagian);
     }
@@ -217,6 +279,11 @@ class IsianBagianKustom extends Component
     public function hapusBaris(int $bagianId, int $index): void
     {
         $bagian = $this->bagianDiizinkanAtau403($bagianId);
+
+        // Baris baru (belum tersimpan) selalu boleh dibuang dari layar.
+        if (filled($this->baris[$bagianId][$index]['id'] ?? null)) {
+            $this->pastikanBoleh($bagian, 'hapus');
+        }
 
         unset($this->baris[$bagianId][$index]);
         $this->baris[$bagianId] = array_values($this->baris[$bagianId] ?? []) ?: [$this->barisKosong($bagian)];
@@ -248,6 +315,7 @@ class IsianBagianKustom extends Component
     public function lanjutkan(int $bagianId, int $poinId): void
     {
         $bagian = $this->bagianDiizinkanAtau403($bagianId);
+        $this->pastikanBoleh($bagian, 'buat');
         $periode = $this->periode();
 
         if (! $periode) {
@@ -339,6 +407,8 @@ class IsianBagianKustom extends Component
             ]);
             abort(403);
         }
+
+        $this->pastikanHakSimpan($bagian, $periode, $dimuat);
 
         $aturan = $bagian->aturanBuktiDi($this->menu);
         $jumlahBuktiLama = Berkas::where('ref_type', BagianKustomPoin::class)->whereIn('ref_id', array_keys($dimuat))
@@ -599,6 +669,7 @@ class IsianBagianKustom extends Component
     public function hapusBukti(int $bagianId, int $poinId, int $berkasId): void
     {
         $bagian = $this->bagianDiizinkanAtau403($bagianId);
+        $this->pastikanBoleh($bagian, 'hapus_bukti');
         $periode = $this->periode();
 
         if (! $periode || $this->periodeDimuatId !== $periode->id || ! array_key_exists($poinId, $this->dimuat[$bagianId] ?? [])) {
@@ -709,6 +780,7 @@ class IsianBagianKustom extends Component
             'objekTerbuka' => $objekTerbuka,
             'tersimpanPeriode' => $tersimpanPeriode,
             'bacaan' => $bacaan,
+            'hakSaya' => $bagianList->mapWithKeys(fn (BagianKustom $b) => [$b->id => $b->petaAksi($peran)])->all(),
         ]);
     }
 }

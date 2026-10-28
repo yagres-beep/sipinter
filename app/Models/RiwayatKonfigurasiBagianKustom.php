@@ -36,6 +36,7 @@ class RiwayatKonfigurasiBagianKustom extends Model
         'bukti_wajib' => 'bukti wajib',
         'aturan_bukti' => 'aturan bukti dukung',
         'peran_pembaca' => 'peran pembaca',
+        'hak_aksi' => 'hak aksi',
         'tampilan' => 'bentuk tampilan',
         'masuk_notula' => 'masuk notula',
         'judul_notula' => 'judul notula',
@@ -115,6 +116,7 @@ class RiwayatKonfigurasiBagianKustom extends Model
                 'peran' => 'peran → '.self::daftar($baru, fn ($p) => BagianKustom::NAMA_PERAN[$p] ?? $p),
                 'penempatan' => 'menu → '.self::daftar($baru, fn ($m) => MenuBagianKustom::label($m)),
                 'peran_pembaca' => 'peran pembaca → '.self::daftar($baru, fn ($p) => BagianKustom::NAMA_PERAN[$p] ?? $p),
+                'hak_aksi' => 'hak aksi → '.self::ringkasHak(is_array($baru) ? $baru : []),
                 'aturan_bukti' => 'aturan bukti dukung → '.\App\Support\AturanBuktiBagianKustom::ringkasan(\App\Support\AturanBuktiBagianKustom::normalkan(is_array($baru) ? $baru : null, (bool) ($sesudah['bukti_wajib'] ?? false))),
                 default => $label.' diubah',
             };
@@ -188,6 +190,18 @@ class RiwayatKonfigurasiBagianKustom extends Model
         }
 
         return implode('; ', $bagian);
+    }
+
+    /**
+     * Mis. "Ketua Tim: buat poin, ubah poin; Kepala: (tidak ada aksi)".
+     *
+     * @param  array<string, array<int, string>>  $hak
+     */
+    public static function ringkasHak(array $hak): string
+    {
+        return collect($hak)->map(fn ($aksi, $peran) => (BagianKustom::NAMA_PERAN[$peran] ?? $peran).': '
+            .(collect((array) $aksi)->map(fn ($a) => mb_strtolower(BagianKustom::AKSI[$a] ?? $a))->implode(', ') ?: '(tidak ada aksi)'))
+            ->implode('; ') ?: '—';
     }
 
     private static function daftar(mixed $nilai, callable $label): string

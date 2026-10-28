@@ -2082,6 +2082,33 @@ class PengisianKegiatan extends Component
             $tolak('hanya Ketua Tim yang dapat mengisi bagian kustom di Isian Kegiatan');
         }
 
+        // Matriks hak akses per bagian (Data Master): poin baru = buat, berkas baru =
+        // unggah bukti. Perubahan poin lama (ubah) diperiksa di bawah setelah poinnya
+        // dipastikan milik form ini.
+        $peranKetua = BagianKustom::PERAN_KETUA_TIM;
+
+        foreach ($this->bagianKustomBlocks as $bagianId => $daftar) {
+            $bagian = $this->bagianKustomAktif()->firstWhere('id', (int) $bagianId);
+
+            if (! $bagian) {
+                continue;
+            }
+
+            foreach ((array) $daftar as $blok) {
+                if (! is_array($blok)) {
+                    continue;
+                }
+
+                if (blank($blok['id'] ?? null) && $this->blokBagianKustomTerisi($blok) && ! $bagian->bolehAksi($peranKetua, 'buat')) {
+                    $tolak('peran pengguna tidak punya hak "'.BagianKustom::AKSI['buat'].'" di bagian ini', (int) $bagianId);
+                }
+
+                if (! empty($blok['bukti']) && ! $bagian->bolehAksi($peranKetua, 'unggah_bukti')) {
+                    $tolak('peran pengguna tidak punya hak "'.BagianKustom::AKSI['unggah_bukti'].'" di bagian ini', (int) $bagianId);
+                }
+            }
+        }
+
         if ($idDikirim === []) {
             return;
         }
@@ -2105,10 +2132,33 @@ class PengisianKegiatan extends Component
         }
 
         foreach ($idDikirim as [$bagianId, $poinId]) {
-            if (! $this->poinBagianKustomForm($bagianId, $poinId, $periode)) {
+            $poin = $this->poinBagianKustomForm($bagianId, $poinId, $periode);
+
+            if (! $poin) {
                 $tolak('konteks data tidak sesuai (poin bukan milik bagian, IKU, periode, atau menu Isian Kegiatan pada form ini)', $bagianId);
             }
+
+            $bagian = $this->bagianKustomAktif()->firstWhere('id', $bagianId);
+
+            if ($bagian && ! $bagian->bolehAksi($peranKetua, 'ubah') && $this->poinBagianKustomBerubah($bagian, $poin, $bagianId)) {
+                $tolak('peran pengguna tidak punya hak "'.BagianKustom::AKSI['ubah'].'" di bagian ini', $bagianId);
+            }
         }
+    }
+
+    /** Isi blok form untuk poin lama ini berbeda dari yang tersimpan (teks atau kolom). */
+    protected function poinBagianKustomBerubah(BagianKustom $bagian, BagianKustomPoin $poin, int $bagianId): bool
+    {
+        $blok = collect($this->bagianKustomBlocks[$bagianId] ?? [])->first(fn ($b) => (int) ($b['id'] ?? 0) === $poin->id);
+
+        if (! is_array($blok)) {
+            return false;
+        }
+
+        $kolomBaru = $bagian->bersihkanNilaiKolom($blok['kolom'] ?? [], $poin->nilai_kolom, $this->tahun, BagianKustom::triwulanDariBulan($this->bulan));
+        $kolomLama = array_filter((array) ($poin->nilai_kolom ?? []), fn ($v) => trim((string) $v) !== '');
+
+        return trim((string) ($blok['teks'] ?? '')) !== trim((string) $poin->teks) || $kolomBaru != $kolomLama;
     }
 
     /**
@@ -2138,6 +2188,15 @@ class PengisianKegiatan extends Component
 
         if (! $poin) {
             return;
+        }
+
+        if (! $poin->bagianKustom?->bolehAksi(BagianKustom::PERAN_KETUA_TIM, 'hapus_bukti')) {
+            JejakAktivitasBagianKustom::ditolak($poin->bagianKustom, 'peran pengguna tidak punya hak "'.BagianKustom::AKSI['hapus_bukti'].'" di bagian ini', [
+                'menu' => MenuBagianKustom::PENGISIAN,
+                'iku_id' => $this->iku_id,
+                'periode_id' => $periode->id,
+            ]);
+            abort(403);
         }
 
         $berkas = Berkas::where('id', $berkasId)
@@ -2327,6 +2386,18 @@ class PengisianKegiatan extends Component
             }
 
             return;
+        }
+
+        // Matriks hak akses Bagian Kustom: mengganti bukti = mengunggah berkas baru.
+        if ($ref instanceof BagianKustomPoin && ! $ref->bagianKustom?->bolehAksi(BagianKustom::PERAN_KETUA_TIM, 'unggah_bukti')) {
+            JejakAktivitasBagianKustom::ditolak($ref->bagianKustom, 'peran pengguna tidak punya hak "'.BagianKustom::AKSI['unggah_bukti'].'" di bagian ini', [
+                'objek_tipe' => LogAktivitas::OBJEK_BERKAS,
+                'objek_id' => $lama->id,
+                'menu' => MenuBagianKustom::PENGISIAN,
+                'iku_id' => $this->iku_id,
+                'periode_id' => $periode->id,
+            ]);
+            abort(403);
         }
 
         // Satu penggantian per berkas lama dalam satu waktu (lintas pengguna/jendela) —
@@ -2706,6 +2777,13 @@ class PengisianKegiatan extends Component
 
     public function addBagianKustomBlock(int $bagianId): void
     {
+        $bagianHak = $this->bagianKustomAktif()->firstWhere('id', $bagianId);
+
+        if ($bagianHak && ! $bagianHak->bolehAksi(BagianKustom::PERAN_KETUA_TIM, 'buat')) {
+            JejakAktivitasBagianKustom::ditolak($bagianHak, 'peran pengguna tidak punya hak "'.BagianKustom::AKSI['buat'].'" di bagian ini', ['menu' => MenuBagianKustom::PENGISIAN]);
+            abort(403);
+        }
+
         if ($this->formTerkunciSedangDitangani()) {
             return;
         }
@@ -6188,6 +6266,10 @@ class PengisianKegiatan extends Component
             'rtlBerjalanOptions' => $this->rtlBerjalanOptions(),
             'rtlBerjalanBelumTerlaksana' => $this->poinRtlBerjalanBelumTerlaksana(),
             'bagianKustomAktif' => $bagianKustomAktif,
+            // Hak aksi Ketua Tim per bagian (matriks Data Master) — untuk tampilan saja;
+            // aksi tetap diperiksa di server (pastikanPoinBagianKustomSah() dkk.).
+            'hakBagianKustom' => $bagianKustomAktif->mapWithKeys(fn ($b) => [$b->id => $b->petaAksi(BagianKustom::PERAN_KETUA_TIM)])->all(),
+            'labelBawaan' => \App\Support\RegistriBagian::tampilanBawaan(),
             'riwayatBagianKustom' => $bagianKustomAktif->mapWithKeys(fn ($b) => [$b->id => $this->riwayatBagianKustom($b)]),
             'bisaDilanjutkanBagianKustom' => $bagianKustomAktif->isNotEmpty() ? $this->bisaDilanjutkanBagianKustom() : [],
             'statusKegiatanTerkunci' => self::STATUS_KEGIATAN_TERKUNCI,

@@ -51,6 +51,18 @@ class BagianKustom extends Model
         self::PERAN_KEPALA => 'Kepala',
     ];
 
+    /**
+     * Aksi yang bisa diatur per peran pengisi (matriks hak akses). "Lihat" tidak ada di
+     * sini: siapa yang melihat diatur lewat `peran` (pengisi) dan `peran_pembaca`.
+     */
+    public const AKSI = [
+        'buat' => 'Buat poin',
+        'ubah' => 'Ubah poin',
+        'hapus' => 'Hapus poin',
+        'unggah_bukti' => 'Unggah bukti',
+        'hapus_bukti' => 'Hapus bukti',
+    ];
+
     public const TIPE_KOLOM = JenisKolomBagianKustom::TIPE;
 
     /** Batas kolom isian per bagian (semua subbagian). */
@@ -69,6 +81,7 @@ class BagianKustom extends Model
         'deskripsi',
         'peran',
         'peran_pembaca',
+        'hak_aksi',
         'penempatan',
         'label_uraian',
         'kolom',
@@ -92,6 +105,7 @@ class BagianKustom extends Model
             'kolom' => 'array',
             'subbagian' => 'array',
             'peran_pembaca' => 'array',
+            'hak_aksi' => 'array',
             'tampilan' => 'array',
             'aturan_bukti' => 'array',
             'bukti_wajib' => 'boolean',
@@ -209,6 +223,58 @@ class BagianKustom extends Model
             && ! in_array($peran, $this->peran ?? [], true)
             && in_array($menu, $this->penempatan ?? [], true)
             && in_array($peran, MenuBagianKustom::peranDiizinkan($menu), true);
+    }
+
+    /**
+     * Aksi yang boleh dilakukan satu peran pada isian bagian ini. Hanya peran pengisi
+     * yang punya aksi; pembaca dan peran lain tidak punya aksi apa pun.
+     *
+     * hak_aksi NULL, atau peran pengisi belum punya entri = semua aksi (perilaku lama,
+     * sebelum matriks hak akses ada).
+     *
+     * @return array<int, string>
+     */
+    public function aksiPeran(?string $peran): array
+    {
+        if ($peran === null || ! in_array($peran, $this->peran ?? [], true)) {
+            return [];
+        }
+
+        $hak = $this->hak_aksi;
+
+        if (! is_array($hak) || ! array_key_exists($peran, $hak)) {
+            return array_keys(self::AKSI);
+        }
+
+        return array_values(array_intersect(array_keys(self::AKSI), (array) $hak[$peran]));
+    }
+
+    public function bolehAksi(?string $peran, string $aksi): bool
+    {
+        return in_array($aksi, $this->aksiPeran($peran), true);
+    }
+
+    /**
+     * Peta aksi → boleh/tidak untuk satu peran, untuk tampilan.
+     *
+     * @return array<string, bool>
+     */
+    public function petaAksi(?string $peran): array
+    {
+        $boleh = $this->aksiPeran($peran);
+
+        return collect(array_keys(self::AKSI))->mapWithKeys(fn ($a) => [$a => in_array($a, $boleh, true)])->all();
+    }
+
+    /**
+     * Matriks hak tersimpan dalam bentuk lengkap untuk semua peran pengisi, mis.
+     * ['ketua_tim' => ['buat', 'ubah', …]]. Dipakai riwayat konfigurasi dan form.
+     *
+     * @return array<string, array<int, string>>
+     */
+    public function matriksAksi(): array
+    {
+        return collect($this->peran ?? [])->mapWithKeys(fn ($p) => [$p => $this->aksiPeran($p)])->all();
     }
 
     /** Peran pembaca dalam bentuk nama tampilan. */
@@ -745,6 +811,7 @@ class BagianKustom extends Model
             'deskripsi' => $this->deskripsi,
             'peran' => array_values($this->peran ?? []),
             'peran_pembaca' => array_values($this->peran_pembaca ?? []),
+            'hak_aksi' => $this->matriksAksi(),
             'penempatan' => array_values($this->penempatan ?? []),
             'label_uraian' => $this->label_uraian,
             'frekuensi_wajib' => $this->frekuensi_wajib,
