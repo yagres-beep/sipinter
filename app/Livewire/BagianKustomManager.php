@@ -10,6 +10,7 @@ use App\Models\FolderConfig;
 use App\Models\LogAktivitas;
 use App\Models\RiwayatKonfigurasiBagianKustom;
 use App\Models\VariabelKatalog;
+use App\Support\AlurBagianKustom;
 use App\Support\AturanBuktiBagianKustom;
 use App\Support\FormatAngkaKolom;
 use App\Support\MenuBagianKustom;
@@ -91,6 +92,20 @@ class BagianKustomManager extends Component
     public ?int $pendingHapusId = null;
 
     public string $pendingHapusNama = '';
+
+    /**
+     * Isian contoh di tab Pratinjau (tidak pernah disimpan ke database): [id bagian][kunci] => nilai.
+     *
+     * @var array<int, array<string, mixed>>
+     */
+    public array $pratinjauNilai = [];
+
+    /**
+     * Hasil uji pratinjau terakhir: nilai yang AKAN tersimpan & tampil (termasuk hasil rumus).
+     *
+     * @var array<int, array<string, string>>
+     */
+    public array $hasilPratinjau = [];
 
     /**
      * Sidik jari definisi tiap bagian saat form-nya dimuat. Simpan ditolak bila definisi
@@ -329,6 +344,13 @@ class BagianKustomManager extends Component
             'masuk_notula' => (bool) $sumber->masuk_notula,
             'label_uraian' => $sumber->label_uraian,
             'format_notula' => $format,
+            // Alur & periode ikut disalin; pengaju dibatasi ke peran pengisi bagian baru.
+            'alur' => is_array($sumber->alur)
+                ? array_merge($sumber->alur, ['pengaju' => array_values(array_intersect((array) ($sumber->alur['pengaju'] ?? $peran), $peran))],
+                    // Tanpa menu selain Isian Kegiatan, alur pemeriksaan tidak berlaku.
+                    array_diff($penempatan, [MenuBagianKustom::PENGISIAN]) === [] ? ['mode' => AlurBagianKustom::MODE_LANGSUNG] : [])
+                : null,
+            'periode_berlaku' => $sumber->periode_berlaku,
             'kolom' => $kolom,
             'subbagian' => $subbagian,
         ];
@@ -375,12 +397,15 @@ class BagianKustomManager extends Component
             'masuk_notula' => (bool) $bagian->masuk_notula,
             'judul_notula' => $bagian->judul_notula,
             'format_notula' => $bagian->format_notula,
+            'alur' => self::alurForm($bagian->alurKerja()),
+            'periode_berlaku' => self::periodeForm($bagian->periodeBerlaku()),
             'subbagian' => collect($bagian->subbagianList())->map(fn ($s) => [
                 'kunci' => $s['kunci'],
                 'nama' => $s['nama'],
                 'deskripsi' => (string) $s['deskripsi'],
                 'aktif' => $s['aktif'],
-            ])->values()->all(),
+                'wajib' => $s['wajib'],
+            ] + self::syaratForm($s['tampil_jika']))->values()->all(),
             'kolom' => collect($bagian->kolomList())->map(fn ($k) => [
                 'kunci' => $k['kunci'],
                 'label' => $k['label'],
@@ -405,7 +430,66 @@ class BagianKustomManager extends Component
                 'format_tanggal' => (string) ($k['format_tanggal'] ?? 'panjang'),
                 'variabel' => (string) ($k['variabel'] ?? ''),
                 'ringkasan' => (string) ($k['ringkasan'] ?? ''),
-            ])->values()->all(),
+                'rumus' => (string) ($k['rumus'] ?? ''),
+                'tabel_kolom' => collect($k['tabel_kolom'] ?? [])->map(fn ($s) => [
+                    'kunci' => $s['kunci'], 'label' => $s['label'], 'tipe' => $s['tipe'], 'wajib' => $s['wajib'], 'opsi_teks' => implode(', ', $s['opsi']),
+                ])->values()->all(),
+                'baris_min' => $k['baris_min'] !== null ? (string) $k['baris_min'] : '',
+                'baris_maks' => $k['baris_maks'] !== null ? (string) $k['baris_maks'] : '',
+            ] + self::syaratForm($k['tampil_jika'] ?? null))->values()->all(),
+        ];
+    }
+
+    /**
+     * Syarat tampil dalam bentuk form (tiga isian datar).
+     *
+     * @param  array{kunci: string, operator: string, nilai: string}|null  $syarat
+     * @return array{syarat_kunci: string, syarat_operator: string, syarat_nilai: string}
+     */
+    protected static function syaratForm(?array $syarat): array
+    {
+        return [
+            'syarat_kunci' => (string) ($syarat['kunci'] ?? ''),
+            'syarat_operator' => (string) ($syarat['operator'] ?? 'sama'),
+            'syarat_nilai' => (string) ($syarat['nilai'] ?? ''),
+        ];
+    }
+
+    /** @param  array<string, mixed>  $row */
+    protected static function syaratDariForm(array $row): ?array
+    {
+        return BagianKustom::normalkanSyarat([
+            'kunci' => $row['syarat_kunci'] ?? '',
+            'operator' => $row['syarat_operator'] ?? 'sama',
+            'nilai' => $row['syarat_nilai'] ?? '',
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $alur  hasil BagianKustom::alurKerja()
+     * @return array<string, mixed>
+     */
+    protected static function alurForm(array $alur): array
+    {
+        return [
+            'mode' => $alur['mode'],
+            'pengaju' => $alur['pengaju'],
+            'pemeriksa' => $alur['pemeriksa'],
+            'ubah_setelah_disetujui' => $alur['ubah_setelah_disetujui'],
+            'notula' => $alur['notula'],
+        ];
+    }
+
+    /**
+     * @param  array{triwulan: array<int, int>, tahun_mulai: ?int, tahun_selesai: ?int}  $p
+     * @return array<string, mixed>
+     */
+    protected static function periodeForm(array $p): array
+    {
+        return [
+            'triwulan' => array_map('strval', $p['triwulan']),
+            'tahun_mulai' => $p['tahun_mulai'] !== null ? (string) $p['tahun_mulai'] : '',
+            'tahun_selesai' => $p['tahun_selesai'] !== null ? (string) $p['tahun_selesai'] : '',
         ];
     }
 
@@ -464,6 +548,7 @@ class BagianKustomManager extends Component
             'format' => $aturan['format'],
             'ukuran_maks_mb' => $aturan['ukuran_maks_mb'] !== null ? (string) $aturan['ukuran_maks_mb'] : '',
             'petunjuk' => (string) $aturan['petunjuk'],
+            'saat' => $aturan['saat'] ?? AturanBuktiBagianKustom::SAAT_SIMPAN,
         ];
     }
 
@@ -508,7 +593,41 @@ class BagianKustomManager extends Component
             'subbagian' => $subbagian, 'petunjuk' => '', 'placeholder' => '', 'min' => '', 'maks' => '',
             'panjang_min' => '', 'panjang_maks' => '', 'pesan' => '', 'format_tanggal' => 'panjang',
             'variabel' => '', 'ringkasan' => '',
+            'rumus' => '', 'tabel_kolom' => [], 'baris_min' => '', 'baris_maks' => '',
+            'syarat_kunci' => '', 'syarat_operator' => 'sama', 'syarat_nilai' => '',
         ];
+    }
+
+    /* ---------- Kolom tabel (subkolom di dalam satu kolom bertipe tabel) ---------- */
+
+    public function tambahKolomTabel(int $id, int $index): void
+    {
+        abort_unless(isset($this->form[$id]['kolom'][$index]), 404);
+
+        if (count($this->form[$id]['kolom'][$index]['tabel_kolom'] ?? []) >= \App\Support\JenisKolomBagianKustom::SUBKOLOM_MAKS) {
+            $this->addError("form.{$id}.kolom.{$index}.tabel_kolom", 'Maksimal '.\App\Support\JenisKolomBagianKustom::SUBKOLOM_MAKS.' kolom tabel.');
+
+            return;
+        }
+
+        $this->form[$id]['kolom'][$index]['tabel_kolom'][] = ['kunci' => '', 'label' => '', 'tipe' => 'teks', 'wajib' => false, 'opsi_teks' => ''];
+    }
+
+    public function hapusKolomTabel(int $id, int $index, int $sub): void
+    {
+        unset($this->form[$id]['kolom'][$index]['tabel_kolom'][$sub]);
+        $this->form[$id]['kolom'][$index]['tabel_kolom'] = array_values($this->form[$id]['kolom'][$index]['tabel_kolom'] ?? []);
+    }
+
+    public function geserKolomTabel(int $id, int $index, int $sub, int $arah): void
+    {
+        $daftar = $this->form[$id]['kolom'][$index]['tabel_kolom'] ?? [];
+        $tujuan = $sub + ($arah < 0 ? -1 : 1);
+
+        if (isset($daftar[$sub], $daftar[$tujuan])) {
+            [$daftar[$tujuan], $daftar[$sub]] = [$daftar[$sub], $daftar[$tujuan]];
+            $this->form[$id]['kolom'][$index]['tabel_kolom'] = $daftar;
+        }
     }
 
     public function buka(int $id): void
@@ -526,7 +645,7 @@ class BagianKustomManager extends Component
 
     public function setTab(string $tab): void
     {
-        if (in_array($tab, ['dasar', 'isian', 'bukti', 'notula', 'pratinjau', 'riwayat'], true)) {
+        if (in_array($tab, ['dasar', 'isian', 'alur', 'bukti', 'notula', 'pratinjau', 'riwayat'], true)) {
             $this->tab = $tab;
         }
     }
@@ -882,7 +1001,7 @@ class BagianKustomManager extends Component
 
         // Kunci dibuat sekarang (bukan saat simpan) supaya kolom bisa langsung
         // ditempatkan di subbagian baru. Kunci tetap walau nama subbagian diganti.
-        $this->form[$id]['subbagian'][] = ['kunci' => 'sub_'.$n, 'nama' => '', 'deskripsi' => '', 'aktif' => true];
+        $this->form[$id]['subbagian'][] = ['kunci' => 'sub_'.$n, 'nama' => '', 'deskripsi' => '', 'aktif' => true, 'wajib' => false] + self::syaratForm(null);
     }
 
     /**
@@ -1056,6 +1175,37 @@ class BagianKustomManager extends Component
             "form.{$id}.tampilan" => ['nullable', 'array'],
             "form.{$id}.tampilan.isian" => ['nullable', Rule::in(array_keys(BagianKustom::TAMPILAN_ISIAN))],
             "form.{$id}.tampilan.baca" => ['nullable', Rule::in(array_keys(BagianKustom::TAMPILAN_BACA))],
+            "form.{$id}.aturan_bukti.saat" => ['nullable', Rule::in(array_keys(AturanBuktiBagianKustom::SAAT))],
+            // Alur kerja & periode berlaku.
+            "form.{$id}.alur" => ['nullable', 'array'],
+            "form.{$id}.alur.mode" => ['nullable', Rule::in(array_keys(AlurBagianKustom::MODE))],
+            "form.{$id}.alur.pengaju" => ['nullable', 'array'],
+            "form.{$id}.alur.pengaju.*" => [Rule::in(array_keys(BagianKustom::NAMA_PERAN))],
+            "form.{$id}.alur.pemeriksa" => ['nullable', 'array'],
+            "form.{$id}.alur.pemeriksa.*" => [Rule::in(array_keys(BagianKustom::NAMA_PERAN))],
+            "form.{$id}.alur.ubah_setelah_disetujui" => ['boolean'],
+            "form.{$id}.alur.notula" => ['nullable', Rule::in(array_keys(AlurBagianKustom::NOTULA))],
+            "form.{$id}.periode_berlaku" => ['nullable', 'array'],
+            "form.{$id}.periode_berlaku.triwulan" => ['nullable', 'array'],
+            "form.{$id}.periode_berlaku.triwulan.*" => [Rule::in(['1', '2', '3', '4', 1, 2, 3, 4])],
+            "form.{$id}.periode_berlaku.tahun_mulai" => ['nullable', 'integer', 'min:2020', 'max:2100'],
+            "form.{$id}.periode_berlaku.tahun_selesai" => ['nullable', 'integer', 'min:2020', 'max:2100'],
+            // Subbagian & kolom: wajib, syarat tampil, rumus, tabel.
+            "form.{$id}.subbagian.*.wajib" => ['boolean'],
+            "form.{$id}.subbagian.*.syarat_kunci" => ['nullable', 'string', 'max:60'],
+            "form.{$id}.subbagian.*.syarat_operator" => ['nullable', Rule::in(array_keys(BagianKustom::OPERATOR_SYARAT))],
+            "form.{$id}.subbagian.*.syarat_nilai" => ['nullable', 'string', 'max:150'],
+            "form.{$id}.kolom.*.syarat_kunci" => ['nullable', 'string', 'max:60'],
+            "form.{$id}.kolom.*.syarat_operator" => ['nullable', Rule::in(array_keys(BagianKustom::OPERATOR_SYARAT))],
+            "form.{$id}.kolom.*.syarat_nilai" => ['nullable', 'string', 'max:150'],
+            "form.{$id}.kolom.*.rumus" => ['nullable', 'string', 'max:'.\App\Support\RumusBagianKustom::PANJANG_MAKS],
+            "form.{$id}.kolom.*.baris_min" => ['nullable', 'integer', 'min:0', 'max:'.\App\Support\JenisKolomBagianKustom::BARIS_TABEL_MAKS],
+            "form.{$id}.kolom.*.baris_maks" => ['nullable', 'integer', 'min:1', 'max:'.\App\Support\JenisKolomBagianKustom::BARIS_TABEL_MAKS],
+            "form.{$id}.kolom.*.tabel_kolom" => ['nullable', 'array', 'max:'.\App\Support\JenisKolomBagianKustom::SUBKOLOM_MAKS],
+            "form.{$id}.kolom.*.tabel_kolom.*.label" => ['required', 'string', 'max:100'],
+            "form.{$id}.kolom.*.tabel_kolom.*.tipe" => ['required', Rule::in(array_keys(\App\Support\JenisKolomBagianKustom::TIPE_SUBKOLOM))],
+            "form.{$id}.kolom.*.tabel_kolom.*.wajib" => ['boolean'],
+            "form.{$id}.kolom.*.tabel_kolom.*.opsi_teks" => ['nullable', 'string', 'max:500'],
         ];
     }
 
@@ -1069,6 +1219,7 @@ class BagianKustomManager extends Component
             "form.{$id}.subbagian.max" => 'Maksimal '.BagianKustom::SUBBAGIAN_MAKS.' subbagian per bagian.',
             "form.{$id}.aturan_bukti.maks.min" => 'Jumlah maksimal bukti minimal 1.',
             "form.{$id}.aturan_bukti.ukuran_maks_mb.max" => 'Ukuran maksimal per berkas paling besar '.AturanBuktiBagianKustom::UKURAN_MAKS_MB.' MB.',
+            "form.{$id}.kolom.*.tabel_kolom.*.label.required" => 'Nama kolom tabel wajib diisi (atau hapus kolom tabelnya).',
         ];
     }
 
@@ -1081,9 +1232,40 @@ class BagianKustomManager extends Component
     {
         return collect($this->form[$id]['subbagian'] ?? [])
             ->filter(fn ($s) => filled($s['kunci'] ?? null))
-            ->map(fn ($s) => BagianKustom::normalkanSubbagian($s + ['nama' => '']))
+            ->map(fn ($s) => BagianKustom::normalkanSubbagian(['tampil_jika' => self::syaratDariForm($s)] + $s + ['nama' => '']))
             ->values()
             ->all();
+    }
+
+    /**
+     * Periksa syarat tampil kolom/subbagian: kolom acuan harus ada, bukan dirinya, dan
+     * nilai pembanding harus salah satu pilihan bila kolom acuannya berpilihan.
+     *
+     * @param  array<string, mixed>  $row
+     * @param  array<int, array<string, mixed>>  $kolomDikenal  kolom tersimpan (kunci tetap)
+     */
+    protected function periksaSyarat(string $jalur, array $row, array $kolomDikenal, ?string $kunciSendiri = null): void
+    {
+        if (! filled($row['syarat_kunci'] ?? null)) {
+            return;
+        }
+
+        $acuan = collect($kolomDikenal)->firstWhere('kunci', $row['syarat_kunci']);
+
+        if (! $acuan || $row['syarat_kunci'] === $kunciSendiri) {
+            $this->addError("{$jalur}.syarat_kunci", 'Kolom acuan syarat tampil tidak ditemukan. Pilih kolom lain atau kosongkan syaratnya.');
+
+            return;
+        }
+
+        $operator = (string) ($row['syarat_operator'] ?? 'sama');
+        $nilai = trim((string) ($row['syarat_nilai'] ?? ''));
+
+        if ($operator !== 'terisi' && $nilai === '') {
+            $this->addError("{$jalur}.syarat_nilai", 'Isi nilai pembanding syarat tampil, atau pilih "sudah diisi".');
+        } elseif ($operator !== 'terisi' && in_array($acuan['tipe'], ['pilihan', 'pilihan_ganda'], true) && ! in_array($nilai, $acuan['opsi'], true)) {
+            $this->addError("{$jalur}.syarat_nilai", 'Nilai pembanding harus salah satu pilihan kolom "'.$acuan['label'].'": '.implode(', ', $acuan['opsi']).'.');
+        }
     }
 
     /**
@@ -1159,7 +1341,43 @@ class BagianKustomManager extends Component
                 }
             }
 
+            if ($row['tipe'] === 'tabel') {
+                $subkolom = $row['tabel_kolom'] ?? [];
+
+                if ($subkolom === []) {
+                    $this->addError("form.{$id}.kolom.{$i}.tabel_kolom", 'Kolom tabel butuh minimal satu kolom di dalamnya. Klik "＋ Kolom tabel".');
+                }
+
+                foreach ($subkolom as $si => $s) {
+                    if (($s['tipe'] ?? '') === 'pilihan' && count($this->opsiDariTeks((string) ($s['opsi_teks'] ?? ''))) < 2) {
+                        $this->addError("form.{$id}.kolom.{$i}.tabel_kolom.{$si}.opsi_teks", 'Kolom tabel pilihan butuh minimal dua opsi, dipisah koma.');
+                    }
+                }
+
+                if (filled($row['baris_min'] ?? null) && filled($row['baris_maks'] ?? null) && (int) $row['baris_min'] > (int) $row['baris_maks']) {
+                    $this->addError("form.{$id}.kolom.{$i}.baris_maks", 'Jumlah baris maksimal harus lebih besar atau sama dengan minimal.');
+                }
+            }
+
             $hasil[] = $this->kolomTersimpan($kunci, $row, $opsi);
+        }
+
+        // Rumus & syarat tampil merujuk kolom lain lewat kunci tetapnya — diperiksa
+        // setelah semua kunci diketahui.
+        $kunciAngka = collect($hasil)->whereIn('tipe', ['angka', 'persentase'])->pluck('kunci')->all();
+
+        foreach ($baris as $i => $row) {
+            if (($row['tipe'] ?? '') === 'hitung' && ($galat = \App\Support\RumusBagianKustom::galat((string) ($row['rumus'] ?? ''), $kunciAngka)) !== null) {
+                $this->addError("form.{$id}.kolom.{$i}.rumus", $galat);
+            }
+
+            $this->periksaSyarat("form.{$id}.kolom.{$i}", $row, $hasil, $hasil[$i]['kunci'] ?? null);
+        }
+
+        foreach ($this->form[$id]['subbagian'] ?? [] as $si => $s) {
+            // Subbagian tidak boleh bersyarat pada kolom di dalamnya sendiri.
+            $kolomLuar = array_values(array_filter($hasil, fn ($k) => $k['subbagian'] !== ($s['kunci'] ?? null)));
+            $this->periksaSyarat("form.{$id}.subbagian.{$si}", $s, $kolomLuar);
         }
 
         return $hasil;
@@ -1191,9 +1409,29 @@ class BagianKustomManager extends Component
         }
 
         $tipe = (string) ($row['tipe'] ?? 'teks');
-        $angka = $tipe === 'angka';
+        $angka = \App\Support\JenisKolomBagianKustom::numerik($tipe);
+
+        // Kunci subkolom tabel: dipertahankan bila sudah ada, dibuat dari label bila baru.
+        $subkolom = [];
+        $kunciSub = collect($row['tabel_kolom'] ?? [])->pluck('kunci')->filter()->values()->all();
+
+        foreach ($tipe === 'tabel' ? ($row['tabel_kolom'] ?? []) : [] as $s) {
+            $k = (string) ($s['kunci'] ?? '');
+
+            if ($k === '') {
+                $k = TemplateBagianKustom::kunciBaru((string) ($s['label'] ?? ''), $kunciSub);
+                $kunciSub[] = $k;
+            }
+
+            $subkolom[] = ['kunci' => $k, 'label' => $s['label'] ?? '', 'tipe' => $s['tipe'] ?? 'teks', 'wajib' => (bool) ($s['wajib'] ?? false), 'opsi' => $this->opsiDariTeks((string) ($s['opsi_teks'] ?? ''))];
+        }
 
         return BagianKustom::normalkanKolom([
+            'rumus' => $row['rumus'] ?? null,
+            'tabel_kolom' => $subkolom,
+            'baris_min' => $row['baris_min'] ?? null,
+            'baris_maks' => $row['baris_maks'] ?? null,
+            'tampil_jika' => self::syaratDariForm($row),
             'variabel' => $variabel,
             'ringkasan' => $row['ringkasan'] ?? null,
             'kunci' => $kunci,
@@ -1268,6 +1506,13 @@ class BagianKustomManager extends Component
             }
         }
 
+        // Kolom di dalam tabel yang sudah berisi data juga tidak boleh dihapus.
+        if (($galatSub = $this->galatSubkolomDihapus($bagian, $kolom)) !== null) {
+            $this->addError("form.{$id}.kolom", $galatSub);
+
+            return;
+        }
+
         // Mengganti jenis isian kolom yang sudah berisi data hanya boleh bila data lama
         // cocok dengan jenis baru (mis. teks "12,5" → angka boleh; "tinggi" → angka tidak).
         if (($galatTipe = $this->galatGantiTipe($bagian, $kolom)) !== null) {
@@ -1334,6 +1579,35 @@ class BagianKustomManager extends Component
             ? $this->bukti_wajib_boleh($peran, $penempatan) && (bool) $f['bukti_wajib']
             : $aturanBaru['mode'] === AturanBuktiBagianKustom::MODE_WAJIB;
 
+        // Alur kerja: berlaku di menu selain Isian Kegiatan.
+        [$alurBaru, $galatAlur] = $this->alurDariForm($bagian, $f, $peran, $penempatan);
+
+        if ($galatAlur !== null) {
+            $this->addError("form.{$id}.alur", $galatAlur);
+
+            return;
+        }
+
+        $alurEfektif = AlurBagianKustom::normalkan($alurBaru, $peran);
+
+        $saatBukti = $aturanBaru['saat'] ?? AturanBuktiBagianKustom::SAAT_SIMPAN;
+
+        if ($aturanBaru !== null && $aturanBaru['mode'] === AturanBuktiBagianKustom::MODE_WAJIB && $saatBukti !== AturanBuktiBagianKustom::SAAT_SIMPAN && ! AlurBagianKustom::pakaiVerifikasi($alurEfektif)) {
+            $this->addError("form.{$id}.aturan_bukti.saat", 'Bukti "'.mb_strtolower(AturanBuktiBagianKustom::SAAT[$saatBukti]).'" hanya bisa dipakai bila alur kerja memakai pengajuan & pemeriksaan (tab Alur Kerja & Periode).');
+
+            return;
+        }
+
+        $periodeBaru = BagianKustom::normalkanPeriode((array) ($f['periode_berlaku'] ?? []));
+
+        if ($periodeBaru['tahun_mulai'] !== null && $periodeBaru['tahun_selesai'] !== null && $periodeBaru['tahun_mulai'] > $periodeBaru['tahun_selesai']) {
+            $this->addError("form.{$id}.periode_berlaku", 'Tahun selesai harus sama atau setelah tahun mulai.');
+
+            return;
+        }
+
+        $periodeSimpan = $periodeBaru === ['triwulan' => [], 'tahun_mulai' => null, 'tahun_selesai' => null] ? null : $periodeBaru;
+
         $tampilan = [
             'isian' => array_key_exists((string) ($f['tampilan']['isian'] ?? ''), BagianKustom::TAMPILAN_ISIAN) ? $f['tampilan']['isian'] : 'kartu',
             'baca' => array_key_exists((string) ($f['tampilan']['baca'] ?? ''), BagianKustom::TAMPILAN_BACA) ? $f['tampilan']['baca'] : 'daftar',
@@ -1352,7 +1626,7 @@ class BagianKustomManager extends Component
         // dicocokkan dengan versi saat form dimuat: bila Tim SAKIP lain sudah mengubah
         // bagian ini, simpan dibatalkan (isian form tetap di layar).
         try {
-            $this->dalamTransaksi(function () use ($id, $f, $peran, $penempatan, $kolom, $pembaca, $aturanBaru, $buktiWajib, $tampilan) {
+            $this->dalamTransaksi(function () use ($id, $f, $peran, $penempatan, $kolom, $pembaca, $aturanBaru, $buktiWajib, $tampilan, $alurBaru, $periodeSimpan) {
                 $bagian = BagianKustom::whereKey($id)->lockForUpdate()->firstOrFail();
 
                 if (! isset($this->versiForm[$id]) || self::versi($bagian) !== $this->versiForm[$id]) {
@@ -1377,6 +1651,8 @@ class BagianKustomManager extends Component
                     'masuk_notula' => (bool) $f['masuk_notula'],
                     'judul_notula' => trim((string) ($f['judul_notula'] ?? '')) ?: null,
                     'format_notula' => trim((string) ($f['format_notula'] ?? '')) ?: null,
+                    'alur' => $alurBaru,
+                    'periode_berlaku' => $periodeSimpan,
                     'kolom' => $kolom,
                     'subbagian' => $this->subbagianDariForm($id),
                 ]);
@@ -1441,6 +1717,93 @@ class BagianKustomManager extends Component
      *
      * @param  array<int, array<string, mixed>>  $kolomBaru
      */
+    /**
+     * Pengaturan alur dari form + pesan galat. Bagian lama (alur NULL) yang tetap pada
+     * pengaturan bawaan dibiarkan NULL — tidak ada perubahan data tanpa perubahan arti.
+     *
+     * @param  array<string, mixed>  $f
+     * @param  array<int, string>  $peran
+     * @param  array<int, string>  $penempatan
+     * @return array{0: ?array<string, mixed>, 1: ?string}
+     */
+    protected function alurDariForm(BagianKustom $bagian, array $f, array $peran, array $penempatan): array
+    {
+        $a = (array) ($f['alur'] ?? []);
+        $mode = array_key_exists((string) ($a['mode'] ?? ''), AlurBagianKustom::MODE) ? (string) $a['mode'] : AlurBagianKustom::MODE_LANGSUNG;
+        $pengaju = array_values(array_intersect($peran, (array) ($a['pengaju'] ?? $peran)));
+        $pemeriksa = array_values(array_intersect(array_keys(BagianKustom::NAMA_PERAN), (array) ($a['pemeriksa'] ?? [])));
+        $alur = [
+            'mode' => $mode,
+            'pengaju' => $pengaju,
+            'pemeriksa' => $pemeriksa,
+            'ubah_setelah_disetujui' => (bool) ($a['ubah_setelah_disetujui'] ?? false),
+            'notula' => array_key_exists((string) ($a['notula'] ?? ''), AlurBagianKustom::NOTULA) ? (string) $a['notula'] : AlurBagianKustom::NOTULA_SEMUA,
+        ];
+
+        if ($mode === AlurBagianKustom::MODE_VERIFIKASI) {
+            $menuLain = array_values(array_diff($penempatan, [MenuBagianKustom::PENGISIAN]));
+
+            if ($menuLain === []) {
+                return [null, 'Alur pengajuan & pemeriksaan berlaku di menu selain Isian Kegiatan. Tempatkan bagian ini di menu lain (tab Informasi), atau pilih "Langsung sah". Isian Kegiatan selalu mengikuti alur verifikasi Isian Kegiatan.'];
+            }
+
+            if ($pengaju === []) {
+                return [null, 'Pilih minimal satu peran pengisi yang boleh mengajukan.'];
+            }
+
+            if ($pemeriksa === []) {
+                return [null, 'Pilih minimal satu peran pemeriksa.'];
+            }
+
+            foreach ($pemeriksa as $p) {
+                if (! collect($menuLain)->contains(fn ($m) => in_array($p, MenuBagianKustom::peranDiizinkan($m), true))) {
+                    return [null, 'Pemeriksa '.(BagianKustom::NAMA_PERAN[$p] ?? $p).' tidak bisa membuka menu mana pun tempat bagian ini ditempatkan. Tambahkan menu yang bisa dibukanya atau hapus centangnya.'];
+                }
+            }
+        }
+
+        $bawaan = AlurBagianKustom::normalkan(null, $peran);
+        unset($bawaan['diatur']);
+
+        return [$bagian->alur === null && $alur == $bawaan ? null : $alur, null];
+    }
+
+    /**
+     * Pesan bila subkolom tabel yang sudah berisi data dihapus dari pengaturan.
+     *
+     * @param  array<int, array<string, mixed>>  $kolomBaru
+     */
+    protected function galatSubkolomDihapus(BagianKustom $bagian, array $kolomBaru): ?string
+    {
+        $baru = collect($kolomBaru)->keyBy('kunci');
+
+        foreach ($bagian->kolomList() as $lama) {
+            if ($lama['tipe'] !== 'tabel' || ($baru->get($lama['kunci'])['tipe'] ?? null) !== 'tabel') {
+                continue;
+            }
+
+            $dihapus = collect($lama['tabel_kolom'])->pluck('kunci')->diff(collect($baru[$lama['kunci']]['tabel_kolom'])->pluck('kunci'));
+
+            if ($dihapus->isEmpty()) {
+                continue;
+            }
+
+            $nilai = BagianKustomPoin::where('bagian_kustom_id', $bagian->id)->whereNotNull('nilai_kolom')->pluck('nilai_kolom');
+
+            foreach ($dihapus as $kunciSub) {
+                $berisi = $nilai->filter(fn ($n) => collect(\App\Support\JenisKolomBagianKustom::barisTabel($n[$lama['kunci']] ?? ''))->contains(fn ($b) => filled($b[$kunciSub] ?? null)))->count();
+
+                if ($berisi > 0) {
+                    $label = collect($lama['tabel_kolom'])->firstWhere('kunci', $kunciSub)['label'] ?? $kunciSub;
+
+                    return "Kolom tabel \"{$label}\" di \"{$lama['label']}\" sudah berisi data di {$berisi} poin, jadi tidak bisa dihapus. Klik \"Batal ubah\" untuk memulihkannya.";
+                }
+            }
+        }
+
+        return null;
+    }
+
     protected function galatGantiTipe(BagianKustom $bagian, array $kolomBaru): ?string
     {
         $lama = collect($bagian->kolomList())->keyBy('kunci');
@@ -1611,6 +1974,50 @@ class BagianKustomManager extends Component
     /* ---------- Pratinjau (dihitung dari form, termasuk yang belum disimpan) ---------- */
 
     /**
+     * Bagian SEMENTARA (tidak disimpan) dari isian form saat ini — dipakai pratinjau
+     * formulir supaya yang dicoba persis sama dengan aturan yang akan diterbitkan.
+     */
+    protected function bagianDariForm(int $id): BagianKustom
+    {
+        $f = $this->form[$id];
+
+        return new BagianKustom([
+            'nama' => (string) ($f['nama'] ?? ''),
+            'peran' => array_values((array) ($f['peran'] ?? [])),
+            'penempatan' => array_values((array) ($f['penempatan'] ?? [])),
+            'kolom' => $this->kolomDariFormTanpaError($id),
+            'subbagian' => $this->subbagianDariForm($id),
+        ]);
+    }
+
+    /** Jalankan validasi sungguhan atas isian contoh di tab Pratinjau. Tidak menyimpan apa pun. */
+    public function ujiPratinjau(int $id): void
+    {
+        abort_unless(isset($this->form[$id]), 404);
+        $this->resetErrorBag();
+
+        $bagian = $this->bagianDariForm($id);
+        $nilai = (array) ($this->pratinjauNilai[$id] ?? []);
+        $galat = $bagian->galatNilaiPoin($nilai, null, null);
+
+        foreach ($galat as $kunci => $pesan) {
+            $this->addError("pratinjauNilai.{$id}.{$kunci}", $pesan);
+        }
+
+        $this->hasilPratinjau[$id] = $galat === [] ? $bagian->nilaiKolomTampil($bagian->bersihkanNilaiKolom($nilai)) : [];
+
+        session()->flash('pratinjau-'.$id, $galat === []
+            ? 'Isian contoh lolos semua aturan. Begini nilai yang akan tersimpan & tampil di notula.'
+            : count($galat).' isian belum sesuai aturan — lihat pesan merah di formulir.');
+    }
+
+    public function kosongkanPratinjau(int $id): void
+    {
+        $this->resetErrorBag();
+        unset($this->pratinjauNilai[$id], $this->hasilPratinjau[$id]);
+    }
+
+    /**
      * Contoh hasil notula dari keadaan form saat ini — dua poin contoh.
      *
      * @return array{judul: string, baris: array<int, string>, peringatan: array<int, string>}
@@ -1678,19 +2085,20 @@ class BagianKustomManager extends Component
         $variabel = [];
         $kolomTampil = [];
         $kelompokPratinjau = [];
+        $bagianPratinjau = null;
 
         if ($this->bukaId !== null && isset($this->form[$this->bukaId])) {
             $kolomTampil = $this->kolomDariFormTanpaError($this->bukaId);
             $variabel = TemplateBagianKustom::semuaVariabel($kolomTampil);
             $pratinjau = $this->pratinjauNotula($this->bukaId);
 
-            // Simulasi formulir isian: hanya kolom & subbagian aktif, sama seperti formulir sungguhan.
-            $subAktif = collect($this->subbagianDariForm($this->bukaId))->where('aktif', true)->values()->all();
-            $subNonaktif = collect($this->subbagianDariForm($this->bukaId))->where('aktif', false)->pluck('kunci')->all();
-            $kelompokPratinjau = BagianKustom::kelompokkan(
-                array_values(array_filter($kolomTampil, fn ($k) => $k['aktif'] && ! in_array($k['subbagian'], $subNonaktif, true))),
-                $subAktif,
-            );
+            // Formulir pratinjau: hanya kolom & subbagian aktif, persis seperti formulir sungguhan.
+            $bagianPratinjau = $this->bagianDariForm($this->bukaId);
+            $kelompokPratinjau = $bagianPratinjau->kelompokKolomBerlaku(null, null);
+
+            // Setiap kolom pratinjau harus punya nilai (kosong) supaya isian yang terikat
+            // lewat entangle (tabel, pilihan ganda) menemukan propertinya.
+            $this->pratinjauNilai[$this->bukaId] = ((array) ($this->pratinjauNilai[$this->bukaId] ?? [])) + $bagianPratinjau->nilaiKolomKosongForm();
         }
 
         $detail = $this->detailId ? BagianKustom::withCount('poin')->find($this->detailId) : null;
@@ -1706,6 +2114,12 @@ class BagianKustomManager extends Component
             'detail' => $detail,
             'kelompokDetail' => $detail ? BagianKustom::kelompokkan($detail->kolomList(), $detail->subbagianList()) : [],
             'kelompokPratinjau' => $kelompokPratinjau,
+            'bagianPratinjau' => $bagianPratinjau,
+            'modeAlur' => AlurBagianKustom::MODE,
+            'pilihanNotula' => AlurBagianKustom::NOTULA,
+            'saatBukti' => AturanBuktiBagianKustom::SAAT,
+            'operatorSyarat' => BagianKustom::OPERATOR_SYARAT,
+            'tipeSubkolom' => \App\Support\JenisKolomBagianKustom::TIPE_SUBKOLOM,
             'formatTanggal' => \App\Support\JenisKolomBagianKustom::FORMAT_TANGGAL,
             'pratinjau' => $pratinjau,
             'variabel' => $variabel,

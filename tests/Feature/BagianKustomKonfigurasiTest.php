@@ -82,7 +82,12 @@ class BagianKustomKonfigurasiTest extends TestCase
             ->set("form.{$bagian->id}.format_notula", '{kode_iku}: {teks} ({skor})')
             ->call('setTab', 'pratinjau')
             ->assertSee('Manajemen Risiko')
-            ->assertSee('Pilih: Rendah / Sedang / Tinggi', false)
+            // Pratinjau = formulir sungguhan (bukan tiruan): pilihan tampil sebagai select terikat.
+            ->assertSeeHtml('wire:model.change="pratinjauNilai.'.$bagian->id.'.level_risiko"')
+            ->assertSeeHtml('<option value="Tinggi">Tinggi</option>')
+            ->call('setTab', 'alur')
+            ->assertSee('Alur isian')
+            ->assertSee('Periode berlaku')
             ->call('setTab', 'dasar')
             ->assertOk();
     }

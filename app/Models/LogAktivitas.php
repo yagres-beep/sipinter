@@ -68,6 +68,8 @@ class LogAktivitas extends Model
         'bagian_kustom_poin.simpan' => 'Percobaan simpan isian',
         'bagian_kustom_poin.ditandai_sesuai' => 'Poin ditandai Sesuai',
         'bagian_kustom_poin.ditandai_tidak_sesuai' => 'Poin ditandai Tidak Sesuai',
+        'bagian_kustom_poin.diajukan' => 'Poin isian diajukan',
+        'bagian_kustom_poin.ditarik' => 'Pengajuan poin ditarik',
         'bukti.diunggah' => 'Bukti dukung diunggah',
         'bukti.diganti' => 'Bukti dukung diganti',
         'bukti.dihapus' => 'Bukti dukung dihapus',

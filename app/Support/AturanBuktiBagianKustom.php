@@ -26,6 +26,22 @@ final class AturanBuktiBagianKustom
         self::MODE_WAJIB => 'Wajib per poin yang diisi',
     ];
 
+    public const SAAT_SIMPAN = 'simpan';
+
+    public const SAAT_AJUKAN = 'ajukan';
+
+    public const SAAT_VERIFIKASI = 'verifikasi';
+
+    /**
+     * Kapan jumlah minimal bukti diperiksa. "Ajukan" & "verifikasi" hanya berlaku pada
+     * bagian beralur verifikasi di menu selain Isian Kegiatan (BagianKustom::aturanBuktiDi()).
+     */
+    public const SAAT = [
+        self::SAAT_SIMPAN => 'Saat disimpan',
+        self::SAAT_AJUKAN => 'Sebelum diajukan',
+        self::SAAT_VERIFIKASI => 'Sebelum disetujui pemeriksa',
+    ];
+
     /**
      * Format yang didukung penuh (unggah lokal → Google Drive → pratinjau/unduh).
      *
@@ -61,6 +77,7 @@ final class AturanBuktiBagianKustom
                 'format' => ['pdf'],
                 'ukuran_maks_mb' => null,
                 'petunjuk' => null,
+                'saat' => self::SAAT_SIMPAN,
                 'diatur' => false,
             ];
         }
@@ -85,8 +102,44 @@ final class AturanBuktiBagianKustom
             'format' => $format === [] ? ['pdf'] : $format,
             'ukuran_maks_mb' => filled($tersimpan['ukuran_maks_mb'] ?? null) ? max(1, min(self::UKURAN_MAKS_MB, (int) $tersimpan['ukuran_maks_mb'])) : null,
             'petunjuk' => filled($tersimpan['petunjuk'] ?? null) ? trim((string) $tersimpan['petunjuk']) : null,
+            'saat' => $mode === self::MODE_WAJIB && array_key_exists((string) ($tersimpan['saat'] ?? ''), self::SAAT) ? (string) $tersimpan['saat'] : self::SAAT_SIMPAN,
             'diatur' => true,
         ];
+    }
+
+    /**
+     * Aturan untuk pemeriksaan SAAT SIMPAN: bila jumlah minimal baru diperiksa saat
+     * diajukan/disetujui, poin boleh disimpan dulu tanpa bukti (format, ukuran, dan
+     * jumlah maksimal tetap diperiksa).
+     *
+     * @param  array<string, mixed>  $aturan
+     * @return array<string, mixed>
+     */
+    public static function untukSimpan(array $aturan): array
+    {
+        if ($aturan['mode'] === self::MODE_WAJIB && ($aturan['saat'] ?? self::SAAT_SIMPAN) !== self::SAAT_SIMPAN) {
+            $aturan['mode'] = self::MODE_OPSIONAL;
+            $aturan['min'] = 0;
+        }
+
+        return $aturan;
+    }
+
+    /**
+     * Pesan bila jumlah bukti tersimpan poin belum memenuhi minimal (dipakai saat
+     * mengajukan & menyetujui), null bila cukup.
+     *
+     * @param  array<string, mixed>  $aturan
+     */
+    public static function galatMinimal(array $aturan, int $jumlah): ?string
+    {
+        if ($aturan['mode'] !== self::MODE_WAJIB || $jumlah >= $aturan['min']) {
+            return null;
+        }
+
+        return $aturan['min'] > 1
+            ? "bukti dukung minimal {$aturan['min']} berkas (saat ini {$jumlah})"
+            : 'bukti dukung belum diunggah';
     }
 
     /** Bentuk yang disimpan ke kolom JSON (tanpa kunci turunan). */
@@ -94,6 +147,11 @@ final class AturanBuktiBagianKustom
     {
         $n = self::normalkan($aturan, false);
         unset($n['diatur']);
+
+        // Bawaan (saat disimpan) tidak ditulis — bentuk data lama tetap sama.
+        if ($n['saat'] === self::SAAT_SIMPAN) {
+            unset($n['saat']);
+        }
 
         return $n;
     }
@@ -140,6 +198,10 @@ final class AturanBuktiBagianKustom
 
         if ($aturan['ukuran_maks_mb'] !== null) {
             $bagian[] = 'maks '.$aturan['ukuran_maks_mb'].' MB per berkas';
+        }
+
+        if ($aturan['mode'] === self::MODE_WAJIB && ($aturan['saat'] ?? self::SAAT_SIMPAN) !== self::SAAT_SIMPAN) {
+            $bagian[] = 'wajib '.mb_strtolower(self::SAAT[$aturan['saat']]);
         }
 
         return implode(' · ', $bagian);

@@ -117,7 +117,7 @@ class VariabelKatalogManager extends Component
         $this->validate([
             'form.kode' => $baru ? ['required', 'string', 'regex:'.VariabelKatalog::POLA_KODE, Rule::unique('variabel_katalog', 'kode')] : [],
             'form.nama' => ['required', 'string', 'max:150'],
-            'form.tipe' => ['required', Rule::in(array_keys(JenisKolomBagianKustom::TIPE))],
+            'form.tipe' => ['required', Rule::in(JenisKolomBagianKustom::TIPE_KATALOG)],
             'form.satuan' => ['nullable', 'string', 'max:30'],
             'form.desimal' => ['nullable', 'integer', 'min:0', 'max:'.FormatAngkaKolom::DESIMAL_MAKS],
             'form.pemisah' => ['nullable', Rule::in(array_keys(FormatAngkaKolom::PEMISAH))],
@@ -293,7 +293,7 @@ class VariabelKatalogManager extends Component
         return view('livewire.variabel-katalog-manager', [
             'daftar' => $daftar,
             'pemakaian' => $pemakaian,
-            'tipeKolom' => JenisKolomBagianKustom::TIPE,
+            'tipeKolom' => JenisKolomBagianKustom::tipeKatalog(),
             'pilihanPemisah' => FormatAngkaKolom::PEMISAH,
         ]);
     }

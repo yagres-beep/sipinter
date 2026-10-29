@@ -151,3 +151,44 @@ Menghapus bukti di menu Isian Bagian Kustom:
 - **Perubahan pengaturan bagian** tercatat di tab 🕘 Riwayat bagian itu: dibuat, disalin, diubah, aktif/nonaktif, urutan, dan dihapus.
 - **Isian, lanjutan, bukti, penandaan verifikasi, perubahan katalog variabel, dan akses yang ditolak** tercatat di 📜 Log Aktivitas.
 - Log tidak bisa diubah atau dihapus, dan tidak menyimpan kata sandi, token, atau kredensial.
+
+## 7. Form builder dinamis (29 Okt 2026)
+
+### Jenis kolom tambahan (tab 🧾 Struktur Isian)
+
+- **Persentase (%)**: angka dengan satuan %. Isi batas minimal/maksimal bila perlu (mis. 0–100).
+- **Tautan (URL)**: harus diawali `http://` atau `https://`.
+- **Perhitungan otomatis**: isi rumus dari kolom Angka/Persentase, mis. `{realisasi} / {target} * 100`. Hasil dihitung server saat poin disimpan. Bila ada nilai kosong atau pembagian dengan nol, hasilnya kosong.
+- **Tabel**: atur kolom di dalam tabel (Teks, Angka, Tanggal, Pilihan; masing-masing bisa wajib) serta jumlah baris minimal/maksimal. Pengisi menambah dan menghapus baris sendiri. Di notula, tabel dicetak per baris: `1) Kolom: isi; … | 2) …`.
+
+Dua bagian bisa punya struktur dan tabel yang berbeda sama sekali.
+
+### Keterlihatan bersyarat dan subbagian wajib
+
+- Setiap kolom dan subbagian bisa diatur **Tampilkan bila "kolom X" bernilai / tidak bernilai / sudah diisi**. Kolom yang tersembunyi tidak wajib diisi dan isiannya tidak disimpan.
+- Centang **Wajib diisi** pada subbagian agar minimal satu isian di subbagian itu wajib diisi.
+
+### Alur kerja dan periode (tab 🔁 Alur Kerja & Periode)
+
+- **Langsung sah** (bawaan): isian sah begitu disimpan.
+- **Diajukan lalu diperiksa**: pengisi menyimpan draf, lalu klik **Ajukan**. Pemeriksa (mis. Tim SAKIP) melihat panel **Pemeriksaan** di menu yang sama, lalu **Setujui** atau **Kembalikan** dengan catatan. Poin yang diajukan terkunci. Pengaju bisa **Tarik pengajuan** selama belum diperiksa.
+- Alur ini berlaku di menu **selain Isian Kegiatan**. Isian Kegiatan tetap mengikuti alur pengajuan dan Verifikasi yang sudah ada.
+- **Periode berlaku**: pilih triwulan dan rentang tahun bagian tampil untuk diisi. Data lama tidak berubah.
+
+### Bukti dukung dan notula
+
+- Bukti **wajib** bisa diperiksa **saat disimpan**, **sebelum diajukan**, atau **sebelum disetujui**. Dua pilihan terakhir hanya untuk alur pemeriksaan.
+- Tab 📄 Notula: **Isian yang dicetak di notula** = semua isian, atau hanya isian yang disetujui atau ditandai Sesuai. Aturan ini berlaku sama untuk notula di layar, DOCX, dan PDF.
+
+### Pratinjau dan uji sebelum diterbitkan
+
+Tab **👁 Pratinjau & Uji** menampilkan formulir sungguhan dari pengaturan di layar, termasuk yang belum disimpan. Isi contoh lalu klik **Uji validasi** untuk melihat pesan galat, hasil rumus, dan nilai yang akan tersimpan. Isian contoh tidak disimpan.
+
+Alur menerbitkan bagian baru:
+
+1. Buat bagian, lalu klik **Nonaktifkan** agar belum tampil ke pengisi. Bagian hasil **Duplikasi** sudah nonaktif dari awal.
+2. Susun kolomnya, lalu **Simpan Pengaturan**. Semua aturan diperiksa di server.
+3. Coba formulirnya di tab **Pratinjau & Uji**.
+4. Klik **Aktifkan** agar bagian tampil ke pengisi.
+
+Yang belum tersedia: jenis kolom "referensi ke data lain", dan bukti dukung sebagai kolom tersendiri. Bukti tetap diatur per poin lewat tab 📎.

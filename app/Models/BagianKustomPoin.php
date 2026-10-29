@@ -36,12 +36,18 @@ class BagianKustomPoin extends Model
         'status_verifikasi',
         'catatan',
         'catatan_bukti_dihapus',
+        'diajukan_pada',
+        'diajukan_oleh',
+        'diperiksa_pada',
+        'diperiksa_oleh',
     ];
 
     protected function casts(): array
     {
         return [
             'nilai_kolom' => 'array',
+            'diajukan_pada' => 'datetime',
+            'diperiksa_pada' => 'datetime',
         ];
     }
 

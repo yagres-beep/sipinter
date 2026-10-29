@@ -218,6 +218,22 @@ final class JejakAktivitasBagianKustom
         );
     }
 
+    /**
+     * Pengisi mengajukan atau menarik pengajuan poin (alur verifikasi Bagian Kustom).
+     * Dicatat di transaksi yang sama dengan perubahan statusnya.
+     */
+    public static function poinBeralur(BagianKustom $bagian, BagianKustomPoin $poin, string $aksi, string $statusSebelum, ?string $korelasi = null): void
+    {
+        LogAktivitas::catat(
+            'bagian_kustom_poin.'.$aksi,
+            LogAktivitas::pelaku().($aksi === 'diajukan' ? ' mengajukan' : ' menarik pengajuan').' poin isian "'.$bagian->nama.'" pada '.self::lokasi($poin).'.',
+            self::konteks($bagian, $poin, $korelasi, LogAktivitas::selisih(
+                ['status' => $statusSebelum],
+                ['status' => \App\Support\AlurBagianKustom::statusPoin($poin)],
+            )),
+        );
+    }
+
     /** Tim SAKIP menandai poin Sesuai / Tidak Sesuai di halaman Verifikasi. */
     public static function poinDitandai(BagianKustomPoin $poin, string $statusSebelum, ?string $catatanSebelum): void
     {

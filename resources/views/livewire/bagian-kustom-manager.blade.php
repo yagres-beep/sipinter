@@ -254,7 +254,7 @@
                     <div style="margin-top:14px;padding:16px;background:var(--bg);border:1px solid var(--line);border-radius:12px">
                         {{-- Tab --}}
                         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
-                            @foreach (['dasar' => '⚙️ Informasi, Peran & Penempatan', 'isian' => '🧾 Struktur Isian & Tampilan', 'bukti' => '📎 Bukti Dukung', 'notula' => '📄 Notula & Variabel', 'pratinjau' => '👁 Pratinjau', 'riwayat' => '🕘 Riwayat'] as $kunciTab => $labelTab)
+                            @foreach (['dasar' => '⚙️ Informasi, Peran & Penempatan', 'isian' => '🧾 Struktur Isian & Tampilan', 'alur' => '🔁 Alur Kerja & Periode', 'bukti' => '📎 Bukti Dukung', 'notula' => '📄 Notula & Variabel', 'pratinjau' => '👁 Pratinjau & Uji', 'riwayat' => '🕘 Riwayat'] as $kunciTab => $labelTab)
                                 <button type="button" class="btn {{ $tab === $kunciTab ? 'btn-primary' : 'btn-ghost' }} btn-sm" wire:click="setTab('{{ $kunciTab }}')" @if ($tab === $kunciTab) aria-current="true" @endif>{{ $labelTab }}</button>
                             @endforeach
                         </div>
@@ -357,6 +357,97 @@
                                 <div class="fhint" style="margin-top:4px">Lihat diatur lewat peran pengisi dan peran pembaca di atas. Aksi lain hanya untuk peran pengisi, dan semuanya diperiksa di server. Menghapus centang tidak menghapus data yang sudah ada. Di Isian Kegiatan, poin tidak pernah dihapus dan pengajuan/verifikasi tetap mengikuti alur Isian Kegiatan.</div>
                             </div>
 
+                        {{-- TAB: ALUR KERJA & PERIODE --}}
+                        @elseif ($tab === 'alur')
+                            @php
+                                $al = $f['alur'] ?? [];
+                                $verif = ($al['mode'] ?? 'langsung') === 'verifikasi';
+                                $pb = $f['periode_berlaku'] ?? [];
+                            @endphp
+                            @error("form.{$bagian->id}.alur")<div class="info red" style="font-size:12px">⚠️ {{ $message }}</div>@enderror
+                            <div class="info" style="font-size:12px">🔁 Alur kerja berlaku untuk isian di menu <b>selain Isian Kegiatan</b>. Isian Kegiatan selalu mengikuti alur pengajuan Ketua Tim &amp; Verifikasi Tim SAKIP yang sudah ada. Semua perubahan status diperiksa di server.</div>
+                            <div class="field">
+                                <label for="mode-alur-{{ $bagian->id }}">Alur isian</label>
+                                <select id="mode-alur-{{ $bagian->id }}" class="inp filled" wire:model.live="form.{{ $bagian->id }}.alur.mode">
+                                    @foreach ($modeAlur as $nilai => $label)
+                                        <option value="{{ $nilai }}">{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            @if ($verif)
+                                <div class="row2">
+                                    <div class="field">
+                                        <label>Peran yang boleh mengajukan</label>
+                                        <div style="display:flex;gap:16px;flex-wrap:wrap">
+                                            @foreach ($namaPeran as $nilai => $label)
+                                                @if (in_array($nilai, $f['peran'] ?? [], true))
+                                                    <label style="display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer"><input type="checkbox" value="{{ $nilai }}" wire:model.live="form.{{ $bagian->id }}.alur.pengaju"> {{ $label }}</label>
+                                                @endif
+                                            @endforeach
+                                        </div>
+                                        <div class="fhint" style="margin-top:4px">Hanya peran pengisi. Pengaju juga bisa menarik pengajuan yang belum diperiksa.</div>
+                                    </div>
+                                    <div class="field">
+                                        <label>Peran pemeriksa</label>
+                                        <div style="display:flex;gap:16px;flex-wrap:wrap">
+                                            @foreach ($namaPeran as $nilai => $label)
+                                                <label style="display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer"><input type="checkbox" value="{{ $nilai }}" wire:model.live="form.{{ $bagian->id }}.alur.pemeriksa"> {{ $label }}</label>
+                                            @endforeach
+                                        </div>
+                                        <div class="fhint" style="margin-top:4px">Pemeriksa melihat poin yang diajukan di menu penempatan, lalu menyetujui atau mengembalikan dengan catatan.</div>
+                                    </div>
+                                </div>
+                                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;margin-bottom:12px">
+                                    <input type="checkbox" wire:model.live="form.{{ $bagian->id }}.alur.ubah_setelah_disetujui">
+                                    Pengisi boleh mengubah poin yang sudah disetujui (poin kembali menjadi draf dan harus diajukan ulang)
+                                </label>
+
+                                <div style="font-size:12px;font-weight:700;margin:6px 0">Status &amp; perubahan yang diizinkan</div>
+                                <div style="overflow-x:auto">
+                                    <table style="border-collapse:collapse;font-size:12px;min-width:460px" data-tabel-transisi="{{ $bagian->id }}">
+                                        <thead><tr style="text-align:left;color:var(--muted)"><th style="padding:4px 8px;border-bottom:1px solid var(--line)">Aksi</th><th style="padding:4px 8px;border-bottom:1px solid var(--line)">Oleh</th><th style="padding:4px 8px;border-bottom:1px solid var(--line)">Dari status</th><th style="padding:4px 8px;border-bottom:1px solid var(--line)">Menjadi</th></tr></thead>
+                                        <tbody>
+                                            @foreach (\App\Support\AlurBagianKustom::TRANSISI as $aksiAlur => [$dari, $ke])
+                                                <tr>
+                                                    <td style="padding:4px 8px;border-bottom:1px solid var(--line2);font-weight:600">{{ ['ajukan' => 'Ajukan', 'tarik' => 'Tarik pengajuan', 'setujui' => 'Setujui', 'kembalikan' => 'Kembalikan untuk diperbaiki'][$aksiAlur] }}</td>
+                                                    <td style="padding:4px 8px;border-bottom:1px solid var(--line2)">{{ in_array($aksiAlur, ['ajukan', 'tarik'], true) ? 'Pengaju' : 'Pemeriksa' }}</td>
+                                                    <td style="padding:4px 8px;border-bottom:1px solid var(--line2)">{{ collect($dari)->map(fn ($s) => \App\Support\AlurBagianKustom::LABEL_STATUS[$s])->implode(' / ') }}</td>
+                                                    <td style="padding:4px 8px;border-bottom:1px solid var(--line2)">{{ \App\Support\AlurBagianKustom::LABEL_STATUS[$ke] }}</td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="fhint" style="margin-top:6px">Poin yang diajukan terkunci (tidak bisa diubah, dihapus, atau ditambah bukti) sampai diperiksa. Poin yang dikembalikan bisa diperbaiki lalu diajukan ulang.</div>
+                            @else
+                                <div class="fhint">Isian langsung dianggap sah begitu disimpan, tanpa pemeriksaan (perilaku awal). Poin yang sebelumnya berstatus draf/diajukan akan menjadi sah saat disimpan ulang.</div>
+                            @endif
+
+                            <div style="font-size:12px;font-weight:700;margin:18px 0 6px">📅 Periode berlaku</div>
+                            @error("form.{$bagian->id}.periode_berlaku")<div style="color:var(--red);font-size:11.5px;margin-bottom:6px">{{ $message }}</div>@enderror
+                            <div class="field">
+                                <label>Triwulan bagian ini tampil untuk diisi <span style="color:var(--muted);font-weight:500">(tanpa centang = semua triwulan)</span></label>
+                                <div style="display:flex;gap:16px;flex-wrap:wrap">
+                                    @foreach (['1' => 'TW I', '2' => 'TW II', '3' => 'TW III', '4' => 'TW IV'] as $nilai => $label)
+                                        <label style="display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer"><input type="checkbox" value="{{ $nilai }}" wire:model.live="form.{{ $bagian->id }}.periode_berlaku.triwulan"> {{ $label }}</label>
+                                    @endforeach
+                                </div>
+                            </div>
+                            <div class="row2">
+                                <div class="field">
+                                    <label>Mulai tahun <span style="color:var(--muted);font-weight:500">(opsional)</span></label>
+                                    <input type="number" min="2020" max="2100" class="inp filled" wire:model.blur="form.{{ $bagian->id }}.periode_berlaku.tahun_mulai" placeholder="kosong = sejak awal">
+                                    @error("form.{$bagian->id}.periode_berlaku.tahun_mulai")<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>@enderror
+                                </div>
+                                <div class="field">
+                                    <label>Sampai tahun <span style="color:var(--muted);font-weight:500">(opsional)</span></label>
+                                    <input type="number" min="2020" max="2100" class="inp filled" wire:model.blur="form.{{ $bagian->id }}.periode_berlaku.tahun_selesai" placeholder="kosong = seterusnya">
+                                    @error("form.{$bagian->id}.periode_berlaku.tahun_selesai")<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>@enderror
+                                </div>
+                            </div>
+                            <div class="fhint">Di luar periode ini bagian tidak tampil untuk diisi (Isian Kegiatan maupun menu lain). Isian yang sudah tersimpan tidak diubah dan tetap tercetak di notula triwulannya. "Kapan wajib diisi" (tab Informasi) tetap mengatur bulan wajibnya.</div>
+
                         {{-- TAB: BUKTI DUKUNG --}}
                         @elseif ($tab === 'bukti')
                             @php $ab = $f['aturan_bukti'] ?? []; @endphp
@@ -403,6 +494,18 @@
                                     <div class="fhint" style="margin-top:4px">Tanpa centang = PDF. Isi berkas juga diperiksa, bukan hanya nama berkasnya.</div>
                                     @error("form.{$bagian->id}.aturan_bukti.format")<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>@enderror
                                 </div>
+                                @if (($ab['mode'] ?? '') === 'wajib')
+                                    <div class="field">
+                                        <label for="saat-bukti-{{ $bagian->id }}">Kapan bukti wajib sudah harus ada</label>
+                                        <select id="saat-bukti-{{ $bagian->id }}" class="inp filled" wire:model.live="form.{{ $bagian->id }}.aturan_bukti.saat">
+                                            @foreach ($saatBukti as $nilai => $label)
+                                                <option value="{{ $nilai }}">{{ $label }}</option>
+                                            @endforeach
+                                        </select>
+                                        <div class="fhint" style="margin-top:4px">"Sebelum diajukan" dan "Sebelum disetujui pemeriksa" hanya untuk alur pengajuan & pemeriksaan (tab 🔁 Alur Kerja) di menu selain Isian Kegiatan — pengisi boleh menyimpan draf dulu tanpa bukti. Di Isian Kegiatan bukti wajib selalu diperiksa saat diajukan seperti biasa.</div>
+                                        @error("form.{$bagian->id}.aturan_bukti.saat")<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>@enderror
+                                    </div>
+                                @endif
                                 <div class="field">
                                     <label for="petunjuk-bukti-{{ $bagian->id }}">Petunjuk pengunggahan <span style="color:var(--muted);font-weight:500">(opsional)</span></label>
                                     <input id="petunjuk-bukti-{{ $bagian->id }}" type="text" class="inp filled" wire:model.blur="form.{{ $bagian->id }}.aturan_bukti.petunjuk" placeholder="mis. Unggah notulen rapat dan daftar hadir">
@@ -449,7 +552,7 @@
                                     $g = in_array($kol['subbagian'] ?? '', $kunciSubForm, true) ? $kol['subbagian'] : '';
                                     $kelompokForm[$g][] = $j;
                                 }
-                                $kartu = ['idBagian' => $bagian->id, 'f' => $f, 'tipeKolom' => $tipeKolom, 'pilihanPemisah' => $pilihanPemisah, 'formatTanggal' => $formatTanggal, 'katalogVariabel' => $katalogVariabel];
+                                $kartu = ['idBagian' => $bagian->id, 'f' => $f, 'tipeKolom' => $tipeKolom, 'pilihanPemisah' => $pilihanPemisah, 'formatTanggal' => $formatTanggal, 'katalogVariabel' => $katalogVariabel, 'operatorSyarat' => $operatorSyarat, 'tipeSubkolom' => $tipeSubkolom];
                             @endphp
 
                             <div style="font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px">Kolom langsung di bagian</div>
@@ -475,9 +578,48 @@
                                             <input type="text" class="inp filled" wire:model.blur="form.{{ $bagian->id }}.subbagian.{{ $si }}.deskripsi">
                                         </div>
                                     </div>
+                                    @php
+                                        $acuanSub = collect($f['kolom'] ?? [])->filter(fn ($k) => filled($k['kunci'] ?? null) && ($k['subbagian'] ?? '') !== $sub['kunci'] && ! in_array($k['tipe'] ?? '', ['tabel', 'hitung'], true))->values();
+                                        $acuanSubDipilih = $acuanSub->firstWhere('kunci', $sub['syarat_kunci'] ?? '');
+                                    @endphp
+                                    <div class="field" style="margin-bottom:8px">
+                                        <label>Tampilkan subbagian ini <span style="color:var(--muted);font-weight:500">(keterlihatan bersyarat)</span></label>
+                                        <div style="display:grid;grid-template-columns:minmax(140px,2fr) minmax(120px,1fr) minmax(120px,1.5fr);gap:6px">
+                                            <select class="inp filled" aria-label="Kolom acuan syarat subbagian" wire:model.live="form.{{ $bagian->id }}.subbagian.{{ $si }}.syarat_kunci">
+                                                <option value="">Selalu tampil</option>
+                                                @foreach ($acuanSub as $a)
+                                                    <option value="{{ $a['kunci'] }}">Bila "{{ $a['label'] }}"</option>
+                                                @endforeach
+                                            </select>
+                                            @if (filled($sub['syarat_kunci'] ?? null))
+                                                <select class="inp filled" aria-label="Operator syarat subbagian" wire:model.live="form.{{ $bagian->id }}.subbagian.{{ $si }}.syarat_operator">
+                                                    @foreach ($operatorSyarat as $nilai => $label)
+                                                        <option value="{{ $nilai }}">{{ $label }}</option>
+                                                    @endforeach
+                                                </select>
+                                                @if (($sub['syarat_operator'] ?? 'sama') !== 'terisi')
+                                                    @if ($acuanSubDipilih && in_array($acuanSubDipilih['tipe'] ?? '', ['pilihan', 'pilihan_ganda'], true))
+                                                        <select class="inp filled" aria-label="Nilai syarat subbagian" wire:model.live="form.{{ $bagian->id }}.subbagian.{{ $si }}.syarat_nilai">
+                                                            <option value="">— pilih —</option>
+                                                            @foreach (array_filter(array_map('trim', preg_split('/[,\n]+/', (string) ($acuanSubDipilih['opsi_teks'] ?? '')))) as $o)
+                                                                <option value="{{ $o }}">{{ $o }}</option>
+                                                            @endforeach
+                                                        </select>
+                                                    @else
+                                                        <input type="text" class="inp filled" aria-label="Nilai syarat subbagian" wire:model.blur="form.{{ $bagian->id }}.subbagian.{{ $si }}.syarat_nilai" placeholder="nilai pembanding">
+                                                    @endif
+                                                @endif
+                                            @endif
+                                        </div>
+                                        @error("form.{$bagian->id}.subbagian.{$si}.syarat_kunci")<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>@enderror
+                                        @error("form.{$bagian->id}.subbagian.{$si}.syarat_nilai")<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>@enderror
+                                    </div>
                                     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:10px">
                                         <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
                                             <input type="checkbox" wire:model.live="form.{{ $bagian->id }}.subbagian.{{ $si }}.aktif"> Aktif
+                                        </label>
+                                        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer" title="Minimal satu isian di subbagian ini wajib diisi pada setiap poin">
+                                            <input type="checkbox" wire:model.live="form.{{ $bagian->id }}.subbagian.{{ $si }}.wajib"> Wajib diisi
                                         </label>
                                         <span style="font-size:11px;color:var(--muted)">Kode: <code>{{ $sub['kunci'] }}</code></span>
                                         <div class="btn-row" style="margin-top:0;gap:4px">
@@ -509,6 +651,15 @@
                             </label>
 
                             @if ($f['masuk_notula'] ?? false)
+                                <div class="field">
+                                    <label for="notula-isian-{{ $bagian->id }}">Isian yang dicetak di notula</label>
+                                    <select id="notula-isian-{{ $bagian->id }}" class="inp filled" wire:model.live="form.{{ $bagian->id }}.alur.notula">
+                                        @foreach ($pilihanNotula as $nilai => $label)
+                                            <option value="{{ $nilai }}">{{ $label }}</option>
+                                        @endforeach
+                                    </select>
+                                    <div class="fhint" style="margin-top:4px">"Hanya yang disetujui" mencetak poin yang sudah disetujui pemeriksa (alur pengajuan) atau ditandai Sesuai di Verifikasi (Isian Kegiatan). Berlaku sama untuk notula di layar, DOCX, dan PDF.</div>
+                                </div>
                                 <div class="row2">
                                     <div class="field">
                                         <label>Judul di notula <span style="color:var(--muted);font-weight:500">(kosong = nama bagian)</span></label>
@@ -588,43 +739,52 @@
                                 @endif
                             </ul>
 
-                            <div style="font-size:12px;font-weight:700;margin-bottom:8px">🧾 Tampilan isian bagi pengisi (contoh)</div>
-                            <div class="card" style="margin:0 0 16px;padding:14px">
+                            <div style="font-size:12px;font-weight:700;margin-bottom:4px">🧾 Coba formulir isian (sebelum diterbitkan)</div>
+                            <div class="fhint" style="margin:0 0 8px">Formulir di bawah dibentuk dari pengaturan di layar ini — <b>termasuk yang belum disimpan</b> — dengan aturan validasi, syarat tampil, tabel, dan rumus yang sama persis dengan formulir pengisi. Isian contoh tidak pernah disimpan.</div>
+                            <div class="card" style="margin:0 0 16px;padding:14px" data-pratinjau-form="{{ $bagian->id }}">
                                 <div class="sec" style="margin:0 0 8px"><span>🧩 {{ $f['nama'] ?: 'Nama Bagian' }}</span></div>
                                 @if (! empty($f['deskripsi']))
                                     <div class="info" style="font-size:11.5px">ℹ️ {{ $f['deskripsi'] }}</div>
+                                @endif
+                                @if (session()->has('pratinjau-'.$bagian->id))
+                                    <div class="info {{ $errors->isEmpty() ? '' : 'warn' }}" role="status" style="font-size:12px">{{ session('pratinjau-'.$bagian->id) }}</div>
                                 @endif
                                 <div class="poin-single" style="margin-top:8px">
                                     <span class="k-num stat-in">Poin 1</span>
                                     <div class="field" style="margin-bottom:8px">
                                         <label style="font-size:11px">{{ filled($f['label_uraian'] ?? null) ? $f['label_uraian'] : 'Uraian' }} <span class="req">*</span></label>
-                                        <div class="inp filled" style="color:var(--muted);font-style:italic">Contoh isian uraian…</div>
+                                        <div class="inp filled" style="color:var(--muted);font-style:italic">Isian uraian poin (teks bebas)</div>
                                     </div>
-                                    @foreach ($kelompokPratinjau as $grup)
-                                        @if ($grup['subbagian'])
-                                            <div style="margin:12px 0 6px;padding-top:8px;border-top:1px dashed var(--line);font-weight:700;font-size:12px">{{ $grup['subbagian']['nama'] }}</div>
-                                            @if ($grup['subbagian']['deskripsi'])<div class="fhint" style="margin:0 0 6px">{{ $grup['subbagian']['deskripsi'] }}</div>@endif
-                                        @endif
-                                        @foreach ($grup['kolom'] as $kol)
-                                            <div class="field" style="margin-bottom:8px">
-                                                <label style="font-size:11px">{{ $kol['label'] }} @if ($kol['wajib'])<span class="req">*</span>@endif</label>
-                                                @if ($kol['petunjuk'])<div class="fhint" style="margin:0 0 4px">{{ $kol['petunjuk'] }}</div>@endif
-                                                <div class="inp filled" style="color:var(--muted);font-style:italic;{{ $kol['tipe'] === 'teks_panjang' ? 'height:64px' : '' }}">{{ match ($kol['tipe']) {
-                                                    'pilihan' => 'Pilih: '.implode(' / ', $kol['opsi']),
-                                                    'pilihan_ganda' => 'Centang satu atau lebih: '.implode(' / ', $kol['opsi']),
-                                                    'angka' => $kol['placeholder'] ?? 'Isi angka…',
-                                                    'tanggal' => 'Pilih tanggal (tampil: '.\App\Support\TemplateBagianKustom::contohKolom($kol).')',
-                                                    default => $kol['placeholder'] ?? 'Isi teks…',
-                                                } }}</div>
-                                            </div>
-                                        @endforeach
-                                    @endforeach
+                                    @if ($kelompokPratinjau === [])
+                                        <p style="color:var(--muted);font-size:12.5px;margin:0 0 8px">Belum ada kolom aktif. Tambahkan di tab 🧾 Struktur Isian.</p>
+                                    @else
+                                        @include('livewire.partials._isian-kolom-bagian-kustom', [
+                                            'kelompok' => $kelompokPratinjau,
+                                            'model' => "pratinjauNilai.{$bagian->id}",
+                                            'nilai' => $pratinjauNilai[$bagian->id] ?? [],
+                                        ])
+                                    @endif
                                     @php $aturanPratinjau = \App\Support\AturanBuktiBagianKustom::normalkan(($f['aturan_bukti'] ?? null) ?: null, (bool) ($f['bukti_wajib'] ?? false)); @endphp
                                     @if (\App\Support\AturanBuktiBagianKustom::dipakai($aturanPratinjau))
                                         <div class="fhint" style="margin:0 0 4px">Bukti dukung: {{ \App\Support\AturanBuktiBagianKustom::ringkasan($aturanPratinjau) }}</div>
-                                        <div class="filechip ok" style="font-size:11px"><span class="nm">📄 contoh-bukti-dukung.{{ $aturanPratinjau['format'][0] ?? 'pdf' }}</span></div>
                                     @endif
                                 </div>
+                                <div class="btn-row" style="flex-wrap:wrap">
+                                    <button type="button" class="btn btn-primary btn-sm" wire:click="ujiPratinjau({{ $bagian->id }})" wire:loading.attr="disabled" wire:target="ujiPratinjau">✔ Uji validasi isian contoh</button>
+                                    <button type="button" class="btn btn-ghost btn-sm" wire:click="kosongkanPratinjau({{ $bagian->id }})">Kosongkan</button>
+                                </div>
+                                @if (! empty($hasilPratinjau[$bagian->id]))
+                                    <div style="margin-top:10px;font-size:12.5px" data-hasil-pratinjau="{{ $bagian->id }}">
+                                        <div style="font-weight:700;margin-bottom:4px">Nilai yang akan tersimpan &amp; tampil:</div>
+                                        <ul style="margin:0;padding-left:18px">
+                                            @foreach ($kolomTampil as $k)
+                                                @if (($hasilPratinjau[$bagian->id][$k['kunci']] ?? '') !== '')
+                                                    <li>{{ $k['label'] }}: <b>{{ $hasilPratinjau[$bagian->id][$k['kunci']] }}</b></li>
+                                                @endif
+                                            @endforeach
+                                        </ul>
+                                    </div>
+                                @endif
                             </div>
 
                             <div style="font-size:12px;font-weight:700;margin-bottom:8px">📄 Hasil di notula (contoh dua poin)</div>

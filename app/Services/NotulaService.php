@@ -609,7 +609,17 @@ class NotulaService
             }])
             ->orderBy('urutan')
             ->orderBy('id')
-            ->get();
+            ->get()
+            // Pengaturan notula per bagian (tab Notula di Data Master): bila "hanya isian
+            // yang disetujui", poin draf/diajukan/dikembalikan tidak dicetak; bagian tanpa
+            // poin tersisa tidak ditampilkan. Satu sumber data untuk notula web, DOCX, PDF.
+            ->each(function (BagianKustom $bagian) {
+                if ($bagian->alurKerja()['notula'] === \App\Support\AlurBagianKustom::NOTULA_DISETUJUI) {
+                    $bagian->setRelation('poin', $bagian->poin->where('status_verifikasi', 'terverifikasi')->values());
+                }
+            })
+            ->filter(fn (BagianKustom $bagian) => $bagian->poin->isNotEmpty())
+            ->values();
 
         // RF baru: link bukti dukung realisasi per IKU (subfolder "Capaian" milik IKU tsb,
         // tempat bukti capaian diunggah -- bukan folder IKU induknya), supaya Tim SAKIP/

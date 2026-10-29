@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use App\Support\AlurBagianKustom;
 use App\Support\AturanBuktiBagianKustom;
 use App\Support\FormatAngkaKolom;
+use App\Support\RumusBagianKustom;
 use App\Support\JenisKolomBagianKustom;
 use App\Support\MenuBagianKustom;
 use App\Support\TemplateBagianKustom;
@@ -93,6 +95,8 @@ class BagianKustom extends Model
         'masuk_notula',
         'judul_notula',
         'format_notula',
+        'alur',
+        'periode_berlaku',
         'aktif',
         'urutan',
     ];
@@ -100,6 +104,8 @@ class BagianKustom extends Model
     protected function casts(): array
     {
         return [
+            'alur' => 'array',
+            'periode_berlaku' => 'array',
             'peran' => 'array',
             'penempatan' => 'array',
             'kolom' => 'array',
@@ -308,7 +314,77 @@ class BagianKustom extends Model
             $aturan['min'] = 0;
         }
 
+        // Isian Kegiatan punya alur pengajuan sendiri: jumlah minimal selalu diperiksa
+        // saat simpan/ajukan Isian Kegiatan. Di menu lain, "saat diajukan/disetujui"
+        // hanya berlaku bila alur verifikasi dipakai.
+        if ($menu === MenuBagianKustom::PENGISIAN || ! AlurBagianKustom::pakaiVerifikasi($this->alurKerja())) {
+            $aturan['saat'] = AturanBuktiBagianKustom::SAAT_SIMPAN;
+        }
+
         return $aturan;
+    }
+
+    /**
+     * Pengaturan alur kerja (lihat AlurBagianKustom::normalkan()).
+     *
+     * @return array{mode: string, pengaju: array<int, string>, pemeriksa: array<int, string>, ubah_setelah_disetujui: bool, notula: string, diatur: bool}
+     */
+    public function alurKerja(): array
+    {
+        return AlurBagianKustom::normalkan($this->alur, array_values($this->peran ?? []));
+    }
+
+    /**
+     * Periode tampil bagian ini: triwulan yang dipilih (kosong = semua) dan rentang tahun.
+     *
+     * @return array{triwulan: array<int, int>, tahun_mulai: ?int, tahun_selesai: ?int}
+     */
+    public function periodeBerlaku(): array
+    {
+        return self::normalkanPeriode($this->periode_berlaku);
+    }
+
+    /**
+     * @return array{triwulan: array<int, int>, tahun_mulai: ?int, tahun_selesai: ?int}
+     */
+    public static function normalkanPeriode(?array $p): array
+    {
+        $tw = array_values(array_unique(array_filter(array_map('intval', (array) ($p['triwulan'] ?? [])), fn ($t) => $t >= 1 && $t <= 4)));
+        sort($tw);
+
+        return [
+            'triwulan' => count($tw) === 4 ? [] : $tw,
+            'tahun_mulai' => filled($p['tahun_mulai'] ?? null) ? (int) $p['tahun_mulai'] : null,
+            'tahun_selesai' => filled($p['tahun_selesai'] ?? null) ? (int) $p['tahun_selesai'] : null,
+        ];
+    }
+
+    /** Bagian tampil untuk diisi pada periode (tahun, triwulan). Tanpa periode = selalu. */
+    public function berlakuPada(?int $tahun, ?int $triwulan): bool
+    {
+        $p = $this->periodeBerlaku();
+
+        if ($tahun !== null && (($p['tahun_mulai'] !== null && $tahun < $p['tahun_mulai']) || ($p['tahun_selesai'] !== null && $tahun > $p['tahun_selesai']))) {
+            return false;
+        }
+
+        return $triwulan === null || $p['triwulan'] === [] || in_array($triwulan, $p['triwulan'], true);
+    }
+
+    /** "TW I & III, 2026–2027" — untuk daftar & pratinjau. */
+    public function labelPeriodeBerlaku(): string
+    {
+        $p = $this->periodeBerlaku();
+        $romawi = ['I', 'II', 'III', 'IV'];
+        $tw = $p['triwulan'] === [] ? 'Semua triwulan' : 'TW '.implode(', ', array_map(fn ($t) => $romawi[$t - 1], $p['triwulan']));
+        $tahun = match (true) {
+            $p['tahun_mulai'] !== null && $p['tahun_selesai'] !== null => ', '.$p['tahun_mulai'].'–'.$p['tahun_selesai'],
+            $p['tahun_mulai'] !== null => ', mulai '.$p['tahun_mulai'],
+            $p['tahun_selesai'] !== null => ', sampai '.$p['tahun_selesai'],
+            default => '',
+        };
+
+        return $tw.$tahun;
     }
 
     public const TAMPILAN_ISIAN = ['kartu' => 'Kartu per poin', 'tabel' => 'Tabel (satu baris per poin)'];
@@ -344,7 +420,7 @@ class BagianKustom extends Model
         $hasil = [];
 
         foreach ($this->kolomList() as $kolom) {
-            if ($kolom['tipe'] !== 'angka' || ($kolom['ringkasan'] ?? null) === null) {
+            if (! JenisKolomBagianKustom::numerik($kolom['tipe']) || ($kolom['ringkasan'] ?? null) === null) {
                 continue;
             }
 
@@ -470,7 +546,7 @@ class BagianKustom extends Model
     public static function normalkanKolom(array $k): array
     {
         $tipe = array_key_exists($k['tipe'] ?? '', self::TIPE_KOLOM) ? $k['tipe'] : 'teks';
-        $angka = $tipe === 'angka';
+        $angka = JenisKolomBagianKustom::numerik($tipe);
         $mulaiTahun = filled($k['mulai_tahun'] ?? null) ? (int) $k['mulai_tahun'] : null;
         $mulaiTriwulan = filled($k['mulai_triwulan'] ?? null) ? (int) $k['mulai_triwulan'] : null;
         $berlakuLengkap = $mulaiTahun !== null && $mulaiTriwulan !== null;
@@ -486,7 +562,7 @@ class BagianKustom extends Model
             'aktif' => (bool) ($k['aktif'] ?? true),
             'mulai_tahun' => $berlakuLengkap ? $mulaiTahun : null,
             'mulai_triwulan' => $berlakuLengkap ? max(1, min(4, $mulaiTriwulan)) : null,
-            'satuan' => $angka && filled($k['satuan'] ?? null) ? trim((string) $k['satuan']) : null,
+            'satuan' => $angka && filled($k['satuan'] ?? null) ? trim((string) $k['satuan']) : ($tipe === 'persentase' ? '%' : null),
             'desimal' => $angka && isset($k['desimal']) && $k['desimal'] !== '' && $k['desimal'] !== null
                 ? max(0, min(FormatAngkaKolom::DESIMAL_MAKS, (int) $k['desimal']))
                 : null,
@@ -508,7 +584,147 @@ class BagianKustom extends Model
             // Katalog variabel (kode) dan ringkasan nilai angka di tampilan tabel.
             'variabel' => filled($k['variabel'] ?? null) ? (string) $k['variabel'] : null,
             'ringkasan' => $angka && array_key_exists((string) ($k['ringkasan'] ?? ''), self::RINGKASAN) ? (string) $k['ringkasan'] : null,
+            // Perhitungan otomatis, tabel, dan keterlihatan bersyarat (opsional).
+            'rumus' => $tipe === 'hitung' && filled($k['rumus'] ?? null) ? trim((string) $k['rumus']) : null,
+            'tabel_kolom' => $tipe === 'tabel' ? JenisKolomBagianKustom::normalkanSubkolom($k['tabel_kolom'] ?? []) : [],
+            'baris_min' => $tipe === 'tabel' && filled($k['baris_min'] ?? null) ? max(0, min(JenisKolomBagianKustom::BARIS_TABEL_MAKS, (int) $k['baris_min'])) : null,
+            'baris_maks' => $tipe === 'tabel' && filled($k['baris_maks'] ?? null) ? max(1, min(JenisKolomBagianKustom::BARIS_TABEL_MAKS, (int) $k['baris_maks'])) : null,
+            'tampil_jika' => self::normalkanSyarat($k['tampil_jika'] ?? null),
         ];
+    }
+
+    public const OPERATOR_SYARAT = [
+        'sama' => 'bernilai / memuat',
+        'tidak_sama' => 'tidak bernilai',
+        'terisi' => 'sudah diisi',
+    ];
+
+    /**
+     * Syarat tampil kolom/subbagian: tampil hanya bila kolom lain (kunci) memenuhi
+     * operator terhadap nilai. Null = selalu tampil.
+     *
+     * @return array{kunci: string, operator: string, nilai: string}|null
+     */
+    public static function normalkanSyarat(mixed $s): ?array
+    {
+        if (! is_array($s) || ! filled($s['kunci'] ?? null)) {
+            return null;
+        }
+
+        $operator = array_key_exists((string) ($s['operator'] ?? ''), self::OPERATOR_SYARAT) ? (string) $s['operator'] : 'sama';
+        $nilai = trim((string) ($s['nilai'] ?? ''));
+
+        if ($operator !== 'terisi' && $nilai === '') {
+            return null;
+        }
+
+        return ['kunci' => (string) $s['kunci'], 'operator' => $operator, 'nilai' => $operator === 'terisi' ? '' : $nilai];
+    }
+
+    /**
+     * Syarat terpenuhi oleh nilai formulir. Pilihan ganda dicocokkan per pilihan.
+     *
+     * @param  array<string, mixed>  $nilaiForm
+     */
+    public static function syaratTerpenuhi(?array $syarat, array $nilaiForm): bool
+    {
+        if ($syarat === null) {
+            return true;
+        }
+
+        $v = $nilaiForm[$syarat['kunci']] ?? '';
+
+        if ($syarat['operator'] === 'terisi') {
+            return JenisKolomBagianKustom::terisi($v);
+        }
+
+        $daftar = is_array($v) ? array_map(fn ($x) => trim((string) $x), $v) : JenisKolomBagianKustom::daftarPilihan(is_string($v) ? $v : (string) $v);
+        $cocok = in_array($syarat['nilai'], $daftar, true);
+
+        return $syarat['operator'] === 'sama' ? $cocok : ! $cocok;
+    }
+
+    /**
+     * Kolom tampil (dan divalidasi) untuk nilai formulir ini: syarat kolomnya dan syarat
+     * subbagiannya terpenuhi.
+     *
+     * @param  array<string, mixed>  $kolom  hasil kolomList()
+     * @param  array<string, mixed>  $nilaiForm
+     */
+    public function kolomTerlihat(array $kolom, array $nilaiForm): bool
+    {
+        if (! self::syaratTerpenuhi($kolom['tampil_jika'] ?? null, $nilaiForm)) {
+            return false;
+        }
+
+        $sub = ($kolom['subbagian'] ?? null) !== null ? collect($this->subbagianList())->firstWhere('kunci', $kolom['subbagian']) : null;
+
+        return $sub === null || self::syaratTerpenuhi($sub['tampil_jika'] ?? null, $nilaiForm);
+    }
+
+    /**
+     * SATU aturan validasi nilai kolom satu poin, dipakai Isian Kegiatan, Isian Bagian
+     * Kustom, pengajuan, dan pratinjau: kolom berlaku & terlihat (wajib, jenis, rentang,
+     * panjang, tabel) + subbagian wajib. Kolom yang disembunyikan syarat tidak diperiksa.
+     *
+     * @param  array<string, mixed>  $nilaiForm  kunci => nilai formulir
+     * @return array<string, string>  kunci kolom => pesan galat
+     */
+    public function galatNilaiPoin(array $nilaiForm, ?int $tahun, ?int $triwulan): array
+    {
+        $galat = [];
+        $berlaku = $this->kolomBerlaku($tahun, $triwulan);
+
+        foreach ($berlaku as $kolom) {
+            if ($kolom['tipe'] === 'hitung' || ! $this->kolomTerlihat($kolom, $nilaiForm)) {
+                continue;
+            }
+
+            if (($pesan = self::pesanGalatKolom($kolom, $nilaiForm[$kolom['kunci']] ?? '')) !== null) {
+                $galat[$kolom['kunci']] = $pesan;
+            }
+        }
+
+        foreach ($this->subbagianList() as $sub) {
+            if (! $sub['aktif'] || ! $sub['wajib'] || ! self::syaratTerpenuhi($sub['tampil_jika'], $nilaiForm)) {
+                continue;
+            }
+
+            $isi = array_values(array_filter($berlaku, fn ($k) => $k['subbagian'] === $sub['kunci'] && $k['tipe'] !== 'hitung' && $this->kolomTerlihat($k, $nilaiForm)));
+
+            if ($isi !== [] && ! collect($isi)->contains(fn ($k) => JenisKolomBagianKustom::terisi($nilaiForm[$k['kunci']] ?? ''))) {
+                $galat[$isi[0]['kunci']] ??= 'Subbagian "'.$sub['nama'].'" wajib diisi (minimal satu isian).';
+            }
+        }
+
+        return $galat;
+    }
+
+    /**
+     * Hasil kolom perhitungan otomatis dari nilai kolom lain (formulir atau tersimpan).
+     * Null bila belum bisa dihitung.
+     *
+     * @param  array<string, mixed>  $kolom  kolom hitung (hasil kolomList())
+     * @param  array<string, mixed>  $nilai  kunci => nilai
+     * @param  array<int, array<string, mixed>>  $semuaKolom
+     */
+    public static function nilaiHitung(array $kolom, array $nilai, array $semuaKolom): ?string
+    {
+        if (($kolom['rumus'] ?? null) === null) {
+            return null;
+        }
+
+        $variabel = [];
+        $peta = collect($semuaKolom)->keyBy('kunci');
+
+        foreach (RumusBagianKustom::variabel($kolom['rumus']) as $kunci) {
+            $def = $peta->get($kunci);
+            $mentah = trim(is_array($nilai[$kunci] ?? null) ? '' : (string) ($nilai[$kunci] ?? ''));
+            $pemisah = $def && FormatAngkaKolom::diatur(JenisKolomBagianKustom::sebagaiAngka($def)) ? FormatAngkaKolom::pemisahDari($def) : null;
+            $variabel[$kunci] = $mentah === '' ? null : (FormatAngkaKolom::urai($mentah, $pemisah) ?? FormatAngkaKolom::urai($mentah, null));
+        }
+
+        return RumusBagianKustom::hitung($kolom['rumus'], $variabel);
     }
 
     /** Batas angka kanonik ("-12.5") dari pengaturan, null bila kosong/tidak sah. */
@@ -547,6 +763,9 @@ class BagianKustom extends Model
             'nama' => trim((string) $s['nama']),
             'deskripsi' => filled($s['deskripsi'] ?? null) ? trim((string) $s['deskripsi']) : null,
             'aktif' => (bool) ($s['aktif'] ?? true),
+            // Opsional (subbagian lama tanpa kunci ini = tidak wajib, selalu tampil).
+            'wajib' => (bool) ($s['wajib'] ?? false),
+            'tampil_jika' => self::normalkanSyarat($s['tampil_jika'] ?? null),
         ];
     }
 
@@ -673,16 +892,37 @@ class BagianKustom extends Model
     public function bersihkanNilaiKolom(array $mentah, ?array $tersimpan = null, ?int $tahun = null, ?int $triwulan = null): array
     {
         $hasil = [];
+        $semua = $this->kolomList();
+        $hitung = [];
 
-        foreach ($this->kolomList() as $kolom) {
+        foreach ($semua as $kolom) {
             $kunci = $kolom['kunci'];
 
-            $nilai = $this->kolomBerlakuDi($kolom, $tahun, $triwulan)
-                ? JenisKolomBagianKustom::untukDisimpan($mentah[$kunci] ?? '', $kolom)
-                : trim((string) ($tersimpan[$kunci] ?? ''));
+            if (! $this->kolomBerlakuDi($kolom, $tahun, $triwulan)) {
+                $nilai = trim((string) ($tersimpan[$kunci] ?? ''));
+            } elseif ($kolom['tipe'] === 'hitung') {
+                // Dihitung setelah semua kolom lain diketahui nilainya.
+                $hitung[] = $kolom;
+
+                continue;
+            } elseif (! $this->kolomTerlihat($kolom, $mentah)) {
+                // Disembunyikan syarat (mis. "Tindak lanjut" hanya bila Status = Ya):
+                // isian sebelumnya tidak lagi berlaku untuk jawaban saat ini.
+                $nilai = '';
+            } else {
+                $nilai = JenisKolomBagianKustom::untukDisimpan($mentah[$kunci] ?? '', $kolom);
+            }
 
             if ($nilai !== '') {
                 $hasil[$kunci] = $nilai;
+            }
+        }
+
+        foreach ($hitung as $kolom) {
+            $nilai = $this->kolomTerlihat($kolom, $mentah) ? self::nilaiHitung($kolom, $hasil, $semua) : null;
+
+            if ($nilai !== null) {
+                $hasil[$kolom['kunci']] = $nilai;
             }
         }
 
@@ -764,7 +1004,24 @@ class BagianKustom extends Model
     {
         $bagian = [];
 
-        if ($kolom['tipe'] === 'angka') {
+        if ($kolom['tipe'] === 'hitung' && ($kolom['rumus'] ?? null) !== null) {
+            $bagian[] = 'rumus '.$kolom['rumus'];
+        }
+
+        if ($kolom['tipe'] === 'tabel') {
+            $bagian[] = count($kolom['tabel_kolom'] ?? []).' kolom tabel: '.collect($kolom['tabel_kolom'] ?? [])->pluck('label')->implode(', ');
+
+            if (($kolom['baris_min'] ?? null) !== null || ($kolom['baris_maks'] ?? null) !== null) {
+                $bagian[] = 'baris '.($kolom['baris_min'] ?? 0).'–'.($kolom['baris_maks'] ?? '…');
+            }
+        }
+
+        if (($kolom['tampil_jika'] ?? null) !== null) {
+            $s = $kolom['tampil_jika'];
+            $bagian[] = 'tampil bila {'.$s['kunci'].'} '.(self::OPERATOR_SYARAT[$s['operator']] ?? $s['operator']).($s['operator'] === 'terisi' ? '' : ' "'.$s['nilai'].'"');
+        }
+
+        if (JenisKolomBagianKustom::numerik($kolom['tipe'])) {
             $bagian[] = $kolom['desimal'] === null
                 ? 'tampil apa adanya'
                 : $kolom['desimal'].' desimal, '.($kolom['pemisah'] === FormatAngkaKolom::PEMISAH_TITIK ? 'titik' : 'koma').($kolom['ribuan'] ? ' + ribuan' : '');
@@ -821,6 +1078,8 @@ class BagianKustom extends Model
             'masuk_notula' => (bool) $this->masuk_notula,
             'judul_notula' => $this->judul_notula,
             'format_notula' => $this->format_notula,
+            'alur' => $this->alur,
+            'periode_berlaku' => $this->periode_berlaku,
             'aktif' => (bool) $this->aktif,
             'subbagian' => $this->subbagianList(),
             'kolom' => $this->kolomList(),

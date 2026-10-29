@@ -28,7 +28,7 @@
                     <th scope="col" style="padding:6px;border-bottom:1px solid var(--line)">IKU</th>
                     <th scope="col" style="padding:6px;border-bottom:1px solid var(--line)">{{ $bagian->labelUraianEfektif() }}</th>
                     @foreach ($kolomBerisi as $k)
-                        <th scope="col" style="padding:6px;border-bottom:1px solid var(--line);{{ $k['tipe'] === 'angka' ? 'text-align:right' : '' }}">{{ $k['label'] }}</th>
+                        <th scope="col" style="padding:6px;border-bottom:1px solid var(--line);{{ \App\Support\JenisKolomBagianKustom::numerik($k['tipe']) ? 'text-align:right' : '' }}">{{ $k['label'] }}</th>
                     @endforeach
                     <th scope="col" style="padding:6px;border-bottom:1px solid var(--line)">Bukti</th>
                     @if ($tampilkanKonteks)<th scope="col" style="padding:6px;border-bottom:1px solid var(--line)">Diisi di</th>@endif
@@ -41,7 +41,7 @@
                         <td style="padding:6px;border-bottom:1px solid var(--line2)">{{ $p->masterIku?->kode ?? '—' }}</td>
                         <td style="padding:6px;border-bottom:1px solid var(--line2);white-space:pre-line">{{ $p->teks }}</td>
                         @foreach ($kolomBerisi as $k)
-                            <td style="padding:6px;border-bottom:1px solid var(--line2);white-space:pre-line;{{ $k['tipe'] === 'angka' ? 'text-align:right' : '' }}">{{ \App\Models\BagianKustom::nilaiTampil($k, ($p->nilai_kolom ?? [])[$k['kunci']] ?? '') }}</td>
+                            <td style="padding:6px;border-bottom:1px solid var(--line2);white-space:pre-line;{{ \App\Support\JenisKolomBagianKustom::numerik($k['tipe']) ? 'text-align:right' : '' }}">{{ \App\Models\BagianKustom::nilaiTampil($k, ($p->nilai_kolom ?? [])[$k['kunci']] ?? '') }}</td>
                         @endforeach
                         <td style="padding:6px;border-bottom:1px solid var(--line2)">
                             @forelse ($p->berkas as $file)

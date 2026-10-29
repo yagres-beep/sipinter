@@ -9,6 +9,7 @@ use App\Models\LogAktivitas;
 use App\Models\MasterIku;
 use App\Models\Periode;
 use App\Services\FolderStructureService;
+use App\Support\AlurBagianKustom;
 use App\Support\AturanBuktiBagianKustom;
 use App\Support\JejakAktivitasBagianKustom;
 use App\Support\LanjutanBagianKustom;
@@ -78,6 +79,13 @@ class IsianBagianKustom extends Component
     #[Locked]
     public ?int $periodeDimuatId = null;
 
+    /**
+     * Catatan pemeriksa per poin (wajib saat mengembalikan untuk diperbaiki).
+     *
+     * @var array<int, string>
+     */
+    public array $catatanPeriksa = [];
+
     public function mount(string $menu = 'isian_bagian_kustom'): void
     {
         // Menu harus menu katalog yang memang memakai komponen ini, dan bila halaman
@@ -123,7 +131,108 @@ class IsianBagianKustom extends Component
             return collect();
         }
 
-        return BagianKustom::daftarUntuk($peran, $this->menu);
+        return BagianKustom::daftarUntuk($peran, $this->menu)->filter(fn (BagianKustom $b) => $this->berlakuSekarang($b))->values();
+    }
+
+    protected function triwulan(): int
+    {
+        return BagianKustom::triwulanDariBulan($this->bulan);
+    }
+
+    /** Bagian tampil pada tahun & triwulan yang dipilih di layar (pengaturan periode berlaku). */
+    protected function berlakuSekarang(BagianKustom $bagian): bool
+    {
+        return $bagian->berlakuPada($this->tahun, $this->triwulan());
+    }
+
+    /**
+     * Bagian beralur verifikasi yang boleh DIPERIKSA peran yang login di menu ini.
+     *
+     * @return Collection<int, BagianKustom>
+     */
+    protected function bagianPeriksaUntukSaya()
+    {
+        $peran = $this->peran();
+
+        if ($peran === null || ! in_array($peran, MenuBagianKustom::peranDiizinkan($this->menu), true)) {
+            return collect();
+        }
+
+        return BagianKustom::daftarAktif()->filter(function (BagianKustom $b) use ($peran) {
+            $alur = $b->alurKerja();
+
+            return AlurBagianKustom::pakaiVerifikasi($alur)
+                && in_array($peran, $alur['pemeriksa'], true)
+                && in_array($this->menu, $b->penempatan ?? [], true)
+                && $this->berlakuSekarang($b);
+        })->values();
+    }
+
+    /** Peran yang login boleh mengajukan isian bagian ini (pengaturan alur). */
+    protected function bolehAjukan(BagianKustom $bagian): bool
+    {
+        $alur = $bagian->alurKerja();
+
+        return AlurBagianKustom::pakaiVerifikasi($alur) && in_array($this->peran(), $alur['pengaju'], true);
+    }
+
+    /**
+     * Isi baris layar berbeda dari poin tersimpan (IKU, uraian, atau nilai kolom).
+     *
+     * @param  array<string, mixed>  $row
+     */
+    protected function barisBerubah(BagianKustom $bagian, array $row, BagianKustomPoin $poin): bool
+    {
+        return (int) $row['iku_id'] !== (int) $poin->iku_id
+            || trim((string) $row['teks']) !== trim((string) $poin->teks)
+            || $bagian->bersihkanNilaiKolom($row['kolom'] ?? [], $poin->nilai_kolom, $this->tahun, $this->triwulan()) != array_filter((array) ($poin->nilai_kolom ?? []), fn ($v) => trim((string) $v) !== '');
+    }
+
+    /**
+     * Pesan bila layar mengubah, menghapus, atau menambah bukti pada poin yang sedang
+     * terkunci alur (diajukan, atau disetujui tanpa izin ubah). Null bila aman.
+     *
+     * @param  array<int, string>  $dimuat
+     */
+    protected function galatKunciAlur(BagianKustom $bagian, array $dimuat): ?string
+    {
+        $alur = $bagian->alurKerja();
+
+        if (! AlurBagianKustom::pakaiVerifikasi($alur) || $dimuat === []) {
+            return null;
+        }
+
+        $tersimpan = BagianKustomPoin::whereKey(array_keys($dimuat))->get()->keyBy('id');
+        $dipertahankan = [];
+
+        foreach ($this->baris[$bagian->id] ?? [] as $i => $row) {
+            $poin = filled($row['id'] ?? null) ? $tersimpan->get((int) $row['id']) : null;
+
+            if (! $poin) {
+                continue;
+            }
+
+            $status = AlurBagianKustom::statusPoin($poin);
+            $terkunci = ! AlurBagianKustom::bisaDiubahPengisi($status, $alur);
+
+            if ($this->terisi($row)) {
+                $dipertahankan[] = $poin->id;
+            }
+
+            $berkasBaru = collect((array) ($this->bukti[$bagian->id][$i] ?? []))->contains(fn ($f) => $f instanceof \Illuminate\Http\UploadedFile);
+
+            if ($terkunci && ($berkasBaru || ($this->terisi($row) && $this->barisBerubah($bagian, $row, $poin)))) {
+                return 'Poin '.($i + 1).' berstatus "'.AlurBagianKustom::labelStatus($status, $alur).'" sehingga tidak bisa diubah'.($status === AlurBagianKustom::DIAJUKAN ? ' — tarik pengajuan lebih dulu bila perlu memperbaiki.' : '.');
+            }
+        }
+
+        foreach ($tersimpan as $poin) {
+            if (! in_array($poin->id, $dipertahankan, true) && ! AlurBagianKustom::bisaDiubahPengisi(AlurBagianKustom::statusPoin($poin), $alur)) {
+                return 'Poin yang sudah diajukan atau disetujui tidak bisa dihapus.';
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -139,7 +248,7 @@ class IsianBagianKustom extends Component
             return collect();
         }
 
-        return BagianKustom::daftarAktif()->filter(fn (BagianKustom $b) => $b->bisaDibacaDi($peran, $this->menu))->values();
+        return BagianKustom::daftarAktif()->filter(fn (BagianKustom $b) => $b->bisaDibacaDi($peran, $this->menu) && $this->berlakuSekarang($b))->values();
     }
 
     /**
@@ -183,7 +292,6 @@ class IsianBagianKustom extends Component
     protected function pastikanHakSimpan(BagianKustom $bagian, Periode $periode, array $dimuat): void
     {
         $tersimpan = $dimuat === [] ? collect() : BagianKustomPoin::whereKey(array_keys($dimuat))->get()->keyBy('id');
-        $triwulan = BagianKustom::triwulanDariBulan($this->bulan);
         $idDipertahankan = [];
         $konteks = ['periode_id' => $periode->id];
 
@@ -203,11 +311,7 @@ class IsianBagianKustom extends Component
 
                 $idDipertahankan[] = (int) $row['id'];
 
-                if ($poin && (
-                    (int) $row['iku_id'] !== (int) $poin->iku_id
-                    || trim((string) $row['teks']) !== trim((string) $poin->teks)
-                    || $bagian->bersihkanNilaiKolom($row['kolom'] ?? [], $poin->nilai_kolom, $this->tahun, $triwulan) != array_filter((array) ($poin->nilai_kolom ?? []), fn ($v) => trim((string) $v) !== '')
-                )) {
+                if ($poin && $this->barisBerubah($bagian, $row, $poin)) {
                     $this->pastikanBoleh($bagian, 'ubah', $konteks + ['perubahan' => ['poin_id' => $poin->id]]);
                 }
             } elseif ($this->terisi($row)) {
@@ -410,7 +514,18 @@ class IsianBagianKustom extends Component
 
         $this->pastikanHakSimpan($bagian, $periode, $dimuat);
 
-        $aturan = $bagian->aturanBuktiDi($this->menu);
+        if (($galatKunci = $this->galatKunciAlur($bagian, $dimuat)) !== null) {
+            JejakAktivitasBagianKustom::ditolak($bagian, 'perubahan pada poin yang terkunci alur kerja', ['menu' => $this->menu, 'periode_id' => $periode->id]);
+            $this->addError("baris.{$bagianId}", $galatKunci);
+
+            return;
+        }
+
+        $alur = $bagian->alurKerja();
+        $verifikasi = AlurBagianKustom::pakaiVerifikasi($alur);
+        // Jumlah minimal bukti yang baru diperiksa saat diajukan/disetujui tidak
+        // menghalangi penyimpanan draf.
+        $aturan = AturanBuktiBagianKustom::untukSimpan($bagian->aturanBuktiDi($this->menu));
         $jumlahBuktiLama = Berkas::where('ref_type', BagianKustomPoin::class)->whereIn('ref_id', array_keys($dimuat))
             ->selectRaw('ref_id, count(*) as jumlah')->groupBy('ref_id')->pluck('jumlah', 'ref_id');
         $sumberLanjutan = [];
@@ -438,14 +553,11 @@ class IsianBagianKustom extends Component
                 $valid = false;
             }
 
-            // Hanya kolom yang berlaku pada periode ini (aktif & sudah mulai berlaku).
-            foreach ($bagian->kolomBerlaku($this->tahun, BagianKustom::triwulanDariBulan($this->bulan)) as $kolom) {
-                $galat = BagianKustom::pesanGalatKolom($kolom, $row['kolom'][$kolom['kunci']] ?? '');
-
-                if ($galat !== null) {
-                    $this->addError("baris.{$bagianId}.{$i}.kolom.{$kolom['kunci']}", $galat);
-                    $valid = false;
-                }
+            // Hanya kolom yang berlaku pada periode ini dan tidak disembunyikan syaratnya;
+            // termasuk subbagian wajib (aturan yang sama dengan Isian Kegiatan).
+            foreach ($bagian->galatNilaiPoin($row['kolom'] ?? [], $this->tahun, $this->triwulan()) as $kunci => $galat) {
+                $this->addError("baris.{$bagianId}.{$i}.kolom.{$kunci}", $galat);
+                $valid = false;
             }
 
             // Bukti dukung: format & ukuran tiap berkas, lalu jumlahnya (lama + baru).
@@ -492,7 +604,7 @@ class IsianBagianKustom extends Component
         // Catatan log aktivitas ditulis di dalam transaksi yang sama: ikut batal bila
         // penyimpanan batal (bentrok atau galat).
         try {
-            $berhasil = DB::transaction(function () use ($bagian, $bagianId, $periode, $peran, $dimuat, $userId, $korelasi, $sumberLanjutan, &$berkasTersimpan, &$pathLokal, &$tidakDihapus) {
+            $berhasil = DB::transaction(function () use ($bagian, $bagianId, $periode, $peran, $dimuat, $userId, $korelasi, $sumberLanjutan, $verifikasi, &$berkasTersimpan, &$pathLokal, &$tidakDihapus) {
                 // Kunci baris yang dimuat layar ini, lalu pastikan belum diubah/dihapus
                 // pengguna lain sejak dimuat — bila sudah, batalkan seluruh penyimpanan
                 // supaya perubahan pengguna lain tidak tertimpa atau terhapus.
@@ -531,7 +643,17 @@ class IsianBagianKustom extends Component
                     ];
 
                     if ($poin) {
+                        $berubah = $this->barisBerubah($bagian, $row, $poin);
                         $sebelum = JejakAktivitasBagianKustom::potret($poin);
+
+                        // Alur langsung: isian sah begitu disimpan. Alur verifikasi: poin
+                        // disetujui yang diubah (bila diizinkan) kembali menjadi draf.
+                        if (! $verifikasi && $poin->status_verifikasi !== 'terverifikasi') {
+                            $data += ['status_verifikasi' => 'terverifikasi', 'diajukan_pada' => null, 'diajukan_oleh' => null];
+                        } elseif ($verifikasi && $berubah && AlurBagianKustom::statusPoin($poin) === AlurBagianKustom::DISETUJUI) {
+                            $data += ['status_verifikasi' => 'menunggu', 'diajukan_pada' => null, 'diajukan_oleh' => null];
+                        }
+
                         $poin->update($data);
                         JejakAktivitasBagianKustom::poinDiubah($bagian, $poin, $sebelum, $korelasi);
                     } else {
@@ -543,8 +665,8 @@ class IsianBagianKustom extends Component
                             'menu' => $this->menu,
                             'peran_pengisi' => $peran,
                             'diisi_oleh' => $userId,
-                            // Tidak ada alur verifikasi untuk isian di luar Isian Kegiatan — langsung dianggap sah.
-                            'status_verifikasi' => 'terverifikasi',
+                            // Alur langsung: langsung sah. Alur verifikasi: draf sampai diajukan.
+                            'status_verifikasi' => $verifikasi ? 'menunggu' : 'terverifikasi',
                         ] + ($sumber ? LanjutanBagianKustom::atribut($sumber) : []));
 
                         $sumber
@@ -570,8 +692,8 @@ class IsianBagianKustom extends Component
                             'kategori' => 'bagian_kustom',
                             'nama_file' => $namaDasar.'.'.AturanBuktiBagianKustom::ekstensiUnggahan($file),
                             'path' => $path,
-                            // Sama dengan poinnya: menu ini tanpa alur verifikasi.
-                            'status_verifikasi' => 'terverifikasi',
+                            // Mengikuti alur poinnya: diperiksa bersama poin bila beralur verifikasi.
+                            'status_verifikasi' => $verifikasi ? 'menunggu' : 'terverifikasi',
                         ]);
 
                         JejakAktivitasBagianKustom::buktiDiunggah($bagian, $poin, $berkas, false, $korelasi);
@@ -696,9 +818,13 @@ class IsianBagianKustom extends Component
                     return 'Bukti dukung tersebut sudah tidak ada.';
                 }
 
+                if (! AlurBagianKustom::bisaDiubahPengisi(AlurBagianKustom::statusPoin($poin), $bagian->alurKerja())) {
+                    return 'Bukti ini tidak bisa dihapus karena poinnya sedang diajukan atau sudah disetujui.';
+                }
+
                 $sisa = Berkas::where('ref_type', BagianKustomPoin::class)->where('ref_id', $poin->id)->count() - 1;
 
-                if ($aturan['mode'] === AturanBuktiBagianKustom::MODE_WAJIB && $sisa < $aturan['min']) {
+                if ($aturan['mode'] === AturanBuktiBagianKustom::MODE_WAJIB && $aturan['saat'] === AturanBuktiBagianKustom::SAAT_SIMPAN && $sisa < $aturan['min']) {
                     return "Bukti ini tidak bisa dihapus: bagian ini mewajibkan minimal {$aturan['min']} bukti per poin. Unggah bukti pengganti lebih dulu, lalu hapus yang ini.";
                 }
 
@@ -733,6 +859,261 @@ class IsianBagianKustom extends Component
         session()->flash('status-'.$bagianId, 'Bukti dukung dihapus. Salinan Google Drive-nya dipindah ke Sampah.');
     }
 
+    /* ---------- Alur kerja: ajukan, tarik, setujui, kembalikan ---------- */
+
+    /** Layar berisi perubahan yang belum disimpan untuk bagian ini. */
+    protected function adaPerubahanBelumDisimpan(BagianKustom $bagian): bool
+    {
+        $dimuat = $this->dimuat[$bagian->id] ?? [];
+        $tersimpan = $dimuat === [] ? collect() : BagianKustomPoin::whereKey(array_keys($dimuat))->get()->keyBy('id');
+        $dipertahankan = [];
+
+        foreach ($this->baris[$bagian->id] ?? [] as $i => $row) {
+            if (collect((array) ($this->bukti[$bagian->id][$i] ?? []))->contains(fn ($f) => $f instanceof \Illuminate\Http\UploadedFile)) {
+                return true;
+            }
+
+            if (filled($row['id'] ?? null)) {
+                $poin = $tersimpan->get((int) $row['id']);
+
+                if (! $this->terisi($row) || ($poin && $this->barisBerubah($bagian, $row, $poin))) {
+                    return true;
+                }
+
+                $dipertahankan[] = (int) $row['id'];
+            } elseif ($this->terisi($row)) {
+                return true;
+            }
+        }
+
+        return array_diff(array_keys($dimuat), $dipertahankan) !== [];
+    }
+
+    /**
+     * Ajukan semua poin draf / dikembalikan milik konteks pengguna (menu + peran) pada
+     * periode ini. Isian & bukti diperiksa ulang dari data TERSIMPAN dengan aturan terkini.
+     */
+    public function ajukan(int $bagianId): void
+    {
+        $bagian = $this->bagianDiizinkanAtau403($bagianId);
+        $this->resetErrorBag();
+
+        if (! $this->bolehAjukan($bagian)) {
+            JejakAktivitasBagianKustom::ditolak($bagian, 'peran pengguna tidak berwenang mengajukan isian bagian ini', ['menu' => $this->menu]);
+            abort(403);
+        }
+
+        $periode = $this->periode();
+
+        if (! $periode || $this->periodeDimuatId !== $periode->id || ! array_key_exists($bagianId, $this->dimuat)) {
+            $this->muat();
+            $this->addError("baris.{$bagianId}", 'Data di layar sudah tidak sesuai periode yang dipilih dan telah dimuat ulang. Periksa lalu ajukan kembali.');
+
+            return;
+        }
+
+        if ($this->adaPerubahanBelumDisimpan($bagian)) {
+            $this->addError("baris.{$bagianId}", 'Ada perubahan yang belum disimpan. Klik Simpan lebih dulu, lalu Ajukan.');
+
+            return;
+        }
+
+        $aturan = $bagian->aturanBuktiDi($this->menu);
+        $dimuat = $this->dimuat[$bagianId];
+        $peran = (string) $this->peran();
+        $korelasi = LogAktivitas::korelasiBaru();
+
+        $hasil = DB::transaction(function () use ($bagian, $periode, $peran, $dimuat, $aturan, $korelasi) {
+            $daftar = BagianKustomPoin::konteks($this->menu, $peran)
+                ->where('bagian_kustom_id', $bagian->id)->where('periode_id', $periode->id)
+                ->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+
+            foreach ($dimuat as $id => $sidikJari) {
+                if (! $daftar->has($id) || $daftar[$id]->sidikJari() !== $sidikJari) {
+                    return ['galat' => 'Isian sudah diubah pengguna lain sejak halaman dimuat. Data terbaru sudah dimuat ulang — periksa lalu ajukan kembali.', 'muat' => true];
+                }
+            }
+
+            $nomor = array_flip($daftar->keys()->all());
+            $siap = $daftar->filter(fn (BagianKustomPoin $p) => AlurBagianKustom::bolehTransisi(AlurBagianKustom::statusPoin($p), 'ajukan'));
+
+            if ($siap->isEmpty()) {
+                return ['galat' => 'Tidak ada poin berstatus draf atau dikembalikan yang bisa diajukan.'];
+            }
+
+            $galat = [];
+            $jumlahBukti = Berkas::where('ref_type', BagianKustomPoin::class)->whereIn('ref_id', $siap->keys())
+                ->selectRaw('ref_id, count(*) as jumlah')->groupBy('ref_id')->pluck('jumlah', 'ref_id');
+
+            foreach ($siap as $p) {
+                $no = 'Poin '.($nomor[$p->id] + 1);
+
+                if (! $p->iku_id || trim((string) $p->teks) === '') {
+                    $galat[] = "{$no}: IKU dan ".mb_strtolower($bagian->labelUraianEfektif()).' wajib diisi.';
+                }
+
+                foreach ($bagian->galatNilaiPoin($bagian->nilaiKolomUntukForm($p->nilai_kolom), $this->tahun, $this->triwulan()) as $pesan) {
+                    $galat[] = "{$no}: {$pesan}";
+                }
+
+                if ($aturan['saat'] !== AturanBuktiBagianKustom::SAAT_VERIFIKASI && ($g = AturanBuktiBagianKustom::galatMinimal($aturan, (int) ($jumlahBukti[$p->id] ?? 0))) !== null) {
+                    $galat[] = "{$no}: {$g}.";
+                }
+            }
+
+            if ($galat !== []) {
+                return ['galat' => 'Belum bisa diajukan — '.implode(' ', array_slice($galat, 0, 6)).(count($galat) > 6 ? ' (dan '.(count($galat) - 6).' lainnya)' : '')];
+            }
+
+            foreach ($siap as $p) {
+                $statusSebelum = AlurBagianKustom::statusPoin($p);
+                $p->update(['status_verifikasi' => 'menunggu', 'diajukan_pada' => now(), 'diajukan_oleh' => auth()->id()]);
+                JejakAktivitasBagianKustom::poinBeralur($bagian, $p, 'diajukan', $statusSebelum, $korelasi);
+            }
+
+            return ['jumlah' => $siap->count()];
+        });
+
+        if (isset($hasil['galat'])) {
+            if ($hasil['muat'] ?? false) {
+                $this->muat();
+            }
+
+            $this->addError("baris.{$bagianId}", $hasil['galat']);
+
+            return;
+        }
+
+        $this->muat();
+        session()->flash('status-'.$bagianId, $hasil['jumlah'].' poin "'.$bagian->nama.'" diajukan dan menunggu pemeriksaan. Poin yang diajukan terkunci sampai diperiksa.');
+    }
+
+    /** Tarik kembali pengajuan yang belum diperiksa (diajukan → draf) agar bisa diperbaiki. */
+    public function tarikPengajuan(int $bagianId): void
+    {
+        $bagian = $this->bagianDiizinkanAtau403($bagianId);
+        $this->resetErrorBag();
+
+        if (! $this->bolehAjukan($bagian)) {
+            JejakAktivitasBagianKustom::ditolak($bagian, 'peran pengguna tidak berwenang menarik pengajuan bagian ini', ['menu' => $this->menu]);
+            abort(403);
+        }
+
+        $periode = $this->periode();
+
+        if (! $periode) {
+            return;
+        }
+
+        $korelasi = LogAktivitas::korelasiBaru();
+
+        $jumlah = DB::transaction(function () use ($bagian, $periode, $korelasi) {
+            $diajukan = BagianKustomPoin::konteks($this->menu, (string) $this->peran())
+                ->where('bagian_kustom_id', $bagian->id)->where('periode_id', $periode->id)
+                ->lockForUpdate()->get()
+                ->filter(fn (BagianKustomPoin $p) => AlurBagianKustom::bolehTransisi(AlurBagianKustom::statusPoin($p), 'tarik'));
+
+            foreach ($diajukan as $p) {
+                $p->update(['status_verifikasi' => 'menunggu', 'diajukan_pada' => null, 'diajukan_oleh' => null]);
+                JejakAktivitasBagianKustom::poinBeralur($bagian, $p, 'ditarik', AlurBagianKustom::DIAJUKAN, $korelasi);
+            }
+
+            return $diajukan->count();
+        });
+
+        $this->muat();
+
+        $jumlah > 0
+            ? session()->flash('status-'.$bagian->id, "{$jumlah} poin ditarik kembali menjadi draf dan bisa diperbaiki.")
+            : $this->addError("baris.{$bagian->id}", 'Tidak ada poin yang sedang diajukan (mungkin sudah diperiksa).');
+    }
+
+    public function setujui(int $poinId): void
+    {
+        $this->periksa($poinId, 'setujui');
+    }
+
+    public function kembalikan(int $poinId): void
+    {
+        $this->periksa($poinId, 'kembalikan');
+    }
+
+    /**
+     * Pemeriksa menyetujui atau mengembalikan satu poin. Server memastikan: peran
+     * termasuk pemeriksa bagian ini, poin milik menu & periode layar ini, transisi status
+     * sah, dan (untuk setujui) jumlah minimal bukti terpenuhi.
+     */
+    protected function periksa(int $poinId, string $aksi): void
+    {
+        $this->resetErrorBag();
+        $poin = BagianKustomPoin::find($poinId);
+        $bagian = $poin ? $this->bagianPeriksaUntukSaya()->firstWhere('id', $poin->bagian_kustom_id) : null;
+        $periode = $this->periode();
+
+        if (! $poin || ! $bagian || $poin->menu !== $this->menu || ! $periode || (int) $poin->periode_id !== $periode->id) {
+            JejakAktivitasBagianKustom::ditolak($poin?->bagianKustom, 'peran pengguna tidak berwenang memeriksa poin ini di menu '.MenuBagianKustom::label($this->menu), ['menu' => $this->menu, 'objek_id' => $poinId]);
+            abort(403);
+        }
+
+        $catatan = trim((string) ($this->catatanPeriksa[$poinId] ?? ''));
+
+        if ($aksi === 'kembalikan' && $catatan === '') {
+            $this->addError("periksa.{$poinId}", 'Tulis catatan perbaikan sebelum mengembalikan poin ini.');
+
+            return;
+        }
+
+        if (mb_strlen($catatan) > 1000) {
+            $this->addError("periksa.{$poinId}", 'Catatan maksimal 1000 karakter.');
+
+            return;
+        }
+
+        $aturan = $bagian->aturanBuktiDi($this->menu);
+
+        $galat = DB::transaction(function () use ($poinId, $aksi, $catatan, $aturan, $bagian) {
+            $p = BagianKustomPoin::whereKey($poinId)->lockForUpdate()->first();
+            $status = AlurBagianKustom::statusPoin($p);
+
+            if (! AlurBagianKustom::bolehTransisi($status, $aksi)) {
+                JejakAktivitasBagianKustom::ditolak($bagian, 'transisi status tidak sah: '.$aksi.' dari "'.$status.'"', ['menu' => $this->menu, 'objek_id' => $p->id]);
+
+                return 'Poin ini berstatus "'.AlurBagianKustom::labelStatus($status, $bagian->alurKerja()).'" sehingga tidak bisa '.($aksi === 'setujui' ? 'disetujui' : 'dikembalikan').'.';
+            }
+
+            if ($aksi === 'setujui' && ($g = AturanBuktiBagianKustom::galatMinimal($aturan, $p->berkas()->count())) !== null) {
+                return 'Belum bisa disetujui: '.$g.'.';
+            }
+
+            [$statusSebelum, $catatanSebelum] = [$p->status_verifikasi, $p->catatan];
+
+            $p->update([
+                'status_verifikasi' => $aksi === 'setujui' ? 'terverifikasi' : 'ditolak',
+                'catatan' => $aksi === 'setujui' ? null : $catatan,
+                'diperiksa_oleh' => auth()->id(),
+                'diperiksa_pada' => now(),
+            ]);
+
+            if ($aksi === 'setujui') {
+                Berkas::where('ref_type', BagianKustomPoin::class)->where('ref_id', $p->id)->where('status_verifikasi', 'menunggu')
+                    ->update(['status_verifikasi' => 'terverifikasi']);
+            }
+
+            JejakAktivitasBagianKustom::poinDitandai($p, $statusSebelum, $catatanSebelum);
+
+            return null;
+        });
+
+        if ($galat !== null) {
+            $this->addError("periksa.{$poinId}", $galat);
+
+            return;
+        }
+
+        unset($this->catatanPeriksa[$poinId]);
+        session()->flash('periksa-'.$bagian->id, $aksi === 'setujui' ? 'Poin disetujui.' : 'Poin dikembalikan ke pengisi dengan catatan perbaikan.');
+    }
+
     public function render()
     {
         $bulanNama = [1 => 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
@@ -765,6 +1146,23 @@ class IsianBagianKustom extends Component
             }
         }
 
+        // Pemeriksa: poin yang sudah diajukan (bukan draf) dari semua pengisi di menu ini.
+        $bagianPeriksa = $this->bagianPeriksaUntukSaya();
+        $periksaan = [];
+
+        foreach ($bagianPeriksa as $bagian) {
+            $periksaan[$bagian->id] = $periode
+                ? BagianKustomPoin::with(['masterIku', 'berkas'])
+                    ->where('bagian_kustom_id', $bagian->id)->where('periode_id', $periode->id)->where('menu', $this->menu)
+                    ->orderBy('id')->get()
+                    ->filter(fn (BagianKustomPoin $p) => AlurBagianKustom::statusPoin($p) !== AlurBagianKustom::DRAF)->values()
+                : collect();
+        }
+
+        // Status alur tiap poin yang dimuat (untuk lencana & penguncian formulir di layar).
+        $poinDimuat = collect($tersimpanPeriode)->flatten(1)->keyBy('id');
+        $statusPoin = $poinDimuat->map(fn (BagianKustomPoin $p) => AlurBagianKustom::statusPoin($p))->all();
+
         return view('livewire.isian-bagian-kustom', [
             'bagianList' => $bagianList,
             'bagianBaca' => $bagianBaca,
@@ -781,6 +1179,12 @@ class IsianBagianKustom extends Component
             'tersimpanPeriode' => $tersimpanPeriode,
             'bacaan' => $bacaan,
             'hakSaya' => $bagianList->mapWithKeys(fn (BagianKustom $b) => [$b->id => $b->petaAksi($peran)])->all(),
+            'alurBagian' => $bagianList->concat($bagianPeriksa)->mapWithKeys(fn (BagianKustom $b) => [$b->id => $b->alurKerja()])->all(),
+            'bolehAjukanSaya' => $bagianList->mapWithKeys(fn (BagianKustom $b) => [$b->id => $this->bolehAjukan($b)])->all(),
+            'statusPoin' => $statusPoin,
+            'poinDimuat' => $poinDimuat,
+            'bagianPeriksa' => $bagianPeriksa,
+            'periksaan' => $periksaan,
         ]);
     }
 }

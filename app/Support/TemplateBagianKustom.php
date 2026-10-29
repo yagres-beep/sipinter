@@ -107,6 +107,11 @@ final class TemplateBagianKustom
             // Angka contoh mengikuti format kolom (desimal, pemisah, satuan) — sama
             // dengan yang tercetak di notula sungguhan.
             'angka' => FormatAngkaKolom::tampil(FormatAngkaKolom::diatur($kolom) ? '1234.5' : '12', $kolom),
+            'persentase', 'hitung' => FormatAngkaKolom::tampil(FormatAngkaKolom::diatur(JenisKolomBagianKustom::sebagaiAngka($kolom)) ? '87.5' : '87,5', JenisKolomBagianKustom::sebagaiAngka($kolom)),
+            'tautan' => 'https://contoh.go.id/dokumen',
+            'tabel' => JenisKolomBagianKustom::tampilTabel((string) json_encode([
+                collect($kolom['tabel_kolom'] ?? [])->mapWithKeys(fn ($s) => [$s['kunci'] => $s['tipe'] === 'angka' ? '1' : ($s['tipe'] === 'tanggal' ? '2026-03-31' : ($s['opsi'][0] ?? 'Contoh'))])->all(),
+            ]), $kolom) ?: '1) Contoh baris tabel',
             'pilihan' => $kolom['opsi'][0] ?? 'Pilihan 1',
             'pilihan_ganda' => implode(', ', array_slice($kolom['opsi'] ?? [], 0, 2)) ?: 'Pilihan 1, Pilihan 2',
             'tanggal' => JenisKolomBagianKustom::tampilTanggal('2026-03-31', (string) ($kolom['format_tanggal'] ?? 'panjang')),
@@ -118,6 +123,10 @@ final class TemplateBagianKustom
     {
         return match ($tipe) {
             'angka' => 'angka',
+            'persentase' => 'persentase',
+            'hitung' => 'perhitungan otomatis',
+            'tautan' => 'tautan',
+            'tabel' => 'tabel',
             'pilihan' => 'pilihan',
             'pilihan_ganda' => 'pilihan ganda',
             'tanggal' => 'tanggal',

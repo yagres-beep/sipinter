@@ -1505,7 +1505,13 @@ class PengisianKegiatan extends Component
      */
     protected function bagianKustomAktif()
     {
-        return BagianKustom::daftarUntuk(BagianKustom::PERAN_KETUA_TIM, \App\Support\MenuBagianKustom::PENGISIAN);
+        // Hanya bagian yang berlaku pada triwulan & tahun form ini (pengaturan "Periode
+        // berlaku" di Data Master). Bagian lain tidak disentuh sama sekali oleh form ini.
+        $triwulan = $this->bulan ? BagianKustom::triwulanDariBulan((int) $this->bulan) : null;
+
+        return BagianKustom::daftarUntuk(BagianKustom::PERAN_KETUA_TIM, \App\Support\MenuBagianKustom::PENGISIAN)
+            ->filter(fn (BagianKustom $b) => $b->berlakuPada($this->tahun ? (int) $this->tahun : null, $triwulan))
+            ->values();
     }
 
     /**
@@ -4834,13 +4840,10 @@ class PengisianKegiatan extends Component
                     }
 
                     // Hanya kolom yang berlaku pada periode ini (aktif & sudah mulai
-                    // berlaku) — kolom baru tidak menuntut isian periode sebelumnya.
-                    foreach ($bagian->kolomBerlaku($this->tahun, BagianKustom::triwulanDariBulan($this->bulan)) as $kolom) {
-                        $galat = BagianKustom::pesanGalatKolom($kolom, $blok['kolom'][$kolom['kunci']] ?? '');
-
-                        if ($galat !== null) {
-                            $validator->errors()->add("bagianKustomBlocks.{$bagian->id}.{$i}.kolom.{$kolom['kunci']}", $galat);
-                        }
+                    // berlaku) dan tidak disembunyikan syaratnya, plus subbagian wajib —
+                    // aturan yang sama dengan Isian Bagian Kustom (BagianKustom::galatNilaiPoin()).
+                    foreach ($bagian->galatNilaiPoin($blok['kolom'] ?? [], $this->tahun, BagianKustom::triwulanDariBulan($this->bulan)) as $kunci => $galat) {
+                        $validator->errors()->add("bagianKustomBlocks.{$bagian->id}.{$i}.kolom.{$kunci}", $galat);
                     }
 
                     // Jumlah bukti (minimal/maksimal) sesuai aturan bukti bagian. Poin

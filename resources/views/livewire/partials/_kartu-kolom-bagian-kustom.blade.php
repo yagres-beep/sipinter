@@ -97,7 +97,63 @@
         </div>
     @endif
 
-    @if ($tipe === 'angka')
+    @if ($tipe === 'hitung')
+        @php $varAngka = collect($f['kolom'] ?? [])->filter(fn ($k) => filled($k['kunci'] ?? null) && in_array($k['tipe'] ?? '', ['angka', 'persentase'], true))->values(); @endphp
+        <div class="field" style="margin-bottom:8px">
+            <label>Rumus <span class="req">*</span></label>
+            <input type="text" class="inp filled" style="font-family:monospace" wire:model.live.debounce.400ms="{{ $m }}.rumus" placeholder="mis. {realisasi} / {target} * 100">
+            @if ($galat('rumus'))<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $galat('rumus') }}</div>@endif
+            <div class="fhint" style="margin-top:4px">Pakai + − × (*) ÷ (/) dan tanda kurung. Variabel yang tersedia (kolom Angka/Persentase yang sudah disimpan):
+                @forelse ($varAngka as $v)<code>{{ '{'.$v['kunci'].'}' }}</code> ({{ $v['label'] }})@if (! $loop->last), @endif @empty <i>belum ada — tambahkan kolom Angka lalu simpan dulu</i>@endforelse.
+                Hasil dihitung server saat poin disimpan; bila salah satu nilai kosong atau pembagian dengan nol, hasilnya kosong.</div>
+        </div>
+    @endif
+
+    @if ($tipe === 'tabel')
+        <div class="field" style="margin-bottom:8px" data-editor-tabel="{{ $j }}">
+            <label>Kolom di dalam tabel <span class="req">*</span></label>
+            @if ($galat('tabel_kolom'))<div style="color:var(--red);font-size:11.5px;margin-bottom:4px">{{ $galat('tabel_kolom') }}</div>@endif
+            @foreach ($kol['tabel_kolom'] ?? [] as $si => $sk)
+                <div style="display:grid;grid-template-columns:minmax(120px,2fr) minmax(100px,1fr) auto auto;gap:6px;align-items:start;margin-bottom:6px" wire:key="subkolom-{{ $idBagian }}-{{ $j }}-{{ $sk['kunci'] ?: 'baru-'.$si }}">
+                    <div>
+                        <input type="text" class="inp filled" aria-label="Nama kolom tabel {{ $si + 1 }}" wire:model.live.debounce.300ms="{{ $m }}.tabel_kolom.{{ $si }}.label" placeholder="mis. Nama kegiatan">
+                        @if ($galat("tabel_kolom.{$si}.label"))<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $galat("tabel_kolom.{$si}.label") }}</div>@endif
+                        @if (($sk['tipe'] ?? '') === 'pilihan')
+                            <input type="text" class="inp filled" style="margin-top:4px" aria-label="Pilihan kolom tabel {{ $si + 1 }}" wire:model.blur="{{ $m }}.tabel_kolom.{{ $si }}.opsi_teks" placeholder="Pilihan, pisahkan koma">
+                            @if ($galat("tabel_kolom.{$si}.opsi_teks"))<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $galat("tabel_kolom.{$si}.opsi_teks") }}</div>@endif
+                        @endif
+                    </div>
+                    <select class="inp filled" aria-label="Jenis kolom tabel {{ $si + 1 }}" wire:model.live="{{ $m }}.tabel_kolom.{{ $si }}.tipe">
+                        @foreach ($tipeSubkolom as $nilai => $label)
+                            <option value="{{ $nilai }}">{{ $label }}</option>
+                        @endforeach
+                    </select>
+                    <label style="display:flex;align-items:center;gap:4px;font-size:12px;padding-top:9px;cursor:pointer"><input type="checkbox" wire:model="{{ $m }}.tabel_kolom.{{ $si }}.wajib"> Wajib</label>
+                    <div class="btn-row" style="margin-top:0;gap:2px">
+                        <button type="button" class="btn btn-ghost btn-sm" wire:click="geserKolomTabel({{ $idBagian }}, {{ $j }}, {{ $si }}, -1)" @disabled($si === 0) aria-label="Geser kiri">←</button>
+                        <button type="button" class="btn btn-ghost btn-sm" wire:click="geserKolomTabel({{ $idBagian }}, {{ $j }}, {{ $si }}, 1)" @disabled($si === count($kol['tabel_kolom']) - 1) aria-label="Geser kanan">→</button>
+                        <button type="button" class="btn btn-red btn-sm" wire:click="hapusKolomTabel({{ $idBagian }}, {{ $j }}, {{ $si }})" aria-label="Hapus kolom tabel">🗑</button>
+                    </div>
+                </div>
+            @endforeach
+            <button type="button" class="btn btn-ghost btn-sm" wire:click="tambahKolomTabel({{ $idBagian }}, {{ $j }})">＋ Kolom tabel</button>
+        </div>
+        <div class="row2">
+            <div class="field" style="margin-bottom:8px">
+                <label>Jumlah baris minimal</label>
+                <input type="number" min="0" max="{{ \App\Support\JenisKolomBagianKustom::BARIS_TABEL_MAKS }}" class="inp filled" wire:model.blur="{{ $m }}.baris_min" placeholder="kosong = bebas">
+                @if ($galat('baris_min'))<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $galat('baris_min') }}</div>@endif
+            </div>
+            <div class="field" style="margin-bottom:8px">
+                <label>Jumlah baris maksimal</label>
+                <input type="number" min="1" max="{{ \App\Support\JenisKolomBagianKustom::BARIS_TABEL_MAKS }}" class="inp filled" wire:model.blur="{{ $m }}.baris_maks" placeholder="kosong = {{ \App\Support\JenisKolomBagianKustom::BARIS_TABEL_MAKS }}">
+                @if ($galat('baris_maks'))<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $galat('baris_maks') }}</div>@endif
+            </div>
+        </div>
+        <div class="fhint" style="margin:-4px 0 8px">Pengisi bisa menambah dan menghapus baris sendiri. Baris yang seluruhnya kosong tidak disimpan. Di notula, tabel dicetak per baris: "1) Kolom: isi; … | 2) …".</div>
+    @endif
+
+    @if (in_array($tipe, ['angka', 'persentase', 'hitung'], true))
         @php $kolomContoh = \App\Models\BagianKustom::normalkanKolom(['kunci' => 'contoh', 'label' => 'contoh'] + $kol); @endphp
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:8px">
             <div class="field" style="margin-bottom:0">
@@ -127,16 +183,18 @@
                     <input type="checkbox" wire:model.live="{{ $m }}.ribuan"> Pakai pemisah ribuan
                 </label>
             @endif
+            @if ($tipe !== 'hitung')
             <div class="field" style="margin-bottom:0">
                 <label>Nilai minimal</label>
-                <input type="text" inputmode="decimal" class="inp filled" wire:model.blur="{{ $m }}.min" placeholder="kosong = bebas">
+                <input type="text" inputmode="decimal" class="inp filled" wire:model.blur="{{ $m }}.min" placeholder="{{ $tipe === 'persentase' ? 'mis. 0' : 'kosong = bebas' }}">
                 @if ($galat('min'))<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $galat('min') }}</div>@endif
             </div>
             <div class="field" style="margin-bottom:0">
                 <label>Nilai maksimal</label>
-                <input type="text" inputmode="decimal" class="inp filled" wire:model.blur="{{ $m }}.maks" placeholder="kosong = bebas">
+                <input type="text" inputmode="decimal" class="inp filled" wire:model.blur="{{ $m }}.maks" placeholder="{{ $tipe === 'persentase' ? 'mis. 100' : 'kosong = bebas' }}">
                 @if ($galat('maks'))<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $galat('maks') }}</div>@endif
             </div>
+            @endif
             <div class="field" style="margin-bottom:0">
                 <label>Ringkasan nilai</label>
                 <select class="inp filled" wire:model.live="{{ $m }}.ringkasan">
@@ -199,14 +257,55 @@
         </div>
     </div>
 
+    {{-- Syarat tampil: kolom ini hanya tampil (dan divalidasi) bila kolom lain bernilai tertentu. --}}
+    @php
+        $acuanSyarat = collect($f['kolom'] ?? [])->filter(fn ($k) => filled($k['kunci'] ?? null) && ($k['kunci'] ?? null) !== ($kol['kunci'] ?? null) && ! in_array($k['tipe'] ?? '', ['tabel', 'hitung'], true))->values();
+        $acuanDipilih = $acuanSyarat->firstWhere('kunci', $kol['syarat_kunci'] ?? '');
+    @endphp
+    <div class="field" style="margin-bottom:8px">
+        <label>Tampilkan kolom ini <span style="color:var(--muted);font-weight:500">(keterlihatan bersyarat)</span></label>
+        <div style="display:grid;grid-template-columns:minmax(140px,2fr) minmax(120px,1fr) minmax(120px,1.5fr);gap:6px">
+            <select class="inp filled" aria-label="Kolom acuan syarat" wire:model.live="{{ $m }}.syarat_kunci">
+                <option value="">Selalu tampil</option>
+                @foreach ($acuanSyarat as $a)
+                    <option value="{{ $a['kunci'] }}">Bila "{{ $a['label'] }}"</option>
+                @endforeach
+            </select>
+            @if (filled($kol['syarat_kunci'] ?? null))
+                <select class="inp filled" aria-label="Operator syarat" wire:model.live="{{ $m }}.syarat_operator">
+                    @foreach ($operatorSyarat as $nilai => $label)
+                        <option value="{{ $nilai }}">{{ $label }}</option>
+                    @endforeach
+                </select>
+                @if (($kol['syarat_operator'] ?? 'sama') !== 'terisi')
+                    @if ($acuanDipilih && in_array($acuanDipilih['tipe'] ?? '', ['pilihan', 'pilihan_ganda'], true))
+                        <select class="inp filled" aria-label="Nilai syarat" wire:model.live="{{ $m }}.syarat_nilai">
+                            <option value="">— pilih —</option>
+                            @foreach (array_filter(array_map('trim', preg_split('/[,\n]+/', (string) ($acuanDipilih['opsi_teks'] ?? '')))) as $o)
+                                <option value="{{ $o }}">{{ $o }}</option>
+                            @endforeach
+                        </select>
+                    @else
+                        <input type="text" class="inp filled" aria-label="Nilai syarat" wire:model.blur="{{ $m }}.syarat_nilai" placeholder="nilai pembanding">
+                    @endif
+                @endif
+            @endif
+        </div>
+        @if ($galat('syarat_kunci'))<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $galat('syarat_kunci') }}</div>@endif
+        @if ($galat('syarat_nilai'))<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $galat('syarat_nilai') }}</div>@endif
+        <div class="fhint" style="margin-top:4px">Kolom yang tersembunyi tidak wajib diisi dan isiannya tidak disimpan. Kolom acuan harus sudah disimpan (punya kode variabel).</div>
+    </div>
+
     @if (! ($kol['aktif'] ?? true))
         <div class="info warn" style="font-size:11.5px;margin-bottom:8px">Kolom nonaktif: tidak lagi tampil di formulir isian. Data yang sudah tersimpan tetap ada, tetap tampil di Verifikasi, dan tetap tercetak di notula bila variabelnya dipakai.</div>
     @endif
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between">
+        @if ($tipe !== 'hitung')
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
-            <input type="checkbox" wire:model="{{ $m }}.wajib"> Wajib diisi
+            <input type="checkbox" wire:model="{{ $m }}.wajib"> Wajib diisi{{ $tipe === 'tabel' ? ' (minimal satu baris)' : '' }}
         </label>
+        @endif
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
             <input type="checkbox" wire:model.live="{{ $m }}.aktif"> Aktif
         </label>

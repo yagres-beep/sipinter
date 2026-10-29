@@ -1610,6 +1610,7 @@
                         @include('livewire.partials._isian-kolom-bagian-kustom', [
                             'kelompok' => $bagian->kelompokKolomBerlaku($tahun, \App\Models\BagianKustom::triwulanDariBulan($bulan)),
                             'model' => "bagianKustomBlocks.{$bagian->id}.{$i}.kolom",
+                            'nilai' => $blok['kolom'] ?? [],
                         ])
                         </fieldset>
 
