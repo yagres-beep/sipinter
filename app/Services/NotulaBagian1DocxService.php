@@ -9,6 +9,7 @@ use App\Models\Notula;
 use App\Models\PengaturanCapaian;
 use App\Models\Periode;
 use App\Models\RincianN;
+use App\Support\RegistriVariabel;
 use App\Support\RumusMarkup;
 use App\Support\TemplateBagianKustom;
 use Illuminate\Support\Carbon;
@@ -290,6 +291,12 @@ class NotulaBagian1DocxService
      * balik ke disk lokal supaya panggilan generate() berikutnya dalam deploy yang sama
      * tidak perlu memanggil Drive API lagi setiap kali.
      */
+    /** Path berkas template Bagian I yang dipakai generate() saat ini (unggahan atau bawaan). */
+    public function pathTemplateAktif(): string
+    {
+        return $this->resolveTemplatePath();
+    }
+
     private function resolveTemplatePath(): string
     {
         $config = FolderConfig::current();
@@ -722,18 +729,7 @@ class NotulaBagian1DocxService
                 .'</w:t></w:r></w:p>';
 
             foreach ($bagian->poin as $poin) {
-                $konteks = TemplateBagianKustom::konteks(
-                    $poin->masterIku->kode ?? null,
-                    $poin->masterIku->indikator ?? null,
-                    $poin->teks,
-                    $bagian->nama,
-                    $poin->periode?->tahun,
-                    $poin->periode?->triwulan,
-                    $poin->periode?->bulan,
-                    // Format angka (desimal, pemisah, satuan) diatur per kolom; kolom
-                    // tanpa pengaturan format tercetak apa adanya seperti sebelumnya.
-                    $bagian->nilaiKolomTampil($poin->nilai_kolom),
-                );
+                $konteks = TemplateBagianKustom::konteksPoin($poin, $bagian);
 
                 $teks = TemplateBagianKustom::render($bagian->formatNotulaEfektif(), $konteks);
                 $this->adaDaftarButir = true;
@@ -1503,20 +1499,88 @@ class NotulaBagian1DocxService
     /**
      * Macro yang DIISI generate() (lihat isiHeader()/isiSatuIku()/isiPenutup()/penanda
      * blok) -- di luar daftar ini, macro di template tidak akan pernah diganti dan
-     * tercetak mentah "{{...}}" di notula.
+     * tercetak mentah "{{...}}" di notula. Sumbernya registri variabel sistem
+     * (App\Support\RegistriVariabel), yang juga ditampilkan di halaman Katalog Variabel.
+     *
+     * @return list<string>
      */
-    private const MACRO_DIKENAL = [
-        'tahun', 'triwulan_angka', 'triwulan_sebelumnya', 'nama_satker', 'agenda_pembahasan', 'hari_tanggal', 'waktu', 'tempat',
-        'pimpinan_rapat', 'capaian_triwulanan_persen', 'capaian_pk_persen', 'lampiran_basis_data',
-        'kotaTtd', 'tanggal', 'namaKepala', 'namaNotulis', 'bagian_2', 'bagian_3',
-        'iku_blok', '/iku_blok', 'blok_proksi', '/blok_proksi', 'blok_berakhlak', '/blok_berakhlak',
-        'blok_ro', '/blok_ro', 'blok_formula', '/blok_formula', 'ro_row', '/ro_row',
-        'proksi_uraian', 'proksi_target', 'proksi_realisasi',
-        'kode', 'indikator', 'sasaran', 'target_pk', 'target_tw', 'realisasi_tw', 'capaian_tw', 'capaian_pk',
-        'analisis_capaian', 'kendala', 'solusi', 'rtl', 'pic_rtl',
-        'batas_waktu_rtl', 'formula_capaian', 'dasar_hitung', 'bukti_realisasi', 'bukti_rtl_sebelumnya',
-        'rtl_evaluasi', 'bukti_rtl_evaluasi', 'rtl_berikutnya', 'batas_waktu_rtl_berikutnya', 'penjelasan_lainnya', 'ro_uraian', 'ro_vol', 'ro_progres',
-    ];
+    public static function macroDikenal(): array
+    {
+        return RegistriVariabel::placeholderDocxDiproses();
+    }
+
+    /**
+     * Periksa placeholder template .docx terhadap registri variabel: yang tidak dikenal,
+     * yang usang (beserta penggantinya), dan yang diletakkan di luar lingkupnya (mis.
+     * {{kode}} di luar {{iku_blok}} — tidak akan pernah terisi). Tidak mengubah berkas.
+     *
+     * @return array{dipakai: list<string>, tidak_dikenal: list<string>, usang: array<string, ?string>, salah_tempat: array<string, string>}
+     */
+    public function analisisTemplate(string $templatePath): array
+    {
+        $hasil = ['dipakai' => [], 'tidak_dikenal' => [], 'usang' => [], 'salah_tempat' => []];
+
+        try {
+            $processor = $this->newTemplateProcessor($templatePath);
+            $variabel = array_values(array_unique(array_map('trim', $processor->getVariables())));
+            $teks = strip_tags($this->getMainPart($processor));
+        } catch (Throwable) {
+            return $hasil;
+        } finally {
+            // Delimiter STATIC dikembalikan ke bawaan PhpWord, sama seperti generate().
+            foreach (['macroOpeningChars' => '${', 'macroClosingChars' => '}'] as $properti => $nilai) {
+                $ref = new ReflectionProperty(TemplateProcessor::class, $properti);
+                $ref->setAccessible(true);
+                $ref->setValue(null, $nilai);
+            }
+        }
+
+        $dikenal = self::macroDikenal();
+
+        foreach ($variabel as $kode) {
+            $dasar = ltrim($kode, '/');
+            $info = RegistriVariabel::cari($dasar);
+
+            if ($info !== null && in_array(RegistriVariabel::KONTEKS_NOTULA_DOCX, $info['konteks'], true)) {
+                $hasil['dipakai'][] = $kode;
+
+                if ($info['status'] === 'usang' && ! array_key_exists($dasar, $hasil['usang'])) {
+                    $hasil['usang'][$dasar] = $info['pengganti'];
+                }
+            }
+
+            if (! in_array($kode, $dikenal, true) && ($info === null || $info['diproses'])) {
+                $hasil['tidak_dikenal'][] = $kode;
+            }
+        }
+
+        // Lingkup: telusuri kemunculan placeholder di isi utama secara berurutan, catat
+        // blok yang sedang terbuka. Header/footer hanya bisa memuat placeholder global.
+        preg_match_all('/\{\{\s*(\/?[A-Za-z0-9_]+)\s*\}\}/', $teks, $m);
+        $terbuka = [];
+
+        foreach ($m[1] as $kode) {
+            if (str_starts_with($kode, '/')) {
+                unset($terbuka[substr($kode, 1)]);
+
+                continue;
+            }
+
+            $info = RegistriVariabel::cari($kode);
+
+            if ($info !== null && $info['penutup'] !== null) {
+                $terbuka[$kode] = true;
+            }
+
+            $lingkup = $info['lingkup'] ?? 'global';
+
+            if ($info !== null && $lingkup !== 'global' && ! isset($terbuka[$lingkup]) && ! isset($hasil['salah_tempat'][$kode])) {
+                $hasil['salah_tempat'][$kode] = RegistriVariabel::LINGKUP[$lingkup];
+            }
+        }
+
+        return $hasil;
+    }
 
     /**
      * Macro {{...}} di template (isi utama, header & footer) yang TIDAK dikenali
@@ -1538,7 +1602,7 @@ class NotulaBagian1DocxService
             return [];
         }
 
-        return array_values(array_diff(array_unique(array_map('trim', $variabel)), self::MACRO_DIKENAL));
+        return array_values(array_diff(array_unique(array_map('trim', $variabel)), self::macroDikenal()));
     }
 
     /**

@@ -9,14 +9,19 @@ use App\Models\VariabelKatalog;
 use App\Support\FormatAngkaKolom;
 use App\Support\JejakAktivitasBagianKustom;
 use App\Support\JenisKolomBagianKustom;
+use App\Support\KatalogVariabel;
+use App\Support\RegistriVariabel;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 /**
- * Tim SAKIP — katalog variabel yang dipakai ulang oleh kolom Bagian Kustom. Kolom yang
- * menautkan variabel mengikuti jenis, opsi, format angka, dan batasnya.
+ * Tim SAKIP — Katalog Variabel: kamus pusat semua variabel SIPINTER.
+ * - Variabel sistem/turunan/penanda template: hanya baca, dari RegistriVariabel.
+ * - Variabel kolom Bagian Kustom: hanya baca, dari konfigurasi bagian.
+ * - Definisi bersama (tabel variabel_katalog): bisa dibuat/diubah di sini dan dipakai
+ *   ulang oleh kolom Bagian Kustom (mengikuti jenis, opsi, format angka, batasnya).
  *
  * Perubahan definisi tidak pernah mengonversi nilai tersimpan: mengganti jenis atau
  * membuang opsi ditolak bila ada nilai tersimpan pada kolom bertaut yang tidak lagi
@@ -27,8 +32,20 @@ class VariabelKatalogManager extends Component
 {
     public string $cari = '';
 
-    /** semua | aktif | nonaktif */
-    public string $filterStatus = 'semua';
+    /** '' = semua | aktif | usang | nonaktif */
+    public string $filterStatus = '';
+
+    public string $filterKategori = '';
+
+    /** Asal: sistem | turunan | penyajian | kustom | definisi */
+    public string $filterJenis = '';
+
+    public string $filterTipe = '';
+
+    public string $filterKonteks = '';
+
+    /** Id entri katalog yang detailnya dibuka (mis. "sistem:kode"). */
+    public ?string $detail = null;
 
     /** null = form tutup, 0 = variabel baru, >0 = id yang diubah */
     public ?int $editId = null;
@@ -55,7 +72,24 @@ class VariabelKatalogManager extends Component
         return [
             'kode' => '', 'nama' => '', 'tipe' => 'angka', 'satuan' => '', 'desimal' => '', 'pemisah' => FormatAngkaKolom::PEMISAH_KOMA,
             'ribuan' => true, 'min' => '', 'maks' => '', 'panjang_min' => '', 'panjang_maks' => '', 'opsi_teks' => '', 'keterangan' => '',
+            'kategori' => VariabelKatalog::KATEGORI_BAWAAN, 'contoh' => '', 'catatan' => '', 'pengganti_kode' => '',
         ];
+    }
+
+    public function bukaDetail(string $id): void
+    {
+        $this->detail = $this->detail === $id ? null : $id;
+    }
+
+    public function resetFilter(): void
+    {
+        $this->reset('cari', 'filterStatus', 'filterKategori', 'filterJenis', 'filterTipe', 'filterKonteks');
+    }
+
+    /** Kategori yang boleh dipilih untuk definisi buatan pengguna. */
+    protected static function kategoriDefinisi(): array
+    {
+        return array_diff_key(RegistriVariabel::KATEGORI, ['struktur' => true]);
     }
 
     public function baru(): void
@@ -78,6 +112,8 @@ class VariabelKatalogManager extends Component
             'ribuan' => (bool) $v->ribuan, 'min' => (string) $v->min, 'maks' => (string) $v->maks,
             'panjang_min' => $v->panjang_min !== null ? (string) $v->panjang_min : '', 'panjang_maks' => $v->panjang_maks !== null ? (string) $v->panjang_maks : '',
             'opsi_teks' => implode(', ', (array) ($v->opsi ?? [])), 'keterangan' => (string) $v->keterangan,
+            'kategori' => $v->kategori ?: VariabelKatalog::KATEGORI_BAWAAN, 'contoh' => (string) $v->contoh,
+            'catatan' => (string) $v->catatan, 'pengganti_kode' => (string) $v->pengganti_kode,
         ];
     }
 
@@ -96,7 +132,7 @@ class VariabelKatalogManager extends Component
 
     protected static function sidik(VariabelKatalog $v): string
     {
-        return sha1((string) json_encode($v->only(['kode', 'nama', 'tipe', 'satuan', 'desimal', 'pemisah', 'ribuan', 'min', 'maks', 'panjang_min', 'panjang_maks', 'opsi', 'keterangan', 'aktif'])));
+        return sha1((string) json_encode($v->only(['kode', 'nama', 'tipe', 'satuan', 'desimal', 'pemisah', 'ribuan', 'min', 'maks', 'panjang_min', 'panjang_maks', 'opsi', 'keterangan', 'aktif', 'kategori', 'contoh', 'catatan', 'pengganti_kode'])));
     }
 
     /** @return array<int, string> */
@@ -114,8 +150,14 @@ class VariabelKatalogManager extends Component
         $baru = $this->editId === 0;
         $this->resetErrorBag();
 
+        $kodeIni = $baru ? (string) ($this->form['kode'] ?? '') : (string) VariabelKatalog::whereKey($this->editId)->value('kode');
+
         $this->validate([
-            'form.kode' => $baru ? ['required', 'string', 'regex:'.VariabelKatalog::POLA_KODE, Rule::unique('variabel_katalog', 'kode')] : [],
+            'form.kode' => $baru ? ['required', 'string', 'regex:'.VariabelKatalog::POLA_KODE, Rule::unique('variabel_katalog', 'kode'), Rule::notIn(array_keys(RegistriVariabel::semua()))] : [],
+            'form.kategori' => ['nullable', Rule::in(array_keys(self::kategoriDefinisi()))],
+            'form.contoh' => ['nullable', 'string', 'max:255'],
+            'form.catatan' => ['nullable', 'string', 'max:2000'],
+            'form.pengganti_kode' => ['nullable', 'string', Rule::exists('variabel_katalog', 'kode'), Rule::notIn([$kodeIni])],
             'form.nama' => ['required', 'string', 'max:150'],
             'form.tipe' => ['required', Rule::in(JenisKolomBagianKustom::TIPE_KATALOG)],
             'form.satuan' => ['nullable', 'string', 'max:30'],
@@ -131,7 +173,10 @@ class VariabelKatalogManager extends Component
         ], [
             'form.kode.regex' => 'Kode hanya huruf kecil, angka, dan garis bawah, diawali huruf (2–60 karakter), mis. persen_tindak_lanjut.',
             'form.kode.unique' => 'Kode tersebut sudah dipakai variabel lain.',
-        ], ['form.kode' => 'kode', 'form.nama' => 'nama', 'form.tipe' => 'jenis']);
+            'form.kode.not_in' => 'Kode tersebut sudah dipakai variabel sistem. Pilih kode lain.',
+            'form.pengganti_kode.exists' => 'Variabel pengganti harus ada di katalog.',
+            'form.pengganti_kode.not_in' => 'Variabel tidak bisa menjadi pengganti dirinya sendiri.',
+        ], ['form.kode' => 'kode', 'form.nama' => 'nama', 'form.tipe' => 'jenis', 'form.pengganti_kode' => 'pengganti']);
 
         $f = $this->form;
         $tipe = $f['tipe'];
@@ -172,6 +217,10 @@ class VariabelKatalogManager extends Component
             'panjang_maks' => JenisKolomBagianKustom::teks($tipe) && filled($f['panjang_maks']) ? (int) $f['panjang_maks'] : null,
             'opsi' => in_array($tipe, ['pilihan', 'pilihan_ganda'], true) ? $opsi : null,
             'keterangan' => trim((string) $f['keterangan']) ?: null,
+            'kategori' => filled($f['kategori'] ?? null) ? $f['kategori'] : VariabelKatalog::KATEGORI_BAWAAN,
+            'contoh' => trim((string) ($f['contoh'] ?? '')) ?: null,
+            'catatan' => trim((string) ($f['catatan'] ?? '')) ?: null,
+            'pengganti_kode' => trim((string) ($f['pengganti_kode'] ?? '')) ?: null,
             'diubah_oleh' => auth()->id(),
         ];
 
@@ -266,33 +315,21 @@ class VariabelKatalogManager extends Component
 
     public function render()
     {
-        $cari = mb_strtolower(trim($this->cari));
-
-        $daftar = VariabelKatalog::orderBy('nama')->get()->filter(function (VariabelKatalog $v) use ($cari) {
-            if ($cari !== '' && ! str_contains(mb_strtolower($v->kode.' '.$v->nama.' '.$v->keterangan), $cari)) {
-                return false;
-            }
-
-            return match ($this->filterStatus) {
-                'aktif' => $v->aktif,
-                'nonaktif' => ! $v->aktif,
-                default => true,
-            };
-        })->values();
-
-        $pemakaian = [];
-
-        foreach (BagianKustom::orderBy('urutan')->orderBy('id')->get() as $bagian) {
-            foreach ($bagian->kolom ?? [] as $kolom) {
-                if (filled($kolom['variabel'] ?? null)) {
-                    $pemakaian[$kolom['variabel']][] = ['bagian' => $bagian->nama, 'kolom' => $kolom['label'] ?? $kolom['kunci'], 'aktif' => (bool) $bagian->aktif && (bool) ($kolom['aktif'] ?? true)];
-                }
-            }
-        }
+        $semua = KatalogVariabel::semua();
+        $daftar = KatalogVariabel::saring($semua, [
+            'cari' => $this->cari, 'kategori' => $this->filterKategori, 'jenis' => $this->filterJenis,
+            'tipe' => $this->filterTipe, 'konteks' => $this->filterKonteks, 'status' => $this->filterStatus,
+        ]);
 
         return view('livewire.variabel-katalog-manager', [
+            'jumlahTotal' => $semua->count(),
+            'jumlahPerJenis' => $semua->countBy('jenis')->all(),
+            'jumlahPerStatus' => $semua->countBy('status')->all(),
             'daftar' => $daftar,
-            'pemakaian' => $pemakaian,
+            'kelompok' => KatalogVariabel::kelompokkan($daftar),
+            'adaFilter' => collect([$this->cari, $this->filterKategori, $this->filterJenis, $this->filterTipe, $this->filterKonteks, $this->filterStatus])->contains(fn ($f) => trim($f) !== ''),
+            'definisiAktif' => $semua->where('jenis', 'definisi')->where('aktif_model', true)->pluck('nama', 'kode')->all(),
+            'kategoriDefinisi' => self::kategoriDefinisi(),
             'tipeKolom' => JenisKolomBagianKustom::tipeKatalog(),
             'pilihanPemisah' => FormatAngkaKolom::PEMISAH,
         ]);

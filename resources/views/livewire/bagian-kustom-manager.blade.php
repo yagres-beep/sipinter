@@ -698,40 +698,42 @@
 
                                 <div class="field">
                                     <label>Format satu baris poin di notula</label>
-                                    <textarea class="inp filled" x-ref="formatNotula" style="height:auto;display:block;font-family:monospace;font-size:12.5px" rows="2"
+                                    <textarea id="format-notula-{{ $bagian->id }}" class="inp filled" x-ref="formatNotula" style="height:auto;display:block;font-family:monospace;font-size:12.5px" rows="2"
                                         wire:model.live.debounce.400ms="form.{{ $bagian->id }}.format_notula"
                                         placeholder="{{ \App\Support\TemplateBagianKustom::FORMAT_STANDAR }}"></textarea>
                                     @error("form.{$bagian->id}.format_notula")<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>@enderror
                                     <div class="fhint" style="margin-top:6px">Tulis teks biasa dan sisipkan variabel dalam kurung kurawal, mis. <code>{kode_iku}: {teks}</code>. Tanda • (bullet) ditambahkan otomatis di notula. Klik variabel di bawah untuk menyisipkannya.</div>
                                 </div>
 
-                                <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 14px">
-                                    @foreach ($variabel as $v)
-                                        <button type="button" class="btn btn-ghost btn-sm" style="font-family:monospace;font-size:11.5px"
-                                            x-on:click="$refs.formatNotula.value += '{{ '{'.$v['kunci'].'}' }}'; $refs.formatNotula.dispatchEvent(new Event('input'))">{{ '{'.$v['kunci'].'}' }}</button>
+                                <div x-data="{ cariVar: '' }" data-uji="pemilih-variabel-format">
+                                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0 6px">
+                                        <div style="font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px">Pilih variabel</div>
+                                        <input type="search" class="inp filled" style="max-width:260px;height:32px;font-size:12px" x-model="cariVar" placeholder="Cari kode, keterangan, atau kategori" aria-label="Cari variabel format notula">
+                                        <span class="fhint" style="margin:0">Klik untuk menyisipkan di posisi kursor.</span>
+                                    </div>
+                                    @foreach (collect($variabel)->groupBy('kategori') as $namaKelompok => $isiKelompok)
+                                        <div style="font-size:11px;font-weight:700;color:var(--muted);margin:8px 0 4px">{{ $namaKelompok }}</div>
+                                        <div style="overflow-x:auto">
+                                            <table style="width:100%;border-collapse:collapse;font-size:12px">
+                                                <tbody>
+                                                    @foreach ($isiKelompok as $v)
+                                                        @php $tulisanVar = '{'.$v['kunci'].'}'; @endphp
+                                                        <tr x-show="cariVar === '' || @js(mb_strtolower($v['kunci'].' '.$v['keterangan'].' '.$v['kategori'])).includes(cariVar.toLowerCase())">
+                                                            <td style="padding:5px 6px;border-bottom:1px solid var(--line2);width:1%;white-space:nowrap">
+                                                                <button type="button" class="btn btn-ghost btn-sm" style="font-family:monospace;font-size:11.5px"
+                                                                    x-on:click="const el = document.getElementById('format-notula-{{ $bagian->id }}'), s =el.selectionStart ?? el.value.length, e = el.selectionEnd ?? s; el.value = el.value.slice(0, s) + @js($tulisanVar) + el.value.slice(e); el.focus(); el.setSelectionRange(s + {{ mb_strlen($tulisanVar) }}, s + {{ mb_strlen($tulisanVar) }}); el.dispatchEvent(new Event('input'))">{{ $tulisanVar }}</button>
+                                                            </td>
+                                                            <td style="padding:5px 6px;border-bottom:1px solid var(--line2)">
+                                                                {{ $v['keterangan'] }}
+                                                                @if (! empty($v['sumber']))<div style="color:var(--muted);font-size:11px">Sumber: {{ $v['sumber'] }}</div>@endif
+                                                            </td>
+                                                            <td style="padding:5px 6px;border-bottom:1px solid var(--line2);color:var(--muted)">Contoh: {{ $v['contoh'] }}</td>
+                                                        </tr>
+                                                    @endforeach
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     @endforeach
-                                </div>
-
-                                <div style="font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Keterangan variabel</div>
-                                <div style="overflow-x:auto">
-                                    <table style="width:100%;border-collapse:collapse;font-size:12px">
-                                        <thead>
-                                            <tr style="text-align:left;color:var(--muted)">
-                                                <th style="padding:6px;border-bottom:1px solid var(--line)">Variabel</th>
-                                                <th style="padding:6px;border-bottom:1px solid var(--line)">Keterangan</th>
-                                                <th style="padding:6px;border-bottom:1px solid var(--line)">Contoh hasil</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach ($variabel as $v)
-                                                <tr>
-                                                    <td style="padding:6px;border-bottom:1px solid var(--line2);font-family:monospace">{{ '{'.$v['kunci'].'}' }}</td>
-                                                    <td style="padding:6px;border-bottom:1px solid var(--line2)">{{ $v['keterangan'] }}</td>
-                                                    <td style="padding:6px;border-bottom:1px solid var(--line2)">{{ $v['contoh'] }}</td>
-                                                </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
                                 </div>
 
                                 <div class="info" style="font-size:11.5px;margin-top:12px">

@@ -2110,7 +2110,8 @@ class BagianKustomManager extends Component
         $baris = [];
 
         foreach ([['1131', 'Persentase rekomendasi yang ditindaklanjuti', 'Contoh uraian poin pertama'], ['1131', 'Persentase rekomendasi yang ditindaklanjuti', 'Contoh uraian poin kedua']] as $i => [$kode, $indikator, $teks]) {
-            $konteks = TemplateBagianKustom::konteks($kode, $indikator, $teks, trim((string) $f['nama']), 2026, 1, 3 - $i, $contohNilai);
+            $konteks = TemplateBagianKustom::konteks($kode, $indikator, $teks, trim((string) $f['nama']), 2026, 1, 3 - $i, $contohNilai,
+                TemplateBagianKustom::VARIABEL_BAWAAN['sasaran_iku']['contoh'], TemplateBagianKustom::VARIABEL_BAWAAN['satuan_iku']['contoh']);
             $baris[] = TemplateBagianKustom::render($format, $konteks);
         }
 

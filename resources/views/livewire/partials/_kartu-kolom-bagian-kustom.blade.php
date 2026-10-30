@@ -36,23 +36,47 @@
         </div>
     </div>
 
-    @if ($katalogVariabel->isNotEmpty() || filled($kol['variabel'] ?? null))
-        <div class="field" style="margin-bottom:8px">
-            <label>Variabel katalog <span style="color:var(--muted);font-weight:500">(opsional — pakai definisi bersama)</span></label>
+    <div class="field" style="margin-bottom:8px" x-data="{ cariKatalog: '' }" data-uji="pemilih-variabel-kolom">
+        <label>Variabel katalog <span style="color:var(--muted);font-weight:500">(opsional — pakai definisi bersama)</span></label>
+        @if ($katalogVariabel->isNotEmpty() || filled($kol['variabel'] ?? null))
+            @php
+                $kelompokKatalog = $katalogVariabel
+                    ->filter(fn ($v) => $v->aktif || ($kol['variabel'] ?? null) === $v->kode)
+                    ->groupBy(fn ($v) => \App\Support\RegistriVariabel::KATEGORI[$v->kategori ?: \App\Models\VariabelKatalog::KATEGORI_BAWAAN] ?? \App\Support\RegistriVariabel::KATEGORI['bagian_kustom']);
+            @endphp
+            @if ($katalogVariabel->count() > 6)
+                <input type="search" class="inp filled" style="margin-bottom:6px;height:32px;font-size:12px" x-model="cariKatalog" placeholder="Cari kode atau nama variabel" aria-label="Cari variabel katalog">
+            @endif
             <select class="inp filled" wire:model.live="{{ $m }}.variabel">
                 <option value="">Tidak — kolom lokal bagian ini</option>
-                @foreach ($katalogVariabel as $v)
-                    @if ($v->aktif || ($kol['variabel'] ?? null) === $v->kode)
-                        <option value="{{ $v->kode }}">{{ $v->nama }} ({{ $v->kode }}){{ $v->aktif ? '' : ' — nonaktif' }}</option>
-                    @endif
+                @foreach ($kelompokKatalog as $namaKategori => $isiKategori)
+                    <optgroup label="{{ $namaKategori }}">
+                        @foreach ($isiKategori as $v)
+                            <option value="{{ $v->kode }}" x-bind:hidden="cariKatalog !== '' && ! @js(mb_strtolower($v->kode.' '.$v->nama)).includes(cariKatalog.toLowerCase())">{{ $v->nama }} ({{ $v->kode }}){{ $v->aktif ? '' : ' — nonaktif' }}</option>
+                        @endforeach
+                    </optgroup>
                 @endforeach
             </select>
             @if ($galat('variabel'))<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $galat('variabel') }}</div>@endif
             @if ($varTerpilih)
-                <div class="fhint" style="margin-top:4px">Jenis, pilihan, satuan, format angka, dan batas nilai mengikuti katalog "{{ $varTerpilih->nama }}": {{ $varTerpilih->ringkasan() }}. Label, wajib, letak, dan petunjuk tetap diatur di sini. Nilai tetap tersimpan per isian bagian ini.</div>
+                <div style="margin-top:6px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:12px;line-height:1.55" data-uji="info-variabel-kolom">
+                    <div><b>{{ $varTerpilih->nama }}</b> <code>{{ $varTerpilih->kode }}</code>
+                        @if (! $varTerpilih->aktif)<span class="badge b-tunggu">nonaktif — hanya untuk kolom lama</span>@endif
+                        @if ($varTerpilih->pengganti_kode)<span class="badge b-tunggu">disarankan diganti {{ $varTerpilih->pengganti_kode }}</span>@endif
+                    </div>
+                    @if ($varTerpilih->keterangan)<div>{{ $varTerpilih->keterangan }}</div>@endif
+                    <div><span style="color:var(--muted)">Jenis data:</span> {{ $tipeKolom[$varTerpilih->tipe] ?? $varTerpilih->tipe }} · {{ $varTerpilih->ringkasan() }}</div>
+                    <div><span style="color:var(--muted)">Sumber:</span> {{ \App\Models\VariabelKatalog::SUMBER[$varTerpilih->sumber] ?? \App\Models\VariabelKatalog::SUMBER['isian'] }}</div>
+                    <div><span style="color:var(--muted)">Contoh:</span> {{ $varTerpilih->contoh ?: \App\Support\TemplateBagianKustom::contohKolom(\App\Models\BagianKustom::normalkanKolom(['kunci' => $varTerpilih->kode, 'label' => $varTerpilih->nama] + $varTerpilih->definisiKolom())) }}</div>
+                    @if ($varTerpilih->catatan)<div><span style="color:var(--muted)">Aturan:</span> {{ $varTerpilih->catatan }}</div>@endif
+                    <div style="color:var(--muted)">Jenis, pilihan, satuan, format angka, dan batas nilai mengikuti katalog. Label, wajib, letak, dan petunjuk tetap diatur di sini. Nilai tetap tersimpan per isian bagian ini dan tersedia di format notula sebagai <code>{{ '{'.($kol['kunci'] ?: 'kode_kolom').'}' }}</code>.</div>
+                </div>
             @endif
-        </div>
-    @endif
+        @else
+            <div class="fhint" style="margin-top:0">Belum ada definisi bersama. Buat di Data Master → Katalog Variabel bila beberapa bagian butuh kolom dengan aturan yang sama.</div>
+        @endif
+        <div class="fhint" style="margin-top:4px">Nilai yang sudah ada di sistem (kode/indikator/sasaran IKU, tahun, triwulan, bulan) tidak perlu dijadikan kolom isian — pakai variabelnya langsung di tab Notula &amp; Variabel.</div>
+    </div>
 
     <div class="row2">
         <div class="field" style="margin-bottom:8px">

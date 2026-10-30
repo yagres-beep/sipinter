@@ -36,6 +36,14 @@ atau ada jenis indikator khusus baru (di luar pola Proksi yang sudah ada).
 Delimiter macro-nya `{{...}}` (bukan `${...}` bawaan PhpWord — lihat
 `TemplateProcessor::setMacroChars('{{', '}}')` di awal `generate()`).
 
+**Daftar resmi & dokumentasi tiap macro** (sumber data, aturan format, perilaku bila
+kosong/nol, lingkup, status usang) ada di `App\Support\RegistriVariabel` dan tampil di
+aplikasi: Data Master → Katalog Variabel, serta panel "Variabel yang bisa dipakai di
+template" di halaman Template Notula. Tombol "Periksa placeholder template aktif" di
+halaman itu melaporkan macro yang tidak dikenal, yang usang (beserta penggantinya), dan
+yang diletakkan di luar lingkupnya (mis. `{{kode}}` di luar `{{iku_blok}}`). Macro baru
+hanya boleh ditambahkan ke registri bila `generate()` benar-benar mengisinya.
+
 ### Macro global (diisi sekali, dari data Notula/Periode — lihat `isiHeader()`/`isiPenutup()`)
 
 `{{tahun}}`, `{{triwulan_angka}}`, `{{triwulan_sebelumnya}}` (romawi triwulan

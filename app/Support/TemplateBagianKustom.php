@@ -2,6 +2,8 @@
 
 namespace App\Support;
 
+use App\Models\BagianKustom;
+use App\Models\BagianKustomPoin;
 use Illuminate\Support\Str;
 
 /**
@@ -15,10 +17,16 @@ final class TemplateBagianKustom
 
     public const FORMAT_LENGKAP_SUFIKS = ' ({kolom})';
 
-    /** Variabel bawaan yang selalu tersedia; nama kolom buatan pengguna tidak boleh memakainya. */
+    /**
+     * Variabel bawaan yang selalu tersedia; nama kolom buatan pengguna tidak boleh memakainya.
+     * Dokumentasi lengkapnya (sumber, aturan, kategori) ada di RegistriVariabel — keduanya
+     * dijaga tetap sama oleh tes.
+     */
     public const VARIABEL_BAWAAN = [
         'kode_iku' => ['keterangan' => 'Kode IKU tempat poin diisi', 'contoh' => '1131'],
         'indikator_iku' => ['keterangan' => 'Teks indikator IKU lengkap', 'contoh' => 'Persentase rekomendasi yang ditindaklanjuti'],
+        'sasaran_iku' => ['keterangan' => 'Sasaran strategis IKU tempat poin diisi', 'contoh' => 'Meningkatnya kualitas tata kelola'],
+        'satuan_iku' => ['keterangan' => 'Satuan IKU (Persen/Poin)', 'contoh' => 'Persen'],
         'teks' => ['keterangan' => 'Isi uraian poin (kolom "Uraian" / label uraian)', 'contoh' => 'Contoh uraian poin bagian kustom'],
         'nama_bagian' => ['keterangan' => 'Nama bagian kustom', 'contoh' => 'Manajemen Risiko'],
         'triwulan' => ['keterangan' => 'Triwulan poin (angka romawi I–IV)', 'contoh' => 'I'],
@@ -52,11 +60,13 @@ final class TemplateBagianKustom
      * @param  array<string, string|null>  $nilaiKolom  kunci kolom => nilai (sudah dibersihkan)
      * @return array<string, string>
      */
-    public static function konteks(?string $kodeIku, ?string $indikatorIku, ?string $teks, string $namaBagian, ?int $tahun, ?int $triwulan, ?int $bulan, array $nilaiKolom = []): array
+    public static function konteks(?string $kodeIku, ?string $indikatorIku, ?string $teks, string $namaBagian, ?int $tahun, ?int $triwulan, ?int $bulan, array $nilaiKolom = [], ?string $sasaranIku = null, ?string $satuanIku = null): array
     {
         $konteks = [
             'kode_iku' => (string) $kodeIku,
             'indikator_iku' => (string) $indikatorIku,
+            'sasaran_iku' => (string) $sasaranIku,
+            'satuan_iku' => (string) $satuanIku,
             'teks' => (string) $teks,
             'nama_bagian' => $namaBagian,
             'triwulan' => $triwulan ? (['I', 'II', 'III', 'IV'][$triwulan - 1] ?? (string) $triwulan) : '',
@@ -64,11 +74,41 @@ final class TemplateBagianKustom
             'bulan' => $bulan ? (self::NAMA_BULAN[$bulan] ?? (string) $bulan) : '',
         ];
 
+        // Kolom menang atas variabel bawaan bernama sama (kolom lama yang kebetulan memakai
+        // nama variabel bawaan baru tetap mencetak isiannya sendiri).
         foreach ($nilaiKolom as $kunci => $nilai) {
             $konteks[$kunci] = (string) $nilai;
         }
 
         return $konteks;
+    }
+
+    /**
+     * Resolver satu poin: nilai semua variabel format notula untuk poin tersimpan.
+     * Relasi masterIku & periode dipakai bila sudah dimuat (notula memuatnya sekaligus
+     * untuk semua poin — tanpa query per poin).
+     *
+     * @return array<string, string>
+     */
+    public static function konteksPoin(BagianKustomPoin $poin, BagianKustom $bagian): array
+    {
+        $iku = $poin->masterIku;
+        $periode = $poin->periode;
+
+        return self::konteks(
+            $iku?->kode,
+            $iku?->indikator,
+            $poin->teks,
+            $bagian->nama,
+            $periode?->tahun,
+            $periode?->triwulan,
+            $periode?->bulan,
+            // Format angka (desimal, pemisah, satuan) diatur per kolom; kolom tanpa
+            // pengaturan format tercetak apa adanya.
+            $bagian->nilaiKolomTampil($poin->nilai_kolom),
+            $iku?->sasaran,
+            $iku?->satuan,
+        );
     }
 
     /**
@@ -82,11 +122,19 @@ final class TemplateBagianKustom
         $daftar = [];
 
         foreach (self::VARIABEL_BAWAAN as $kunci => $info) {
-            $daftar[] = ['kunci' => $kunci, 'keterangan' => $info['keterangan'], 'contoh' => $info['contoh']];
+            $registri = RegistriVariabel::cari($kunci);
+            $daftar[] = [
+                'kunci' => $kunci, 'keterangan' => $info['keterangan'], 'contoh' => $info['contoh'], 'kelompok' => 'sistem',
+                'kategori' => RegistriVariabel::KATEGORI[$registri['kategori'] ?? ''] ?? 'Sistem',
+                'sumber' => $registri['sumber'] ?? null,
+            ];
         }
 
         foreach ($kolom as $k) {
             $daftar[] = [
+                'kelompok' => 'kolom',
+                'kategori' => 'Kolom bagian ini',
+                'sumber' => 'Isian kolom (bagian_kustom_poin.nilai_kolom)',
                 'kunci' => $k['kunci'],
                 'keterangan' => 'Isian kolom "'.$k['label'].'" ('.self::labelTipe($k['tipe']).')'.(($k['aktif'] ?? true) ? '' : ' — nonaktif, hanya berisi data lama'),
                 'contoh' => self::contohKolom($k),

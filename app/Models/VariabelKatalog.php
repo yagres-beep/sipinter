@@ -30,8 +30,12 @@ class VariabelKatalog extends Model
     protected $fillable = [
         'kode', 'nama', 'tipe', 'satuan', 'desimal', 'pemisah', 'ribuan', 'min', 'maks',
         'panjang_min', 'panjang_maks', 'opsi', 'sumber', 'keterangan', 'aktif',
+        'kategori', 'contoh', 'catatan', 'pengganti_kode',
         'dibuat_oleh', 'diubah_oleh',
     ];
+
+    /** Kategori bawaan untuk variabel tanpa kategori. */
+    public const KATEGORI_BAWAAN = 'bagian_kustom';
 
     protected function casts(): array
     {
@@ -125,6 +129,22 @@ class VariabelKatalog extends Model
         }
 
         return $hasil;
+    }
+
+    /**
+     * Status dokumentasi: aktif; usang = tidak disarankan (nonaktif tetapi masih dipakai
+     * kolom, atau sudah punya pengganti) — tetap dibaca untuk data lama; nonaktif = tidak
+     * dipakai dan tidak bisa ditautkan.
+     *
+     * @param  int  $jumlahPemakaian  jumlah kolom Bagian Kustom yang menautkannya
+     */
+    public function statusKatalog(int $jumlahPemakaian): string
+    {
+        if ($this->aktif) {
+            return filled($this->pengganti_kode) ? 'usang' : 'aktif';
+        }
+
+        return $jumlahPemakaian > 0 || filled($this->pengganti_kode) ? 'usang' : 'nonaktif';
     }
 
     /** "2 desimal, koma · satuan persen" — keterangan singkat untuk layar. */

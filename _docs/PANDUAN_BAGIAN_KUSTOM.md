@@ -96,10 +96,19 @@ Ketentuan bila aturan diubah:
 
 ## 3. Katalog variabel
 
-Gunakan katalog bila beberapa bagian memakai definisi kolom yang sama, misalnya "Persentase tindak lanjut" (angka, 2 desimal, satuan %, maksimal 100).
+Katalog adalah kamus semua variabel SIPINTER. Isinya dikelompokkan per kategori dan bisa dicari serta difilter (kategori, asal nilai, jenis data, tempat pemakaian, status). Klik **Detail** untuk melihat sumber data, aturan format, perilaku bila kosong/nol, contoh, dan tempat pemakaiannya.
 
-1. Buka tab **🔣 Katalog Variabel → ＋ Variabel baru**.
-2. Isi kode (tetap), nama, jenis, satuan, format angka, pilihan, dan batas, lalu simpan.
+Asal nilai:
+
+- **Sistem / Turunan** — diambil atau dihitung sistem (kode IKU, target, capaian, RTL, tautan bukti, dll.). Tidak perlu diisi dan tidak bisa diubah. Dipakai di template Bagian I notula (`{{kode}}`) atau di format baris notula Bagian Kustom (`{kode_iku}`, `{sasaran_iku}`, `{satuan_iku}`, `{tahun}`, `{triwulan}`, `{bulan}`, `{teks}`, `{nama_bagian}`).
+- **Khusus template** — penanda blok berulang/bersyarat di berkas Word (`{{iku_blok}}`, `{{blok_proksi}}`, dll.).
+- **Kolom Bagian Kustom** — setiap kolom menjadi variabel `{kode_kolom}` di format notula bagian itu. Kodenya tetap walau label diganti.
+- **Definisi bersama** — dibuat Tim SAKIP di katalog dan dipakai ulang oleh kolom isian.
+
+Gunakan definisi bersama bila beberapa bagian memakai definisi kolom yang sama, misalnya "Persentase tindak lanjut" (angka, 2 desimal, satuan %, maksimal 100). Nilai yang sudah ada di sistem (kode/indikator/sasaran IKU, periode) tidak perlu dijadikan kolom isian — pakai variabel sistemnya langsung di format notula.
+
+1. Buka tab **🔣 Katalog Variabel → ＋ Definisi bersama baru**.
+2. Isi kode (tetap, tidak boleh sama dengan variabel sistem), nama, jenis, kategori, satuan, format angka, pilihan, dan batas. Opsional: deskripsi, contoh nilai (jangan data sungguhan), aturan penggunaan, dan variabel pengganti. Simpan.
 3. Di **Bagian Kustom → Struktur Isian**, pada kolom yang diinginkan, pilih **Variabel katalog**.
    - Jenis, pilihan, format, dan batas kolom kini mengikuti katalog.
    - Label, wajib, letak, dan petunjuk tetap diatur per bagian.
@@ -111,7 +120,8 @@ Ketentuan:
 - Variabel tidak dihapus, cukup dinonaktifkan:
   - kolom yang sudah memakainya tetap berfungsi,
   - variabel itu tidak bisa dipilih untuk kolom baru.
-- Klik **👁 Pemakaian** untuk melihat bagian dan kolom yang memakai variabel.
+- Variabel nonaktif yang masih dipakai kolom, atau yang diberi pengganti, berstatus **Historis**: tetap terbaca untuk data lama, tidak disarankan untuk kolom baru. Data tidak dipindahkan ke pengganti secara otomatis.
+- Klik **Detail** untuk melihat bagian dan kolom yang memakai variabel.
 - Nilai tetap tersimpan di isian masing-masing bagian. Katalog hanya menyatukan definisinya.
 
 ## 4. Isian antartriwulan (untuk pengisi)

@@ -6,6 +6,8 @@ use App\Models\FolderConfig;
 use App\Services\FolderStructureService;
 use App\Services\GoogleDriveService;
 use App\Services\NotulaBagian1DocxService;
+use App\Support\KatalogVariabel;
+use App\Support\RegistriVariabel;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Component;
@@ -28,6 +30,67 @@ class TemplateNotula extends Component
     public $templateFile = null;
 
     public bool $konfirmasiHapus = false;
+
+    /** Pemilih variabel: pencarian & kategori. */
+    public string $cariVariabel = '';
+
+    public string $kategoriVariabel = '';
+
+    /**
+     * Hasil pemeriksaan placeholder template aktif (lihat periksaTemplate()).
+     *
+     * @var array<string, mixed>|null
+     */
+    public ?array $hasilPeriksa = null;
+
+    /**
+     * Periksa placeholder template yang sedang dipakai (unggahan, atau bawaan bila belum
+     * ada) terhadap Katalog Variabel: tidak dikenal, usang, dan salah letak. Hanya membaca.
+     */
+    public function periksaTemplate(): void
+    {
+        $docx = app(NotulaBagian1DocxService::class);
+
+        try {
+            $path = $docx->pathTemplateAktif();
+        } catch (\Throwable $e) {
+            $this->hasilPeriksa = ['galat' => 'Template aktif tidak bisa dibaca: '.$e->getMessage()];
+
+            return;
+        }
+
+        $this->hasilPeriksa = $docx->analisisTemplate($path) + [
+            'bawaan' => realpath($path) === realpath(base_path('template_notula/SIPINTER_Template_Bagian_I_Mesin.docx')),
+            'galat' => null,
+        ];
+    }
+
+    /**
+     * Kalimat peringatan dari hasil analisisTemplate() — dipakai saat unggah.
+     *
+     * @param  array<string, mixed>  $analisis
+     * @return list<string>
+     */
+    protected static function peringatanDari(array $analisis): array
+    {
+        $pesan = [];
+
+        if ($analisis['tidak_dikenal'] !== []) {
+            $pesan[] = 'Placeholder berikut tidak dikenali sistem dan TIDAK akan terisi (tercetak apa adanya di notula): '
+                .collect($analisis['tidak_dikenal'])->map(fn ($m) => '{{'.$m.'}}')->implode(', ')
+                .'. Periksa ejaannya di Katalog Variabel, atau hapus dari template bila memang tidak dipakai.';
+        }
+
+        foreach ($analisis['usang'] as $kode => $pengganti) {
+            $pesan[] = 'Placeholder {{'.$kode.'}} sudah tidak disarankan'.($pengganti ? ' — gunakan {{'.$pengganti.'}}' : '').'.';
+        }
+
+        foreach ($analisis['salah_tempat'] as $kode => $lingkup) {
+            $pesan[] = 'Placeholder {{'.$kode.'}} diletakkan di luar lingkupnya sehingga tidak akan terisi. Letak yang benar: '.$lingkup.'.';
+        }
+
+        return $pesan;
+    }
 
     protected function rules(): array
     {
@@ -58,7 +121,7 @@ class TemplateNotula extends Component
             return;
         }
 
-        $macroAsing = $docx->macroTidakDikenal($this->templateFile->getRealPath());
+        $peringatan = self::peringatanDari($docx->analisisTemplate($this->templateFile->getRealPath()));
 
         $config = FolderConfig::current();
 
@@ -100,13 +163,11 @@ class TemplateNotula extends Component
 
         session()->flash('status', 'Template notula berhasil diunggah.');
 
-        if ($macroAsing !== []) {
-            session()->flash('peringatan', 'Placeholder berikut tidak dikenali sistem dan TIDAK akan terisi (tercetak apa adanya di notula): '
-                .collect($macroAsing)->map(fn ($m) => '{{'.$m.'}}')->implode(', ')
-                .'. Periksa ejaannya, atau hapus dari template bila memang tidak dipakai.');
+        if ($peringatan !== []) {
+            session()->flash('peringatan', implode(' ', $peringatan));
         }
 
-        $this->reset('templateFile');
+        $this->reset('templateFile', 'hasilPeriksa');
     }
 
     public function unduh(): \Symfony\Component\HttpFoundation\StreamedResponse
@@ -166,14 +227,24 @@ class TemplateNotula extends Component
         ]);
 
         $this->konfirmasiHapus = false;
+        $this->hasilPeriksa = null;
 
         session()->flash('status', 'Template notula dihapus.');
     }
 
     public function render()
     {
+        $variabel = KatalogVariabel::saring(collect(RegistriVariabel::semua())->values(), [
+            'cari' => $this->cariVariabel,
+            'kategori' => $this->kategoriVariabel,
+            'konteks' => RegistriVariabel::KONTEKS_NOTULA_DOCX,
+        ]);
+
         return view('livewire.template-notula', [
             'config' => FolderConfig::current(),
+            'kelompokVariabel' => KatalogVariabel::kelompokkan($variabel),
+            'jumlahVariabel' => count(RegistriVariabel::kodeKonteks(RegistriVariabel::KONTEKS_NOTULA_DOCX)),
+            'jumlahTampil' => $variabel->count(),
         ]);
     }
 }
