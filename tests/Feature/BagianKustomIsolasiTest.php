@@ -200,7 +200,12 @@ class BagianKustomIsolasiTest extends TestCase
 
         // Bagian menu Persetujuan tampil di Persetujuan, tapi tidak di halaman menu lain.
         $this->get(route('persetujuan.index'))->assertOk()->assertSee($bagian->nama);
-        $this->get(route('bagian-kustom.index'))->assertOk()->assertDontSee($bagian->nama);
+        // Di halaman Isian Bagian Kustom formulirnya tidak tampil — hanya tautan ke menu
+        // tempat bagian itu ditempatkan (penyempurnaan 30 Okt).
+        $this->get(route('bagian-kustom.index'))->assertOk()
+            ->assertDontSee('id="bagian-kustom-'.$bagian->id.'"', false)
+            ->assertSee('Bagian kustom Anda di menu lain')
+            ->assertSee(route('persetujuan.index'));
     }
 
     /* ---------- 3 & 7: Ketua Tim & id poin/bukti milik IKU lain (F-03) ---------- */

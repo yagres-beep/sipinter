@@ -109,6 +109,9 @@
             @if ($bagian->deskripsi)
                 <div class="info">ℹ️ {{ $bagian->deskripsi }}</div>
             @endif
+            @if ($kolomBerlaku === [])
+                <div class="fhint" data-tanpa-kolom="{{ $bagian->id }}" style="margin-bottom:8px">Bagian ini belum punya kolom tambahan — cukup pilih IKU dan isi {{ mb_strtolower($bagian->labelUraianEfektif()) }}.</div>
+            @endif
             @if ($hakTerbatas)
                 <div class="info" data-hak-terbatas="{{ $bagian->id }}" style="font-size:12px">🔐 Hak Anda di bagian ini: {{ collect($hak)->filter()->keys()->map(fn ($a) => mb_strtolower(\App\Models\BagianKustom::AKSI[$a]))->implode(', ') ?: 'hanya melihat isian sendiri' }}.</div>
             @endif
@@ -364,8 +367,31 @@
     @endforeach
 
     @if (! $adaBagian)
-        <div class="card">
-            <p style="color:var(--muted);font-size:13px;margin:0">Belum ada bagian kustom aktif yang diisi atau dibaca peran {{ $namaPeran }} di menu ini. Bagian tampil di sini bila Tim SAKIP mengaktifkannya, memilih peran {{ $namaPeran }} sebagai pengisi atau pembaca, dan menempatkannya di menu {{ $namaMenu }} (Data Master &amp; Konfigurasi → Bagian Kustom).</p>
+        <div class="card" data-alasan-kosong>
+            <p style="font-size:13px;margin:0 0 6px;font-weight:700">Tidak ada bagian kustom untuk peran {{ $namaPeran }} di menu {{ $namaMenu }} pada {{ $namaBulan[$bulan] }} {{ $tahun }}.</p>
+            @if ($alasanKosong !== [])
+                <ul style="margin:0 0 6px;padding-left:18px;font-size:12.5px;line-height:1.6">
+                    @foreach ($alasanKosong as $alasan)
+                        <li>{{ $alasan }}</li>
+                    @endforeach
+                </ul>
+            @endif
+            <p style="color:var(--muted);font-size:12px;margin:0">Bagian tampil di sini bila aktif, peran {{ $namaPeran }} dipilih sebagai pengisi atau pembaca, dan ditempatkan di menu {{ $namaMenu }} (Data Master &amp; Konfigurasi → Pengelolaan Bagian).</p>
+        </div>
+    @endif
+
+    @if (($diMenuLain ?? []) !== [])
+        <div class="card" style="margin-top:16px" data-di-menu-lain>
+            <div class="sec"><span class="n">↗</span><span>Bagian kustom Anda di menu lain</span></div>
+            <div class="fhint" style="margin-bottom:8px">Bagian berikut aktif untuk peran {{ $namaPeran }}, tetapi ditempatkan di menu lain. Datanya satu sumber — mengisi di menu mana pun memakai data yang sama untuk menu tersebut.</div>
+            @foreach ($diMenuLain as $item)
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--line2);padding:8px 0" wire:key="menu-lain-{{ $item['bagian']->id }}">
+                    <b style="flex:1;min-width:180px">🧩 {{ $item['bagian']->nama }}</b>
+                    @foreach ($item['tautan'] as $t)
+                        <a wire:navigate href="{{ $t['url'] }}" class="btn btn-ghost btn-sm">{{ ['isi' => 'Isi', 'periksa' => 'Periksa', 'baca' => 'Lihat'][$t['mode']] }} di {{ $t['label'] }} →</a>
+                    @endforeach
+                </div>
+            @endforeach
         </div>
     @endif
     @endif

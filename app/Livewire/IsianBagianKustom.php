@@ -12,6 +12,7 @@ use App\Services\FolderStructureService;
 use App\Support\AlurBagianKustom;
 use App\Support\AturanBuktiBagianKustom;
 use App\Support\JejakAktivitasBagianKustom;
+use App\Support\KelengkapanBagianKustom;
 use App\Support\LanjutanBagianKustom;
 use App\Support\MenuBagianKustom;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -1163,6 +1164,10 @@ class IsianBagianKustom extends Component
         $poinDimuat = collect($tersimpanPeriode)->flatten(1)->keyBy('id');
         $statusPoin = $poinDimuat->map(fn (BagianKustomPoin $p) => AlurBagianKustom::statusPoin($p))->all();
 
+        [$diMenuLain, $alasanKosong] = $this->menu === 'isian_bagian_kustom'
+            ? $this->diagnosis($peran, $bagianList->concat($bagianBaca)->concat($bagianPeriksa)->pluck('id')->all())
+            : [[], []];
+
         return view('livewire.isian-bagian-kustom', [
             'bagianList' => $bagianList,
             'bagianBaca' => $bagianBaca,
@@ -1185,6 +1190,65 @@ class IsianBagianKustom extends Component
             'poinDimuat' => $poinDimuat,
             'bagianPeriksa' => $bagianPeriksa,
             'periksaan' => $periksaan,
+            'diMenuLain' => $diMenuLain,
+            'alasanKosong' => $alasanKosong,
         ]);
+    }
+
+    /**
+     * Penjelasan untuk halaman Isian Bagian Kustom: (1) bagian aktif yang dipakai peran
+     * ini di MENU LAIN (dengan tautan ke menu itu), dan (2) alasan tidak ada bagian di
+     * halaman ini — dibedakan: tidak ada yang aktif, tidak ditempatkan di menu ini,
+     * bukan untuk peran ini, atau tidak berlaku pada periode terpilih. Baca-saja.
+     *
+     * @param  array<int, int>  $idTampil  bagian yang sudah tampil di halaman ini
+     * @return array{0: array<int, array{bagian: BagianKustom, tautan: array<int, array<string, string>>}>, 1: array<int, string>}
+     */
+    protected function diagnosis(?string $peran, array $idTampil): array
+    {
+        $aktif = BagianKustom::daftarAktif();
+        $diMenuLain = [];
+
+        if ($peran !== null) {
+            foreach ($aktif as $b) {
+                if (in_array($b->id, $idTampil, true) || ! $this->berlakuSekarang($b)) {
+                    continue;
+                }
+
+                $tautan = KelengkapanBagianKustom::tautanMenu($b, $peran, $this->menu);
+
+                if ($tautan !== []) {
+                    $diMenuLain[] = ['bagian' => $b, 'tautan' => $tautan];
+                }
+            }
+        }
+
+        if ($idTampil !== []) {
+            return [$diMenuLain, []];
+        }
+
+        $namaPeran = BagianKustom::NAMA_PERAN[$peran] ?? 'Anda';
+        $diMenuIni = $aktif->filter(fn (BagianKustom $b) => in_array($this->menu, $b->penempatan ?? [], true));
+        $alasan = [];
+
+        if ($aktif->isEmpty()) {
+            $alasan[] = 'Belum ada bagian kustom yang berstatus aktif.';
+        } elseif ($diMenuIni->isEmpty()) {
+            $alasan[] = 'Ada '.$aktif->count().' bagian kustom aktif, tetapi tidak ada yang ditempatkan di menu '.MenuBagianKustom::label($this->menu).'.';
+        } else {
+            $untukSaya = $diMenuIni->filter(fn (BagianKustom $b) => $peran !== null && ($b->tampilDi($peran, $this->menu) || $b->bisaDibacaDi($peran, $this->menu) || KelengkapanBagianKustom::menuPeriksa($b, $peran) !== []));
+            $tanpaHak = $diMenuIni->count() - $untukSaya->count();
+            $luarPeriode = $untukSaya->reject(fn (BagianKustom $b) => $this->berlakuSekarang($b));
+
+            if ($tanpaHak > 0) {
+                $alasan[] = $tanpaHak.' bagian di menu ini tidak diberikan kepada peran '.$namaPeran.' (bukan pengisi, pembaca, maupun pemeriksa).';
+            }
+
+            foreach ($luarPeriode as $b) {
+                $alasan[] = '"'.$b->nama.'" tidak berlaku pada TW '.['I', 'II', 'III', 'IV'][$this->triwulan() - 1].' '.$this->tahun.' (berlaku: '.$b->labelPeriodeBerlaku().'). Pilih periode lain.';
+            }
+        }
+
+        return [$diMenuLain, $alasan];
     }
 }

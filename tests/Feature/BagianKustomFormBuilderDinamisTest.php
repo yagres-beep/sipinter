@@ -537,7 +537,10 @@ class BagianKustomFormBuilderDinamisTest extends TestCase
         // Hanya TW I & III: tidak tampil di April (TW II), dan aksi simpan ditolak.
         $m->set("form.{$a->id}.periode_berlaku.triwulan", ['1', '3'])->call('simpan', $a->id)->assertHasNoErrors();
         $this->assertSame([1, 3], BagianKustom::daftarAktif()->firstWhere('id', $a->id)->periodeBerlaku()['triwulan'], 'Cache dilupakan setelah simpan.');
-        $this->isian()->assertDontSee('Capaian Layanan')->call('simpan', $a->id)->assertForbidden();
+        // Formulirnya tidak tampil; halaman hanya menjelaskan bahwa bagian tidak berlaku.
+        $this->isian()->assertDontSeeHtml('id="bagian-kustom-'.$a->id.'"')
+            ->assertSee('"Capaian Layanan" tidak berlaku pada TW II 2026')
+            ->call('simpan', $a->id)->assertForbidden();
 
         // Juli (TW III) tampil kembali.
         Periode::create(['tahun' => 2026, 'bulan' => 7, 'triwulan' => 3, 'bulan_ke' => 1, 'flag_bulan_terlewat' => true]);

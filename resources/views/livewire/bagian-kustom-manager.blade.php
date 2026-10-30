@@ -8,7 +8,7 @@
         <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>
     @endif
 
-    <div class="info">ℹ️ Bagian yang <b>aktif</b> muncul di menu peran pengisinya (Ketua Tim di Isian Kegiatan; Tim SAKIP/Kepala di 🧩 Isian Bagian Kustom). Data yang sudah tersimpan tetap tampil di notula meski bagiannya kemudian dinonaktifkan.</div>
+    <div class="info">ℹ️ Bagian yang <b>aktif</b> muncul di setiap menu yang dicentang pada <b>Penempatan</b>, untuk peran pengisi/pembaca yang bisa membuka menu itu (mis. Ketua Tim di Isian Kegiatan; Tim SAKIP di Verifikasi &amp; Notula atau 🧩 Isian Bagian Kustom). Data yang sudah tersimpan tetap tampil di notula meski bagiannya kemudian dinonaktifkan.</div>
 
     <div class="card" id="form-tambah-bagian" style="scroll-margin-top:90px">
         <div class="sec"><span>Tambah Bagian Baru</span></div>
@@ -182,7 +182,28 @@
                             <span class="badge b-draft">{{ count($bagian->subbagianList()) }} subbagian</span>
                             <span class="badge b-draft">{{ $kolomAktif }} kolom{{ count($semuaKolom) > $kolomAktif ? ' (+'.(count($semuaKolom) - $kolomAktif).' nonaktif)' : '' }}</span>
                             <span class="badge b-draft">{{ $bagian->poin_count }} poin tersimpan</span>
+                            @php $masalah = $kelengkapan[$bagian->id] ?? []; @endphp
+                            @if (\App\Support\KelengkapanBagianKustom::adaGalat($masalah))
+                                <span class="badge b-tolak" data-kelengkapan="galat">⚠ Konfigurasi belum lengkap</span>
+                            @elseif ($masalah !== [])
+                                <span class="badge b-tunggu" data-kelengkapan="saran">ℹ {{ count($masalah) }} saran konfigurasi</span>
+                            @else
+                                <span class="badge b-approve" data-kelengkapan="lengkap">✓ Konfigurasi lengkap</span>
+                            @endif
                         </div>
+                        @if ($masalah !== [])
+                            <details style="margin-top:6px;font-size:12px" @if (\App\Support\KelengkapanBagianKustom::adaGalat($masalah)) open @endif>
+                                <summary style="cursor:pointer;color:var(--muted)">Yang perlu diperiksa ({{ count($masalah) }}) — berdasarkan pengaturan tersimpan</summary>
+                                <ul style="margin:6px 0 0;padding-left:18px;line-height:1.6">
+                                    @foreach ($masalah as $m)
+                                        <li>
+                                            <span style="color:{{ $m['tingkat'] === 'galat' ? 'var(--red)' : 'var(--ink)' }}">{{ $m['tingkat'] === 'galat' ? '⚠' : 'ℹ' }} {{ $m['pesan'] }}</span>
+                                            <button type="button" class="btn btn-ghost btn-sm" style="padding:1px 8px" wire:click="perbaiki({{ $bagian->id }}, '{{ $m['tab'] }}')">Perbaiki →</button>
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            </details>
+                        @endif
                         <div style="font-size:11px;color:var(--faint);margin-top:4px">Diperbarui {{ $bagian->updated_at?->wita()->format('d/m/Y H:i') }} WITA</div>
                     </div>
 
@@ -625,6 +646,7 @@
                                         <div class="btn-row" style="margin-top:0;gap:4px">
                                             <button type="button" class="btn btn-ghost btn-sm" wire:click="naikkanSubbagian({{ $bagian->id }}, {{ $si }})" @disabled($si === 0) aria-label="Naikkan subbagian">↑</button>
                                             <button type="button" class="btn btn-ghost btn-sm" wire:click="turunkanSubbagian({{ $bagian->id }}, {{ $si }})" @disabled($si === count($f['subbagian']) - 1) aria-label="Turunkan subbagian">↓</button>
+                                            <button type="button" class="btn btn-ghost btn-sm" wire:click="duplikasiSubbagian({{ $bagian->id }}, {{ $si }})" title="Salin subbagian ini beserta kolomnya (tanpa data isian)" aria-label="Duplikasi subbagian">⧉</button>
                                             <button type="button" class="btn btn-red btn-sm" wire:click="hapusSubbagian({{ $bagian->id }}, {{ $si }})" aria-label="Hapus subbagian">🗑</button>
                                         </div>
                                     </div>

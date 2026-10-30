@@ -13,6 +13,7 @@ use App\Models\VariabelKatalog;
 use App\Support\AlurBagianKustom;
 use App\Support\AturanBuktiBagianKustom;
 use App\Support\FormatAngkaKolom;
+use App\Support\KelengkapanBagianKustom;
 use App\Support\MenuBagianKustom;
 use App\Support\TemplateBagianKustom;
 use Illuminate\Support\Facades\DB;
@@ -1049,6 +1050,81 @@ class BagianKustomManager extends Component
 
         [$sub[$tujuan], $sub[$index]] = [$sub[$index], $sub[$tujuan]];
         $this->form[$id]['subbagian'] = $sub;
+    }
+
+    /**
+     * Salin satu subbagian beserta kolom-kolomnya ke subbagian BARU tepat di bawahnya
+     * (belum tersimpan sampai Simpan Pengaturan). Salinan mendapat kode subbagian dan
+     * variabel kolom baru, jadi tidak pernah terhubung ke data isian subbagian asal.
+     */
+    public function duplikasiSubbagian(int $id, int $index): void
+    {
+        $sub = $this->form[$id]['subbagian'][$index] ?? null;
+
+        if ($sub === null) {
+            return;
+        }
+
+        $terpakai = array_column($this->form[$id]['subbagian'], 'kunci');
+        $n = count($terpakai) + 1;
+
+        while (in_array('sub_'.$n, $terpakai, true)) {
+            $n++;
+        }
+
+        $baru = ['kunci' => 'sub_'.$n, 'nama' => trim((string) $sub['nama']).' (salinan)'] + $sub;
+        $daftar = $this->form[$id]['subbagian'];
+        array_splice($daftar, $index + 1, 0, [$baru]);
+        $this->form[$id]['subbagian'] = $daftar;
+
+        foreach ($this->form[$id]['kolom'] ?? [] as $kol) {
+            if (($kol['subbagian'] ?? '') === $sub['kunci']) {
+                $this->form[$id]['kolom'][] = $this->salinanBarisKolom($kol, $baru['kunci'], false);
+            }
+        }
+    }
+
+    /** Salin satu kolom (definisi saja) tepat di bawahnya, dengan variabel baru. */
+    public function duplikasiKolom(int $id, int $index): void
+    {
+        $kol = $this->form[$id]['kolom'][$index] ?? null;
+
+        if ($kol === null) {
+            return;
+        }
+
+        $daftar = $this->form[$id]['kolom'];
+        array_splice($daftar, $index + 1, 0, [$this->salinanBarisKolom($kol, (string) ($kol['subbagian'] ?? ''), true)]);
+        $this->form[$id]['kolom'] = $daftar;
+    }
+
+    /**
+     * Baris form salinan kolom: kunci dikosongkan, jadi variabel baru dibuat dari label
+     * saat disimpan (kunci subkolom tabel hanya berlaku di dalam kolomnya, tetap sama).
+     *
+     * @param  array<string, mixed>  $kol
+     * @return array<string, mixed>
+     */
+    protected function salinanBarisKolom(array $kol, string $subbagian, bool $tandaiLabel): array
+    {
+        $kol['kunci'] = '';
+        $kol['subbagian'] = $subbagian;
+
+        if ($tandaiLabel) {
+            $kol['label'] = trim((string) ($kol['label'] ?? '')).' (salinan)';
+        }
+
+        return $kol;
+    }
+
+    /** Buka editor bagian pada tab tempat satu masalah kelengkapan diperbaiki. */
+    public function perbaiki(int $id, string $tab): void
+    {
+        if ($this->bukaId !== $id) {
+            $this->buka($id);
+        }
+
+        $this->setTab($tab);
     }
 
     /**
@@ -2102,16 +2178,18 @@ class BagianKustomManager extends Component
         }
 
         $detail = $this->detailId ? BagianKustom::withCount('poin')->find($this->detailId) : null;
+        $daftar = $this->daftar();
 
         return view('livewire.bagian-kustom-manager', [
             'katalogVariabel' => VariabelKatalog::orderBy('nama')->get(),
             'belumDisimpan' => $this->bukaId !== null && $this->adaPerubahanBelumDisimpan($this->bukaId),
             'modeBukti' => AturanBuktiBagianKustom::MODE,
             'formatBukti' => AturanBuktiBagianKustom::FORMAT,
-            'daftar' => $this->daftar(),
+            'daftar' => $daftar,
             'daftarTampil' => $this->daftarTampil(),
             'filterAktif' => $this->filterAktif(),
             'detail' => $detail,
+            'kelengkapan' => $daftar->mapWithKeys(fn (BagianKustom $b) => [$b->id => KelengkapanBagianKustom::periksa($b)])->all(),
             'kelompokDetail' => $detail ? BagianKustom::kelompokkan($detail->kolomList(), $detail->subbagianList()) : [],
             'kelompokPratinjau' => $kelompokPratinjau,
             'bagianPratinjau' => $bagianPratinjau,

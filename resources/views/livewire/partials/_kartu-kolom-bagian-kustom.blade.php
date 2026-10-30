@@ -313,6 +313,7 @@
         <div class="btn-row" style="margin-top:0;gap:4px">
             <button type="button" class="btn btn-ghost btn-sm" wire:click="naikkanKolom({{ $idBagian }}, {{ $j }})" @disabled($pertama) aria-label="Naikkan kolom">↑</button>
             <button type="button" class="btn btn-ghost btn-sm" wire:click="turunkanKolom({{ $idBagian }}, {{ $j }})" @disabled($terakhir) aria-label="Turunkan kolom">↓</button>
+            <button type="button" class="btn btn-ghost btn-sm" wire:click="duplikasiKolom({{ $idBagian }}, {{ $j }})" title="Salin kolom ini (variabel baru dibuat saat disimpan)" aria-label="Duplikasi kolom">⧉</button>
             <button type="button" class="btn btn-red btn-sm" wire:click="hapusKolom({{ $idBagian }}, {{ $j }})" aria-label="Hapus kolom">🗑</button>
         </div>
     </div>
