@@ -437,6 +437,10 @@ class BagianKustomManager extends Component
                 ])->values()->all(),
                 'baris_min' => $k['baris_min'] !== null ? (string) $k['baris_min'] : '',
                 'baris_maks' => $k['baris_maks'] !== null ? (string) $k['baris_maks'] : '',
+                'bulat' => (bool) ($k['bulat'] ?? false),
+                'pola' => (string) ($k['pola'] ?? 'bebas'),
+                'sumber' => (string) ($k['sumber'] ?? \App\Support\ReferensiBagianKustom::SUMBER_BAWAAN),
+                'isi_info' => (string) ($k['isi_info'] ?? ''),
             ] + self::syaratForm($k['tampil_jika'] ?? null))->values()->all(),
         ];
     }
@@ -472,13 +476,45 @@ class BagianKustomManager extends Component
      */
     protected static function alurForm(array $alur): array
     {
+        // Form: tahap 1 = "pemeriksa" + "label_tahap1" (bentuk lama), tahap berikutnya di
+        // "tahap_lanjut". Label status kosong = label bawaan.
+        $tahapan = $alur['tahapan'] ?? [['label' => AlurBagianKustom::LABEL_TAHAP_BAWAAN, 'pemeriksa' => $alur['pemeriksa']]];
+
         return [
             'mode' => $alur['mode'],
             'pengaju' => $alur['pengaju'],
-            'pemeriksa' => $alur['pemeriksa'],
+            'pemeriksa' => $tahapan[0]['pemeriksa'],
+            'label_tahap1' => $tahapan[0]['label'] === AlurBagianKustom::LABEL_TAHAP_BAWAAN ? '' : $tahapan[0]['label'],
+            'tahap_lanjut' => collect(array_slice($tahapan, 1))->map(fn ($t) => ['label' => $t['label'], 'pemeriksa' => $t['pemeriksa']])->values()->all(),
+            'label_status' => collect(AlurBagianKustom::LABEL_STATUS)
+                ->mapWithKeys(fn ($bawaan, $s) => [$s => ($alur['label_status'][$s] ?? $bawaan) === $bawaan ? '' : $alur['label_status'][$s]])->all(),
             'ubah_setelah_disetujui' => $alur['ubah_setelah_disetujui'],
             'notula' => $alur['notula'],
         ];
+    }
+
+    /** Tambah satu tahap pemeriksaan (mis. Persetujuan Kepala) di form alur. */
+    public function tambahTahapAlur(int $id): void
+    {
+        abort_unless(isset($this->form[$id]), 404);
+        $lanjut = $this->form[$id]['alur']['tahap_lanjut'] ?? [];
+
+        if (count($lanjut) + 1 >= AlurBagianKustom::TAHAP_MAKS) {
+            $this->addError("form.{$id}.alur", 'Maksimal '.AlurBagianKustom::TAHAP_MAKS.' tahap pemeriksaan.');
+
+            return;
+        }
+
+        $lanjut[] = ['label' => '', 'pemeriksa' => []];
+        $this->form[$id]['alur']['tahap_lanjut'] = $lanjut;
+    }
+
+    public function hapusTahapAlur(int $id, int $index): void
+    {
+        abort_unless(isset($this->form[$id]['alur']['tahap_lanjut'][$index]), 404);
+        $lanjut = $this->form[$id]['alur']['tahap_lanjut'];
+        array_splice($lanjut, $index, 1);
+        $this->form[$id]['alur']['tahap_lanjut'] = array_values($lanjut);
     }
 
     /**
@@ -596,6 +632,7 @@ class BagianKustomManager extends Component
             'variabel' => '', 'ringkasan' => '',
             'rumus' => '', 'tabel_kolom' => [], 'baris_min' => '', 'baris_maks' => '',
             'syarat_kunci' => '', 'syarat_operator' => 'sama', 'syarat_nilai' => '',
+            'bulat' => false, 'pola' => 'bebas', 'sumber' => \App\Support\ReferensiBagianKustom::SUMBER_BAWAAN, 'isi_info' => '',
         ];
     }
 
@@ -1260,6 +1297,13 @@ class BagianKustomManager extends Component
             "form.{$id}.alur.pemeriksa" => ['nullable', 'array'],
             "form.{$id}.alur.pemeriksa.*" => [Rule::in(array_keys(BagianKustom::NAMA_PERAN))],
             "form.{$id}.alur.ubah_setelah_disetujui" => ['boolean'],
+            "form.{$id}.alur.label_tahap1" => ['nullable', 'string', 'max:60'],
+            "form.{$id}.alur.tahap_lanjut" => ['nullable', 'array', 'max:'.(AlurBagianKustom::TAHAP_MAKS - 1)],
+            "form.{$id}.alur.tahap_lanjut.*.label" => ['nullable', 'string', 'max:60'],
+            "form.{$id}.alur.tahap_lanjut.*.pemeriksa" => ['nullable', 'array'],
+            "form.{$id}.alur.tahap_lanjut.*.pemeriksa.*" => [Rule::in(array_keys(BagianKustom::NAMA_PERAN))],
+            "form.{$id}.alur.label_status" => ['nullable', 'array'],
+            "form.{$id}.alur.label_status.*" => ['nullable', 'string', 'max:60'],
             "form.{$id}.alur.notula" => ['nullable', Rule::in(array_keys(AlurBagianKustom::NOTULA))],
             "form.{$id}.periode_berlaku" => ['nullable', 'array'],
             "form.{$id}.periode_berlaku.triwulan" => ['nullable', 'array'],
@@ -1282,6 +1326,11 @@ class BagianKustomManager extends Component
             "form.{$id}.kolom.*.tabel_kolom.*.tipe" => ['required', Rule::in(array_keys(\App\Support\JenisKolomBagianKustom::TIPE_SUBKOLOM))],
             "form.{$id}.kolom.*.tabel_kolom.*.wajib" => ['boolean'],
             "form.{$id}.kolom.*.tabel_kolom.*.opsi_teks" => ['nullable', 'string', 'max:500'],
+            // Jenis kolom tambahan: bilangan bulat, pola kode, sumber referensi, teks informasi.
+            "form.{$id}.kolom.*.bulat" => ['boolean'],
+            "form.{$id}.kolom.*.pola" => ['nullable', Rule::in(array_keys(\App\Support\JenisKolomBagianKustom::POLA_KODE))],
+            "form.{$id}.kolom.*.sumber" => ['nullable', Rule::in(array_keys(\App\Support\ReferensiBagianKustom::SUMBER))],
+            "form.{$id}.kolom.*.isi_info" => ['nullable', 'string', 'max:2000'],
         ];
     }
 
@@ -1328,19 +1377,32 @@ class BagianKustomManager extends Component
 
         $acuan = collect($kolomDikenal)->firstWhere('kunci', $row['syarat_kunci']);
 
-        if (! $acuan || $row['syarat_kunci'] === $kunciSendiri) {
-            $this->addError("{$jalur}.syarat_kunci", 'Kolom acuan syarat tampil tidak ditemukan. Pilih kolom lain atau kosongkan syaratnya.');
+        if (! $acuan || $row['syarat_kunci'] === $kunciSendiri || ! \App\Support\JenisKolomBagianKustom::bisaJadiAcuan($acuan['tipe'])) {
+            $this->addError("{$jalur}.syarat_kunci", 'Kolom acuan syarat tampil tidak ditemukan atau jenisnya tidak bisa dijadikan acuan. Pilih kolom lain atau kosongkan syaratnya.');
 
             return;
         }
 
         $operator = (string) ($row['syarat_operator'] ?? 'sama');
         $nilai = trim((string) ($row['syarat_nilai'] ?? ''));
+        $tanpaNilai = in_array($operator, BagianKustom::OPERATOR_TANPA_NILAI, true);
+        $opsiAcuan = \App\Support\JenisKolomBagianKustom::opsiTetap($acuan);
 
-        if ($operator !== 'terisi' && $nilai === '') {
-            $this->addError("{$jalur}.syarat_nilai", 'Isi nilai pembanding syarat tampil, atau pilih "sudah diisi".');
-        } elseif ($operator !== 'terisi' && in_array($acuan['tipe'], ['pilihan', 'pilihan_ganda'], true) && ! in_array($nilai, $acuan['opsi'], true)) {
-            $this->addError("{$jalur}.syarat_nilai", 'Nilai pembanding harus salah satu pilihan kolom "'.$acuan['label'].'": '.implode(', ', $acuan['opsi']).'.');
+        if (! $tanpaNilai && $nilai === '') {
+            $this->addError("{$jalur}.syarat_nilai", 'Isi nilai pembanding syarat tampil, atau pilih "sudah diisi" / "masih kosong".');
+        } elseif (in_array($operator, BagianKustom::OPERATOR_BANDING, true)) {
+            // Perbandingan hanya untuk angka/tanggal/waktu; pembanding angka harus angka sah.
+            if (! \App\Support\JenisKolomBagianKustom::bisaDibandingkan($acuan['tipe'])) {
+                $this->addError("{$jalur}.syarat_operator", '"Lebih besar / lebih kecil" hanya untuk kolom acuan berjenis angka, mata uang, persentase, tanggal, atau waktu.');
+            } elseif (\App\Support\JenisKolomBagianKustom::numerik($acuan['tipe']) && BagianKustom::angkaSyarat($nilai, '') === null) {
+                $this->addError("{$jalur}.syarat_nilai", 'Nilai pembanding harus berupa angka, mis. 50 atau 12,5.');
+            } elseif ($acuan['tipe'] === 'tanggal' && ! \App\Support\JenisKolomBagianKustom::tanggalSah($nilai)) {
+                $this->addError("{$jalur}.syarat_nilai", 'Nilai pembanding tanggal ditulis tahun-bulan-hari, mis. 2026-06-30.');
+            } elseif ($acuan['tipe'] === 'waktu' && \App\Support\JenisKolomBagianKustom::waktuKanonik($nilai) === null) {
+                $this->addError("{$jalur}.syarat_nilai", 'Nilai pembanding jam ditulis jam:menit, mis. 14:30.');
+            }
+        } elseif (! $tanpaNilai && $operator !== 'berisi' && $opsiAcuan !== [] && ! in_array($nilai, $opsiAcuan, true)) {
+            $this->addError("{$jalur}.syarat_nilai", 'Nilai pembanding harus salah satu pilihan kolom "'.$acuan['label'].'": '.implode(', ', $opsiAcuan).'.');
         }
     }
 
@@ -1387,7 +1449,11 @@ class BagianKustomManager extends Component
                 $this->addError("form.{$id}.kolom.{$i}.subbagian", 'Subbagian kolom ini sudah tidak ada. Pilih subbagian lain atau "Langsung di bagian".');
             }
 
-            if ($row['tipe'] === 'angka') {
+            if ($row['tipe'] === 'informasi' && ! filled(trim((string) ($row['isi_info'] ?? '')))) {
+                $this->addError("form.{$id}.kolom.{$i}.isi_info", 'Tulis isi teks informasi yang ditampilkan di formulir.');
+            }
+
+            if (in_array($row['tipe'], ['angka', 'mata_uang'], true)) {
                 foreach (['min', 'maks'] as $batas) {
                     if (filled($row[$batas] ?? null) && FormatAngkaKolom::urai((string) $row[$batas], null) === null) {
                         $this->addError("form.{$id}.kolom.{$i}.{$batas}", 'Batas harus berupa angka, mis. 0 atau 12,5.');
@@ -1440,7 +1506,7 @@ class BagianKustomManager extends Component
 
         // Rumus & syarat tampil merujuk kolom lain lewat kunci tetapnya — diperiksa
         // setelah semua kunci diketahui.
-        $kunciAngka = collect($hasil)->whereIn('tipe', ['angka', 'persentase'])->pluck('kunci')->all();
+        $kunciAngka = collect($hasil)->filter(fn ($k) => \App\Support\JenisKolomBagianKustom::angkaIsian($k['tipe']))->pluck('kunci')->all();
 
         foreach ($baris as $i => $row) {
             if (($row['tipe'] ?? '') === 'hitung' && ($galat = \App\Support\RumusBagianKustom::galat((string) ($row['rumus'] ?? ''), $kunciAngka)) !== null) {
@@ -1531,6 +1597,10 @@ class BagianKustomManager extends Component
             'desimal' => $angka ? ($row['desimal'] ?? null) : null,
             'pemisah' => $row['pemisah'] ?? FormatAngkaKolom::PEMISAH_KOMA,
             'ribuan' => (bool) ($row['ribuan'] ?? true),
+            'bulat' => (bool) ($row['bulat'] ?? false),
+            'pola' => $row['pola'] ?? null,
+            'sumber' => $row['sumber'] ?? null,
+            'isi_info' => $row['isi_info'] ?? null,
         ]);
     }
 
@@ -1736,6 +1806,9 @@ class BagianKustomManager extends Component
                 $sesudah = $bagian->fresh()->potretDefinisi();
 
                 if ($sebelum != $sesudah) {
+                    // Versi definisi naik satu; isian yang disimpan sesudahnya mencatat
+                    // versi baru ini (BagianKustomPoin::booted), isian lama tetap versi lamanya.
+                    $bagian->forceFill(['versi_konfigurasi' => $bagian->versiKonfigurasi() + 1])->save();
                     RiwayatKonfigurasiBagianKustom::catat($bagian, $bagian->nama, 'ubah', $sebelum, $sesudah);
                 }
             });
@@ -1816,7 +1889,38 @@ class BagianKustomManager extends Component
             'notula' => array_key_exists((string) ($a['notula'] ?? ''), AlurBagianKustom::NOTULA) ? (string) $a['notula'] : AlurBagianKustom::NOTULA_SEMUA,
         ];
 
+        // Tahapan berjenjang: disimpan hanya bila ada tahap lanjutan atau label tahap 1
+        // diubah — bagian satu tahap tetap berbentuk lama.
+        $lanjut = array_values(array_filter((array) ($a['tahap_lanjut'] ?? []), 'is_array'));
+        $labelTahap1 = trim((string) ($a['label_tahap1'] ?? ''));
+
+        if ($mode === AlurBagianKustom::MODE_VERIFIKASI && ($lanjut !== [] || $labelTahap1 !== '')) {
+            $alur['tahapan'] = [['label' => $labelTahap1 ?: AlurBagianKustom::LABEL_TAHAP_BAWAAN, 'pemeriksa' => $pemeriksa]];
+
+            foreach ($lanjut as $i => $t) {
+                $peranTahap = array_values(array_intersect(array_keys(BagianKustom::NAMA_PERAN), (array) ($t['pemeriksa'] ?? [])));
+
+                if ($peranTahap === []) {
+                    return [null, 'Tahap pemeriksaan '.($i + 2).' belum punya peran pemeriksa. Centang perannya atau hapus tahap itu.'];
+                }
+
+                $alur['tahapan'][] = ['label' => trim((string) ($t['label'] ?? '')) ?: 'Tahap '.($i + 2), 'pemeriksa' => $peranTahap];
+            }
+        }
+
+        $labelStatus = collect((array) ($a['label_status'] ?? []))
+            ->only(array_keys(AlurBagianKustom::LABEL_STATUS))
+            ->map(fn ($l) => trim((string) $l))
+            ->filter(fn ($l, $s) => $l !== '' && $l !== AlurBagianKustom::LABEL_STATUS[$s])
+            ->all();
+
+        if ($mode === AlurBagianKustom::MODE_VERIFIKASI && $labelStatus !== []) {
+            $alur['label_status'] = $labelStatus;
+        }
+
         if ($mode === AlurBagianKustom::MODE_VERIFIKASI) {
+            // Semua pemeriksa (semua tahap) harus bisa membuka menu penempatan.
+            $pemeriksa = AlurBagianKustom::normalkan($alur, $peran)['pemeriksa'];
             $menuLain = array_values(array_diff($penempatan, [MenuBagianKustom::PENGISIAN]));
 
             if ($menuLain === []) {
@@ -1827,8 +1931,8 @@ class BagianKustomManager extends Component
                 return [null, 'Pilih minimal satu peran pengisi yang boleh mengajukan.'];
             }
 
-            if ($pemeriksa === []) {
-                return [null, 'Pilih minimal satu peran pemeriksa.'];
+            if ($alur['pemeriksa'] === []) {
+                return [null, 'Pilih minimal satu peran pemeriksa'.(isset($alur['tahapan']) ? ' untuk tahap 1.' : '.')];
             }
 
             foreach ($pemeriksa as $p) {
@@ -1838,10 +1942,12 @@ class BagianKustomManager extends Component
             }
         }
 
+        // Bagian lama (alur NULL) yang tetap pada pengaturan bawaan dibiarkan NULL.
         $bawaan = AlurBagianKustom::normalkan(null, $peran);
-        unset($bawaan['diatur']);
+        $efektif = AlurBagianKustom::normalkan($alur, $peran);
+        unset($bawaan['diatur'], $efektif['diatur']);
 
-        return [$bagian->alur === null && $alur == $bawaan ? null : $alur, null];
+        return [$bagian->alur === null && $efektif == $bawaan ? null : $alur, null];
     }
 
     /**
@@ -1883,7 +1989,13 @@ class BagianKustomManager extends Component
     protected function galatGantiTipe(BagianKustom $bagian, array $kolomBaru): ?string
     {
         $lama = collect($bagian->kolomList())->keyBy('kunci');
-        $berganti = collect($kolomBaru)->filter(fn ($k) => $lama->has($k['kunci']) && $lama[$k['kunci']]['tipe'] !== $k['tipe']);
+        $berganti = collect($kolomBaru)->filter(fn ($k) => $lama->has($k['kunci']) && (
+            $lama[$k['kunci']]['tipe'] !== $k['tipe']
+            // Sumber referensi diganti: identitas lama (mis. id IKU) tidak bermakna di sumber baru.
+            || ($k['tipe'] === 'referensi' && ($lama[$k['kunci']]['sumber'] ?? null) !== ($k['sumber'] ?? null))
+            // Pola kode diperketat: nilai lama harus tetap memenuhi pola baru.
+            || ($k['tipe'] === 'kode' && ($lama[$k['kunci']]['pola'] ?? 'bebas') !== ($k['pola'] ?? 'bebas'))
+        ));
 
         if ($berganti->isEmpty()) {
             return null;
@@ -1892,13 +2004,18 @@ class BagianKustomManager extends Component
         $nilaiTersimpan = BagianKustomPoin::where('bagian_kustom_id', $bagian->id)->whereNotNull('nilai_kolom')->pluck('nilai_kolom');
 
         foreach ($berganti as $k) {
-            $tipeLama = $lama[$k['kunci']]['tipe'];
+            // Jenis sama tetapi sumber/pola berubah: diperiksa sebagai "jenis berbeda" supaya
+            // cocokDenganTipe() benar-benar menguji nilai lama terhadap aturan baru.
+            $tipeLama = $lama[$k['kunci']]['tipe'] === $k['tipe'] ? '__'.$k['tipe'].'_lama' : $lama[$k['kunci']]['tipe'];
 
             // Nilai lama tidak pernah dikonversi — penggantian jenis hanya boleh bila
             // semua nilai tersimpan tetap bermakna dengan jenis baru.
+            $gantiSumber = $tipeLama === '__referensi_lama';
             $tidakCocok = $nilaiTersimpan
                 ->map(fn ($n) => trim((string) ($n[$k['kunci']] ?? '')))
-                ->filter(fn ($v) => ! \App\Support\JenisKolomBagianKustom::cocokDenganTipe($v, $tipeLama, $k))
+                // Ganti sumber referensi: semua isian lama ditolak (id di sumber baru bisa
+                // kebetulan ada tetapi menunjuk data yang berbeda).
+                ->filter(fn ($v) => $gantiSumber ? $v !== '' : ! \App\Support\JenisKolomBagianKustom::cocokDenganTipe($v, $tipeLama, $k))
                 ->unique()
                 ->values();
 

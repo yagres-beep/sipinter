@@ -158,9 +158,9 @@ final class KatalogVariabel
     private static function tipeKolom(string $tipe): string
     {
         return match ($tipe) {
-            'angka', 'hitung' => 'angka',
+            'angka', 'hitung', 'mata_uang' => 'angka',
             'persentase' => 'persen',
-            'tanggal' => 'tanggal',
+            'tanggal', 'waktu', 'tanggal_waktu' => 'tanggal',
             'tautan' => 'tautan',
             'tabel', 'pilihan_ganda' => 'daftar',
             'teks_panjang' => 'teks_panjang',

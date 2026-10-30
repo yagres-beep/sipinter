@@ -99,11 +99,13 @@ class BagianKustom extends Model
         'periode_berlaku',
         'aktif',
         'urutan',
+        'versi_konfigurasi',
     ];
 
     protected function casts(): array
     {
         return [
+            'versi_konfigurasi' => 'integer',
             'alur' => 'array',
             'periode_berlaku' => 'array',
             'peran' => 'array',
@@ -162,6 +164,15 @@ class BagianKustom extends Model
         }
 
         return $kode;
+    }
+
+    /**
+     * Nomor versi definisi bagian (naik satu setiap perubahan definisi). Bagian lama
+     * yang belum pernah diubah sejak fitur versi ada = versi 1.
+     */
+    public function versiKonfigurasi(): int
+    {
+        return max(1, (int) ($this->versi_konfigurasi ?? 1));
     }
 
     /** Nama folder Drive tempat bukti dukung bagian ini diunggah. */
@@ -551,21 +562,33 @@ class BagianKustom extends Model
         $mulaiTriwulan = filled($k['mulai_triwulan'] ?? null) ? (int) $k['mulai_triwulan'] : null;
         $berlakuLengkap = $mulaiTahun !== null && $mulaiTriwulan !== null;
 
-        $teks = JenisKolomBagianKustom::teks($tipe);
+        $teks = JenisKolomBagianKustom::berpanjang($tipe);
 
         return [
             'kunci' => (string) $k['kunci'],
             'label' => (string) $k['label'],
             'tipe' => $tipe,
             'opsi' => in_array($tipe, ['pilihan', 'pilihan_ganda'], true) || ! empty($k['opsi']) ? array_values((array) ($k['opsi'] ?? [])) : [],
-            'wajib' => (bool) ($k['wajib'] ?? false),
+            // Kolom tanpa isian (teks informasi) tidak pernah wajib.
+            'wajib' => $tipe !== 'informasi' && (bool) ($k['wajib'] ?? false),
             'aktif' => (bool) ($k['aktif'] ?? true),
             'mulai_tahun' => $berlakuLengkap ? $mulaiTahun : null,
             'mulai_triwulan' => $berlakuLengkap ? max(1, min(4, $mulaiTriwulan)) : null,
-            'satuan' => $angka && filled($k['satuan'] ?? null) ? trim((string) $k['satuan']) : ($tipe === 'persentase' ? '%' : null),
+            'satuan' => $angka && filled($k['satuan'] ?? null) ? trim((string) $k['satuan']) : match ($tipe) {
+                'persentase' => '%',
+                'mata_uang' => 'Rp',
+                default => null,
+            },
             'desimal' => $angka && isset($k['desimal']) && $k['desimal'] !== '' && $k['desimal'] !== null
                 ? max(0, min(FormatAngkaKolom::DESIMAL_MAKS, (int) $k['desimal']))
-                : null,
+                // Mata uang: bawaan tanpa sen, dengan pemisah ribuan (Rp 1.250.000).
+                : ($tipe === 'mata_uang' ? 0 : null),
+            // Angka/mata uang: tolak pecahan bila "hanya bilangan bulat" dicentang.
+            'bulat' => in_array($tipe, ['angka', 'mata_uang'], true) && (bool) ($k['bulat'] ?? false),
+            // Nomor / kode: pola isian; Referensi: sumber data; Informasi: isi teksnya.
+            'pola' => $tipe === 'kode' && array_key_exists((string) ($k['pola'] ?? ''), JenisKolomBagianKustom::POLA_KODE) ? (string) $k['pola'] : ($tipe === 'kode' ? 'bebas' : null),
+            'sumber' => $tipe === 'referensi' ? \App\Support\ReferensiBagianKustom::sumberSah($k['sumber'] ?? null) : null,
+            'isi_info' => $tipe === 'informasi' && filled($k['isi_info'] ?? null) ? trim((string) $k['isi_info']) : null,
             'pemisah' => FormatAngkaKolom::pemisahDari($k),
             'ribuan' => (bool) ($k['ribuan'] ?? true),
             // Struktur & petunjuk (opsional; kolom lama tanpa kunci ini = perilaku lama).
@@ -578,9 +601,9 @@ class BagianKustom extends Model
             'panjang_min' => $teks && filled($k['panjang_min'] ?? null) ? max(0, (int) $k['panjang_min']) : null,
             'panjang_maks' => $teks && filled($k['panjang_maks'] ?? null) ? max(1, (int) $k['panjang_maks']) : null,
             'pesan' => filled($k['pesan'] ?? null) ? trim((string) $k['pesan']) : null,
-            'format_tanggal' => $tipe === 'tanggal' && array_key_exists((string) ($k['format_tanggal'] ?? ''), JenisKolomBagianKustom::FORMAT_TANGGAL)
+            'format_tanggal' => in_array($tipe, ['tanggal', 'tanggal_waktu'], true) && array_key_exists((string) ($k['format_tanggal'] ?? ''), JenisKolomBagianKustom::FORMAT_TANGGAL)
                 ? (string) $k['format_tanggal']
-                : ($tipe === 'tanggal' ? 'panjang' : null),
+                : (in_array($tipe, ['tanggal', 'tanggal_waktu'], true) ? 'panjang' : null),
             // Katalog variabel (kode) dan ringkasan nilai angka di tampilan tabel.
             'variabel' => filled($k['variabel'] ?? null) ? (string) $k['variabel'] : null,
             'ringkasan' => $angka && array_key_exists((string) ($k['ringkasan'] ?? ''), self::RINGKASAN) ? (string) $k['ringkasan'] : null,
@@ -593,11 +616,26 @@ class BagianKustom extends Model
         ];
     }
 
+    /**
+     * Operator syarat tampil yang diizinkan — daftar tetap, tanpa ekspresi bebas.
+     * Dievaluasi sama persis di server (syaratTerpenuhi) dan di browser
+     * (_isian-kolom-bagian-kustom.blade.php, fungsi syaratOk).
+     */
     public const OPERATOR_SYARAT = [
         'sama' => 'bernilai / memuat',
         'tidak_sama' => 'tidak bernilai',
+        'berisi' => 'mengandung teks',
+        'lebih_besar' => 'lebih besar dari',
+        'lebih_kecil' => 'lebih kecil dari',
         'terisi' => 'sudah diisi',
+        'kosong' => 'masih kosong',
     ];
+
+    /** Operator yang tidak memakai nilai pembanding. */
+    public const OPERATOR_TANPA_NILAI = ['terisi', 'kosong'];
+
+    /** Operator perbandingan (hanya untuk acuan angka / tanggal / waktu). */
+    public const OPERATOR_BANDING = ['lebih_besar', 'lebih_kecil'];
 
     /**
      * Syarat tampil kolom/subbagian: tampil hanya bila kolom lain (kunci) memenuhi
@@ -613,35 +651,103 @@ class BagianKustom extends Model
 
         $operator = array_key_exists((string) ($s['operator'] ?? ''), self::OPERATOR_SYARAT) ? (string) $s['operator'] : 'sama';
         $nilai = trim((string) ($s['nilai'] ?? ''));
+        $tanpaNilai = in_array($operator, self::OPERATOR_TANPA_NILAI, true);
 
-        if ($operator !== 'terisi' && $nilai === '') {
+        if (! $tanpaNilai && $nilai === '') {
             return null;
         }
 
-        return ['kunci' => (string) $s['kunci'], 'operator' => $operator, 'nilai' => $operator === 'terisi' ? '' : $nilai];
+        return ['kunci' => (string) $s['kunci'], 'operator' => $operator, 'nilai' => $tanpaNilai ? '' : $nilai];
     }
 
     /**
      * Syarat terpenuhi oleh nilai formulir. Pilihan ganda dicocokkan per pilihan.
+     * $acuan (definisi kolom acuan, bila diketahui) menentukan cara membaca angka untuk
+     * operator perbandingan — tanpa acuan, nilai dibandingkan sebagai teks.
      *
      * @param  array<string, mixed>  $nilaiForm
+     * @param  array<string, mixed>|null  $acuan
      */
-    public static function syaratTerpenuhi(?array $syarat, array $nilaiForm): bool
+    public static function syaratTerpenuhi(?array $syarat, array $nilaiForm, ?array $acuan = null): bool
     {
         if ($syarat === null) {
             return true;
         }
 
         $v = $nilaiForm[$syarat['kunci']] ?? '';
+        $op = $syarat['operator'];
 
-        if ($syarat['operator'] === 'terisi') {
-            return JenisKolomBagianKustom::terisi($v);
+        if ($op === 'terisi' || $op === 'kosong') {
+            return JenisKolomBagianKustom::terisi($v) === ($op === 'terisi');
         }
 
-        $daftar = is_array($v) ? array_map(fn ($x) => trim((string) $x), $v) : JenisKolomBagianKustom::daftarPilihan(is_string($v) ? $v : (string) $v);
+        $daftar = is_array($v)
+            ? array_values(array_filter(array_map(fn ($x) => trim((string) $x), $v), fn ($x) => $x !== ''))
+            : JenisKolomBagianKustom::daftarPilihan(is_string($v) ? $v : (string) $v);
+
+        if ($op === 'berisi') {
+            return collect($daftar)->contains(fn ($x) => mb_stripos($x, $syarat['nilai']) !== false);
+        }
+
+        if (in_array($op, self::OPERATOR_BANDING, true)) {
+            $teks = is_array($v) ? '' : trim((string) $v);
+
+            if ($teks === '') {
+                return false;
+            }
+
+            if ($acuan !== null && JenisKolomBagianKustom::numerik((string) ($acuan['tipe'] ?? ''))) {
+                $a = self::angkaSyarat($teks, self::pemisahSyarat($acuan));
+                $b = self::angkaSyarat($syarat['nilai'], '');
+
+                if ($a === null || $b === null) {
+                    return false;
+                }
+
+                return $op === 'lebih_besar' ? $a > $b : $a < $b;
+            }
+
+            $banding = strcmp($teks, $syarat['nilai']);
+
+            return $op === 'lebih_besar' ? $banding > 0 : $banding < 0;
+        }
+
         $cocok = in_array($syarat['nilai'], $daftar, true);
 
-        return $syarat['operator'] === 'sama' ? $cocok : ! $cocok;
+        return $op === 'sama' ? $cocok : ! $cocok;
+    }
+
+    /**
+     * Pemisah desimal yang dipakai kolom acuan di formulir: 'koma' / 'titik' bila format
+     * angkanya diatur, '' = aturan lama (satu koma atau titik desimal).
+     *
+     * @param  array<string, mixed>  $acuan
+     */
+    public static function pemisahSyarat(array $acuan): string
+    {
+        $k = JenisKolomBagianKustom::sebagaiAngka($acuan);
+
+        return FormatAngkaKolom::diatur($k) ? FormatAngkaKolom::pemisahDari($k) : '';
+    }
+
+    /**
+     * Baca angka untuk syarat tampil — aturan yang SAMA dengan fungsi angka() di browser.
+     */
+    public static function angkaSyarat(string $teks, string $pemisah): ?float
+    {
+        $s = preg_replace('/[\s\x{00A0}]/u', '', $teks) ?? '';
+
+        if ($s === '') {
+            return null;
+        }
+
+        $s = match ($pemisah) {
+            FormatAngkaKolom::PEMISAH_KOMA => preg_replace('/,/', '.', str_replace('.', '', $s), 1),
+            FormatAngkaKolom::PEMISAH_TITIK => str_replace(',', '', $s),
+            default => preg_replace('/,/', '.', $s, 1),
+        };
+
+        return preg_match('/^[+-]?(\d+(\.\d*)?|\.\d+)$/', (string) $s) ? (float) $s : null;
     }
 
     /**
@@ -653,13 +759,29 @@ class BagianKustom extends Model
      */
     public function kolomTerlihat(array $kolom, array $nilaiForm): bool
     {
-        if (! self::syaratTerpenuhi($kolom['tampil_jika'] ?? null, $nilaiForm)) {
+        if (! self::syaratTerpenuhi($kolom['tampil_jika'] ?? null, $nilaiForm, $this->acuanSyarat($kolom['tampil_jika'] ?? null))) {
             return false;
         }
 
         $sub = ($kolom['subbagian'] ?? null) !== null ? collect($this->subbagianList())->firstWhere('kunci', $kolom['subbagian']) : null;
 
-        return $sub === null || self::syaratTerpenuhi($sub['tampil_jika'] ?? null, $nilaiForm);
+        return $sub === null || self::syaratTerpenuhi($sub['tampil_jika'] ?? null, $nilaiForm, $this->acuanSyarat($sub['tampil_jika'] ?? null));
+    }
+
+    /**
+     * Definisi kolom acuan sebuah syarat (null bila tanpa syarat / acuan sudah tidak ada).
+     *
+     * @param  array{kunci: string, operator: string, nilai: string}|null  $syarat
+     * @return array<string, mixed>|null
+     */
+    public function acuanSyarat(?array $syarat): ?array
+    {
+        // Acuan hanya memengaruhi operator perbandingan (cara membaca angka).
+        if ($syarat === null || ! in_array($syarat['operator'], self::OPERATOR_BANDING, true)) {
+            return null;
+        }
+
+        return collect($this->kolomList())->firstWhere('kunci', $syarat['kunci']);
     }
 
     /**
@@ -676,7 +798,7 @@ class BagianKustom extends Model
         $berlaku = $this->kolomBerlaku($tahun, $triwulan);
 
         foreach ($berlaku as $kolom) {
-            if ($kolom['tipe'] === 'hitung' || ! $this->kolomTerlihat($kolom, $nilaiForm)) {
+            if (JenisKolomBagianKustom::tanpaIsian($kolom['tipe']) || ! $this->kolomTerlihat($kolom, $nilaiForm)) {
                 continue;
             }
 
@@ -686,11 +808,11 @@ class BagianKustom extends Model
         }
 
         foreach ($this->subbagianList() as $sub) {
-            if (! $sub['aktif'] || ! $sub['wajib'] || ! self::syaratTerpenuhi($sub['tampil_jika'], $nilaiForm)) {
+            if (! $sub['aktif'] || ! $sub['wajib'] || ! self::syaratTerpenuhi($sub['tampil_jika'], $nilaiForm, $this->acuanSyarat($sub['tampil_jika']))) {
                 continue;
             }
 
-            $isi = array_values(array_filter($berlaku, fn ($k) => $k['subbagian'] === $sub['kunci'] && $k['tipe'] !== 'hitung' && $this->kolomTerlihat($k, $nilaiForm)));
+            $isi = array_values(array_filter($berlaku, fn ($k) => $k['subbagian'] === $sub['kunci'] && ! JenisKolomBagianKustom::tanpaIsian($k['tipe']) && $this->kolomTerlihat($k, $nilaiForm)));
 
             if ($isi !== [] && ! collect($isi)->contains(fn ($k) => JenisKolomBagianKustom::terisi($nilaiForm[$k['kunci']] ?? ''))) {
                 $galat[$isi[0]['kunci']] ??= 'Subbagian "'.$sub['nama'].'" wajib diisi (minimal satu isian).';
@@ -1018,7 +1140,19 @@ class BagianKustom extends Model
 
         if (($kolom['tampil_jika'] ?? null) !== null) {
             $s = $kolom['tampil_jika'];
-            $bagian[] = 'tampil bila {'.$s['kunci'].'} '.(self::OPERATOR_SYARAT[$s['operator']] ?? $s['operator']).($s['operator'] === 'terisi' ? '' : ' "'.$s['nilai'].'"');
+            $bagian[] = 'tampil bila {'.$s['kunci'].'} '.(self::OPERATOR_SYARAT[$s['operator']] ?? $s['operator']).(in_array($s['operator'], self::OPERATOR_TANPA_NILAI, true) ? '' : ' "'.$s['nilai'].'"');
+        }
+
+        if (($kolom['tipe'] ?? '') === 'kode' && ($kolom['pola'] ?? 'bebas') !== 'bebas') {
+            $bagian[] = 'pola: '.mb_strtolower(JenisKolomBagianKustom::POLA_KODE[$kolom['pola']] ?? $kolom['pola']);
+        }
+
+        if (($kolom['tipe'] ?? '') === 'referensi') {
+            $bagian[] = 'sumber: '.(\App\Support\ReferensiBagianKustom::SUMBER[$kolom['sumber'] ?? ''] ?? '—');
+        }
+
+        if ($kolom['bulat'] ?? false) {
+            $bagian[] = 'hanya bilangan bulat';
         }
 
         if (JenisKolomBagianKustom::numerik($kolom['tipe'])) {
@@ -1039,7 +1173,7 @@ class BagianKustom extends Model
             $bagian[] = 'panjang '.($kolom['panjang_min'] ?? 0).'–'.($kolom['panjang_maks'] ?? '…').' karakter';
         }
 
-        if (($kolom['tipe'] ?? '') === 'tanggal') {
+        if (in_array($kolom['tipe'] ?? '', ['tanggal', 'tanggal_waktu'], true)) {
             $bagian[] = 'format '.(JenisKolomBagianKustom::FORMAT_TANGGAL[$kolom['format_tanggal'] ?? 'panjang'] ?? '');
         }
 

@@ -181,7 +181,7 @@ Dua bagian bisa punya struktur dan tabel yang berbeda sama sekali.
 ### Alur kerja dan periode (tab 🔁 Alur Kerja & Periode)
 
 - **Langsung sah** (bawaan): isian sah begitu disimpan.
-- **Diajukan lalu diperiksa**: pengisi menyimpan draf, lalu klik **Ajukan**. Pemeriksa (mis. Tim SAKIP) melihat panel **Pemeriksaan** di menu yang sama, lalu **Setujui** atau **Kembalikan** dengan catatan. Poin yang diajukan terkunci. Pengaju bisa **Tarik pengajuan** selama belum diperiksa.
+- **Diajukan lalu diperiksa**: pengisi menyimpan draf, lalu klik **Ajukan**. Pemeriksa (mis. Tim SAKIP) melihat panel **Pemeriksaan** di menu penempatan mana pun yang bisa dibukanya (sejak 30 Okt), lalu **Setujui** atau **Kembalikan** dengan catatan. Poin yang diajukan terkunci. Pengaju bisa **Tarik pengajuan** selama belum diperiksa.
 - Alur ini berlaku di menu **selain Isian Kegiatan**. Isian Kegiatan tetap mengikuti alur pengajuan dan Verifikasi yang sudah ada.
 - **Periode berlaku**: pilih triwulan dan rentang tahun bagian tampil untuk diisi. Data lama tidak berubah.
 
@@ -201,4 +201,48 @@ Alur menerbitkan bagian baru:
 3. Coba formulirnya di tab **Pratinjau & Uji**.
 4. Klik **Aktifkan** agar bagian tampil ke pengisi.
 
-Yang belum tersedia: jenis kolom "referensi ke data lain", dan bukti dukung sebagai kolom tersendiri. Bukti tetap diatur per poin lewat tab 📎.
+Yang belum tersedia: bukti dukung sebagai kolom tersendiri. Bukti tetap diatur per poin lewat tab 📎. (Jenis "referensi ke data lain" tersedia sejak 30 Okt — lihat bagian 8.)
+
+## 8. Penyempurnaan mesin (30 Okt 2026)
+
+### Jenis kolom baru
+
+| Jenis | Yang disimpan | Tampil di layar & notula |
+|---|---|---|
+| Nomor / kode | teks apa adanya (nol di depan tetap ada); pola: bebas, hanya angka, atau huruf-angka | `0012`, `R-01` |
+| Email | alamat email | `nama@bps.go.id` |
+| Mata uang (Rp) | angka; bisa "hanya bilangan bulat" | `Rp 1.250.000` |
+| Waktu | jam:menit 24 jam | `14.30` |
+| Tanggal & waktu | tanggal + jam | `30 Juni 2026 pukul 14.30` |
+| Ya / Tidak | `ya` / `tidak` | `Ya` / `Tidak` |
+| Pilih data SIPINTER | identitas IKU, tim, atau pengguna | label terbaru, mis. `IKU 1.1 — …` |
+| Teks informasi | tidak menyimpan apa pun | hanya petunjuk di formulir |
+
+- Kolom **Angka** juga punya pilihan **Hanya bilangan bulat**.
+- Kolom **Pilih data SIPINTER** menyimpan identitas data, bukan teksnya. Jika nama IKU atau pengguna diganti, isian lama otomatis ikut menampilkan nama baru. Sumber data tidak bisa diganti bila kolom sudah berisi.
+
+### Syarat tampil lebih lengkap
+
+Operator yang tersedia: **bernilai**, **tidak bernilai**, **mengandung teks**, **lebih besar dari**, **lebih kecil dari**, **sudah diisi**, dan **masih kosong**. "Lebih besar/kecil" hanya untuk kolom acuan angka, mata uang, persentase, tanggal, atau waktu. Syarat dihitung dengan aturan yang sama di browser dan di server.
+
+### Persetujuan berjenjang (tab 🔁 Alur Kerja)
+
+- Di bawah **Peran pemeriksa**, klik **＋ Tambah tahap pemeriksaan**. Contoh: tahap 1 "Pemeriksaan Tim SAKIP" (Tim SAKIP), tahap 2 "Persetujuan Kepala" (Kepala). Maksimal 3 tahap.
+- **Setujui** di tahap 1 meneruskan poin ke tahap 2. Poin baru berstatus Disetujui setelah tahap terakhir menyetujui. Tombol hanya aktif bagi pemeriksa tahap yang sedang berjalan, dan server menolak bila bukan gilirannya.
+- **Kembalikan** di tahap mana pun mengembalikan poin ke pengisi dengan catatan wajib. Pengajuan ulang dimulai lagi dari tahap 1. Pengajuan hanya bisa ditarik sebelum tahap 1 menyetujui.
+- **Label status** bisa diganti, mis. "Dikembalikan" → "Perlu perbaikan". Identitas status tidak berubah, jadi data lama aman.
+- **Satu data, banyak menu**: pemeriksa melihat poin dari semua menu tempat bagian ditempatkan. Contoh: Ketua Tim mengisi di RTL & Evaluasi, lalu Tim SAKIP memeriksa dari Isian Bagian Kustom. Poin Isian Kegiatan tetap diverifikasi di menu Verifikasi.
+
+### Versi konfigurasi
+
+Setiap kali definisi bagian disimpan dengan perubahan, nomornya naik (lencana **v2**, **v3**, … di daftar dan di tab Riwayat). Setiap isian mencatat versi saat isinya terakhir disimpan, sehingga data lama bisa ditelusuri ke struktur formulirnya.
+
+### Pemeriksaan sebelum diterbitkan
+
+Tab **👁 Pratinjau & Uji** menampilkan pemeriksaan dalam tiga tingkat:
+
+- **Kesalahan**: mis. syarat tampil atau rumus menunjuk kolom yang tidak ada, tahap pemeriksaan tanpa pemeriksa yang bisa membuka menu, atau teks informasi kosong.
+- **Peringatan**: mis. syarat bergantung pada kolom nonaktif, atau sumber referensi masih kosong.
+- **Informasi**: mis. belum ada kolom wajib.
+
+Di bawahnya ada **simulasi alur kerja** berupa urutan status dan siapa yang bertindak. Simulasi ini tidak membuat data, tidak mengirim notifikasi, dan tidak mengunggah berkas.

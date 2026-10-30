@@ -40,6 +40,8 @@ class BagianKustomPoin extends Model
         'diajukan_oleh',
         'diperiksa_pada',
         'diperiksa_oleh',
+        'tahap_periksa',
+        'versi_konfigurasi',
     ];
 
     protected function casts(): array
@@ -48,7 +50,27 @@ class BagianKustomPoin extends Model
             'nilai_kolom' => 'array',
             'diajukan_pada' => 'datetime',
             'diperiksa_pada' => 'datetime',
+            'tahap_periksa' => 'integer',
+            'versi_konfigurasi' => 'integer',
         ];
+    }
+
+    /**
+     * Setiap kali ISI poin (IKU, uraian, nilai kolom) dibuat/diubah — dari menu mana pun —
+     * catat versi definisi bagian yang dipakai formulirnya. Perubahan status saja
+     * (ajukan/setujui) tidak mengubah versi ini.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (self $poin) {
+            if (! $poin->exists || $poin->isDirty(['teks', 'nilai_kolom', 'iku_id'])) {
+                $versi = $poin->relationLoaded('bagianKustom')
+                    ? $poin->bagianKustom?->versi_konfigurasi
+                    : BagianKustom::whereKey($poin->bagian_kustom_id)->value('versi_konfigurasi');
+
+                $poin->versi_konfigurasi = max(1, (int) ($versi ?? 1));
+            }
+        });
     }
 
     /**

@@ -41,6 +41,8 @@ class RiwayatKonfigurasiBagianKustom extends Model
         'masuk_notula' => 'masuk notula',
         'judul_notula' => 'judul notula',
         'format_notula' => 'format notula',
+        'alur' => 'alur kerja',
+        'periode_berlaku' => 'periode berlaku',
         'aktif' => 'status aktif',
     ];
 
@@ -53,6 +55,7 @@ class RiwayatKonfigurasiBagianKustom extends Model
         'ringkasan',
         'sebelum',
         'sesudah',
+        'versi',
     ];
 
     protected function casts(): array
@@ -90,6 +93,8 @@ class RiwayatKonfigurasiBagianKustom extends Model
             'ringkasan' => $ringkasan ?? (self::ringkasSelisih($sebelum ?? [], $sesudah ?? []) ?: (self::AKSI[$aksi] ?? $aksi)),
             'sebelum' => $sebelum,
             'sesudah' => $sesudah,
+            // Versi definisi setelah kejadian ini (null untuk bagian yang sudah dihapus).
+            'versi' => $bagian?->exists ? $bagian->versiKonfigurasi() : null,
         ]);
     }
 
@@ -166,7 +171,8 @@ class RiwayatKonfigurasiBagianKustom extends Model
             }
 
             $berubah = collect(['label', 'tipe', 'opsi', 'wajib', 'mulai_tahun', 'mulai_triwulan', 'satuan', 'desimal', 'pemisah', 'ribuan',
-                'subbagian', 'petunjuk', 'placeholder', 'min', 'maks', 'panjang_min', 'panjang_maks', 'pesan', 'format_tanggal', 'variabel', 'ringkasan'])
+                'subbagian', 'petunjuk', 'placeholder', 'min', 'maks', 'panjang_min', 'panjang_maks', 'pesan', 'format_tanggal', 'variabel', 'ringkasan',
+                'rumus', 'tabel_kolom', 'baris_min', 'baris_maks', 'tampil_jika', 'sumber', 'pola', 'isi_info'])
                 ->filter(fn ($f) => ($l[$f] ?? null) != ($k[$f] ?? null))
                 ->values()
                 ->all();

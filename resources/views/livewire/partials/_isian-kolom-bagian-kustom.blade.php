@@ -16,12 +16,27 @@
     $ringkas ??= false;
     $nilai ??= [];
     $semuaKolom = collect($kelompok)->flatMap(fn ($g) => $g['kolom'])->values()->all();
-    // Fungsi pencocok syarat (sama dengan BagianKustom::syaratTerpenuhi()).
-    $fnSyarat = "{ syaratOk(v, op, t) { if (v === null || v === undefined) v = ''; if (typeof v !== 'string') v = Array.isArray(v) ? JSON.stringify(v) : String(v); v = v.trim(); let daftar = []; if (v !== '' && v !== '[]') { try { const a = JSON.parse(v); daftar = Array.isArray(a) ? a.map(x => String(x).trim()) : [v]; } catch (e) { daftar = [v]; } } if (op === 'terisi') return daftar.length > 0; const cocok = daftar.includes(t); return op === 'sama' ? cocok : ! cocok; } }";
+    // Definisi kolom acuan syarat (mode tabel hanya mengirim satu kolom per sel, jadi
+    // pemanggil boleh mengirim semua kolom lewat $acuanKolom).
+    $acuanKolom ??= collect($semuaKolom)->keyBy('kunci')->all();
+    // Atribut syarat tampil: kolom acuan, operator, nilai, cara membaca angka acuan.
+    $atributSyarat = function (?array $s) use ($model, $acuanKolom) {
+        if ($s === null) {
+            return '';
+        }
+
+        $acuan = $acuanKolom[$s['kunci']] ?? null;
+        $angka = $acuan !== null && \App\Support\JenisKolomBagianKustom::numerik((string) ($acuan['tipe'] ?? ''));
+
+        return 'data-sj="'.e($model.'.'.$s['kunci']).'" data-so="'.e($s['operator']).'" data-sn="'.e($s['nilai']).'" data-sk="'.($angka ? 'angka' : 'teks').'" data-sp="'.e($angka ? \App\Models\BagianKustom::pemisahSyarat($acuan) : '').'"';
+    };
+    // Fungsi pencocok syarat — aturan SAMA dengan BagianKustom::syaratTerpenuhi() dan
+    // BagianKustom::angkaSyarat(). Hanya operator dari daftar tetap; tidak ada ekspresi bebas.
+    $fnSyarat = "{ angka(s, sp) { s = String(s).replace(/[\\s\\u00A0]/g, ''); if (s === '') return null; if (sp === 'koma') s = s.replace(/\\./g, '').replace(',', '.'); else if (sp === 'titik') s = s.replace(/,/g, ''); else s = s.replace(',', '.'); return /^[+-]?(\\d+(\\.\\d*)?|\\.\\d+)$/.test(s) ? parseFloat(s) : null; }, cocok(el) { return this.syaratOk(this.\$wire.get(el.dataset.sj), el.dataset.so, el.dataset.sn, el.dataset.sk, el.dataset.sp); }, syaratOk(v, op, t, sk, sp) { if (v === null || v === undefined) v = ''; if (typeof v !== 'string') v = Array.isArray(v) ? JSON.stringify(v) : String(v); v = v.trim(); let daftar = []; if (v !== '' && v !== '[]') { try { const a = JSON.parse(v); daftar = Array.isArray(a) ? a.map(x => String(x).trim()).filter(x => x !== '') : [v]; } catch (e) { daftar = [v]; } } if (op === 'terisi') return daftar.length > 0; if (op === 'kosong') return daftar.length === 0; if (op === 'berisi') { const c = String(t).toLowerCase(); return daftar.some(x => x.toLowerCase().includes(c)); } if (op === 'lebih_besar' || op === 'lebih_kecil') { if (v === '') return false; let a = v, b = t; if (sk === 'angka') { a = this.angka(v, sp); b = this.angka(t, ''); if (a === null || b === null) return false; } else { a = v; b = String(t); } return op === 'lebih_besar' ? a > b : a < b; } const cocok = daftar.includes(t); return op === 'sama' ? cocok : ! cocok; } }";
 @endphp
 @foreach ($kelompok as $grup)
     @php $syaratSub = $grup['subbagian']['tampil_jika'] ?? null; @endphp
-    <div @if ($syaratSub) x-data="{{ $fnSyarat }}" x-show="syaratOk($wire.get($el.dataset.sj), $el.dataset.so, $el.dataset.sn)" data-sj="{{ $model }}.{{ $syaratSub['kunci'] }}" data-so="{{ $syaratSub['operator'] }}" data-sn="{{ $syaratSub['nilai'] }}" @endif @if ($ringkas) style="display:contents" @endif>
+    <div @if ($syaratSub) x-data="{{ $fnSyarat }}" x-show="cocok($el)" {!! $atributSyarat($syaratSub) !!} @endif @if ($ringkas) style="display:contents" @endif>
     @if ($grup['subbagian'] && ! $ringkas)
         <div class="sub-bagian-kustom" style="margin:14px 0 8px;padding-top:10px;border-top:1px dashed var(--line)">
             <div style="font-weight:700;font-size:12.5px">{{ $grup['subbagian']['nama'] }}@if ($grup['subbagian']['wajib'] ?? false) <span class="req" title="Minimal satu isian di subbagian ini wajib diisi">*</span>@endif</div>
@@ -38,18 +53,18 @@
             $syarat = $kolom['tampil_jika'] ?? null;
         @endphp
         <div class="field" @if ($ringkas) style="margin-bottom:0;min-width:140px" @endif
-            @if ($syarat) x-data="{{ $fnSyarat }}" x-show="syaratOk($wire.get($el.dataset.sj), $el.dataset.so, $el.dataset.sn)" data-sj="{{ $model }}.{{ $syarat['kunci'] }}" data-so="{{ $syarat['operator'] }}" data-sn="{{ $syarat['nilai'] }}" @endif>
+            @if ($syarat) x-data="{{ $fnSyarat }}" x-show="cocok($el)" {!! $atributSyarat($syarat) !!} @endif>
             @if ($ringkas)
                 <label for="{{ $idKolom }}" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">{{ $kolom['label'] }}</label>
             @else
             <label for="{{ $idKolom }}">{{ $kolom['label'] }}
-                @if ($kolom['tipe'] === 'hitung')<span style="color:var(--muted);font-weight:500">otomatis</span>@elseif ($kolom['wajib'])<span class="req">*</span>@else<span style="color:var(--muted);font-weight:500">opsional</span>@endif
-                @if ($kolom['tipe'] !== 'hitung')
+                @if ($kolom['tipe'] === 'hitung')<span style="color:var(--muted);font-weight:500">otomatis</span>@elseif ($kolom['tipe'] === 'informasi')@elseif ($kolom['wajib'])<span class="req">*</span>@else<span style="color:var(--muted);font-weight:500">opsional</span>@endif
+                @if (! in_array($kolom['tipe'], ['hitung', 'informasi'], true))
                     @include('livewire.partials._petunjuk-kolom-angka', ['kolom' => \App\Support\JenisKolomBagianKustom::sebagaiAngka($kolom)])
                 @endif
             </label>
             @endif
-            @if (($kolom['petunjuk'] ?? null) && ! $ringkas)
+            @if (($kolom['petunjuk'] ?? null) && ! $ringkas && $kolom['tipe'] !== 'informasi')
                 <div class="fhint" style="margin:0 0 6px">{{ $kolom['petunjuk'] }}</div>
             @endif
 
@@ -188,6 +203,59 @@
 
                 @case('tanggal')
                     <input id="{{ $idKolom }}" type="date" class="inp filled" wire:model.blur="{{ $jalur }}">
+                    @break
+
+                @case('waktu')
+                    <input id="{{ $idKolom }}" type="time" class="inp filled" wire:model.blur="{{ $jalur }}">
+                    @break
+
+                @case('tanggal_waktu')
+                    <input id="{{ $idKolom }}" type="datetime-local" class="inp filled" wire:model.blur="{{ $jalur }}">
+                    @break
+
+                @case('ya_tidak')
+                    {{-- .change: syarat tampil kolom lain langsung terbaca. --}}
+                    <div id="{{ $idKolom }}" role="radiogroup" aria-label="{{ $kolom['label'] }}" style="display:flex;gap:16px;padding:6px 0">
+                        @foreach (\App\Support\JenisKolomBagianKustom::YA_TIDAK as $nilaiYt => $labelYt)
+                            <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer">
+                                <input type="radio" value="{{ $nilaiYt }}" name="{{ $idKolom }}" wire:model.change="{{ $jalur }}"> {{ $labelYt }}
+                            </label>
+                        @endforeach
+                    </div>
+                    @break
+
+                @case('email')
+                    <input id="{{ $idKolom }}" type="email" inputmode="email" autocomplete="off" class="inp filled" wire:model.blur="{{ $jalur }}" placeholder="{{ $kolom['placeholder'] ?? 'nama@bps.go.id' }}" maxlength="254">
+                    @break
+
+                @case('kode')
+                    <input id="{{ $idKolom }}" type="text" class="inp filled" style="font-family:monospace" wire:model.blur="{{ $jalur }}" placeholder="{{ $kolom['placeholder'] ?? '' }}" @if (($kolom['pola'] ?? 'bebas') === 'angka') inputmode="numeric" @endif maxlength="{{ $kolom['panjang_maks'] ?? \App\Support\JenisKolomBagianKustom::PANJANG_MAKS_BAWAAN['kode'] }}">
+                    @break
+
+                @case('mata_uang')
+                    <div style="display:flex;align-items:center;gap:6px">
+                        <span style="font-weight:700;color:var(--muted)" aria-hidden="true">{{ $kolom['satuan'] ?? 'Rp' }}</span>
+                        <input id="{{ $idKolom }}" type="text" inputmode="decimal" class="inp filled" style="flex:1" wire:model.blur="{{ $jalur }}" placeholder="{{ $kolom['placeholder'] ?? 'mis. 1.250.000' }}">
+                    </div>
+                    @break
+
+                @case('referensi')
+                    @php $opsiReferensi = \App\Support\ReferensiBagianKustom::opsi((string) ($kolom['sumber'] ?? '')); @endphp
+                    <select id="{{ $idKolom }}" class="inp filled" wire:model.change="{{ $jalur }}">
+                        <option value="">{{ $kolom['placeholder'] ?? '— pilih —' }}</option>
+                        @foreach ($opsiReferensi as $idRef => $labelRef)
+                            <option value="{{ $idRef }}">{{ \Illuminate\Support\Str::limit($labelRef, 90) }}</option>
+                        @endforeach
+                        {{-- Isian lama yang data acuannya sudah tidak ada tetap tampil apa adanya. --}}
+                        @php $nilaiRef = (string) ($nilai[$kolom['kunci']] ?? ''); @endphp
+                        @if ($nilaiRef !== '' && ! array_key_exists($nilaiRef, $opsiReferensi))
+                            <option value="{{ $nilaiRef }}">{{ \App\Support\ReferensiBagianKustom::label((string) ($kolom['sumber'] ?? ''), $nilaiRef) }}</option>
+                        @endif
+                    </select>
+                    @break
+
+                @case('informasi')
+                    <div id="{{ $idKolom }}" class="info" style="font-size:12.5px;white-space:pre-line;margin:0" data-informasi="{{ $kolom['kunci'] }}">{{ $kolom['isi_info'] ?? '' }}</div>
                     @break
 
                 @case('teks_panjang')

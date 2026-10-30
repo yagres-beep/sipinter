@@ -90,6 +90,7 @@
             $pakaiBukti = \App\Support\AturanBuktiBagianKustom::dipakai($aturan);
             $kelompokBerlaku = $bagian->kelompokKolomBerlaku($tahun, \App\Models\BagianKustom::triwulanDariBulan($bulan));
             $kolomBerlaku = collect($kelompokBerlaku)->flatMap(fn ($g) => $g['kolom'])->values()->all();
+            $acuanTabel = collect($kolomBerlaku)->keyBy('kunci')->all();
             $terbuka = $objekTerbuka[$bagian->id] ?? collect();
             $tabel = $bagian->tampilanIsian() === 'tabel';
             // Hak aksi peran ini (matriks Data Master). Hanya untuk tampilan — semua aksi
@@ -101,7 +102,9 @@
             $pakaiAlur = \App\Support\AlurBagianKustom::pakaiVerifikasi($alurIni);
             $statusBaris = fn ($row) => filled($row['id'] ?? null) ? ($statusPoin[(int) $row['id']] ?? null) : null;
             $terkunciAlur = fn ($row) => ($s = $statusBaris($row)) !== null && ! \App\Support\AlurBagianKustom::bisaDiubahPengisi($s, $alurIni);
-            $adaDiajukan = collect($baris[$bagian->id] ?? [])->contains(fn ($r) => $statusBaris($r) === \App\Support\AlurBagianKustom::DIAJUKAN);
+            // Tarik pengajuan hanya untuk poin yang belum disetujui di tahap mana pun.
+            $adaDiajukan = collect($baris[$bagian->id] ?? [])->contains(fn ($r) => filled($r['id'] ?? null) && in_array((int) $r['id'], $bisaDitarik, true));
+            $labelBaris = fn ($row) => filled($row['id'] ?? null) ? ($labelPoin[(int) $row['id']] ?? null) : null;
             $adaSiapAjukan = collect($baris[$bagian->id] ?? [])->contains(fn ($r) => in_array($statusBaris($r), [\App\Support\AlurBagianKustom::DRAF, \App\Support\AlurBagianKustom::DIKEMBALIKAN], true));
         @endphp
         <div class="card" style="margin-bottom:16px" wire:key="bagian-{{ $bagian->id }}">
@@ -116,7 +119,9 @@
                 <div class="info" data-hak-terbatas="{{ $bagian->id }}" style="font-size:12px">🔐 Hak Anda di bagian ini: {{ collect($hak)->filter()->keys()->map(fn ($a) => mb_strtolower(\App\Models\BagianKustom::AKSI[$a]))->implode(', ') ?: 'hanya melihat isian sendiri' }}.</div>
             @endif
             @if ($pakaiAlur)
-                <div class="info" style="font-size:12px" data-alur-verifikasi="{{ $bagian->id }}">🔁 Isian bagian ini <b>diajukan lalu diperiksa</b> ({{ collect($alurIni['pemeriksa'])->map(fn ($p) => \App\Models\BagianKustom::NAMA_PERAN[$p] ?? $p)->implode(', ') }}). Simpan sebagai draf, lalu klik <b>Ajukan</b>. Poin yang diajukan terkunci sampai diperiksa.</div>
+                <div class="info" style="font-size:12px" data-alur-verifikasi="{{ $bagian->id }}"><span>🔁 Isian bagian ini <b>diajukan lalu diperiksa</b>
+                    ({{ collect($alurIni['tahapan'])->map(fn ($t, $i) => (count($alurIni['tahapan']) > 1 ? ($i + 1).'. '.$t['label'].': ' : '').collect($t['pemeriksa'])->map(fn ($p) => \App\Models\BagianKustom::NAMA_PERAN[$p] ?? $p)->implode('/'))->implode(' → ') }}).
+                    Simpan sebagai draf, lalu klik <b>Ajukan</b>. Poin yang diajukan terkunci sampai diperiksa.</span></div>
             @endif
             @if ($bagian->frekuensi_wajib === 'setiap_bulan')
                 <div class="info warn">⚠️ Minimal satu poin wajib diisi setiap bulan.</div>
@@ -179,7 +184,7 @@
                                 <tr wire:key="baris-{{ $bagian->id }}-{{ $i }}" style="vertical-align:top">
                                     <td style="padding:6px;border-bottom:1px solid var(--line2)">{{ $i + 1 }}
                                         @if (! empty($row['lanjutan_dari_id']))<div class="badge b-draft" style="font-size:10px" title="Lanjutan dari periode sebelumnya">↪ {{ \App\Support\LanjutanBagianKustom::labelPeriode($sumberLanjutan[(int) $row['lanjutan_dari_id']]?->periode ?? null) }}</div>@endif
-                                        @if ($pakaiAlur && $stBaris)<div class="badge {{ \App\Support\AlurBagianKustom::BADGE_STATUS[$stBaris] }}" style="font-size:10px" data-status-poin="{{ $row['id'] }}">{{ \App\Support\AlurBagianKustom::labelStatus($stBaris, $alurIni) }}</div>@endif
+                                        @if ($pakaiAlur && $stBaris)<div class="badge {{ \App\Support\AlurBagianKustom::BADGE_STATUS[$stBaris] }}" style="font-size:10px;white-space:normal" data-status-poin="{{ $row['id'] }}">{{ $labelBaris($row) ?? \App\Support\AlurBagianKustom::labelStatus($stBaris, $alurIni) }}</div>@endif
                                         @if ($stBaris === 'dikembalikan' && ($poinDimuat[(int) $row['id']]->catatan ?? null))<div style="font-size:11px;color:var(--red);max-width:160px">Catatan: {{ $poinDimuat[(int) $row['id']]->catatan }}</div>@endif
                                     </td>
                                     <td style="padding:6px;border-bottom:1px solid var(--line2)">
@@ -198,7 +203,7 @@
                                     @foreach ($kolomBerlaku as $k)
                                         <td style="padding:6px;border-bottom:1px solid var(--line2)">
                                             <fieldset @disabled($kunciBaris) style="border:0;padding:0;margin:0;min-width:0">
-                                                @include('livewire.partials._isian-kolom-bagian-kustom', ['kelompok' => [['subbagian' => null, 'kolom' => [$k]]], 'model' => "baris.{$bagian->id}.{$i}.kolom", 'ringkas' => true, 'nilai' => $row['kolom'] ?? []])
+                                                @include('livewire.partials._isian-kolom-bagian-kustom', ['kelompok' => [['subbagian' => null, 'kolom' => [$k]]], 'model' => "baris.{$bagian->id}.{$i}.kolom", 'ringkas' => true, 'nilai' => $row['kolom'] ?? [], 'acuanKolom' => $acuanTabel])
                                             </fieldset>
                                         </td>
                                     @endforeach
@@ -232,7 +237,7 @@
                             <span class="badge b-draft" style="margin-left:6px" title="Poin ini melanjutkan isian periode sebelumnya">↪ Lanjutan dari {{ \App\Support\LanjutanBagianKustom::labelPeriode($sumberLanjutan[(int) $row['lanjutan_dari_id']]?->periode ?? null) }}</span>
                         @endif
                         @if ($pakaiAlur && $stBaris)
-                            <span class="badge {{ \App\Support\AlurBagianKustom::BADGE_STATUS[$stBaris] }}" style="margin-left:6px" data-status-poin="{{ $row['id'] }}">{{ \App\Support\AlurBagianKustom::labelStatus($stBaris, $alurIni) }}</span>
+                            <span class="badge {{ \App\Support\AlurBagianKustom::BADGE_STATUS[$stBaris] }}" style="margin-left:6px;white-space:normal" data-status-poin="{{ $row['id'] }}">{{ $labelBaris($row) ?? \App\Support\AlurBagianKustom::labelStatus($stBaris, $alurIni) }}</span>
                         @endif
                         @if ($stBaris === 'dikembalikan' && ($poinDimuat[(int) $row['id']]->catatan ?? null))
                             <div class="info red" style="font-size:12px;margin-top:8px">↩ Catatan pemeriksa: {{ $poinDimuat[(int) $row['id']]->catatan }}</div>
@@ -324,16 +329,20 @@
         @php $alurPeriksa = $alurBagian[$bagian->id]; $kolomPeriksa = $bagian->kolomList(); @endphp
         <div class="card" style="margin-bottom:16px" wire:key="periksa-bagian-{{ $bagian->id }}" data-panel-periksa="{{ $bagian->id }}">
             <div class="sec"><span class="n">✅</span><span>Pemeriksaan: {{ $bagian->nama }}</span></div>
-            <div class="fhint" style="margin:0 0 8px">Poin yang diajukan pada {{ $namaBulan[$bulan] }} {{ $tahun }} di menu {{ $namaMenu }}. Setujui bila sesuai, atau kembalikan dengan catatan perbaikan.</div>
+            <div class="fhint" style="margin:0 0 8px">Poin yang diajukan pada {{ $namaBulan[$bulan] }} {{ $tahun }} dari semua menu tempat bagian ini diisi. Setujui bila sesuai, atau kembalikan dengan catatan perbaikan.@if (\App\Support\AlurBagianKustom::jumlahTahap($alurPeriksa) > 1) Pemeriksaan berjenjang: {{ collect($alurPeriksa['tahapan'])->pluck('label')->implode(' → ') }} — tombol hanya aktif pada tahap giliran peran Anda.@endif</div>
             @if (session()->has('periksa-'.$bagian->id))
                 <div class="badge b-approve" role="status" style="display:block;margin-bottom:12px;white-space:normal">{{ session('periksa-'.$bagian->id) }}</div>
             @endif
             @forelse ($periksaan[$bagian->id] ?? collect() as $p)
-                @php $st = \App\Support\AlurBagianKustom::statusPoin($p); @endphp
+                @php
+                    $st = \App\Support\AlurBagianKustom::statusPoin($p);
+                    $bolehSetujui = \App\Support\AlurBagianKustom::bolehPeriksa($alurPeriksa, $peranSaya, $p, 'setujui');
+                    $bolehKembalikan = \App\Support\AlurBagianKustom::bolehPeriksa($alurPeriksa, $peranSaya, $p, 'kembalikan');
+                @endphp
                 <div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px" wire:key="periksa-poin-{{ $p->id }}">
                     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between">
-                        <div><b>{{ $p->masterIku?->kode ?? '—' }}</b> — {{ \App\Models\BagianKustom::NAMA_PERAN[$p->peran_pengisi] ?? $p->peran_pengisi }}</div>
-                        <span class="badge {{ \App\Support\AlurBagianKustom::BADGE_STATUS[$st] }}" data-status-periksa="{{ $p->id }}">{{ \App\Support\AlurBagianKustom::labelStatus($st, $alurPeriksa) }}</span>
+                        <div><b>{{ $p->masterIku?->kode ?? '—' }}</b> — {{ \App\Models\BagianKustom::NAMA_PERAN[$p->peran_pengisi] ?? $p->peran_pengisi }} <span style="color:var(--muted);font-size:11.5px">· diisi di {{ \App\Support\MenuBagianKustom::label((string) $p->menu) }}</span></div>
+                        <span class="badge {{ \App\Support\AlurBagianKustom::BADGE_STATUS[$st] }}" style="white-space:normal" data-status-periksa="{{ $p->id }}">{{ \App\Support\AlurBagianKustom::labelPoin($p, $alurPeriksa) }}</span>
                     </div>
                     <div style="white-space:pre-line;font-size:13px;margin:6px 0">{{ $p->teks }}</div>
                     @foreach ($kolomPeriksa as $k)
@@ -346,17 +355,22 @@
                     @if ($st === 'dikembalikan' && $p->catatan)
                         <div style="font-size:12px;color:var(--red);margin-top:4px">Catatan: {{ $p->catatan }}</div>
                     @endif
-                    @if (in_array($st, ['diajukan', 'disetujui'], true))
+                    @if (! $bolehSetujui && ! $bolehKembalikan && $st === 'diajukan')
+                        <div class="fhint" style="margin-top:6px" data-bukan-giliran="{{ $p->id }}">Menunggu pemeriksa tahap ini — bukan giliran peran {{ $namaPeran }}.</div>
+                    @endif
+                    @if ($bolehSetujui || $bolehKembalikan)
                         <div class="field" style="margin:8px 0 0">
                             <label for="catatan-periksa-{{ $p->id }}" style="font-size:11.5px">Catatan perbaikan <span style="color:var(--muted);font-weight:500">(wajib bila dikembalikan)</span></label>
                             <textarea id="catatan-periksa-{{ $p->id }}" class="inp filled" style="height:auto;display:block" rows="2" wire:model="catatanPeriksa.{{ $p->id }}" maxlength="1000"></textarea>
                         </div>
                         @error("periksa.{$p->id}")<div role="alert" style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>@enderror
                         <div class="btn-row" style="margin-top:6px">
-                            @if ($st === 'diajukan')
-                                <button type="button" class="btn btn-sm" style="background:var(--green);color:#fff" wire:click="setujui({{ $p->id }})" wire:loading.attr="disabled" wire:target="setujui({{ $p->id }})">✔ Setujui</button>
+                            @if ($bolehSetujui)
+                                <button type="button" class="btn btn-sm" style="background:var(--green);color:#fff" wire:click="setujui({{ $p->id }})" wire:loading.attr="disabled" wire:target="setujui({{ $p->id }})">✔ {{ \App\Support\AlurBagianKustom::tahapPoin($p, $alurPeriksa) < \App\Support\AlurBagianKustom::jumlahTahap($alurPeriksa) ? 'Setujui & teruskan' : 'Setujui' }}</button>
                             @endif
-                            <button type="button" class="btn btn-red btn-sm" wire:click="kembalikan({{ $p->id }})" wire:loading.attr="disabled" wire:target="kembalikan({{ $p->id }})">↩ Kembalikan untuk diperbaiki</button>
+                            @if ($bolehKembalikan)
+                                <button type="button" class="btn btn-red btn-sm" wire:click="kembalikan({{ $p->id }})" wire:loading.attr="disabled" wire:target="kembalikan({{ $p->id }})">↩ Kembalikan untuk diperbaiki</button>
+                            @endif
                         </div>
                     @endif
                 </div>

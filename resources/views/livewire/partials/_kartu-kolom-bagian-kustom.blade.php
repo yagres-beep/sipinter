@@ -121,8 +121,43 @@
         </div>
     @endif
 
+    @if ($tipe === 'kode')
+        <div class="field" style="margin-bottom:8px;max-width:420px">
+            <label>Pola isian</label>
+            <select class="inp filled" wire:model.live="{{ $m }}.pola">
+                @foreach (\App\Support\JenisKolomBagianKustom::POLA_KODE as $nilai => $label)
+                    <option value="{{ $nilai }}">{{ $label }}</option>
+                @endforeach
+            </select>
+            @if ($galat('pola'))<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $galat('pola') }}</div>@endif
+            <div class="fhint" style="margin-top:4px">Disimpan sebagai teks, jadi nol di depan (mis. 0012) tidak hilang.</div>
+        </div>
+    @endif
+
+    @if ($tipe === 'referensi')
+        <div class="field" style="margin-bottom:8px;max-width:420px">
+            <label>Sumber data</label>
+            <select class="inp filled" wire:model.live="{{ $m }}.sumber">
+                @foreach (\App\Support\ReferensiBagianKustom::SUMBER as $nilai => $label)
+                    <option value="{{ $nilai }}">{{ $label }}</option>
+                @endforeach
+            </select>
+            @if ($galat('sumber'))<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $galat('sumber') }}</div>@endif
+            <div class="fhint" style="margin-top:4px">Pengisi memilih dari data yang sudah ada ({{ count(\App\Support\ReferensiBagianKustom::opsi((string) ($kol['sumber'] ?? 'iku'))) }} data saat ini). Yang disimpan identitasnya, jadi mengganti nama IKU/pengguna tidak memutus isian lama.</div>
+        </div>
+    @endif
+
+    @if ($tipe === 'informasi')
+        <div class="field" style="margin-bottom:8px">
+            <label>Isi teks informasi <span class="req">*</span></label>
+            <textarea class="inp filled" style="height:auto;display:block" rows="3" maxlength="2000" wire:model.blur="{{ $m }}.isi_info" placeholder="mis. Isi register risiko sesuai Pedoman Manajemen Risiko BPS 2025."></textarea>
+            @if ($galat('isi_info'))<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $galat('isi_info') }}</div>@endif
+            <div class="fhint" style="margin-top:4px">Hanya ditampilkan di formulir sebagai petunjuk — tidak diisi, tidak disimpan, dan tidak masuk notula.</div>
+        </div>
+    @endif
+
     @if ($tipe === 'hitung')
-        @php $varAngka = collect($f['kolom'] ?? [])->filter(fn ($k) => filled($k['kunci'] ?? null) && in_array($k['tipe'] ?? '', ['angka', 'persentase'], true))->values(); @endphp
+        @php $varAngka = collect($f['kolom'] ?? [])->filter(fn ($k) => filled($k['kunci'] ?? null) && \App\Support\JenisKolomBagianKustom::angkaIsian($k['tipe'] ?? ''))->values(); @endphp
         <div class="field" style="margin-bottom:8px">
             <label>Rumus <span class="req">*</span></label>
             <input type="text" class="inp filled" style="font-family:monospace" wire:model.live.debounce.400ms="{{ $m }}.rumus" placeholder="mis. {realisasi} / {target} * 100">
@@ -177,7 +212,7 @@
         <div class="fhint" style="margin:-4px 0 8px">Pengisi bisa menambah dan menghapus baris sendiri. Baris yang seluruhnya kosong tidak disimpan. Di notula, tabel dicetak per baris: "1) Kolom: isi; … | 2) …".</div>
     @endif
 
-    @if (in_array($tipe, ['angka', 'persentase', 'hitung'], true))
+    @if (\App\Support\JenisKolomBagianKustom::numerik($tipe))
         @php $kolomContoh = \App\Models\BagianKustom::normalkanKolom(['kunci' => 'contoh', 'label' => 'contoh'] + $kol); @endphp
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:8px">
             <div class="field" style="margin-bottom:0">
@@ -219,6 +254,11 @@
                 @if ($galat('maks'))<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $galat('maks') }}</div>@endif
             </div>
             @endif
+            @if (in_array($tipe, ['angka', 'mata_uang'], true))
+                <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;align-self:end;padding-bottom:10px">
+                    <input type="checkbox" wire:model.live="{{ $m }}.bulat"> Hanya bilangan bulat
+                </label>
+            @endif
             <div class="field" style="margin-bottom:0">
                 <label>Ringkasan nilai</label>
                 <select class="inp filled" wire:model.live="{{ $m }}.ringkasan">
@@ -229,10 +269,10 @@
                 </select>
             </div>
         </div>
-        <div class="fhint" style="margin:0 0 8px">Contoh tampilan: <b>{{ \App\Support\TemplateBagianKustom::contohKolom($kolomContoh) }}</b>. Format hanya mengubah tampilan — angka yang sudah tersimpan tidak diubah atau dibulatkan.</div>
+        <div class="fhint" style="margin:0 0 8px">Contoh tampilan: <b>{{ \App\Support\TemplateBagianKustom::contohKolom($kolomContoh) }}</b>. Format hanya mengubah tampilan — angka yang sudah tersimpan tidak diubah atau dibulatkan.@if ($tipe === 'mata_uang') Satuan = simbol mata uang di depan angka (bawaan Rp).@endif</div>
     @endif
 
-    @if (in_array($tipe, ['teks', 'teks_panjang'], true))
+    @if (\App\Support\JenisKolomBagianKustom::berpanjang($tipe))
         <div class="row2">
             <div class="field" style="margin-bottom:8px">
                 <label>Panjang minimal (karakter)</label>
@@ -247,7 +287,7 @@
         </div>
     @endif
 
-    @if ($tipe === 'tanggal')
+    @if (in_array($tipe, ['tanggal', 'tanggal_waktu'], true))
         <div class="field" style="margin-bottom:8px">
             <label>Format tanggal di tampilan &amp; notula</label>
             <select class="inp filled" wire:model.live="{{ $m }}.format_tanggal">
@@ -283,8 +323,16 @@
 
     {{-- Syarat tampil: kolom ini hanya tampil (dan divalidasi) bila kolom lain bernilai tertentu. --}}
     @php
-        $acuanSyarat = collect($f['kolom'] ?? [])->filter(fn ($k) => filled($k['kunci'] ?? null) && ($k['kunci'] ?? null) !== ($kol['kunci'] ?? null) && ! in_array($k['tipe'] ?? '', ['tabel', 'hitung'], true))->values();
+        $acuanSyarat = collect($f['kolom'] ?? [])->filter(fn ($k) => filled($k['kunci'] ?? null) && ($k['kunci'] ?? null) !== ($kol['kunci'] ?? null) && \App\Support\JenisKolomBagianKustom::bisaJadiAcuan($k['tipe'] ?? ''))->values();
         $acuanDipilih = $acuanSyarat->firstWhere('kunci', $kol['syarat_kunci'] ?? '');
+        $opSyarat = $kol['syarat_operator'] ?? 'sama';
+        // Pilihan nilai pembanding untuk acuan berpilihan (operator sama / tidak sama).
+        $opsiSyarat = match ($acuanDipilih['tipe'] ?? '') {
+            'ya_tidak' => \App\Support\JenisKolomBagianKustom::YA_TIDAK,
+            'pilihan', 'pilihan_ganda' => collect(array_filter(array_map('trim', preg_split('/[,\n]+/', (string) ($acuanDipilih['opsi_teks'] ?? '')))))->mapWithKeys(fn ($o) => [$o => $o])->all(),
+            default => [],
+        };
+        $pakaiDaftarSyarat = $opsiSyarat !== [] && in_array($opSyarat, ['sama', 'tidak_sama'], true);
     @endphp
     <div class="field" style="margin-bottom:8px">
         <label>Tampilkan kolom ini <span style="color:var(--muted);font-weight:500">(keterlihatan bersyarat)</span></label>
@@ -301,21 +349,23 @@
                         <option value="{{ $nilai }}">{{ $label }}</option>
                     @endforeach
                 </select>
-                @if (($kol['syarat_operator'] ?? 'sama') !== 'terisi')
-                    @if ($acuanDipilih && in_array($acuanDipilih['tipe'] ?? '', ['pilihan', 'pilihan_ganda'], true))
+                @if (! in_array($opSyarat, \App\Models\BagianKustom::OPERATOR_TANPA_NILAI, true))
+                    @if ($pakaiDaftarSyarat)
                         <select class="inp filled" aria-label="Nilai syarat" wire:model.live="{{ $m }}.syarat_nilai">
                             <option value="">— pilih —</option>
-                            @foreach (array_filter(array_map('trim', preg_split('/[,\n]+/', (string) ($acuanDipilih['opsi_teks'] ?? '')))) as $o)
-                                <option value="{{ $o }}">{{ $o }}</option>
+                            @foreach ($opsiSyarat as $o => $labelO)
+                                <option value="{{ $o }}">{{ $labelO }}</option>
                             @endforeach
                         </select>
                     @else
-                        <input type="text" class="inp filled" aria-label="Nilai syarat" wire:model.blur="{{ $m }}.syarat_nilai" placeholder="nilai pembanding">
+                        <input type="text" class="inp filled" aria-label="Nilai syarat" wire:model.blur="{{ $m }}.syarat_nilai"
+                            placeholder="{{ match ($acuanDipilih['tipe'] ?? '') { 'tanggal' => 'mis. 2026-06-30', 'waktu' => 'mis. 14:30', 'angka', 'persentase', 'mata_uang' => 'mis. 50', default => 'nilai pembanding' } }}">
                     @endif
                 @endif
             @endif
         </div>
         @if ($galat('syarat_kunci'))<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $galat('syarat_kunci') }}</div>@endif
+        @if ($galat('syarat_operator'))<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $galat('syarat_operator') }}</div>@endif
         @if ($galat('syarat_nilai'))<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $galat('syarat_nilai') }}</div>@endif
         <div class="fhint" style="margin-top:4px">Kolom yang tersembunyi tidak wajib diisi dan isiannya tidak disimpan. Kolom acuan harus sudah disimpan (punya kode variabel).</div>
     </div>
@@ -325,7 +375,7 @@
     @endif
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between">
-        @if ($tipe !== 'hitung')
+        @if (! \App\Support\JenisKolomBagianKustom::tanpaIsian($tipe))
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
             <input type="checkbox" wire:model="{{ $m }}.wajib"> Wajib diisi{{ $tipe === 'tabel' ? ' (minimal satu baris)' : '' }}
         </label>

@@ -131,6 +131,11 @@ final class TemplateBagianKustom
         }
 
         foreach ($kolom as $k) {
+            // Teks informasi tidak menyimpan nilai — tidak ditawarkan sebagai variabel.
+            if (($k['tipe'] ?? '') === 'informasi') {
+                continue;
+            }
+
             $daftar[] = [
                 'kelompok' => 'kolom',
                 'kategori' => 'Kolom bagian ini',
@@ -163,6 +168,18 @@ final class TemplateBagianKustom
             'pilihan' => $kolom['opsi'][0] ?? 'Pilihan 1',
             'pilihan_ganda' => implode(', ', array_slice($kolom['opsi'] ?? [], 0, 2)) ?: 'Pilihan 1, Pilihan 2',
             'tanggal' => JenisKolomBagianKustom::tampilTanggal('2026-03-31', (string) ($kolom['format_tanggal'] ?? 'panjang')),
+            'mata_uang' => JenisKolomBagianKustom::tampilUang('1250000', $kolom),
+            'waktu' => '14.30',
+            'tanggal_waktu' => JenisKolomBagianKustom::tampilTanggalWaktu('2026-03-31T14:30', (string) ($kolom['format_tanggal'] ?? 'panjang')),
+            'ya_tidak' => 'Ya',
+            'email' => 'nama@bps.go.id',
+            'kode' => ($kolom['pola'] ?? 'bebas') === 'angka' ? '0012' : 'R-01',
+            'referensi' => match ($kolom['sumber'] ?? 'iku') {
+                'pengguna' => 'Nama Pengguna',
+                'tim' => 'Nama Tim',
+                default => 'IKU 1.1 — Indikator',
+            },
+            'informasi' => '',
             default => 'Contoh '.Str::lower($kolom['label']),
         };
     }
@@ -179,6 +196,14 @@ final class TemplateBagianKustom
             'pilihan_ganda' => 'pilihan ganda',
             'tanggal' => 'tanggal',
             'teks_panjang' => 'teks panjang',
+            'mata_uang' => 'mata uang',
+            'waktu' => 'waktu',
+            'tanggal_waktu' => 'tanggal & waktu',
+            'ya_tidak' => 'ya/tidak',
+            'email' => 'email',
+            'kode' => 'nomor/kode',
+            'referensi' => 'data SIPINTER',
+            'informasi' => 'teks informasi',
             default => 'teks',
         };
     }

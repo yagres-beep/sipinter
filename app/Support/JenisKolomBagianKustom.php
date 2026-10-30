@@ -20,6 +20,15 @@ use Carbon\Carbon;
  * - hitung: hasil rumus (angka kanonik), dihitung server saat disimpan — tidak diketik.
  * - tabel: JSON array baris, tiap baris {kunci_subkolom: nilai}, mis.
  *   [{"nama":"Rapat","jumlah":"3"}]. Subkolom diatur per kolom (tabel_kolom).
+ * - kode: teks apa adanya (nol di depan dipertahankan), dibatasi pola bila diatur.
+ * - email: alamat email apa adanya.
+ * - mata_uang: seperti angka (kanonik), ditampilkan "Rp 1.250.000".
+ * - waktu: "HH:MM" (24 jam).
+ * - tanggal_waktu: "YYYY-MM-DDTHH:MM".
+ * - ya_tidak: "ya" atau "tidak".
+ * - referensi: identitas data acuan (id IKU / id pengguna / nama tim), lihat
+ *   ReferensiBagianKustom — label dibaca ulang saat tampil.
+ * - informasi: tidak menyimpan nilai apa pun (teks petunjuk baca-saja di formulir).
  *
  * Format tampilan tidak pernah mengubah nilai tersimpan.
  */
@@ -28,21 +37,80 @@ final class JenisKolomBagianKustom
     public const TIPE = [
         'teks' => 'Teks pendek',
         'teks_panjang' => 'Teks panjang',
+        'kode' => 'Nomor / kode',
+        'email' => 'Email',
+        'tautan' => 'Tautan (URL)',
         'angka' => 'Angka',
+        'mata_uang' => 'Mata uang (Rp)',
         'persentase' => 'Persentase (%)',
+        'hitung' => 'Perhitungan otomatis (rumus)',
         'tanggal' => 'Tanggal',
+        'waktu' => 'Waktu (jam:menit)',
+        'tanggal_waktu' => 'Tanggal & waktu',
         'pilihan' => 'Pilihan tunggal (daftar)',
         'pilihan_ganda' => 'Pilihan ganda (centang)',
-        'tautan' => 'Tautan (URL)',
-        'hitung' => 'Perhitungan otomatis (rumus)',
+        'ya_tidak' => 'Ya / Tidak',
+        'referensi' => 'Pilih data SIPINTER (IKU, tim, pengguna)',
         'tabel' => 'Tabel (baris bisa ditambah)',
+        'informasi' => 'Teks informasi (baca-saja, tanpa isian)',
     ];
 
     /**
      * Jenis yang bisa dipakai Katalog Variabel (definisi bersama antarbagian). Tabel,
-     * rumus, persentase, dan tautan diatur langsung per kolom bagian.
+     * rumus, persentase, tautan, referensi, dan teks informasi diatur langsung per kolom.
      */
-    public const TIPE_KATALOG = ['teks', 'teks_panjang', 'angka', 'tanggal', 'pilihan', 'pilihan_ganda'];
+    public const TIPE_KATALOG = ['teks', 'teks_panjang', 'kode', 'email', 'angka', 'tanggal', 'waktu', 'tanggal_waktu', 'pilihan', 'pilihan_ganda', 'ya_tidak'];
+
+    /** Pola isian kolom Nomor / kode. */
+    public const POLA_KODE = [
+        'bebas' => 'Bebas',
+        'angka' => 'Hanya angka (nol di depan dipertahankan)',
+        'huruf_angka' => 'Huruf, angka, titik, strip, garis miring (tanpa spasi)',
+    ];
+
+    public const YA_TIDAK = ['ya' => 'Ya', 'tidak' => 'Tidak'];
+
+    /** Jenis yang tidak menerima isian pengguna (dilewati validasi & penyimpanan). */
+    public static function tanpaIsian(string $tipe): bool
+    {
+        return $tipe === 'hitung' || $tipe === 'informasi';
+    }
+
+    /** Jenis yang memakai pengaturan panjang minimal/maksimal. */
+    public static function berpanjang(string $tipe): bool
+    {
+        return in_array($tipe, ['teks', 'teks_panjang', 'kode'], true);
+    }
+
+    /**
+     * Jenis yang bisa dijadikan acuan syarat tampil kolom lain. Tabel, rumus, referensi,
+     * dan teks informasi tidak bisa (nilainya bukan satu teks yang bisa dibandingkan).
+     */
+    public static function bisaJadiAcuan(string $tipe): bool
+    {
+        return ! in_array($tipe, ['tabel', 'hitung', 'referensi', 'informasi'], true);
+    }
+
+    /** Jenis yang nilainya bisa dibandingkan "lebih besar / lebih kecil". */
+    public static function bisaDibandingkan(string $tipe): bool
+    {
+        return self::numerik($tipe) || in_array($tipe, ['tanggal', 'waktu', 'tanggal_waktu'], true);
+    }
+
+    /**
+     * Pilihan tetap untuk jenis berpilihan (dipakai syarat tampil & validasi).
+     *
+     * @param  array<string, mixed>  $kolom
+     * @return array<int, string>
+     */
+    public static function opsiTetap(array $kolom): array
+    {
+        return match ($kolom['tipe'] ?? 'teks') {
+            'ya_tidak' => array_keys(self::YA_TIDAK),
+            'pilihan', 'pilihan_ganda' => array_values((array) ($kolom['opsi'] ?? [])),
+            default => [],
+        };
+    }
 
     /** @return array<string, string> */
     public static function tipeKatalog(): array
@@ -65,7 +133,13 @@ final class JenisKolomBagianKustom
     /** Jenis bernilai angka: format, batas, ringkasan, dan rumus berlaku. */
     public static function numerik(string $tipe): bool
     {
-        return in_array($tipe, ['angka', 'persentase', 'hitung'], true);
+        return in_array($tipe, ['angka', 'persentase', 'hitung', 'mata_uang'], true);
+    }
+
+    /** Jenis angka yang diketik pengguna (bisa dipakai di rumus & batas nilai). */
+    public static function angkaIsian(string $tipe): bool
+    {
+        return in_array($tipe, ['angka', 'persentase', 'mata_uang'], true);
     }
 
     /**
@@ -162,7 +236,7 @@ final class JenisKolomBagianKustom
     }
 
     /** Batas panjang bawaan bila "panjang maksimal" tidak diatur. */
-    public const PANJANG_MAKS_BAWAAN = ['teks' => 500, 'teks_panjang' => 5000, 'tautan' => 2000];
+    public const PANJANG_MAKS_BAWAAN = ['teks' => 500, 'teks_panjang' => 5000, 'tautan' => 2000, 'kode' => 100, 'email' => 254];
 
     /**
      * Nilai kosong di formulir. Semua jenis memakai teks di formulir — pilihan ganda
@@ -229,7 +303,8 @@ final class JenisKolomBagianKustom
     {
         return match ($kolom['tipe'] ?? 'teks') {
             'pilihan_ganda' => ($daftar = self::daftarPilihan($tersimpan)) === [] ? '' : (string) json_encode($daftar, JSON_UNESCAPED_UNICODE),
-            'angka', 'persentase', 'hitung' => FormatAngkaKolom::untukInput($tersimpan, self::sebagaiAngka($kolom)),
+            'angka', 'persentase', 'hitung', 'mata_uang' => FormatAngkaKolom::untukInput($tersimpan, self::sebagaiAngka($kolom)),
+            'informasi' => '',
             'tabel' => ($baris = self::barisTabel($tersimpan)) === [] ? '' : (string) json_encode($baris, JSON_UNESCAPED_UNICODE),
             default => (string) $tersimpan,
         };
@@ -259,11 +334,37 @@ final class JenisKolomBagianKustom
         $teks = is_array($nilai) ? '' : (string) $nilai;
 
         return match ($tipe) {
-            'angka', 'persentase', 'hitung' => FormatAngkaKolom::untukDisimpan($teks, self::sebagaiAngka($kolom)),
+            'angka', 'persentase', 'hitung', 'mata_uang' => FormatAngkaKolom::untukDisimpan($teks, self::sebagaiAngka($kolom)),
             // Baris baru dipertahankan untuk teks panjang; spasi tepi dibuang.
             'teks_panjang' => trim(str_replace("\r\n", "\n", $teks)),
+            'ya_tidak' => mb_strtolower(trim($teks)),
+            'waktu' => self::waktuKanonik($teks) ?? trim($teks),
+            'tanggal_waktu' => self::tanggalWaktuKanonik($teks) ?? trim($teks),
+            'informasi' => '',
             default => trim($teks),
         };
+    }
+
+    /** "14:30" / "14:30:00" / "9:05" → "14:30"; null bila bukan waktu yang sah. */
+    public static function waktuKanonik(string $teks): ?string
+    {
+        if (! preg_match('/^(\d{1,2}):(\d{2})(?::\d{2})?$/', trim($teks), $m) || (int) $m[1] > 23 || (int) $m[2] > 59) {
+            return null;
+        }
+
+        return sprintf('%02d:%02d', (int) $m[1], (int) $m[2]);
+    }
+
+    /** "2026-10-30T14:30" / "2026-10-30 14:30:00" → "2026-10-30T14:30"; null bila tidak sah. */
+    public static function tanggalWaktuKanonik(string $teks): ?string
+    {
+        if (! preg_match('/^(\d{4}-\d{2}-\d{2})[T ](\d{1,2}:\d{2}(?::\d{2})?)$/', trim($teks), $m) || ! self::tanggalSah($m[1])) {
+            return null;
+        }
+
+        $waktu = self::waktuKanonik($m[2]);
+
+        return $waktu === null ? null : $m[1].'T'.$waktu;
     }
 
     /**
@@ -322,13 +423,67 @@ final class JenisKolomBagianKustom
 
         return match ($tipe) {
             'pilihan' => in_array($teks, $opsi, true) ? null : "Pilih salah satu opsi untuk \"{$label}\".",
-            'angka', 'persentase' => FormatAngkaKolom::pesanGalat($teks, self::sebagaiAngka($kolom)) ?? self::galatRentangAngka(self::sebagaiAngka($kolom), $teks),
-            // Dihitung server dari kolom lain — tidak pernah diketik pengguna.
-            'hitung' => null,
+            'angka', 'persentase', 'mata_uang' => FormatAngkaKolom::pesanGalat($teks, self::sebagaiAngka($kolom))
+                ?? self::galatBulat($kolom, $teks)
+                ?? self::galatRentangAngka(self::sebagaiAngka($kolom), $teks),
+            // Dihitung server dari kolom lain / bukan isian — tidak pernah diketik pengguna.
+            'hitung', 'informasi' => null,
             'tanggal' => self::tanggalSah($teks) ? null : "\"{$label}\" harus berupa tanggal yang sah.",
+            'waktu' => self::waktuKanonik($teks) !== null ? null : "\"{$label}\" harus berupa jam yang sah, mis. 14:30.",
+            'tanggal_waktu' => self::tanggalWaktuKanonik($teks) !== null ? null : "\"{$label}\" harus berupa tanggal dan jam yang sah.",
             'tautan' => self::tautanSah($teks) ? self::galatPanjang($kolom, $nilai) : "\"{$label}\" harus berupa tautan lengkap yang diawali http:// atau https://.",
+            'email' => self::emailSah($teks) ? self::galatPanjang($kolom, $nilai) : "\"{$label}\" harus berupa alamat email yang sah, mis. nama@bps.go.id.",
+            'ya_tidak' => array_key_exists(mb_strtolower($teks), self::YA_TIDAK) ? null : "Pilih Ya atau Tidak untuk \"{$label}\".",
+            'kode' => self::galatPola($kolom, $teks) ?? self::galatPanjang($kolom, $nilai),
+            'referensi' => ReferensiBagianKustom::sah((string) ($kolom['sumber'] ?? ''), $teks) ? null : "Pilih data yang tersedia untuk \"{$label}\".",
             default => self::galatPanjang($kolom, $nilai),
         };
+    }
+
+    public static function emailSah(string $teks): bool
+    {
+        return mb_strlen($teks) <= 254 && filter_var($teks, FILTER_VALIDATE_EMAIL) !== false;
+    }
+
+    /**
+     * Pola kolom Nomor / kode.
+     *
+     * @param  array<string, mixed>  $kolom
+     */
+    public static function polaCocok(array $kolom, string $teks): bool
+    {
+        return match ($kolom['pola'] ?? 'bebas') {
+            'angka' => (bool) preg_match('/^\d+$/', $teks),
+            'huruf_angka' => (bool) preg_match('#^[A-Za-z0-9][A-Za-z0-9./_-]*$#', $teks),
+            default => true,
+        };
+    }
+
+    /** @param  array<string, mixed>  $kolom */
+    private static function galatPola(array $kolom, string $teks): ?string
+    {
+        if (self::polaCocok($kolom, $teks)) {
+            return null;
+        }
+
+        $label = (string) ($kolom['label'] ?? 'Kolom');
+
+        return ($kolom['pola'] ?? 'bebas') === 'angka'
+            ? "\"{$label}\" hanya boleh berisi angka."
+            : "\"{$label}\" hanya boleh berisi huruf, angka, titik, strip, atau garis miring (tanpa spasi).";
+    }
+
+    /** @param  array<string, mixed>  $kolom */
+    private static function galatBulat(array $kolom, string $teks): ?string
+    {
+        if (! ($kolom['bulat'] ?? false)) {
+            return null;
+        }
+
+        $k = self::sebagaiAngka($kolom);
+        $angka = FormatAngkaKolom::urai($teks, FormatAngkaKolom::diatur($k) ? FormatAngkaKolom::pemisahDari($k) : null);
+
+        return $angka !== null && str_contains($angka, '.') ? '"'.($kolom['label'] ?? 'Kolom').'" harus bilangan bulat (tanpa angka di belakang koma).' : null;
     }
 
     public static function tautanSah(string $teks): bool
@@ -523,11 +678,52 @@ final class JenisKolomBagianKustom
 
         return match ($kolom['tipe'] ?? 'teks') {
             'angka', 'persentase', 'hitung' => FormatAngkaKolom::tampil($nilai, self::sebagaiAngka($kolom)),
+            'mata_uang' => self::tampilUang($nilai, $kolom),
             'tabel' => self::tampilTabel($nilai, $kolom),
             'pilihan_ganda' => implode(', ', self::daftarPilihan($nilai)),
             'tanggal' => self::tampilTanggal($nilai, (string) ($kolom['format_tanggal'] ?? 'panjang')),
+            'waktu' => self::tampilWaktu($nilai),
+            'tanggal_waktu' => self::tampilTanggalWaktu($nilai, (string) ($kolom['format_tanggal'] ?? 'panjang')),
+            'ya_tidak' => self::YA_TIDAK[mb_strtolower($nilai)] ?? $nilai,
+            'referensi' => ReferensiBagianKustom::label((string) ($kolom['sumber'] ?? ''), $nilai),
+            'informasi' => '',
             default => $nilai,
         };
+    }
+
+    /**
+     * Mata uang: "Rp 1.250.000". Satuan (mata uang) ditaruh di depan; format angka
+     * (desimal, pemisah) sama dengan kolom angka.
+     *
+     * @param  array<string, mixed>  $kolom
+     */
+    public static function tampilUang(string $nilai, array $kolom): string
+    {
+        $angka = FormatAngkaKolom::tampil($nilai, ['satuan' => null] + self::sebagaiAngka($kolom));
+        $simbol = trim((string) ($kolom['satuan'] ?? 'Rp')) ?: 'Rp';
+
+        return FormatAngkaKolom::urai($nilai, null) === null ? $nilai : $simbol.' '.$angka;
+    }
+
+    /** "14:30" → "14.30" (penulisan jam bahasa Indonesia). */
+    public static function tampilWaktu(string $nilai): string
+    {
+        $k = self::waktuKanonik($nilai);
+
+        return $k === null ? $nilai : str_replace(':', '.', $k);
+    }
+
+    public static function tampilTanggalWaktu(string $nilai, string $format): string
+    {
+        $k = self::tanggalWaktuKanonik($nilai);
+
+        if ($k === null) {
+            return $nilai;
+        }
+
+        [$tanggal, $waktu] = explode('T', $k);
+
+        return self::tampilTanggal($tanggal, $format).' pukul '.str_replace(':', '.', $waktu);
     }
 
     public static function tampilTanggal(string $nilai, string $format): string
@@ -559,16 +755,24 @@ final class JenisKolomBagianKustom
             return true;
         }
 
-        // Pilihan ganda & tabel disimpan sebagai JSON — tidak dibaca sebagai jenis lain.
-        if (in_array($tipeLama, ['pilihan_ganda', 'tabel'], true) || $tipeBaru === 'tabel') {
+        // Pilihan ganda & tabel disimpan sebagai JSON, referensi sebagai identitas data —
+        // tidak dibaca sebagai jenis lain. Teks informasi tidak menyimpan nilai, jadi
+        // kolom yang sudah berisi tidak boleh diubah menjadi teks informasi.
+        if (in_array($tipeLama, ['pilihan_ganda', 'tabel', 'referensi'], true) || in_array($tipeBaru, ['tabel', 'informasi'], true)) {
             return false;
         }
 
         return match ($tipeBaru) {
             'teks', 'teks_panjang' => true,
-            'angka', 'persentase', 'hitung' => FormatAngkaKolom::urai($nilai, null) !== null,
+            'kode' => self::polaCocok($kolomBaru, $nilai),
+            'email' => self::emailSah($nilai),
+            'angka', 'persentase', 'hitung', 'mata_uang' => FormatAngkaKolom::urai($nilai, null) !== null,
             'tautan' => self::tautanSah($nilai),
             'tanggal' => self::tanggalSah($nilai),
+            'waktu' => self::waktuKanonik($nilai) !== null,
+            'tanggal_waktu' => self::tanggalWaktuKanonik($nilai) !== null,
+            'ya_tidak' => array_key_exists(mb_strtolower($nilai), self::YA_TIDAK),
+            'referensi' => ReferensiBagianKustom::sah((string) ($kolomBaru['sumber'] ?? ''), $nilai),
             'pilihan' => in_array($nilai, (array) ($kolomBaru['opsi'] ?? []), true),
             'pilihan_ganda' => in_array($nilai, (array) ($kolomBaru['opsi'] ?? []), true),
             default => false,

@@ -18,9 +18,18 @@ final class KelengkapanBagianKustom
 
     public const SARAN = 'saran';
 
+    public const INFO = 'info';
+
+    public const LABEL_TINGKAT = [
+        self::GALAT => 'Kesalahan — perlu diperbaiki',
+        self::SARAN => 'Peringatan — bisa dipakai, periksa kembali',
+        self::INFO => 'Informasi',
+    ];
+
     /**
      * Daftar masalah konfigurasi. "galat" = bagian tidak bisa dipakai sebagaimana
-     * dimaksud; "saran" = bisa dipakai, tetapi kemungkinan belum sesuai harapan.
+     * dimaksud; "saran" = bisa dipakai, tetapi kemungkinan belum sesuai harapan;
+     * "info" = keterangan/rekomendasi, bukan masalah.
      * Setiap butir menyebut tab editor tempat memperbaikinya.
      *
      * @return array<int, array{tingkat: string, pesan: string, tab: string}>
@@ -91,7 +100,109 @@ final class KelengkapanBagianKustom
             }
         }
 
+        return [...$hasil, ...self::periksaStruktur($bagian), ...self::periksaAlur($bagian, $penempatan)];
+    }
+
+    /**
+     * Struktur formulir: kode kolom unik, syarat tampil & rumus menunjuk kolom yang ada
+     * dan aktif, teks informasi berisi, sumber referensi punya data.
+     *
+     * @return array<int, array{tingkat: string, pesan: string, tab: string}>
+     */
+    private static function periksaStruktur(BagianKustom $bagian): array
+    {
+        $hasil = [];
+        $semua = $bagian->kolomList();
+        $peta = collect($semua)->keyBy('kunci');
+
+        foreach (collect($semua)->countBy('kunci')->filter(fn ($n) => $n > 1)->keys() as $kunci) {
+            $hasil[] = self::butir(self::GALAT, 'Kode variabel kolom "'.$kunci.'" dipakai lebih dari satu kolom.', 'isian');
+        }
+
+        $diperiksa = [...array_map(fn ($k) => ['nama' => 'Kolom "'.$k['label'].'"', 'syarat' => $k['tampil_jika'] ?? null, 'aktif' => $k['aktif']], $semua),
+            ...array_map(fn ($s) => ['nama' => 'Subbagian "'.$s['nama'].'"', 'syarat' => $s['tampil_jika'] ?? null, 'aktif' => $s['aktif']], $bagian->subbagianList())];
+
+        foreach ($diperiksa as $d) {
+            if (! $d['aktif'] || $d['syarat'] === null) {
+                continue;
+            }
+
+            $acuan = $peta->get($d['syarat']['kunci']);
+
+            if ($acuan === null) {
+                $hasil[] = self::butir(self::GALAT, $d['nama'].' bersyarat pada kolom {'.$d['syarat']['kunci'].'} yang sudah tidak ada, jadi tidak pernah tampil.', 'isian');
+            } elseif (! $acuan['aktif']) {
+                $hasil[] = self::butir(self::SARAN, $d['nama'].' bersyarat pada kolom "'.$acuan['label'].'" yang nonaktif — syaratnya hanya terpenuhi oleh data lama.', 'isian');
+            }
+        }
+
+        foreach ($semua as $k) {
+            if (! $k['aktif']) {
+                continue;
+            }
+
+            if ($k['tipe'] === 'hitung' && ($k['rumus'] ?? null) !== null) {
+                $hilang = array_values(array_filter(RumusBagianKustom::variabel($k['rumus']), fn ($v) => ! $peta->has($v)));
+
+                if ($hilang !== []) {
+                    $hasil[] = self::butir(self::GALAT, 'Rumus kolom "'.$k['label'].'" memakai kolom yang tidak ada: {'.implode('}, {', $hilang).'}.', 'isian');
+                }
+            }
+
+            if ($k['tipe'] === 'informasi' && ($k['isi_info'] ?? null) === null) {
+                $hasil[] = self::butir(self::GALAT, 'Teks informasi "'.$k['label'].'" belum berisi teks.', 'isian');
+            }
+
+            if ($k['tipe'] === 'referensi' && ReferensiBagianKustom::opsi((string) $k['sumber']) === []) {
+                $hasil[] = self::butir(self::SARAN, 'Kolom "'.$k['label'].'" memilih dari '.mb_strtolower(ReferensiBagianKustom::SUMBER[$k['sumber']] ?? $k['sumber']).', tetapi datanya masih kosong.', 'isian');
+            }
+        }
+
+        $aktif = array_filter($semua, fn ($k) => $k['aktif'] && ! JenisKolomBagianKustom::tanpaIsian($k['tipe']));
+
+        if ($aktif !== [] && ! collect($aktif)->contains('wajib', true)) {
+            $hasil[] = self::butir(self::INFO, 'Belum ada kolom wajib — pengisi bisa menyimpan poin hanya dengan IKU dan '.mb_strtolower($bagian->labelUraianEfektif()).'.', 'isian');
+        }
+
         return $hasil;
+    }
+
+    /**
+     * Alur kerja: setiap tahap pemeriksaan punya pemeriksa yang bisa membuka menu
+     * penempatan; keterangan alur Isian Kegiatan & notula.
+     *
+     * @param  array<int, string>  $penempatan
+     * @return array<int, array{tingkat: string, pesan: string, tab: string}>
+     */
+    private static function periksaAlur(BagianKustom $bagian, array $penempatan): array
+    {
+        $hasil = [];
+        $alur = $bagian->alurKerja();
+        $menuBeralur = array_values(array_diff($penempatan, [MenuBagianKustom::PENGISIAN]));
+
+        if (AlurBagianKustom::pakaiVerifikasi($alur)) {
+            foreach ($alur['tahapan'] as $i => $tahap) {
+                $bisaBuka = array_filter($tahap['pemeriksa'], fn ($p) => collect($menuBeralur)->contains(fn ($m) => in_array($p, MenuBagianKustom::peranDiizinkan($m), true)));
+
+                if ($bisaBuka === []) {
+                    $hasil[] = self::butir(self::GALAT, 'Tahap pemeriksaan '.($i + 1).' ("'.$tahap['label'].'") tidak punya pemeriksa yang bisa membuka menu penempatan, jadi pengajuan akan tertahan di tahap itu.', 'alur');
+                }
+            }
+
+            if (in_array(MenuBagianKustom::PENGISIAN, $penempatan, true)) {
+                $hasil[] = self::butir(self::INFO, 'Isian di menu Isian Kegiatan tetap mengikuti pengajuan Ketua Tim & Verifikasi Tim SAKIP; alur bagian ini berlaku di menu lainnya.', 'alur');
+            }
+        } elseif ($alur['notula'] === AlurBagianKustom::NOTULA_DISETUJUI && $menuBeralur !== []) {
+            $hasil[] = self::butir(self::INFO, 'Notula dibatasi "hanya yang disetujui", sedangkan alur langsung sah — di menu selain Isian Kegiatan semua isian tersimpan dianggap disetujui.', 'notula');
+        }
+
+        return $hasil;
+    }
+
+    /** Jumlah butir yang perlu perhatian (galat + saran, tanpa informasi). */
+    public static function jumlahMasalah(array $masalah): int
+    {
+        return collect($masalah)->whereIn('tingkat', [self::GALAT, self::SARAN])->count();
     }
 
     /** Ada butir bertingkat galat. */

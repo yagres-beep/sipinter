@@ -182,23 +182,27 @@
                             <span class="badge b-draft">{{ count($bagian->subbagianList()) }} subbagian</span>
                             <span class="badge b-draft">{{ $kolomAktif }} kolom{{ count($semuaKolom) > $kolomAktif ? ' (+'.(count($semuaKolom) - $kolomAktif).' nonaktif)' : '' }}</span>
                             <span class="badge b-draft">{{ $bagian->poin_count }} poin tersimpan</span>
-                            @php $masalah = $kelengkapan[$bagian->id] ?? []; @endphp
+                            @php
+                                $masalah = $kelengkapan[$bagian->id] ?? [];
+                                $jumlahMasalah = \App\Support\KelengkapanBagianKustom::jumlahMasalah($masalah);
+                            @endphp
                             @if (\App\Support\KelengkapanBagianKustom::adaGalat($masalah))
                                 <span class="badge b-tolak" data-kelengkapan="galat">⚠ Konfigurasi belum lengkap</span>
-                            @elseif ($masalah !== [])
-                                <span class="badge b-tunggu" data-kelengkapan="saran">ℹ {{ count($masalah) }} saran konfigurasi</span>
+                            @elseif ($jumlahMasalah > 0)
+                                <span class="badge b-tunggu" data-kelengkapan="saran">ℹ {{ $jumlahMasalah }} saran konfigurasi</span>
                             @else
                                 <span class="badge b-approve" data-kelengkapan="lengkap">✓ Konfigurasi lengkap</span>
                             @endif
+                            <span class="badge b-draft" title="Versi definisi — naik setiap kali pengaturan disimpan">v{{ $bagian->versiKonfigurasi() }}</span>
                         </div>
                         @if ($masalah !== [])
                             <details style="margin-top:6px;font-size:12px" @if (\App\Support\KelengkapanBagianKustom::adaGalat($masalah)) open @endif>
-                                <summary style="cursor:pointer;color:var(--muted)">Yang perlu diperiksa ({{ count($masalah) }}) — berdasarkan pengaturan tersimpan</summary>
+                                <summary style="cursor:pointer;color:var(--muted)">{{ $jumlahMasalah > 0 ? 'Yang perlu diperiksa ('.$jumlahMasalah.')' : 'Keterangan konfigurasi ('.count($masalah).')' }} — berdasarkan pengaturan tersimpan</summary>
                                 <ul style="margin:6px 0 0;padding-left:18px;line-height:1.6">
                                     @foreach ($masalah as $m)
-                                        <li>
-                                            <span style="color:{{ $m['tingkat'] === 'galat' ? 'var(--red)' : 'var(--ink)' }}">{{ $m['tingkat'] === 'galat' ? '⚠' : 'ℹ' }} {{ $m['pesan'] }}</span>
-                                            <button type="button" class="btn btn-ghost btn-sm" style="padding:1px 8px" wire:click="perbaiki({{ $bagian->id }}, '{{ $m['tab'] }}')">Perbaiki →</button>
+                                        <li data-tingkat="{{ $m['tingkat'] }}">
+                                            <span style="color:{{ $m['tingkat'] === 'galat' ? 'var(--red)' : ($m['tingkat'] === 'info' ? 'var(--muted)' : 'var(--ink)') }}">{{ ['galat' => '⚠', 'saran' => 'ℹ', 'info' => '💡'][$m['tingkat']] ?? 'ℹ' }} {{ $m['pesan'] }}</span>
+                                            <button type="button" class="btn btn-ghost btn-sm" style="padding:1px 8px" wire:click="perbaiki({{ $bagian->id }}, '{{ $m['tab'] }}')">{{ $m['tingkat'] === 'info' ? 'Buka →' : 'Perbaiki →' }}</button>
                                         </li>
                                     @endforeach
                                 </ul>
@@ -410,15 +414,58 @@
                                         <div class="fhint" style="margin-top:4px">Hanya peran pengisi. Pengaju juga bisa menarik pengajuan yang belum diperiksa.</div>
                                     </div>
                                     <div class="field">
-                                        <label>Peran pemeriksa</label>
+                                        <label>Peran pemeriksa{{ ($al['tahap_lanjut'] ?? []) !== [] ? ' — tahap 1' : '' }}</label>
                                         <div style="display:flex;gap:16px;flex-wrap:wrap">
                                             @foreach ($namaPeran as $nilai => $label)
                                                 <label style="display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer"><input type="checkbox" value="{{ $nilai }}" wire:model.live="form.{{ $bagian->id }}.alur.pemeriksa"> {{ $label }}</label>
                                             @endforeach
                                         </div>
-                                        <div class="fhint" style="margin-top:4px">Pemeriksa melihat poin yang diajukan di menu penempatan, lalu menyetujui atau mengembalikan dengan catatan.</div>
+                                        <div class="fhint" style="margin-top:4px">Pemeriksa melihat poin yang diajukan dari semua menu penempatan bagian ini, lalu menyetujui atau mengembalikan dengan catatan.</div>
                                     </div>
                                 </div>
+
+                                {{-- Pemeriksaan berjenjang: Setujui di tahap 1 meneruskan ke tahap 2, dst. --}}
+                                <div style="border:1px dashed var(--line);border-radius:10px;padding:10px 12px;margin-bottom:12px" data-tahapan-alur="{{ $bagian->id }}">
+                                    <div style="font-size:12px;font-weight:700;margin-bottom:6px">Tahapan pemeriksaan</div>
+                                    <div class="field" style="margin-bottom:8px;max-width:360px">
+                                        <label for="label-tahap1-{{ $bagian->id }}">Nama tahap 1 <span style="color:var(--muted);font-weight:500">(opsional)</span></label>
+                                        <input id="label-tahap1-{{ $bagian->id }}" type="text" class="inp filled" maxlength="60" wire:model.blur="form.{{ $bagian->id }}.alur.label_tahap1" placeholder="Pemeriksaan">
+                                    </div>
+                                    @foreach ($al['tahap_lanjut'] ?? [] as $ti => $tahap)
+                                        <div style="display:grid;grid-template-columns:minmax(160px,1fr) 2fr auto;gap:8px;align-items:end;margin-bottom:8px" wire:key="tahap-{{ $bagian->id }}-{{ $ti }}">
+                                            <div class="field" style="margin-bottom:0">
+                                                <label for="label-tahap-{{ $bagian->id }}-{{ $ti }}">Nama tahap {{ $ti + 2 }}</label>
+                                                <input id="label-tahap-{{ $bagian->id }}-{{ $ti }}" type="text" class="inp filled" maxlength="60" wire:model.blur="form.{{ $bagian->id }}.alur.tahap_lanjut.{{ $ti }}.label" placeholder="mis. Persetujuan Kepala">
+                                            </div>
+                                            <div>
+                                                <div style="font-size:11.5px;font-weight:600;margin-bottom:4px">Pemeriksa tahap {{ $ti + 2 }}</div>
+                                                <div style="display:flex;gap:14px;flex-wrap:wrap">
+                                                    @foreach ($namaPeran as $nilai => $label)
+                                                        <label style="display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer"><input type="checkbox" value="{{ $nilai }}" wire:model.live="form.{{ $bagian->id }}.alur.tahap_lanjut.{{ $ti }}.pemeriksa"> {{ $label }}</label>
+                                                    @endforeach
+                                                </div>
+                                            </div>
+                                            <button type="button" class="btn btn-red btn-sm" wire:click="hapusTahapAlur({{ $bagian->id }}, {{ $ti }})" aria-label="Hapus tahap {{ $ti + 2 }}">🗑</button>
+                                        </div>
+                                    @endforeach
+                                    @if (count($al['tahap_lanjut'] ?? []) + 1 < \App\Support\AlurBagianKustom::TAHAP_MAKS)
+                                        <button type="button" class="btn btn-ghost btn-sm" wire:click="tambahTahapAlur({{ $bagian->id }})">＋ Tambah tahap pemeriksaan</button>
+                                    @endif
+                                    <div class="fhint" style="margin-top:6px">Contoh: tahap 1 Tim SAKIP memeriksa, tahap 2 Kepala menyetujui. "Kembalikan" di tahap mana pun mengembalikan poin ke pengisi; pengajuan ulang mulai lagi dari tahap 1. Pengajuan hanya bisa ditarik sebelum tahap 1 menyetujui.</div>
+                                </div>
+
+                                <details style="margin-bottom:12px">
+                                    <summary style="cursor:pointer;font-size:12px;font-weight:700">Label status (opsional)</summary>
+                                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:8px">
+                                        @foreach (\App\Support\AlurBagianKustom::LABEL_STATUS as $kodeStatus => $labelBawaan)
+                                            <div class="field" style="margin-bottom:0">
+                                                <label for="label-status-{{ $bagian->id }}-{{ $kodeStatus }}" style="font-size:11.5px">{{ $labelBawaan }}</label>
+                                                <input id="label-status-{{ $bagian->id }}-{{ $kodeStatus }}" type="text" class="inp filled" maxlength="60" wire:model.blur="form.{{ $bagian->id }}.alur.label_status.{{ $kodeStatus }}" placeholder="{{ $labelBawaan }}">
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                    <div class="fhint" style="margin-top:4px">Hanya mengganti teks yang tampil. Identitas status (draf, diajukan, disetujui, dikembalikan) tetap, jadi data lama tidak terpengaruh.</div>
+                                </details>
                                 <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;margin-bottom:12px">
                                     <input type="checkbox" wire:model.live="form.{{ $bagian->id }}.alur.ubah_setelah_disetujui">
                                     Pengisi boleh mengubah poin yang sudah disetujui (poin kembali menjadi draf dan harus diajukan ulang)
@@ -432,7 +479,7 @@
                                             @foreach (\App\Support\AlurBagianKustom::TRANSISI as $aksiAlur => [$dari, $ke])
                                                 <tr>
                                                     <td style="padding:4px 8px;border-bottom:1px solid var(--line2);font-weight:600">{{ ['ajukan' => 'Ajukan', 'tarik' => 'Tarik pengajuan', 'setujui' => 'Setujui', 'kembalikan' => 'Kembalikan untuk diperbaiki'][$aksiAlur] }}</td>
-                                                    <td style="padding:4px 8px;border-bottom:1px solid var(--line2)">{{ in_array($aksiAlur, ['ajukan', 'tarik'], true) ? 'Pengaju' : 'Pemeriksa' }}</td>
+                                                    <td style="padding:4px 8px;border-bottom:1px solid var(--line2)">{{ in_array($aksiAlur, ['ajukan', 'tarik'], true) ? 'Pengaju' : (($al['tahap_lanjut'] ?? []) !== [] ? ($aksiAlur === 'setujui' ? 'Pemeriksa tahap berjalan (tahap terakhir → Disetujui)' : 'Pemeriksa tahap berjalan') : 'Pemeriksa') }}</td>
                                                     <td style="padding:4px 8px;border-bottom:1px solid var(--line2)">{{ collect($dari)->map(fn ($s) => \App\Support\AlurBagianKustom::LABEL_STATUS[$s])->implode(' / ') }}</td>
                                                     <td style="padding:4px 8px;border-bottom:1px solid var(--line2)">{{ \App\Support\AlurBagianKustom::LABEL_STATUS[$ke] }}</td>
                                                 </tr>
@@ -600,8 +647,14 @@
                                         </div>
                                     </div>
                                     @php
-                                        $acuanSub = collect($f['kolom'] ?? [])->filter(fn ($k) => filled($k['kunci'] ?? null) && ($k['subbagian'] ?? '') !== $sub['kunci'] && ! in_array($k['tipe'] ?? '', ['tabel', 'hitung'], true))->values();
+                                        $acuanSub = collect($f['kolom'] ?? [])->filter(fn ($k) => filled($k['kunci'] ?? null) && ($k['subbagian'] ?? '') !== $sub['kunci'] && \App\Support\JenisKolomBagianKustom::bisaJadiAcuan($k['tipe'] ?? ''))->values();
                                         $acuanSubDipilih = $acuanSub->firstWhere('kunci', $sub['syarat_kunci'] ?? '');
+                                        $opSub = $sub['syarat_operator'] ?? 'sama';
+                                        $opsiSub = match ($acuanSubDipilih['tipe'] ?? '') {
+                                            'ya_tidak' => \App\Support\JenisKolomBagianKustom::YA_TIDAK,
+                                            'pilihan', 'pilihan_ganda' => collect(array_filter(array_map('trim', preg_split('/[,\n]+/', (string) ($acuanSubDipilih['opsi_teks'] ?? '')))))->mapWithKeys(fn ($o) => [$o => $o])->all(),
+                                            default => [],
+                                        };
                                     @endphp
                                     <div class="field" style="margin-bottom:8px">
                                         <label>Tampilkan subbagian ini <span style="color:var(--muted);font-weight:500">(keterlihatan bersyarat)</span></label>
@@ -618,12 +671,12 @@
                                                         <option value="{{ $nilai }}">{{ $label }}</option>
                                                     @endforeach
                                                 </select>
-                                                @if (($sub['syarat_operator'] ?? 'sama') !== 'terisi')
-                                                    @if ($acuanSubDipilih && in_array($acuanSubDipilih['tipe'] ?? '', ['pilihan', 'pilihan_ganda'], true))
+                                                @if (! in_array($opSub, \App\Models\BagianKustom::OPERATOR_TANPA_NILAI, true))
+                                                    @if ($opsiSub !== [] && in_array($opSub, ['sama', 'tidak_sama'], true))
                                                         <select class="inp filled" aria-label="Nilai syarat subbagian" wire:model.live="form.{{ $bagian->id }}.subbagian.{{ $si }}.syarat_nilai">
                                                             <option value="">— pilih —</option>
-                                                            @foreach (array_filter(array_map('trim', preg_split('/[,\n]+/', (string) ($acuanSubDipilih['opsi_teks'] ?? '')))) as $o)
-                                                                <option value="{{ $o }}">{{ $o }}</option>
+                                                            @foreach ($opsiSub as $o => $labelO)
+                                                                <option value="{{ $o }}">{{ $labelO }}</option>
                                                             @endforeach
                                                         </select>
                                                     @else
@@ -634,6 +687,7 @@
                                         </div>
                                         @error("form.{$bagian->id}.subbagian.{$si}.syarat_kunci")<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>@enderror
                                         @error("form.{$bagian->id}.subbagian.{$si}.syarat_nilai")<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>@enderror
+                                        @error("form.{$bagian->id}.subbagian.{$si}.syarat_operator")<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>@enderror
                                     </div>
                                     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:10px">
                                         <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
@@ -746,6 +800,46 @@
 
                         {{-- TAB 4: PRATINJAU --}}
                         @elseif ($tab === 'pratinjau')
+                            @php
+                                $periksaTerbit = \App\Support\KelengkapanBagianKustom::periksa($bagian);
+                                $alurSimulasi = $bagian->alurKerja();
+                            @endphp
+                            <div style="font-size:12px;font-weight:700;margin-bottom:6px">🔎 Pemeriksaan sebelum diterbitkan</div>
+                            <div data-periksa-terbit="{{ $bagian->id }}" style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:16px;font-size:12.5px">
+                                @if ($periksaTerbit === [])
+                                    <div style="color:var(--green)">✓ Tidak ada kesalahan, peringatan, maupun catatan pada pengaturan tersimpan.</div>
+                                @else
+                                    @foreach (\App\Support\KelengkapanBagianKustom::LABEL_TINGKAT as $tingkat => $labelTingkat)
+                                        @php $butirTingkat = array_values(array_filter($periksaTerbit, fn ($m) => $m['tingkat'] === $tingkat)); @endphp
+                                        @if ($butirTingkat !== [])
+                                            <div style="font-weight:700;margin:4px 0 2px;color:{{ $tingkat === 'galat' ? 'var(--red)' : 'var(--ink)' }}">{{ $labelTingkat }} ({{ count($butirTingkat) }})</div>
+                                            <ul style="margin:0 0 6px;padding-left:18px;line-height:1.6">
+                                                @foreach ($butirTingkat as $m)
+                                                    <li data-tingkat="{{ $tingkat }}">{{ $m['pesan'] }} <button type="button" class="btn btn-ghost btn-sm" style="padding:1px 8px" wire:click="perbaiki({{ $bagian->id }}, '{{ $m['tab'] }}')">Buka tab →</button></li>
+                                                @endforeach
+                                            </ul>
+                                        @endif
+                                    @endforeach
+                                @endif
+                                <div class="fhint" style="margin:6px 0 0">Diperiksa dari pengaturan <b>tersimpan</b> (versi v{{ $bagian->versiKonfigurasi() }}). Perubahan di layar yang belum disimpan diperiksa saat Anda menekan Simpan — kesalahan menolak penyimpanan, peringatan dan informasi tidak.</div>
+                            </div>
+
+                            <div style="font-size:12px;font-weight:700;margin-bottom:6px">🔁 Simulasi alur kerja (menu selain Isian Kegiatan)</div>
+                            <div data-simulasi-alur="{{ $bagian->id }}" style="font-size:12.5px;margin-bottom:16px;line-height:1.7">
+                                @if (\App\Support\AlurBagianKustom::pakaiVerifikasi($alurSimulasi))
+                                    <ol style="margin:0;padding-left:18px">
+                                        <li>{{ collect($alurSimulasi['pengaju'])->map(fn ($p) => $namaPeran[$p] ?? $p)->implode(' / ') }} menyimpan <b>{{ $alurSimulasi['label_status']['draf'] }}</b>, lalu klik Ajukan → <b>{{ $alurSimulasi['label_status']['diajukan'] }}</b>.</li>
+                                        @foreach ($alurSimulasi['tahapan'] as $ti => $tahap)
+                                            <li><b>{{ $tahap['label'] }}</b> oleh {{ collect($tahap['pemeriksa'])->map(fn ($p) => $namaPeran[$p] ?? $p)->implode(' / ') }}: Setujui → {{ $loop->last ? $alurSimulasi['label_status']['disetujui'] : 'diteruskan ke tahap '.($ti + 2) }}; Kembalikan → <b>{{ $alurSimulasi['label_status']['dikembalikan'] }}</b> (catatan wajib).</li>
+                                        @endforeach
+                                        <li>Poin yang dikembalikan diperbaiki pengisi lalu diajukan ulang dari tahap 1.</li>
+                                    </ol>
+                                @else
+                                    <div>Langsung sah saat disimpan — tanpa pengajuan maupun pemeriksaan.</div>
+                                @endif
+                                <div class="fhint" style="margin:4px 0 0">Simulasi ini hanya uraian — tidak membuat isian, tidak mengirim notifikasi, dan tidak mengunggah berkas.</div>
+                            </div>
+
                             <div style="font-size:12px;font-weight:700;margin-bottom:8px">📍 Di mana bagian ini muncul</div>
                             <ul style="font-size:12.5px;line-height:1.7;margin:0 0 16px;padding-left:18px">
                                 @forelse ($lokasi as $tempat)
@@ -835,6 +929,7 @@
                                 <div style="padding:8px 0;border-bottom:1px solid var(--line2);font-size:12.5px">
                                     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
                                         <span class="badge b-verif">{{ $r->labelAksi() }}</span>
+                                        @if ($r->versi)<span class="badge b-draft" title="Versi definisi setelah perubahan ini">v{{ $r->versi }}</span>@endif
                                         <span style="color:var(--muted)">{{ $r->created_at?->wita()->format('d/m/Y H:i') }} WITA · {{ $r->nama_pengguna ?? $r->user?->nama ?? 'Sistem' }}</span>
                                     </div>
                                     <div style="margin-top:4px">{{ $r->ringkasan }}</div>
