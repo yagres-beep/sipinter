@@ -284,7 +284,7 @@
                             @endforeach
                         </div>
                         @if ($belumDisimpan)
-                            <div class="info warn" role="status" style="font-size:12px" data-belum-disimpan="1">✎ Ada perubahan yang <b>belum disimpan</b>. Klik "💾 Simpan Pengaturan" untuk menyimpan, atau "Batal ubah" untuk membuangnya.</div>
+                            <div class="info warn" role="status" style="font-size:12px" data-belum-disimpan="1" data-pesan-keluar="Ada perubahan pengaturan Bagian Kustom yang belum disimpan. Tinggalkan halaman ini dan buang perubahannya?">✎ Ada perubahan yang <b>belum disimpan</b>. Klik "💾 Simpan Pengaturan" untuk menyimpan, atau "Batal ubah" untuk membuangnya.</div>
                         @endif
 
                         @error("form.{$bagian->id}.nama")<div style="color:var(--red);font-size:11.5px;margin-bottom:8px">{{ $message }}</div>@enderror
@@ -958,24 +958,8 @@
         @endforelse
     </div>
 
-    {{-- Peringatan meninggalkan halaman saat ada pengaturan yang belum disimpan
-         (penanda data-belum-disimpan dirender server dari perbandingan form vs database). --}}
-    @script
-    <script>
-        if (! window.__jagaBagianKustomBelumDisimpan) {
-            window.__jagaBagianKustomBelumDisimpan = true;
-            const adaPerubahan = () => document.querySelector('[data-belum-disimpan="1"]') !== null;
-            window.addEventListener('beforeunload', (e) => {
-                if (adaPerubahan()) { e.preventDefault(); e.returnValue = ''; }
-            });
-            document.addEventListener('livewire:navigate', (e) => {
-                if (adaPerubahan() && ! confirm('Ada perubahan pengaturan Bagian Kustom yang belum disimpan. Tinggalkan halaman ini dan buang perubahannya?')) {
-                    e.preventDefault();
-                }
-            });
-        }
-    </script>
-    @endscript
+    {{-- Penanda data-belum-disimpan="1" dibaca oleh penjaga navigasi global di resources/js/app.js
+         untuk menampilkan dialog konfirmasi bertema SIPINTER (<x-dialog-konfirmasi>). --}}
 
     <x-confirm-modal :show="$pendingHapusId !== null" title="Hapus Bagian?" :message="'Hapus bagian \''.$pendingHapusNama.'\'?'">
         <button type="button" class="btn btn-ghost" wire:click="batalkanHapus" wire:loading.attr="disabled" wire:target="hapus">Batal</button>

@@ -402,8 +402,83 @@ document.addEventListener('alpine:init', () => {
 window.sipinterKonfirmasi = (opsi) => window.Alpine.store('dialog')
     .tanya(typeof opsi === 'string' ? { pesan: opsi } : opsi);
 
+// Susun judul, label tombol, dan status bahaya dari isi pesan wire:confirm atau
+// atribut opsional data-confirm-title / data-confirm-ok / data-confirm-cancel / data-confirm-danger.
+const opsiKonfirmasiDariPesan = (el, pesanMentah) => {
+    const pesan = (pesanMentah || 'Apakah Anda yakin ingin melanjutkan tindakan ini?').replaceAll('\\n', '\n').trim();
+    const kalimatTanya = pesan.split('?')[0]?.trim() || '';
+
+    let judul = 'Konfirmasi';
+    let labelOk = 'Ya, lanjutkan';
+    let bahaya = el.classList.contains('btn-red');
+
+    if (/^hapus\b/i.test(pesan)) {
+        judul = kalimatTanya.length > 0 && kalimatTanya.length <= 42 ? `${kalimatTanya}?` : 'Konfirmasi Hapus';
+        labelOk = 'Hapus';
+        bahaya = true;
+    } else if (/^nonaktifkan\b/i.test(pesan)) {
+        judul = /^nonaktifkan variabel\b/i.test(pesan) ? 'Nonaktifkan Variabel?' : 'Nonaktifkan Bagian?';
+        labelOk = 'Nonaktifkan';
+        bahaya = true;
+    } else if (/^buat bagian baru\b/i.test(pesan) || /^duplikasi\b/i.test(pesan)) {
+        judul = 'Duplikasi Bagian?';
+        labelOk = 'Duplikasi';
+        bahaya = false;
+    } else if (/tutup editor\?/i.test(pesan)) {
+        judul = 'Tutup Editor?';
+        labelOk = 'Tutup editor';
+        bahaya = true;
+    } else if (/^ajukan\b/i.test(pesan)) {
+        judul = 'Ajukan untuk Diperiksa?';
+        labelOk = 'Ajukan';
+        bahaya = false;
+    } else if (/^tarik pengajuan\b/i.test(pesan)) {
+        judul = 'Tarik Pengajuan?';
+        labelOk = 'Tarik pengajuan';
+        bahaya = false;
+    }
+
+    if (el.dataset.confirmTitle) judul = el.dataset.confirmTitle;
+    if (el.dataset.confirmOk) labelOk = el.dataset.confirmOk;
+    if (el.dataset.confirmDanger !== undefined) bahaya = el.dataset.confirmDanger !== 'false';
+
+    return {
+        judul,
+        pesan,
+        labelOk,
+        labelBatal: el.dataset.confirmCancel || 'Batal',
+        bahaya,
+    };
+};
+
+// Ganti wire:confirm bawaan Livewire (yang memanggil window.confirm() native browser di luar
+// tema web) supaya selalu merender modal bertema SIPINTER (<x-dialog-konfirmasi>).
+const pasangKonfirmasiLivewire = () => window.Livewire.hook('directive.init', ({ el, directive, cleanup }) => {
+    if (directive.value !== 'confirm') return;
+
+    el.__livewire_confirm = (action, instead) => {
+        const atributAktif = Array.from(el.attributes).find(
+            (at) => at.name === 'wire:confirm' || at.name.startsWith('wire:confirm.')
+        );
+        if (! atributAktif) {
+            action();
+            return;
+        }
+        instead();
+        window.sipinterKonfirmasi(opsiKonfirmasiDariPesan(el, atributAktif.value)).then((ok) => {
+            if (ok) action();
+        });
+    };
+
+    cleanup(() => {
+        delete el.__livewire_confirm;
+    });
+});
+window.Livewire ? pasangKonfirmasiLivewire() : document.addEventListener('livewire:init', pasangKonfirmasiLivewire);
+
 // Penjaga "jangan sampai perubahan hilang". <x-status-simpan> menandai dirinya dengan
-// atribut data-kotor selama ada perubahan yang belum disimpan. Semua cara meninggalkan
+// atribut data-kotor selama ada perubahan yang belum disimpan (atau [data-belum-disimpan="1"]
+// pada editor pengaturan Bagian Kustom). Semua cara meninggalkan
 // halaman yang bisa dicegat dari dalam halaman — menu (wire:navigate), tautan biasa,
 // form (mis. Keluar), dan F5 / Ctrl+R — meminta konfirmasi lewat dialog bertema.
 // Hanya tombol reload/tutup tab milik browser sendiri yang tidak bisa dicegat; untuk
@@ -412,11 +487,12 @@ window.sipinterKonfirmasi = (opsi) => window.Alpine.store('dialog')
 let lewatiPenjaga = false;
 window.sipinterLewatiPenjaga = () => { lewatiPenjaga = true; };
 
-const adaPerubahan = () => ! lewatiPenjaga && document.querySelector('.status-simpan[data-kotor]') !== null;
+const elemenPerubahan = () => document.querySelector('.status-simpan[data-kotor], [data-belum-disimpan="1"]');
+const adaPerubahan = () => ! lewatiPenjaga && elemenPerubahan() !== null;
 const tanyaTinggalkan = () => window.sipinterKonfirmasi({
     judul: 'Tinggalkan Halaman?',
-    // Pesan khusus halaman lewat <x-status-simpan pesan-keluar="…">.
-    pesan: document.querySelector('.status-simpan[data-kotor]')?.dataset.pesanKeluar
+    // Pesan khusus halaman lewat <x-status-simpan pesan-keluar="…"> atau data-pesan-keluar.
+    pesan: elemenPerubahan()?.dataset.pesanKeluar
         || 'Ada perubahan yang belum disimpan. Bila halaman ini ditinggalkan, perubahan tersebut akan hilang.\nKlik "Simpan Draft" dulu bila ingin menyimpannya.',
     labelOk: 'Tinggalkan',
     labelBatal: 'Tetap di sini',
@@ -507,9 +583,27 @@ window.Livewire ? pasangPenjagaRespons() : document.addEventListener('livewire:i
 // SERVER ERROR" kosong yang menutupi seluruh halaman — pengguna mengira isiannya
 // hilang. Di produksi diganti notifikasi saja: halaman & isian di layar tetap utuh,
 // pengguna cukup mengulang aksinya. (Saat pengembangan jendela bawaan tetap tampil
-// karena berisi detail galat.)
+// karena berisi detail galat.) Sesi berakhir (419) juga dialihkan ke dialog bertema
+// SIPINTER, bukan confirm() bawaan browser berbahasa Inggris.
+let sesiKedaluwarsa = false;
 const pasangPenanganGalatServer = () => window.Livewire.interceptRequest(({ onError }) => {
     onError(({ response, preventDefault }) => {
+        if (response.status === 419) {
+            preventDefault();
+            if (sesiKedaluwarsa) return;
+            sesiKedaluwarsa = true;
+            window.sipinterKonfirmasi({
+                judul: 'Sesi Halaman Berakhir',
+                pesan: 'Sesi halaman ini telah berakhir karena lama tidak aktif. Muat ulang halaman sekarang?',
+                labelOk: 'Muat ulang',
+                labelBatal: 'Nanti',
+                bahaya: false,
+            }).then((ok) => {
+                sesiKedaluwarsa = false;
+                if (ok) window.location.reload();
+            });
+            return;
+        }
         if (! import.meta.env.PROD || response.status < 500) return;
         preventDefault();
         window.dispatchEvent(new CustomEvent('notify', { detail: {

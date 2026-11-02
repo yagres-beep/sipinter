@@ -1,9 +1,10 @@
 {{--
     Dialog konfirmasi global bertema SIPINTER (dipasang sekali di layout), pengganti
-    confirm() bawaan browser untuk konfirmasi yang terjadi murni di sisi klien —
-    mis. ganti periode/IKU atau meninggalkan halaman saat masih ada perubahan.
+    confirm() bawaan browser untuk konfirmasi di sisi klien maupun atribut wire:confirm
+    Livewire — mis. nonaktifkan/duplikasi bagian, hapus poin/bukti, ganti periode/IKU,
+    atau meninggalkan halaman saat masih ada perubahan.
     Dipanggil lewat window.sipinterKonfirmasi({...}) yang mengembalikan Promise<bool>
-    (lihat resources/js/app.js). Untuk konfirmasi aksi Livewire, pakai <x-confirm-modal>.
+    serta otomatis mencegat semua direktif wire:confirm (lihat resources/js/app.js).
 --}}
 <div x-data x-show="$store.dialog.buka" x-cloak class="modal-overlay" style="z-index:90"
     x-on:keydown.escape.window="$store.dialog.buka && $store.dialog.jawab(false)"
