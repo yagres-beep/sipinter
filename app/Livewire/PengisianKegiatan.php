@@ -5525,6 +5525,7 @@ class PengisianKegiatan extends Component
         // adaPerubahan dimatikan dulu supaya redirect tidak memicu peringatan
         // "perubahan belum disimpan" di browser.
         $this->adaPerubahan = false;
+        $this->dispatch('perubahan-tersimpan');
         session()->flash('terakhirDisimpan', now()->format('H:i'));
 
         $this->lupakanCachePeriodeIku();
@@ -6236,6 +6237,7 @@ class PengisianKegiatan extends Component
         }
 
         $this->adaPerubahan = false;
+        $this->dispatch('perubahan-tersimpan');
         $this->lupakanCachePeriodeIku();
 
         // Muat ulang HALAMAN PENUH (bukan cuma me-reset properti komponen) supaya

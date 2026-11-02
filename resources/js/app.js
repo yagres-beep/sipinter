@@ -410,6 +410,8 @@ window.sipinterKonfirmasi = (opsi) => window.Alpine.store('dialog')
 // itu terpaksa tetap memakai peringatan bawaan browser (beforeunload) sebagai jaring
 // pengaman terakhir — tampilan dialog tersebut memang tidak dapat diubah oleh situs.
 let lewatiPenjaga = false;
+window.sipinterLewatiPenjaga = () => { lewatiPenjaga = true; };
+
 const adaPerubahan = () => ! lewatiPenjaga && document.querySelector('.status-simpan[data-kotor]') !== null;
 const tanyaTinggalkan = () => window.sipinterKonfirmasi({
     judul: 'Tinggalkan Halaman?',
@@ -425,6 +427,37 @@ const tinggalkan = (aksi) => tanyaTinggalkan().then((ok) => {
     lewatiPenjaga = true;
     aksi();
 });
+
+// Bila perubahan berhasil disimpan di server (event perubahan-tersimpan dipancarkan),
+// bersihkan atribut data-kotor dan izinkan navigasi terprogram berikutnya tanpa peringatan.
+window.addEventListener('perubahan-tersimpan', () => {
+    lewatiPenjaga = true;
+    document.querySelectorAll('.status-simpan[data-kotor]').forEach((el) => {
+        el.removeAttribute('data-kotor');
+    });
+});
+
+// Tangkap semua redirect yang dipicu oleh Livewire (mis. simpanDraft, ajukanIsian,
+// verifikasiSelesai, dsb.) — redirect dari server adalah tindakan terprogram yang sah
+// setelah data disimpan, sehingga browser TIDAK boleh memunculkan peringatan "Leave site?".
+const pasangPenjagaRedirectLivewire = () => {
+    window.Livewire?.hook?.('effect', ({ effects }) => {
+        if (effects && effects.redirect) {
+            lewatiPenjaga = true;
+        }
+    });
+    window.Livewire?.interceptRequest?.(({ onRedirect }) => {
+        onRedirect(() => {
+            lewatiPenjaga = true;
+        });
+    });
+};
+
+if (window.Livewire) {
+    pasangPenjagaRedirectLivewire();
+} else {
+    document.addEventListener('livewire:init', pasangPenjagaRedirectLivewire);
+}
 
 // Kolom yang baru ditinggalkan baru dianggap "sampai" setelah request Livewire yang
 // membawanya sukses — lihat komitMulai() di <x-status-simpan>.
