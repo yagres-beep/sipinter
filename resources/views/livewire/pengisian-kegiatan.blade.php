@@ -71,6 +71,33 @@
         // SETIAP request komponen ini terkirim, lalu koreksi balik setelah DOM
         // selesai di-morph.
         init() {
+            // Pulihkan posisi scroll setelah simpan sementara (simpanDraft reload)
+            const tersimpanY = sessionStorage.getItem('sipinter_scroll_pengisian');
+            if (tersimpanY !== null) {
+                sessionStorage.removeItem('sipinter_scroll_pengisian');
+                const targetY = parseInt(tersimpanY, 10);
+                if (! isNaN(targetY) && targetY > 0) {
+                    if ('scrollRestoration' in history) {
+                        history.scrollRestoration = 'manual';
+                    }
+                    const pasangPosisi = () => {
+                        const maks = document.documentElement.scrollHeight - window.innerHeight;
+                        const y = Math.min(targetY, Math.max(0, maks));
+                        window.scrollTo(0, y);
+                    };
+                    pasangPosisi();
+                    this.koreksiScroll(targetY, performance.now() + 2000);
+                    requestAnimationFrame(() => {
+                        pasangPosisi();
+                        requestAnimationFrame(pasangPosisi);
+                    });
+                    setTimeout(pasangPosisi, 50);
+                    setTimeout(pasangPosisi, 150);
+                    setTimeout(pasangPosisi, 300);
+                    setTimeout(pasangPosisi, 600);
+                }
+            }
+
             Livewire.hook('commit', ({ component, respond }) => {
                 if (component !== this.$wire.__instance) return;
                 const y = window.scrollY;
@@ -424,28 +451,81 @@
                     @if (trim(mb_strtolower($block['uraian_kegiatan'])) !== trim(mb_strtolower($blokUraianInduk['uraian_kegiatan'] ?? '')))
                         <div class="fhint" style="margin:4px 0 0">Uraian tahapan ini: <b>{{ $block['uraian_kegiatan'] }}</b></div>
                     @endif
-                    <div class="filechip-grid" style="margin-top:6px">
-                        @forelse ($block['existing_bukti'] as $file)
-                            <div class="filechip {{ $file['status_verifikasi'] === 'terverifikasi' ? 'ok' : ($file['status_verifikasi'] === 'ditolak' ? 'no' : '') }}">
-                                <span class="nm">
-                                    <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" :status="$file['status_verifikasi'] ?? null" /><x-belum-di-drive :di-drive="$file['di_drive'] ?? true" :berkas-id="$file['id']" />
-                                    @if (filled($file['subfolder'] ?? null))
-                                        <span class="sub">📁 {{ $file['subfolder'] }}</span>
-                                    @endif
-                                    @if ($file['status_verifikasi'] === 'ditolak' && $file['catatan'])
-                                        <span class="sub" style="color:var(--red)">{{ $file['catatan'] }}</span>
-                                    @endif
-                                </span>
-                                <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file['id'] }}">🔍 Lihat</button>
-                                @if ($this->buktiLamaBisaDikelola($file['status_verifikasi'], true))
-                                    @include('livewire.partials._ganti-berkas', ['berkasId' => $file['id']])
-                                    <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLama', args: [{{ $i }}, {{ $file['id'] }}], tertaut: @js(filled($block['rtl_evaluasi_id'] ?? null)) }" wire:loading.class="btn-busy" wire:target="hapusBuktiLama({{ $i }}, {{ $file['id'] }})">🗑️</span>
-                                @endif
+                    @php
+                        $subfoldersAda = collect($block['existing_bukti'])->pluck('subfolder')->filter()->unique()->values();
+                    @endphp
+                    @if ($subfoldersAda->isNotEmpty())
+                        @php
+                            $berkasInduk = collect($block['existing_bukti'])->filter(fn ($f) => blank($f['subfolder'] ?? null));
+                        @endphp
+                        @if ($berkasInduk->isNotEmpty())
+                            <div class="filechip-grid" style="margin-top:6px">
+                                @foreach ($berkasInduk as $file)
+                                    <div class="filechip {{ $file['status_verifikasi'] === 'terverifikasi' ? 'ok' : ($file['status_verifikasi'] === 'ditolak' ? 'no' : '') }}">
+                                        <span class="nm">
+                                            <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" :status="$file['status_verifikasi'] ?? null" /><x-belum-di-drive :di-drive="$file['di_drive'] ?? true" :berkas-id="$file['id']" />
+                                            @if ($file['status_verifikasi'] === 'ditolak' && $file['catatan'])
+                                                <span class="sub" style="color:var(--red)">{{ $file['catatan'] }}</span>
+                                            @endif
+                                        </span>
+                                        <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file['id'] }}">🔍 Lihat</button>
+                                        @if ($this->buktiLamaBisaDikelola($file['status_verifikasi'], true))
+                                            @include('livewire.partials._ganti-berkas', ['berkasId' => $file['id']])
+                                            <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLama', args: [{{ $i }}, {{ $file['id'] }}], tertaut: @js(filled($block['rtl_evaluasi_id'] ?? null)) }" wire:loading.class="btn-busy" wire:target="hapusBuktiLama({{ $i }}, {{ $file['id'] }})">🗑️</span>
+                                        @endif
+                                    </div>
+                                @endforeach
                             </div>
-                        @empty
-                            <p style="color:var(--muted);font-size:12.5px">Belum ada bukti diunggah.</p>
-                        @endforelse
-                    </div>
+                        @endif
+                        @foreach ($subfoldersAda as $namaSub)
+                            @php
+                                $berkasSub = collect($block['existing_bukti'])->filter(fn ($f) => trim((string) ($f['subfolder'] ?? '')) === trim((string) $namaSub));
+                            @endphp
+                            <div style="margin-left:18px;margin-top:8px">
+                                <div class="foldername">↳ 📁 {{ $namaSub }}</div>
+                                <div class="filechip-grid" style="margin-top:6px;margin-left:18px">
+                                    @foreach ($berkasSub as $file)
+                                        <div class="filechip {{ $file['status_verifikasi'] === 'terverifikasi' ? 'ok' : ($file['status_verifikasi'] === 'ditolak' ? 'no' : '') }}">
+                                            <span class="nm">
+                                                <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" :status="$file['status_verifikasi'] ?? null" /><x-belum-di-drive :di-drive="$file['di_drive'] ?? true" :berkas-id="$file['id']" />
+                                                @if ($file['status_verifikasi'] === 'ditolak' && $file['catatan'])
+                                                    <span class="sub" style="color:var(--red)">{{ $file['catatan'] }}</span>
+                                                @endif
+                                            </span>
+                                            <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file['id'] }}">🔍 Lihat</button>
+                                            @if ($this->buktiLamaBisaDikelola($file['status_verifikasi'], true))
+                                                @include('livewire.partials._ganti-berkas', ['berkasId' => $file['id']])
+                                                <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLama', args: [{{ $i }}, {{ $file['id'] }}], tertaut: @js(filled($block['rtl_evaluasi_id'] ?? null)) }" wire:loading.class="btn-busy" wire:target="hapusBuktiLama({{ $i }}, {{ $file['id'] }})">🗑️</span>
+                                            @endif
+                                        </div>
+                                    @endforeach
+                                </div>
+                            </div>
+                        @endforeach
+                    @else
+                        <div class="filechip-grid" style="margin-top:6px">
+                            @forelse ($block['existing_bukti'] as $file)
+                                <div class="filechip {{ $file['status_verifikasi'] === 'terverifikasi' ? 'ok' : ($file['status_verifikasi'] === 'ditolak' ? 'no' : '') }}">
+                                    <span class="nm">
+                                        <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" :status="$file['status_verifikasi'] ?? null" /><x-belum-di-drive :di-drive="$file['di_drive'] ?? true" :berkas-id="$file['id']" />
+                                        @if (filled($file['subfolder'] ?? null))
+                                            <span class="sub">📁 {{ $file['subfolder'] }}</span>
+                                        @endif
+                                        @if ($file['status_verifikasi'] === 'ditolak' && $file['catatan'])
+                                            <span class="sub" style="color:var(--red)">{{ $file['catatan'] }}</span>
+                                        @endif
+                                    </span>
+                                    <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file['id'] }}">🔍 Lihat</button>
+                                    @if ($this->buktiLamaBisaDikelola($file['status_verifikasi'], true))
+                                        @include('livewire.partials._ganti-berkas', ['berkasId' => $file['id']])
+                                        <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLama', args: [{{ $i }}, {{ $file['id'] }}], tertaut: @js(filled($block['rtl_evaluasi_id'] ?? null)) }" wire:loading.class="btn-busy" wire:target="hapusBuktiLama({{ $i }}, {{ $file['id'] }})">🗑️</span>
+                                    @endif
+                                </div>
+                            @empty
+                                <p style="color:var(--muted);font-size:12.5px">Belum ada bukti diunggah.</p>
+                            @endforelse
+                        </div>
+                    @endif
                     @if ($bolehSusulan)
                         @include('livewire.partials._bukti-susulan', ['kunciSusulan' => 'kegiatan-'.$block['id']])
                     @endif
@@ -509,29 +589,82 @@
 
                     <div class="field" style="margin-bottom:0">
                         <label>Bukti Capaian (PDF)</label>
-                        <div class="filechip-grid">
-                            @forelse ($block['existing_bukti'] as $file)
-                                <div class="filechip {{ $file['status_verifikasi'] === 'terverifikasi' ? 'ok' : ($file['status_verifikasi'] === 'ditolak' ? 'no' : '') }}">
-                                    <span class="nm">
-                                        <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" :status="$file['status_verifikasi'] ?? null" /><x-belum-di-drive :di-drive="$file['di_drive'] ?? true" :berkas-id="$file['id']" />
-                                        @if (filled($file['subfolder'] ?? null))
-                                            <span class="sub">📁 {{ $file['subfolder'] }}</span>
-                                        @endif
-                                        @if ($file['status_verifikasi'] === 'ditolak' && $file['catatan'])
-                                            <span class="sub" style="color:var(--red)">{{ $file['catatan'] }}</span>
-                                        @endif
-                                    </span>
-                                    <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file['id'] }}">🔍 Lihat</button>
-                                    {{-- Kegiatan terkunci: berkas "Tidak Sesuai" tetap bisa diganti/dihapus. --}}
-                                    @if ($this->buktiLamaBisaDikelola($file['status_verifikasi'], true))
-                                        @include('livewire.partials._ganti-berkas', ['berkasId' => $file['id']])
-                                        <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLama', args: [{{ $i }}, {{ $file['id'] }}], tertaut: @js(filled($block['rtl_evaluasi_id'] ?? null)) }" wire:loading.class="btn-busy" wire:target="hapusBuktiLama({{ $i }}, {{ $file['id'] }})">🗑️</span>
-                                    @endif
+                        @php
+                            $subfoldersAda = collect($block['existing_bukti'])->pluck('subfolder')->filter()->unique()->values();
+                        @endphp
+                        @if ($subfoldersAda->isNotEmpty())
+                            @php
+                                $berkasInduk = collect($block['existing_bukti'])->filter(fn ($f) => blank($f['subfolder'] ?? null));
+                            @endphp
+                            @if ($berkasInduk->isNotEmpty())
+                                <div class="filechip-grid">
+                                    @foreach ($berkasInduk as $file)
+                                        <div class="filechip {{ $file['status_verifikasi'] === 'terverifikasi' ? 'ok' : ($file['status_verifikasi'] === 'ditolak' ? 'no' : '') }}">
+                                            <span class="nm">
+                                                <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" :status="$file['status_verifikasi'] ?? null" /><x-belum-di-drive :di-drive="$file['di_drive'] ?? true" :berkas-id="$file['id']" />
+                                                @if ($file['status_verifikasi'] === 'ditolak' && $file['catatan'])
+                                                    <span class="sub" style="color:var(--red)">{{ $file['catatan'] }}</span>
+                                                @endif
+                                            </span>
+                                            <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file['id'] }}">🔍 Lihat</button>
+                                            @if ($this->buktiLamaBisaDikelola($file['status_verifikasi'], true))
+                                                @include('livewire.partials._ganti-berkas', ['berkasId' => $file['id']])
+                                                <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLama', args: [{{ $i }}, {{ $file['id'] }}], tertaut: @js(filled($block['rtl_evaluasi_id'] ?? null)) }" wire:loading.class="btn-busy" wire:target="hapusBuktiLama({{ $i }}, {{ $file['id'] }})">🗑️</span>
+                                            @endif
+                                        </div>
+                                    @endforeach
                                 </div>
-                            @empty
-                                <p style="color:var(--muted);font-size:12.5px">Belum ada bukti diunggah.</p>
-                            @endforelse
-                        </div>
+                            @endif
+                            @foreach ($subfoldersAda as $namaSub)
+                                @php
+                                    $berkasSub = collect($block['existing_bukti'])->filter(fn ($f) => trim((string) ($f['subfolder'] ?? '')) === trim((string) $namaSub));
+                                @endphp
+                                <div style="margin-left:18px;margin-top:8px">
+                                    <div class="foldername">↳ 📁 {{ $namaSub }}</div>
+                                    <div class="filechip-grid" style="margin-top:6px;margin-left:18px">
+                                        @foreach ($berkasSub as $file)
+                                            <div class="filechip {{ $file['status_verifikasi'] === 'terverifikasi' ? 'ok' : ($file['status_verifikasi'] === 'ditolak' ? 'no' : '') }}">
+                                                <span class="nm">
+                                                    <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" :status="$file['status_verifikasi'] ?? null" /><x-belum-di-drive :di-drive="$file['di_drive'] ?? true" :berkas-id="$file['id']" />
+                                                    @if ($file['status_verifikasi'] === 'ditolak' && $file['catatan'])
+                                                        <span class="sub" style="color:var(--red)">{{ $file['catatan'] }}</span>
+                                                    @endif
+                                                </span>
+                                                <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file['id'] }}">🔍 Lihat</button>
+                                                @if ($this->buktiLamaBisaDikelola($file['status_verifikasi'], true))
+                                                    @include('livewire.partials._ganti-berkas', ['berkasId' => $file['id']])
+                                                    <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLama', args: [{{ $i }}, {{ $file['id'] }}], tertaut: @js(filled($block['rtl_evaluasi_id'] ?? null)) }" wire:loading.class="btn-busy" wire:target="hapusBuktiLama({{ $i }}, {{ $file['id'] }})">🗑️</span>
+                                                @endif
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            @endforeach
+                        @else
+                            <div class="filechip-grid">
+                                @forelse ($block['existing_bukti'] as $file)
+                                    <div class="filechip {{ $file['status_verifikasi'] === 'terverifikasi' ? 'ok' : ($file['status_verifikasi'] === 'ditolak' ? 'no' : '') }}">
+                                        <span class="nm">
+                                            <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" :status="$file['status_verifikasi'] ?? null" /><x-belum-di-drive :di-drive="$file['di_drive'] ?? true" :berkas-id="$file['id']" />
+                                            @if (filled($file['subfolder'] ?? null))
+                                                <span class="sub">📁 {{ $file['subfolder'] }}</span>
+                                            @endif
+                                            @if ($file['status_verifikasi'] === 'ditolak' && $file['catatan'])
+                                                <span class="sub" style="color:var(--red)">{{ $file['catatan'] }}</span>
+                                            @endif
+                                        </span>
+                                        <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file['id'] }}">🔍 Lihat</button>
+                                        {{-- Kegiatan terkunci: berkas "Tidak Sesuai" tetap bisa diganti/dihapus. --}}
+                                        @if ($this->buktiLamaBisaDikelola($file['status_verifikasi'], true))
+                                            @include('livewire.partials._ganti-berkas', ['berkasId' => $file['id']])
+                                            <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLama', args: [{{ $i }}, {{ $file['id'] }}], tertaut: @js(filled($block['rtl_evaluasi_id'] ?? null)) }" wire:loading.class="btn-busy" wire:target="hapusBuktiLama({{ $i }}, {{ $file['id'] }})">🗑️</span>
+                                        @endif
+                                    </div>
+                                @empty
+                                    <p style="color:var(--muted);font-size:12.5px">Belum ada bukti diunggah.</p>
+                                @endforelse
+                            </div>
+                        @endif
                         @if ($bolehSusulan)
                             @include('livewire.partials._bukti-susulan', ['kunciSusulan' => 'kegiatan-'.$block['id']])
                         @endif
@@ -780,31 +913,6 @@
                         </div>
                     @endif
 
-                    @if (! empty($block['existing_bukti']))
-                        <div class="filechip-grid">
-                            @foreach ($block['existing_bukti'] as $file)
-                                <div class="filechip {{ $file['status_verifikasi'] === 'terverifikasi' ? 'ok' : ($file['status_verifikasi'] === 'ditolak' ? 'no' : '') }}">
-                                    <span class="nm">
-                                        <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" :status="$file['status_verifikasi'] ?? null" /><x-belum-di-drive :di-drive="$file['di_drive'] ?? true" :berkas-id="$file['id']" />
-                                        @if (filled($file['subfolder'] ?? null))
-                                            <span class="sub">📁 {{ $file['subfolder'] }}</span>
-                                        @endif
-                                        @if ($file['status_verifikasi'] === 'ditolak' && $file['catatan'])
-                                            <span class="sub" style="color:var(--red)">{{ $file['catatan'] }}</span>
-                                        @endif
-                                    </span>
-                                    <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file['id'] }}">🔍 Lihat</button>
-                                    @if ($file['status_verifikasi'] === 'ditolak')
-                                        @include('livewire.partials._ganti-berkas', ['berkasId' => $file['id']])
-                                    @endif
-                                    @if ($file['status_verifikasi'] !== 'terverifikasi')
-                                        <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLama', args: [{{ $i }}, {{ $file['id'] }}], tertaut: @js(filled($block['rtl_evaluasi_id'] ?? null)) }" wire:loading.class="btn-busy" wire:target="hapusBuktiLama({{ $i }}, {{ $file['id'] }})">🗑️</span>
-                                    @endif
-                                </div>
-                            @endforeach
-                        </div>
-                    @endif
-
                     <div x-show="jenisTerpilih === '' || (jenisTerpilih === 'survei_sensus' && !tahapanTerisi)" x-cloak
                         class="locked-note" style="padding:14px;border:1.5px dashed var(--line);border-radius:10px;text-align:center">
                         🔒 Lengkapi pembentukan folder kegiatan<span x-show="jenisTerpilih === 'survei_sensus'"> dan tahapan</span> terlebih dahulu untuk mengunggah bukti.
@@ -842,6 +950,7 @@
                                     @foreach ($grup['folder'] as $folder)
                                         @php
                                             $berkasFolder = collect($block['bukti'] ?? [])->filter(fn ($f) => $this->tahapanBerkasBaru($block, $f) === $grup['tahapan'] && $this->subfolderBerkasBaru($block, $f) === $folder['subfolder']);
+                                            $existingFolder = $this->existingBuktiFolder($block, $grup['tahapan'], $folder, $grup['folder']);
                                             $folderInduk = $folder['urutan'] === 0;
                                         @endphp
                                         <div wire:key="folder-unggah-{{ $i }}-{{ $grup['urutan'] }}-{{ $folder['urutan'] }}" style="{{ $folderInduk ? '' : 'margin-left:18px;' }}margin-top:6px">
@@ -899,13 +1008,33 @@
 
                                             </div>
 
-                                            @if ($berkasFolder->isNotEmpty())
+                                            @if ($existingFolder->isNotEmpty() || $berkasFolder->isNotEmpty())
                                                 <div class="filechip-grid" style="margin-top:6px;margin-left:18px">
+                                                    @foreach ($existingFolder as $file)
+                                                        <div class="filechip {{ $file['status_verifikasi'] === 'terverifikasi' ? 'ok' : ($file['status_verifikasi'] === 'ditolak' ? 'no' : '') }}" wire:key="existing-bukti-{{ $file['id'] }}">
+                                                            <span class="nm">
+                                                                <x-nama-berkas :id="$file['id']" :nama="$file['nama_file']" :diunggah-oleh="$file['diunggah_oleh'] ?? null" :status="$file['status_verifikasi'] ?? null" /><x-belum-di-drive :di-drive="$file['di_drive'] ?? true" :berkas-id="$file['id']" />
+                                                                @if (filled($file['subfolder'] ?? null) && ($folderInduk || trim((string) $file['subfolder']) !== trim((string) $folder['subfolder'])))
+                                                                    <span class="sub">📁 {{ $file['subfolder'] }}</span>
+                                                                @endif
+                                                                @if ($file['status_verifikasi'] === 'ditolak' && $file['catatan'])
+                                                                    <span class="sub" style="color:var(--red)">{{ $file['catatan'] }}</span>
+                                                                @endif
+                                                            </span>
+                                                            <button type="button" class="btn btn-ghost btn-sm" @click="modalBerkas = {{ $file['id'] }}">🔍 Lihat</button>
+                                                            @if ($file['status_verifikasi'] === 'ditolak')
+                                                                @include('livewire.partials._ganti-berkas', ['berkasId' => $file['id']])
+                                                            @endif
+                                                            @if ($file['status_verifikasi'] !== 'terverifikasi')
+                                                                <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLama', args: [{{ $i }}, {{ $file['id'] }}], tertaut: @js(filled($block['rtl_evaluasi_id'] ?? null)) }" wire:loading.class="btn-busy" wire:target="hapusBuktiLama({{ $i }}, {{ $file['id'] }})">🗑️</span>
+                                                            @endif
+                                                        </div>
+                                                    @endforeach
                                                     @foreach ($berkasFolder as $fi => $file)
                                                         {{-- TANPA kelas "ok" (hijau) — berkas ini baru dipilih, belum
                                                              pernah diperiksa Tim SAKIP sama sekali, jadi belum punya
                                                              status apa-apa (bukan "Sesuai"). Hijau baru muncul begitu
-                                                             benar-benar ditandai "Sesuai" (lihat existing_bukti di atas). --}}
+                                                             benar-benar ditandai "Sesuai" (lihat existingFolder di atas). --}}
                                                         @php
                                                             $kunciBaru = $this->kunciBuktiBaru($file);
                                                             $namaTampil = $this->namaBuktiBaruKegiatan($block, $file);
@@ -1184,30 +1313,35 @@
                             </div>
                         @endif
 
-                        @if ($poin->berkas->isNotEmpty())
-                            <div style="font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.4px;margin:2px 0 6px">📤 Unggahan Mandiri Evaluasi RTL</div>
+                        @php
+                            $rtlPakaiPohonFolder = ! $tertautKegiatan && ! $evaluasiTerkunci && ! $evaluasiBolehBuktiSusulan && $polaRtl['per_kegiatan'];
+                        @endphp
+                        @if (! $rtlPakaiPohonFolder)
+                            @if ($poin->berkas->isNotEmpty())
+                                <div style="font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.4px;margin:2px 0 6px">📤 Unggahan Mandiri Evaluasi RTL</div>
+                            @endif
+                            <div class="filechip-grid">
+                                @foreach ($poin->berkas as $file)
+                                    <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}">
+                                        <span class="nm">
+                                            <x-nama-berkas :id="$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" :status="$file->status_verifikasi" /><x-belum-di-drive :di-drive="filled($file->drive_file_id) || blank($file->path)" :berkas-id="$file->id" />
+                                            @if (filled($file->tahapan) || filled($file->subfolder))
+                                                <span class="sub">📁 {{ collect([$file->tahapan, $file->subfolder])->filter()->join(' / ') }}</span>
+                                            @endif
+                                            @if ($file->status_verifikasi === 'ditolak' && $file->catatan)
+                                                <span class="sub" style="color:var(--red)">{{ $file->catatan }}</span>
+                                            @endif
+                                        </span>
+                                        @if ($file->status_verifikasi === 'ditolak' && $this->buktiLamaBisaDikelola($file->status_verifikasi, $evaluasiTerkunci))
+                                            @include('livewire.partials._ganti-berkas', ['berkasId' => $file->id])
+                                        @endif
+                                        @if ($this->buktiLamaBisaDikelola($file->status_verifikasi, $evaluasiTerkunci))
+                                            <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLamaEvaluasi', args: [{{ $poin->id }}, {{ $file->id }}] }" wire:loading.class="btn-busy" wire:target="hapusBuktiLamaEvaluasi({{ $poin->id }}, {{ $file->id }})">🗑️</span>
+                                        @endif
+                                    </div>
+                                @endforeach
+                            </div>
                         @endif
-                        <div class="filechip-grid">
-                            @foreach ($poin->berkas as $file)
-                                <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}">
-                                    <span class="nm">
-                                        <x-nama-berkas :id="$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" :status="$file->status_verifikasi" /><x-belum-di-drive :di-drive="filled($file->drive_file_id) || blank($file->path)" :berkas-id="$file->id" />
-                                        @if (filled($file->tahapan) || filled($file->subfolder))
-                                            <span class="sub">📁 {{ collect([$file->tahapan, $file->subfolder])->filter()->join(' / ') }}</span>
-                                        @endif
-                                        @if ($file->status_verifikasi === 'ditolak' && $file->catatan)
-                                            <span class="sub" style="color:var(--red)">{{ $file->catatan }}</span>
-                                        @endif
-                                    </span>
-                                    @if ($file->status_verifikasi === 'ditolak' && $this->buktiLamaBisaDikelola($file->status_verifikasi, $evaluasiTerkunci))
-                                        @include('livewire.partials._ganti-berkas', ['berkasId' => $file->id])
-                                    @endif
-                                    @if ($this->buktiLamaBisaDikelola($file->status_verifikasi, $evaluasiTerkunci))
-                                        <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLamaEvaluasi', args: [{{ $poin->id }}, {{ $file->id }}] }" wire:loading.class="btn-busy" wire:target="hapusBuktiLamaEvaluasi({{ $poin->id }}, {{ $file->id }})">🗑️</span>
-                                    @endif
-                                </div>
-                            @endforeach
-                        </div>
 
                         @if ($tertautKegiatan && ! $evaluasiBolehBuktiSusulan)
                             {{-- Satu jalur unggah: bukti realisasi poin yang sudah dilaksanakan
@@ -1302,14 +1436,34 @@
                                             @php
                                                 $berkasFolder = collect($dataRtl['bukti'] ?? [])->filter(fn ($f) => ! $polaRtl['per_kegiatan']
                                                     || ($this->tahapanBerkasBaruRtl($poin->id, $f) === $grup['tahapan'] && $this->subfolderBerkasBaruRtl($poin->id, $f) === $folder['subfolder']));
+                                                $existingFolderRtl = $this->existingBuktiFolderRtl($poin, $grup['tahapan'], $folder, $grup['folder']);
                                             @endphp
                                             <div wire:key="folder-unggah-rtl-{{ $poin->id }}-{{ $grup['urutan'] }}-{{ $folder['urutan'] }}" style="{{ $folder['urutan'] > 0 ? 'margin-left:18px;' : '' }}margin-top:6px">
                                                 @if ($grup['tahapan'] !== null || $folder['urutan'] > 0)
                                                     <div class="foldername">↳ 📁 {{ $folder['urutan'] > 0 ? $folder['subfolder'] : $grup['label'] }}</div>
                                                 @endif
 
-                                                @if ($berkasFolder->isNotEmpty())
+                                                @if ($existingFolderRtl->isNotEmpty() || $berkasFolder->isNotEmpty())
                                                     <div class="filechip-grid" style="margin-top:6px;margin-left:18px">
+                                                        @foreach ($existingFolderRtl as $file)
+                                                            <div class="filechip {{ $file->status_verifikasi === 'terverifikasi' ? 'ok' : ($file->status_verifikasi === 'ditolak' ? 'no' : '') }}" wire:key="existing-rtl-{{ $file->id }}">
+                                                                <span class="nm">
+                                                                    <x-nama-berkas :id="$file->id" :nama="$file->nama_file" :diunggah-oleh="$file->diunggah_oleh" :status="$file->status_verifikasi" /><x-belum-di-drive :di-drive="filled($file->drive_file_id) || blank($file->path)" :berkas-id="$file->id" />
+                                                                    @if (filled($file->subfolder) && ($folder['urutan'] === 0 || trim((string) $file->subfolder) !== trim((string) $folder['subfolder'])))
+                                                                        <span class="sub">📁 {{ $file->subfolder }}</span>
+                                                                    @endif
+                                                                    @if ($file->status_verifikasi === 'ditolak' && $file->catatan)
+                                                                        <span class="sub" style="color:var(--red)">{{ $file->catatan }}</span>
+                                                                    @endif
+                                                                </span>
+                                                                @if ($file->status_verifikasi === 'ditolak' && $this->buktiLamaBisaDikelola($file->status_verifikasi, $evaluasiTerkunci))
+                                                                    @include('livewire.partials._ganti-berkas', ['berkasId' => $file->id])
+                                                                @endif
+                                                                @if ($this->buktiLamaBisaDikelola($file->status_verifikasi, $evaluasiTerkunci))
+                                                                    <span class="x" style="cursor:pointer" title="Hapus bukti ini" @click="pendingHapus = { method: 'hapusBuktiLamaEvaluasi', args: [{{ $poin->id }}, {{ $file->id }}] }" wire:loading.class="btn-busy" wire:target="hapusBuktiLamaEvaluasi({{ $poin->id }}, {{ $file->id }})">🗑️</span>
+                                                                @endif
+                                                            </div>
+                                                        @endforeach
                                                         @foreach ($berkasFolder as $fi => $file)
                                                             @php
                                                                 $kunciBaru = $this->kunciBuktiBaru($file);

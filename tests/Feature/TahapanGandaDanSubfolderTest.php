@@ -549,4 +549,74 @@ class TahapanGandaDanSubfolderTest extends TestCase
 
         $this->assertSame('folder-rapat', app(FolderStructureService::class)->resolveKegiatanFolder($kegiatan, 'folder-capaian'));
     }
+
+    public function test_berkas_bukti_berada_di_dalam_folder_tempat_diupload(): void
+    {
+        $iku = $this->siapkan();
+        $periode = Periode::create(['tahun' => 2026, 'bulan' => 8, 'triwulan' => 3, 'bulan_ke' => 2, 'flag_bulan_terlewat' => false]);
+
+        $kegiatan = Kegiatan::create([
+            'iku_id' => $iku->id,
+            'periode_id' => $periode->id,
+            'uraian_kegiatan' => 'Persiapan Sakernas',
+            'jenis' => 'bukan_survei_sensus',
+            'status_dokumen' => Kegiatan::STATUS_DIKEMBALIKAN,
+        ]);
+
+        Berkas::create([
+            'ref_id' => $kegiatan->id,
+            'ref_type' => Kegiatan::class,
+            'kategori' => 'capaian',
+            'nama_file' => 'KAK Pencetakan.pdf',
+            'subfolder' => '1. Pencetakan kuesioner',
+            'status_verifikasi' => 'menunggu',
+        ]);
+
+        Berkas::create([
+            'ref_id' => $kegiatan->id,
+            'ref_type' => Kegiatan::class,
+            'kategori' => 'capaian',
+            'nama_file' => 'Surat Tugas Instruktur.pdf',
+            'subfolder' => '2. Pelaksanaan pelatihan',
+            'status_verifikasi' => 'menunggu',
+        ]);
+
+        Berkas::create([
+            'ref_id' => $kegiatan->id,
+            'ref_type' => Kegiatan::class,
+            'kategori' => 'capaian',
+            'nama_file' => 'SK Tim.pdf',
+            'subfolder' => null,
+            'status_verifikasi' => 'menunggu',
+        ]);
+
+        $test = Livewire::test(PengisianKegiatan::class)
+            ->set('tahun', 2026)
+            ->set('bulan', 8)
+            ->set('iku_id', $iku->id);
+
+        $komponen = $test->instance();
+        $block = $test->get('blocks.0');
+        $grup = $komponen->folderUnggahBlok(0);
+
+        // Subfolder 1 ("1. Pencetakan kuesioner") memuat hanya KAK Pencetakan.pdf
+        $folder1 = $grup[0]['folder'][1];
+        $buktiFolder1 = $komponen->existingBuktiFolder($block, null, $folder1, $grup[0]['folder']);
+        $this->assertSame(['KAK Pencetakan.pdf'], $buktiFolder1->pluck('nama_file')->all());
+
+        // Subfolder 2 ("2. Pelaksanaan pelatihan") memuat hanya Surat Tugas Instruktur.pdf
+        $folder2 = $grup[0]['folder'][2];
+        $buktiFolder2 = $komponen->existingBuktiFolder($block, null, $folder2, $grup[0]['folder']);
+        $this->assertSame(['Surat Tugas Instruktur.pdf'], $buktiFolder2->pluck('nama_file')->all());
+
+        // Folder induk (urutan 0) memuat SK Tim.pdf
+        $folderIndukData = $grup[0]['folder'][0];
+        $buktiFolderInduk = $komponen->existingBuktiFolder($block, null, $folderIndukData, $grup[0]['folder']);
+        $this->assertSame(['SK Tim.pdf'], $buktiFolderInduk->pluck('nama_file')->all());
+
+        // Dan di tampilan HTML, file tampil dan bisa dilihat di tempat foldernya
+        $test->assertSee('KAK Pencetakan.pdf')
+            ->assertSee('Surat Tugas Instruktur.pdf')
+            ->assertSee('SK Tim.pdf');
+    }
 }

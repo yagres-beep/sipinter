@@ -620,6 +620,19 @@ class PengisianKegiatan extends Component
             }
         }
 
+        foreach ($this->blocks[$index]['existing_bukti'] ?? [] as $ebIdx => $ebFile) {
+            if (($ebFile['subfolder'] ?? '') === $lama) {
+                $this->blocks[$index]['existing_bukti'][$ebIdx]['subfolder'] = $nama;
+            }
+        }
+
+        if (! empty($this->blocks[$index]['id'])) {
+            Berkas::where('ref_type', Kegiatan::class)
+                ->where('ref_id', $this->blocks[$index]['id'])
+                ->where('subfolder', $lama)
+                ->update(['subfolder' => $nama]);
+        }
+
         $daftar[$urutan] = $nama;
         $this->simpanSusunanFolder($index, $tahapan, null, $daftar);
     }
@@ -777,6 +790,64 @@ class PengisianKegiatan extends Component
         return $this->namaBuktiBaruAtauDefault($file, $this->namaDefaultBuktiBaru(
             'Kegiatan '.$block['uraian_kegiatan'], count($block['existing_bukti'] ?? []), $urutan, count($semua)
         ));
+    }
+
+    /**
+     * Berkas tersimpan (existing_bukti) yang berada di satu folder tertentu (tahapan & subfolder).
+     *
+     * - Subfolder (urutan > 0): hanya berkas dengan subfolder yang sama persis (case-insensitive).
+     * - Folder induk (urutan 0): berkas tanpa subfolder, atau semua berkas bila mode subfolder
+     *   tidak aktif di tahapan ini, atau berkas dengan subfolder yang sudah tidak ada di daftar
+     *   pilihan subfolder (agar berkas lama tidak hilang dari tampilan).
+     *
+     * @param  array  $block
+     * @param  ?string  $tahapan
+     * @param  array{urutan: int, subfolder: string, label: string}  $folder
+     * @param  list<array{urutan: int, subfolder: string, label: string}>  $daftarFolderGrup
+     * @return \Illuminate\Support\Collection<int, array>
+     */
+    public function existingBuktiFolder(array $block, ?string $tahapan, array $folder, array $daftarFolderGrup = []): \Illuminate\Support\Collection
+    {
+        $existing = collect($block['existing_bukti'] ?? []);
+
+        if ($existing->isEmpty()) {
+            return collect();
+        }
+
+        $isSurvei = ($block['jenis'] ?? '') === 'survei_sensus';
+
+        return $existing->filter(function (array $file) use ($block, $tahapan, $folder, $daftarFolderGrup, $isSurvei) {
+            if ($isSurvei && filled($tahapan)) {
+                $tahapanFile = $file['tahapan'] ?? ($block['tahapan_survei'] ?: null);
+                if ($tahapanFile !== null && $tahapanFile !== $tahapan) {
+                    return false;
+                }
+            }
+
+            $subFile = trim((string) ($file['subfolder'] ?? ''));
+            $urutan = (int) ($folder['urutan'] ?? 0);
+            $subFolder = trim((string) ($folder['subfolder'] ?? ''));
+
+            if ($urutan > 0) {
+                return $subFile !== '' && mb_strtolower($subFile) === mb_strtolower($subFolder);
+            }
+
+            if ($subFile === '') {
+                return true;
+            }
+
+            if (! $this->pakaiSubfolder($block, $tahapan)) {
+                return true;
+            }
+
+            $subfoldersAktif = collect($daftarFolderGrup)
+                ->pluck('subfolder')
+                ->filter()
+                ->map(fn ($s) => mb_strtolower(trim((string) $s)))
+                ->all();
+
+            return ! in_array(mb_strtolower($subFile), $subfoldersAktif, true);
+        })->values();
     }
 
     // ================================================================
@@ -973,6 +1044,59 @@ class PengisianKegiatan extends Component
         $pilihan = $this->subfolderBuktiBaru[$this->kunciBuktiBaru($file)] ?? '';
 
         return in_array($pilihan, $daftar, true) ? $pilihan : '';
+    }
+
+    /**
+     * Berkas mandiri tersimpan milik satu poin RTL yang berada di folder tertentu (tahapan & subfolder).
+     *
+     * @param  \App\Models\RtlEvaluasi  $poin
+     * @param  ?string  $tahapan
+     * @param  array{urutan: int, subfolder: string, label: string}  $folder
+     * @param  list<array{urutan: int, subfolder: string, label: string}>  $daftarFolderGrup
+     * @return \Illuminate\Support\Collection<int, \App\Models\Berkas>
+     */
+    public function existingBuktiFolderRtl(\App\Models\RtlEvaluasi $poin, ?string $tahapan, array $folder, array $daftarFolderGrup = []): \Illuminate\Support\Collection
+    {
+        $berkas = $poin->berkas ?? collect();
+
+        if ($berkas->isEmpty()) {
+            return collect();
+        }
+
+        $dataRtl = $this->evaluasi[$poin->id] ?? [];
+        $pisahTahapan = ! empty($dataRtl['pisah_tahapan']);
+
+        return $berkas->filter(function (\App\Models\Berkas $file) use ($dataRtl, $pisahTahapan, $tahapan, $folder, $daftarFolderGrup) {
+            if ($pisahTahapan && filled($tahapan)) {
+                if ($file->tahapan !== null && $file->tahapan !== $tahapan) {
+                    return false;
+                }
+            }
+
+            $subFile = trim((string) ($file->subfolder ?? ''));
+            $urutan = (int) ($folder['urutan'] ?? 0);
+            $subFolder = trim((string) ($folder['subfolder'] ?? ''));
+
+            if ($urutan > 0) {
+                return $subFile !== '' && mb_strtolower($subFile) === mb_strtolower($subFolder);
+            }
+
+            if ($subFile === '') {
+                return true;
+            }
+
+            if (! $this->pakaiSubfolder($dataRtl, $tahapan)) {
+                return true;
+            }
+
+            $subfoldersAktif = collect($daftarFolderGrup)
+                ->pluck('subfolder')
+                ->filter()
+                ->map(fn ($s) => mb_strtolower(trim((string) $s)))
+                ->all();
+
+            return ! in_array(mb_strtolower($subFile), $subfoldersAktif, true);
+        })->values();
     }
 
     public function updatedUnggahRtl($nilai, ?string $kunci = null): void
@@ -2509,6 +2633,7 @@ class PengisianKegiatan extends Component
         foreach ($this->blocks as $i => $block) {
             foreach ($block['existing_bukti'] ?? [] as $j => $f) {
                 if ($f['id'] === $berkasId) {
+                    $dataBaru['tahapan'] = $block['tahapan_survei'] ?? null;
                     array_splice($this->blocks[$i]['existing_bukti'], $j + 1 - $hapusLama, $hapusLama, [$this->maskBerkas($dataBaru)]);
                     if ($hapusLama) {
                         $this->blocks[$i]['catatan_bukti_dihapus'] = $lama->catatan ?: ($block['catatan_bukti_dihapus'] ?? null);
@@ -2652,6 +2777,7 @@ class PengisianKegiatan extends Component
                     'kode' => $berkas->kode,
                     'nama_file' => $berkas->nama_file,
                     'subfolder' => $berkas->subfolder,
+                    'tahapan' => $this->blocks[$index]['tahapan_survei'] ?? null,
                     'diunggah_oleh' => $berkas->diunggah_oleh,
                     'di_drive' => filled($berkas->drive_file_id),
                     'status_verifikasi' => $berkas->status_verifikasi,
@@ -3675,6 +3801,7 @@ class PengisianKegiatan extends Component
                     'kode' => $b->kode,
                     'nama_file' => $b->nama_file,
                     'subfolder' => $b->subfolder,
+                    'tahapan' => $kegiatan->tahapan_survei,
                     'diunggah_oleh' => $b->diunggah_oleh,
                     'di_drive' => filled($b->drive_file_id) || blank($b->path),
                     'status_verifikasi' => $b->status_verifikasi,

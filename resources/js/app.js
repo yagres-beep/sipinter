@@ -444,11 +444,18 @@ const pasangPenjagaRedirectLivewire = () => {
     window.Livewire?.hook?.('effect', ({ effects }) => {
         if (effects && effects.redirect) {
             lewatiPenjaga = true;
+            // Pertahankan posisi scroll bila redirect kembali ke isian IKU yang sama (simpan draft)
+            if (effects.redirect.includes('pengisian') && effects.redirect.includes('iku_id=') && window.scrollY > 0) {
+                sessionStorage.setItem('sipinter_scroll_pengisian', String(window.scrollY));
+            }
         }
     });
     window.Livewire?.interceptRequest?.(({ onRedirect }) => {
-        onRedirect(() => {
+        onRedirect(({ url }) => {
             lewatiPenjaga = true;
+            if (url && url.includes('pengisian') && url.includes('iku_id=') && window.scrollY > 0) {
+                sessionStorage.setItem('sipinter_scroll_pengisian', String(window.scrollY));
+            }
         });
     });
 };
@@ -458,6 +465,14 @@ if (window.Livewire) {
 } else {
     document.addEventListener('livewire:init', pasangPenjagaRedirectLivewire);
 }
+
+// Simpan posisi scroll saat tombol simpan draft diklik agar halaman tidak meloncat ke atas setelah reload
+document.addEventListener('click', (e) => {
+    const btnSimpan = e.target.closest?.('button[wire\\:click*="simpanDraft"], .status-simpan button');
+    if (btnSimpan && window.scrollY > 0) {
+        sessionStorage.setItem('sipinter_scroll_pengisian', String(window.scrollY));
+    }
+}, true);
 
 // Kolom yang baru ditinggalkan baru dianggap "sampai" setelah request Livewire yang
 // membawanya sukses — lihat komitMulai() di <x-status-simpan>.
