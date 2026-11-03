@@ -22,7 +22,18 @@ class PengaturanPengingat extends Model
     protected $fillable = [
         'jam_kirim',
         'deadline_h_minus',
+        'wa_pengingat_aktif',
+        'wa_gateway_url',
+        'wa_gateway_token',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'wa_pengingat_aktif' => 'boolean',
+            'wa_gateway_token' => 'encrypted',
+        ];
+    }
 
     /**
      * Baris pengaturan tunggal, di-cache permanen (nilainya jarang berubah) — mirip
@@ -38,6 +49,25 @@ class PengaturanPengingat extends Model
                 'deadline_h_minus' => 3,
             ])
         );
+    }
+
+    public static function ambilAman(): ?self
+    {
+        try {
+            return static::ambil();
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    public static function waPengingatAktif(): bool
+    {
+        $pengaturan = static::ambilAman();
+        if ($pengaturan && $pengaturan->wa_pengingat_aktif !== null) {
+            return (bool) $pengaturan->wa_pengingat_aktif;
+        }
+
+        return (bool) config('services.whatsapp.pengingat_aktif', false);
     }
 
     public static function lupakanCache(): void

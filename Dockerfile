@@ -1,4 +1,4 @@
-# Tahap 1 — build asset frontend (Vite/Tailwind)
+# Tahap 1 — build asset frontend (Vite/Tailwind) + dependensi wa-gateway
 FROM node:20-bookworm-slim AS assets
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -6,6 +6,9 @@ RUN npm ci
 COPY resources ./resources
 COPY vite.config.js ./
 RUN npm run build
+
+COPY wa-gateway/package.json wa-gateway/package-lock.json ./wa-gateway/
+RUN cd wa-gateway && npm ci --omit=dev
 
 # Tahap 2 — image PHP final (Nginx + PHP-FPM + LibreOffice, dijalankan lewat Supervisor)
 FROM php:8.2-fpm-bookworm
@@ -42,6 +45,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+COPY --from=assets /usr/local/bin/node /usr/local/bin/node
 
 WORKDIR /var/www/html
 
@@ -50,6 +54,7 @@ RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist --no-in
 
 COPY . .
 COPY --from=assets /app/public/build ./public/build
+COPY --from=assets /app/wa-gateway/node_modules ./wa-gateway/node_modules
 
 RUN composer dump-autoload --optimize --no-dev \
     && rm -rf public/hot \

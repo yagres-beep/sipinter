@@ -178,4 +178,50 @@ class PengaturanWhatsAppTest extends TestCase
         $this->assertFalse($user->fresh()->wa_opt_in);
         $this->assertNull($user->fresh()->wa_opt_in_at);
     }
+
+    public function test_otomatis_memakai_gateway_bawaan_bila_env_kosong(): void
+    {
+        config(['services.whatsapp.gateway_url' => null, 'services.whatsapp.gateway_token' => null]);
+        Http::fake(['http://127.0.0.1:3001/status' => Http::response($this->statusGateway('no_session'))]);
+        $this->actingAs($this->buatUser('Tim SAKIP'));
+
+        Livewire::test(PengaturanWhatsApp::class)
+            ->call('periksa')
+            ->assertSee('Belum terhubung')
+            ->assertSet('galatGateway', null);
+    }
+
+    public function test_minta_kode_pairing_dari_web(): void
+    {
+        Http::fake([
+            self::URL.'/pairing-code' => Http::response(['status' => 'waiting_qr', 'pairing_code' => 'ABCD-1234']),
+            self::URL.'/status' => Http::response($this->statusGateway('waiting_qr')),
+            self::URL.'/qr' => Http::response(['status' => 'waiting_qr', 'qr_data_url' => null]),
+        ]);
+        $this->actingAs($this->buatUser('Tim SAKIP'));
+
+        Livewire::test(PengaturanWhatsApp::class)
+            ->set('nomorPairing', '085256513989')
+            ->call('mintaKodePairing')
+            ->assertSet('kodePairing', 'ABCD-1234')
+            ->assertSee('ABCD-1234');
+
+        Http::assertSent(fn (Request $r) => $r->url() === self::URL.'/pairing-code' && $r['phone'] === '6285256513989');
+    }
+
+    public function test_toggle_pengingat_otomatis_dan_aktifkan_wa_saya_dari_web(): void
+    {
+        Http::fake([self::URL.'/send-message' => Http::response(['status' => 'queued', 'created' => true], 202)]);
+        $admin = $this->buatUser('Tim SAKIP', setuju: false, nomor: '085256513989');
+        $this->actingAs($admin);
+
+        Livewire::test(PengaturanWhatsApp::class)
+            ->call('togglePengingatOtomatis')
+            ->set('nomorTes', '085256513989')
+            ->call('aktifkanWaSayaDanKirimTes')
+            ->assertHasNoErrors();
+
+        $this->assertTrue($admin->fresh()->wa_opt_in);
+        $this->assertSame(1, RiwayatPengirimanWa::count());
+    }
 }

@@ -7,7 +7,7 @@ envsubst '${PORT}' < /etc/nginx/sites-available/default.template > /etc/nginx/si
 # Folder storage bisa kosong bila suatu saat dipasang disk/volume baru — pastikan
 # struktur yang dibutuhkan Laravel selalu ada dan bisa ditulis oleh PHP-FPM.
 mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/views \
-         storage/logs storage/app/private bootstrap/cache
+         storage/logs storage/app/private/wa-gateway bootstrap/cache
 chown -R www-data:www-data storage bootstrap/cache
 
 # Migrasi dijalankan SEBELUM cache dibangun. Bila migrasi gagal, `set -e` menghentikan

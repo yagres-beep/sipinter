@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Exceptions\WhatsAppGatewayException;
+use App\Models\PengaturanPengingat;
 use App\Models\RiwayatPengirimanWa;
 use App\Models\User;
 use App\Support\NomorWhatsApp;
@@ -30,7 +31,7 @@ class WhatsAppPengingatService
     public function antrekan(User $user, string $jenis, string $subjek, string $pesan, string $kunciKejadian): void
     {
         try {
-            if (! config('services.whatsapp.pengingat_aktif') || ! $user->wa_opt_in) {
+            if (! PengaturanPengingat::waPengingatAktif() || ! $user->wa_opt_in) {
                 return;
             }
 

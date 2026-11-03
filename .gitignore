@@ -19,6 +19,7 @@
 /.zed
 /auth.json
 /node_modules
+/wa-gateway/node_modules
 /public/build
 /public/hot
 /public/storage

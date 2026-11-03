@@ -3,28 +3,67 @@
 namespace App\Services;
 
 use App\Exceptions\WhatsAppGatewayException;
+use App\Models\PengaturanPengingat;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 
 /**
- * Klien HTTP ke gateway WhatsApp (repo sipinter-wa-gateway). Hanya dipanggil
- * dari sisi server; token tidak pernah dikirim ke browser.
- *
- * Gateway di Render Free bisa sedang tidur: permintaan pertama ditahan Render
- * sampai layanan bangun (sekitar satu menit). Karena itu aksi yang memang
- * ditunggu admin atau dijalankan scheduler memakai timeout panjang, sedangkan
- * polling status di halaman memakai timeout pendek.
+ * Klien HTTP ke gateway WhatsApp (bawaan di wa-gateway/ atau eksternal).
+ * Hanya dipanggil dari sisi server; token tidak pernah dikirim ke browser.
  */
 class WhatsAppGatewayClient
 {
+    public const URL_BAWAAN = 'http://127.0.0.1:3001';
+
     public const TIMEOUT_SINGKAT = 10;
 
     public const TIMEOUT_BANGUN = 75;
 
+    public function url(): string
+    {
+        $pengaturan = PengaturanPengingat::ambilAman();
+        if (filled($pengaturan?->wa_gateway_url)) {
+            return rtrim(trim((string) $pengaturan->wa_gateway_url), '/');
+        }
+
+        $envUrl = trim((string) config('services.whatsapp.gateway_url'));
+        if (filled($envUrl)) {
+            return rtrim($envUrl, '/');
+        }
+
+        return self::URL_BAWAAN;
+    }
+
+    public function token(): string
+    {
+        $pengaturan = PengaturanPengingat::ambilAman();
+        if (filled($pengaturan?->wa_gateway_token)) {
+            return trim((string) $pengaturan->wa_gateway_token);
+        }
+
+        $envToken = trim((string) config('services.whatsapp.gateway_token'));
+        if (filled($envToken)) {
+            return $envToken;
+        }
+
+        if ($this->memakaiGatewayBawaan()) {
+            $appKey = trim((string) config('app.key')) ?: 'sipinter-wa-gateway-default-key';
+
+            return hash_hmac('sha256', 'sipinter-wa-gateway-token', $appKey);
+        }
+
+        return '';
+    }
+
+    public function memakaiGatewayBawaan(): bool
+    {
+        return in_array($this->url(), ['http://127.0.0.1:3001', 'http://localhost:3001'], true);
+    }
+
     public function terkonfigurasi(): bool
     {
-        return filled(config('services.whatsapp.gateway_url')) && filled(config('services.whatsapp.gateway_token'));
+        return filled($this->url()) && filled($this->token());
     }
 
     public function status(int $timeout = self::TIMEOUT_SINGKAT): array
@@ -73,22 +112,24 @@ class WhatsAppGatewayClient
     protected function permintaan(string $metode, string $path, array $data, int $timeout): array
     {
         if (! $this->terkonfigurasi()) {
-            throw new WhatsAppGatewayException('Gateway WhatsApp belum dikonfigurasi (WHATSAPP_GATEWAY_URL/WHATSAPP_GATEWAY_TOKEN kosong).');
+            throw new WhatsAppGatewayException('Gateway WhatsApp belum dikonfigurasi (URL atau Token gateway kosong).');
         }
 
-        $http = Http::baseUrl(rtrim((string) config('services.whatsapp.gateway_url'), '/'))
-            ->withToken((string) config('services.whatsapp.gateway_token'))
-            ->acceptJson()
-            ->connectTimeout(min(15, $timeout))
-            ->timeout($timeout);
+        $http = $this->buatHttp($timeout);
 
         try {
             $respons = $metode === 'get' ? $http->get($path) : $http->post($path, $data);
         } catch (ConnectionException) {
-            throw new WhatsAppGatewayException(
-                'Gateway WhatsApp tidak dapat dihubungi (mungkin sedang tidur/bangun di Render). Coba lagi sebentar.',
-                bisaDiulang: true,
-            );
+            if ($this->cobaNyalakanGatewayLokal()) {
+                try {
+                    $httpUlang = $this->buatHttp($timeout);
+                    $respons = $metode === 'get' ? $httpUlang->get($path) : $httpUlang->post($path, $data);
+                } catch (ConnectionException) {
+                    throw $this->galatKoneksi();
+                }
+            } else {
+                throw $this->galatKoneksi();
+            }
         }
 
         if ($respons->successful()) {
@@ -98,6 +139,61 @@ class WhatsAppGatewayClient
         throw $this->galatDariRespons($respons);
     }
 
+    protected function buatHttp(int $timeout)
+    {
+        return Http::baseUrl($this->url())
+            ->withToken($this->token())
+            ->acceptJson()
+            ->connectTimeout(min(15, $timeout))
+            ->timeout($timeout);
+    }
+
+    protected function galatKoneksi(): WhatsAppGatewayException
+    {
+        return new WhatsAppGatewayException(
+            'Gateway WhatsApp tidak dapat dihubungi (mungkin sedang menyala/bangun). Coba lagi sebentar.',
+            bisaDiulang: true,
+        );
+    }
+
+    protected function cobaNyalakanGatewayLokal(): bool
+    {
+        if (app()->runningUnitTests() || ! $this->memakaiGatewayBawaan()) {
+            return false;
+        }
+
+        $script = base_path('wa-gateway/src/index.js');
+        if (! is_file($script)) {
+            return false;
+        }
+
+        try {
+            $cwd = base_path('wa-gateway');
+            if (PHP_OS_FAMILY === 'Windows') {
+                $cmd = 'start /B "" node '.escapeshellarg($script).' >NUL 2>&1';
+                pclose(popen('cd /d '.escapeshellarg($cwd).' && '.$cmd, 'r'));
+            } else {
+                $cmd = 'nohup node '.escapeshellarg($script).' >/dev/null 2>&1 &';
+                exec('cd '.escapeshellarg($cwd).' && '.$cmd);
+            }
+
+            // Tunggu hingga port 3001 siap menerima koneksi (maks 3 detik)
+            for ($i = 0; $i < 12; $i++) {
+                usleep(250_000);
+                $fp = @fsockopen('127.0.0.1', 3001, $errno, $errstr, 0.2);
+                if (is_resource($fp)) {
+                    fclose($fp);
+
+                    return true;
+                }
+            }
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return false;
+    }
+
     protected function galatDariRespons(Response $respons): WhatsAppGatewayException
     {
         $status = $respons->status();
@@ -105,7 +201,7 @@ class WhatsAppGatewayClient
         $pesanGateway = $respons->json('message');
 
         return match (true) {
-            $status === 401 => new WhatsAppGatewayException('Token gateway ditolak. Samakan WHATSAPP_GATEWAY_TOKEN dengan GATEWAY_API_TOKEN di gateway.', false, $status, $kode),
+            $status === 401 => new WhatsAppGatewayException('Token gateway ditolak. Samakan token gateway di pengaturan dengan GATEWAY_API_TOKEN.', false, $status, $kode),
             $status === 422 => new WhatsAppGatewayException('Gateway menolak data: '.collect((array) $respons->json('errors'))->flatten()->implode(' '), false, $status, $kode),
             $status === 409 => new WhatsAppGatewayException($pesanGateway ?: 'Permintaan ditolak gateway.', false, $status, $kode),
             $status === 429 || $status >= 500 => new WhatsAppGatewayException($pesanGateway ?: "Gateway sedang tidak siap (HTTP {$status}). Coba lagi.", true, $status, $kode),

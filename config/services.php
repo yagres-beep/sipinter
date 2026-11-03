@@ -148,7 +148,7 @@ return [
     'whatsapp' => [
         'gateway_url' => env('WHATSAPP_GATEWAY_URL'),
         'gateway_token' => env('WHATSAPP_GATEWAY_TOKEN'),
-        'pengingat_aktif' => (bool) env('WHATSAPP_PENGINGAT_AKTIF', false),
+        'pengingat_aktif' => (bool) env('WHATSAPP_PENGINGAT_AKTIF', true),
     ],
 
 ];

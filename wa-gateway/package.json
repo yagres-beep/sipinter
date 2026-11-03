@@ -1,0 +1,22 @@
+{
+  "name": "sipinter-wa-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Gateway WhatsApp (Baileys, tidak resmi) untuk pengingat SIPINTER",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test --test-concurrency=1 test/unit.test.js test/server.test.js test/connection.integration.test.js test/outbox.integration.test.js"
+  },
+  "engines": {
+    "node": ">=20.0.0 <23"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "7.0.0-rc14",
+    "express": "5.3.0",
+    "pg": "8.23.1",
+    "pino": "10.4.0",
+    "qrcode": "1.5.4"
+  }
+}
