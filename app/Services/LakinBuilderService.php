@@ -2,10 +2,17 @@
 
 namespace App\Services;
 
+use App\Models\Berkas;
 use App\Models\Capaian;
 use App\Models\CapaianTahunan;
+use App\Models\Kegiatan;
+use App\Models\KendalaSolusi;
 use App\Models\Lakin;
 use App\Models\LakinBaris;
+use App\Models\MasterIku;
+use App\Models\Periode;
+use App\Models\RtlEvaluasi;
+use App\Models\SalinanBuktiRtl;
 use Illuminate\Support\Collection;
 
 /**
@@ -78,6 +85,8 @@ class LakinBuilderService
     /**
      * Tambah/perbarui baris LAKIN HANYA untuk IKU yang eksplisit dipilih Tim SAKIP
      * (lewat checklist) — IKU yang tidak dipilih tidak pernah ikut masuk.
+     * Ikut menyalin detail tindak lanjut (kegiatan, kendala & solusi, RTL, PIC,
+     * batas waktu, tautan bukti) dari data capaian & verifikasi tahun tsb.
      *
      * @param  list<int>  $ikuIds
      */
@@ -95,30 +104,33 @@ class LakinBuilderService
 
             $urutan++;
 
+            $tindakLanjut = $this->ekstrakDataTindakLanjut($data->iku, $lakin->tahun);
+
             LakinBaris::updateOrCreate(
                 ['lakin_id' => $lakin->id, 'iku_id' => $ikuId],
-                [
+                array_merge([
                     'sasaran' => $data->iku->sasaran,
                     'indikator' => $data->iku->indikator,
                     'target' => $data->target,
                     'realisasi' => $data->realisasi,
                     'capaian_persen' => $data->capaian_persen,
                     'urutan' => $urutan,
-                ]
+                ], $tindakLanjut)
             );
         }
     }
 
     /**
-     * Segarkan ANGKA baris yang SUDAH ADA di LAKIN ini (dicocokkan lewat iku_id) dari
-     * data capaian terkini — TIDAK menambah baris baru (Tim SAKIP tetap yang memilih
-     * lewat tambahDariIku()) dan TIDAK menyentuh baris custom (iku_id kosong).
+     * Segarkan ANGKA dan DATA baris yang SUDAH ADA di LAKIN ini (dicocokkan lewat iku_id) dari
+     * data capaian & verifikasi terkini — TIDAK menambah baris baru (Tim SAKIP tetap yang memilih
+     * lewat tambahDariIku()) dan TIDAK menyentuh baris custom (iku_id kosong). Kolom tindak lanjut
+     * yang masih kosong akan diisi dengan data terverifikasi terkini.
      */
     public function segarkanBaris(Lakin $lakin): void
     {
         $tersedia = $this->ikuTersediaUntukTahun($lakin->tahun);
 
-        foreach ($lakin->baris as $baris) {
+        foreach ($lakin->baris()->get() as $baris) {
             if (! $baris->iku_id) {
                 continue;
             }
@@ -129,13 +141,232 @@ class LakinBuilderService
                 continue;
             }
 
-            $baris->update([
+            $tindakLanjut = $this->ekstrakDataTindakLanjut($data->iku, $lakin->tahun);
+
+            $updateData = [
                 'sasaran' => $data->iku->sasaran,
                 'indikator' => $data->iku->indikator,
                 'target' => $data->target,
                 'realisasi' => $data->realisasi,
                 'capaian_persen' => $data->capaian_persen,
-            ]);
+            ];
+
+            foreach (['kegiatan', 'solusi_kendala', 'rtl', 'pic', 'batas_waktu_tindak_lanjut', 'link_bukti_dukung_kinerja', 'link_rtl_sebelumnya'] as $kolom) {
+                if (blank($baris->{$kolom}) && ! blank($tindakLanjut[$kolom] ?? null)) {
+                    $updateData[$kolom] = $tindakLanjut[$kolom];
+                }
+            }
+
+            $baris->update($updateData);
         }
+    }
+
+    /**
+     * Kumpulkan data tindak lanjut (kegiatan, kendala & solusi, RTL, PIC, batas waktu,
+     * dan tautan bukti dukung) dari data terverifikasi IKU ini pada tahun bersangkutan.
+     *
+     * @return array{
+     *     kegiatan: ?string,
+     *     solusi_kendala: ?string,
+     *     rtl: ?string,
+     *     pic: ?string,
+     *     batas_waktu_tindak_lanjut: ?string,
+     *     link_bukti_dukung_kinerja: ?string,
+     *     link_rtl_sebelumnya: ?string
+     * }
+     */
+    public function ekstrakDataTindakLanjut(MasterIku $iku, int $tahun): array
+    {
+        // 1. Kegiatan: ambil dari data kegiatan terverifikasi/disetujui (atau diajukan bila belum disetujui)
+        $kegiatanQuery = Kegiatan::query()
+            ->where('iku_id', $iku->id)
+            ->whereHas('periode', fn ($q) => $q->where('tahun', $tahun));
+
+        $kegiatanList = (clone $kegiatanQuery)
+            ->whereIn('status_dokumen', [Kegiatan::STATUS_DIVERIFIKASI, Kegiatan::STATUS_DISETUJUI])
+            ->get();
+
+        if ($kegiatanList->isEmpty()) {
+            $kegiatanList = (clone $kegiatanQuery)
+                ->whereNotIn('status_dokumen', [Kegiatan::STATUS_DRAFT, Kegiatan::STATUS_DIKEMBALIKAN])
+                ->get();
+        }
+        if ($kegiatanList->isEmpty()) {
+            $kegiatanList = $kegiatanQuery->get();
+        }
+
+        Kegiatan::terapkanNamaInduk($kegiatanList);
+        $uraianList = $kegiatanList
+            ->map(fn ($k) => trim((string) ($k->uraian_kegiatan ?: $k->nama_folder_kustom ?: '')))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $kegiatanTeks = $uraianList->count() > 1
+            ? $uraianList->map(fn ($u, $i) => ($i + 1).'. '.$u)->implode("\n")
+            : ($uraianList->first() ?: null);
+
+        // 2. Kendala & Solusi: utamakan yang terverifikasi (atau tidak ditolak)
+        $ksQuery = KendalaSolusi::query()
+            ->where('iku_id', $iku->id)
+            ->whereHas('periode', fn ($q) => $q->where('tahun', $tahun));
+
+        $ksList = (clone $ksQuery)
+            ->where('status_verifikasi', 'terverifikasi')
+            ->get();
+
+        if ($ksList->isEmpty()) {
+            $ksList = (clone $ksQuery)
+                ->where('status_verifikasi', '!=', 'ditolak')
+                ->get();
+        }
+        if ($ksList->isEmpty()) {
+            $ksList = $ksQuery->get();
+        }
+
+        $poinKsList = $ksList->map(function ($ks) {
+            $kendala = trim((string) ($ks->kendala ?? ''));
+            $solusi = trim((string) ($ks->solusi ?? ''));
+
+            if ($kendala !== '' && $solusi !== '') {
+                return "Kendala: {$kendala}\nSolusi: {$solusi}";
+            } elseif ($kendala !== '') {
+                return "Kendala: {$kendala}";
+            } elseif ($solusi !== '') {
+                return "Solusi: {$solusi}";
+            }
+
+            return null;
+        })->filter()->unique()->values();
+
+        if ($poinKsList->count() > 1) {
+            $solusiKendalaTeks = $poinKsList->map(function ($item, $i) {
+                $nomor = ($i + 1).'. ';
+                $indent = str_repeat(' ', strlen($nomor));
+                $baris = explode("\n", $item);
+                $baris[0] = $nomor.$baris[0];
+                for ($b = 1; $b < count($baris); $b++) {
+                    $baris[$b] = $indent.$baris[$b];
+                }
+
+                return implode("\n", $baris);
+            })->implode("\n");
+        } elseif ($poinKsList->count() === 1) {
+            $solusiKendalaTeks = $poinKsList->first();
+        } else {
+            $solusiKendalaTeks = null;
+        }
+
+        // 3. RTL: utamakan yang terverifikasi (atau tidak ditolak)
+        $rtlQuery = RtlEvaluasi::query()
+            ->where('iku_id', $iku->id)
+            ->whereHas('periode', fn ($q) => $q->where('tahun', $tahun));
+
+        $rtlList = (clone $rtlQuery)
+            ->where('status_verifikasi', 'terverifikasi')
+            ->get();
+
+        if ($rtlList->isEmpty()) {
+            $rtlList = (clone $rtlQuery)
+                ->where('status_verifikasi', '!=', 'ditolak')
+                ->get();
+        }
+        if ($rtlList->isEmpty()) {
+            $rtlList = $rtlQuery->get();
+        }
+
+        $rtlTeksList = $rtlList
+            ->map(fn ($r) => trim((string) ($r->rtl_teks ?? '')))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $rtlTeks = $rtlTeksList->count() > 1
+            ? $rtlTeksList->map(fn ($item, $i) => ($i + 1).'. '.$item)->implode("\n")
+            : ($rtlTeksList->first() ?: null);
+
+        // 4. PIC: dari RTL atau fallback ke Tim IKU
+        $picList = $rtlList->pluck('pic')->map(fn ($p) => trim((string) ($p ?? '')))->filter()->unique()->values();
+        if ($picList->isNotEmpty()) {
+            $pic = $picList->join(', ');
+        } else {
+            $timList = $iku->namaTimList();
+            $pic = ! empty($timList) ? implode(', ', $timList) : ($iku->tim ?: null);
+        }
+
+        // 5. Batas Waktu Tindak Lanjut: tanggal RTL terjauh atau akhir tahun jika ada RTL
+        $batasWaktu = $rtlList
+            ->pluck('batas_waktu')
+            ->filter()
+            ->sort()
+            ->last()?->format('Y-m-d');
+
+        if (! $batasWaktu && $rtlTeks !== null) {
+            $batasWaktu = "{$tahun}-12-31";
+        }
+
+        // 6. Link Bukti Dukung Kinerja: folder Drive kegiatan, berkas Drive capaian, atau tautan folder IKU
+        $linkBukti = null;
+        $folderId = $kegiatanList->whereNotNull('drive_folder_id')->pluck('drive_folder_id')->first();
+        if ($folderId) {
+            $linkBukti = "https://drive.google.com/drive/folders/{$folderId}";
+        } else {
+            $berkas = Berkas::where('kategori', 'capaian')
+                ->whereNotNull('drive_file_id')
+                ->whereHasMorph('ref', [Kegiatan::class], fn ($q) => $q->where('iku_id', $iku->id)->whereHas('periode', fn ($p) => $p->where('tahun', $tahun)))
+                ->first();
+
+            if ($berkas) {
+                $linkBukti = "https://drive.google.com/file/d/{$berkas->drive_file_id}/view";
+            }
+        }
+
+        if (! $linkBukti) {
+            try {
+                $periode = Periode::where('tahun', $tahun)->orderByDesc('triwulan')->orderByDesc('bulan')->first()
+                    ?? new Periode(['tahun' => $tahun, 'triwulan' => 4]);
+                $linkBukti = app(FolderStructureService::class)->linkKategoriIku($periode, $iku, 'capaian')
+                    ?? app(FolderStructureService::class)->linkBuktiDukungIku($periode, $iku);
+            } catch (\Throwable) {
+            }
+        }
+
+        // 7. Link RTL Sebelumnya: salinan bukti RTL di Drive, berkas evaluasi RTL, atau folder evaluasi RTL
+        $linkRtl = null;
+        $salinan = SalinanBuktiRtl::whereNotNull('drive_file_id')
+            ->whereHas('rtlEvaluasi', fn ($q) => $q->where('iku_id', $iku->id)->whereHas('periode', fn ($p) => $p->where('tahun', $tahun)))
+            ->first();
+
+        if ($salinan) {
+            $linkRtl = "https://drive.google.com/file/d/{$salinan->drive_file_id}/view";
+        } else {
+            $berkasRtl = Berkas::where('kategori', 'evaluasi_rtl')
+                ->whereNotNull('drive_file_id')
+                ->whereHasMorph('ref', [RtlEvaluasi::class], fn ($q) => $q->where('iku_id', $iku->id)->whereHas('periode', fn ($p) => $p->where('tahun', $tahun)))
+                ->first();
+
+            if ($berkasRtl) {
+                $linkRtl = "https://drive.google.com/file/d/{$berkasRtl->drive_file_id}/view";
+            }
+        }
+
+        if (! $linkRtl) {
+            try {
+                $periode = Periode::where('tahun', $tahun)->orderByDesc('triwulan')->orderByDesc('bulan')->first()
+                    ?? new Periode(['tahun' => $tahun, 'triwulan' => 4]);
+                $linkRtl = app(FolderStructureService::class)->linkKategoriIku($periode, $iku, 'evaluasi_rtl');
+            } catch (\Throwable) {
+            }
+        }
+
+        return [
+            'kegiatan' => $kegiatanTeks,
+            'solusi_kendala' => $solusiKendalaTeks,
+            'rtl' => $rtlTeks,
+            'pic' => $pic,
+            'batas_waktu_tindak_lanjut' => $batasWaktu,
+            'link_bukti_dukung_kinerja' => $linkBukti,
+            'link_rtl_sebelumnya' => $linkRtl,
+        ];
     }
 }

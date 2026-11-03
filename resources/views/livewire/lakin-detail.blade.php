@@ -664,8 +664,8 @@
     @endif
 
     {{-- Modal Konfirmasi Segarkan --}}
-    <x-confirm-modal :show="$showSegarkanConfirm" title="Segarkan Angka?" :danger="false"
-        message="Segarkan angka baris yang sudah ada dari data capaian terbaru? Baris custom tidak berubah, dan ini tidak menambah baris baru.">
+    <x-confirm-modal :show="$showSegarkanConfirm" title="Segarkan Data Rekap?" :danger="false"
+        message="Segarkan angka dan rincian tindak lanjut (kegiatan, kendala &amp; solusi, RTL, PIC, tautan bukti) dari data capaian &amp; verifikasi terbaru? Baris custom dan kolom yang sudah Anda sunting tidak akan berubah.">
         <button type="button" class="btn btn-ghost" wire:click="batalkanSegarkan" wire:loading.attr="disabled" wire:target="segarkanAngka">Batal</button>
         <button type="button" class="btn btn-primary" wire:click="segarkanAngka" wire:loading.attr="disabled" wire:target="segarkanAngka">
             <span wire:loading.remove wire:target="segarkanAngka">Segarkan</span>

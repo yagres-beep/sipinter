@@ -67,6 +67,15 @@ class LakinDetail extends Component
     public function mount(Lakin $lakin): void
     {
         $this->lakin = $lakin->load('baris');
+
+        // Bila ada baris IKU yang kolom tindak lanjutnya masih kosong (mis. dibentuk
+        // sebelum otomatisasi tindak lanjut), segarkan otomatis agar data kegiatan,
+        // kendala & solusi, RTL, dan link terverifikasi langsung terisi ke tabel.
+        if ($this->adaBarisIkuKosong()) {
+            app(LakinBuilderService::class)->segarkanBaris($this->lakin);
+            $this->lakin->load('baris');
+        }
+
         $this->muatEdit();
 
         $this->ikuTerpilihUntukTambah = $this->ikuBelumDitambahkan()
@@ -74,6 +83,18 @@ class LakinDetail extends Component
             ->pluck('iku.id')
             ->values()
             ->all();
+    }
+
+    protected function adaBarisIkuKosong(): bool
+    {
+        return $this->lakin->baris->contains(function (LakinBaris $b) {
+            return $b->iku_id !== null && (
+                blank($b->kegiatan) ||
+                blank($b->solusi_kendala) ||
+                blank($b->rtl) ||
+                blank($b->link_bukti_dukung_kinerja)
+            );
+        });
     }
 
     /**
@@ -328,11 +349,16 @@ class LakinDetail extends Component
         $this->lakin->load('baris');
         $this->muatEdit();
 
-        session()->flash('status', 'Angka baris yang sudah ada disegarkan dari data capaian terbaru. Baris custom tidak berubah.');
+        session()->flash('status', 'Data baris berhasil disegarkan dari capaian dan verifikasi terbaru. Baris custom tidak berubah.');
     }
 
     public function unduhExcel()
     {
+        if ($this->adaBarisIkuKosong()) {
+            app(LakinBuilderService::class)->segarkanBaris($this->lakin);
+            $this->lakin->load('baris');
+        }
+
         return ExcelFacade::download(new LakinExport($this->lakin), "rekap-kinerja-tahunan-{$this->lakin->tahun}.xlsx");
     }
 

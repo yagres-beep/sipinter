@@ -19,7 +19,10 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
  */
 class LakinExport implements FromCollection, WithColumnWidths, WithHeadings, WithStyles
 {
-    public function __construct(protected Lakin $lakin) {}
+    public function __construct(protected Lakin $lakin)
+    {
+        $this->lakin->loadMissing('baris.masterIku');
+    }
 
     public function collection()
     {
