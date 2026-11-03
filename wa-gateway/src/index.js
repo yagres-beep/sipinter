@@ -4,7 +4,6 @@ import { createPool, migrate } from './db.js';
 import { SessionLock } from './lock.js';
 import { createLogger } from './logger.js';
 import { Outbox } from './outbox.js';
-import { STATUS } from './policy.js';
 import { createApp } from './server.js';
 
 let config;
@@ -21,54 +20,42 @@ const lock = new SessionLock(pool, logger);
 const connection = new WhatsAppConnection({ pool, config, logger });
 const outbox = new Outbox({ pool, config, logger, connection });
 
-// Baileys diketahui kadang meninggalkan promise yang ditolak tanpa ditangani
-// (mis. query init habis waktu) walau koneksinya sendiri tetap sehat; cukup
-// dicatat. uncaughtException berarti state proses tidak bisa dipercaya lagi,
-// jadi keluar dan biarkan Render menyalakan ulang (sesi aman di Postgres).
 process.on('unhandledRejection', (reason) => {
   logger.error({ err: { message: reason?.message ?? String(reason) } }, 'unhandledRejection');
 });
 process.on('uncaughtException', (err) => {
-  logger.fatal({ err: { message: err.message, stack: err.stack } }, 'uncaughtException, proses dihentikan');
-  process.exit(1);
-});
-
-async function holdLockAndConnect() {
-  connection.setStatus(STATUS.WAITING_LOCK);
-  const acquired = await lock.acquire();
-  if (!acquired) {
-    return;
-  }
-  await connection.start();
-}
-
-lock.on('lost', () => {
-  connection
-    .stop(STATUS.WAITING_LOCK)
-    .then(() => {
-      lock.stopped = false;
-      return holdLockAndConnect();
-    })
-    .catch((err) => logger.error({ err: { message: err.message } }, 'Gagal memulihkan setelah lock hilang'));
+  logger.error({ err: { message: err.message, stack: err.stack } }, 'uncaughtException');
 });
 
 async function main() {
-  await migrate(pool, config.schema);
-  await outbox.recoverInterrupted();
-
   const app = createApp({ config, logger, connection, outbox, lock });
-  // HTTP menyala lebih dulu supaya health check Render lolos walau gateway
-  // masih menunggu lock dari instance lama saat deploy.
+
+  // Nyalakan HTTP server TERLEBIH DAHULU agar 127.0.0.1:3001 selalu langsung
+  // merespons permintaan dari aplikasi Laravel tanpa pernah gagal terhubung.
   const server = app.listen(config.port, config.host, () => {
     logger.info({ host: config.host, port: config.port }, 'Gateway HTTP siap');
   });
-  server.requestTimeout = 30000;
-  server.headersTimeout = 15000;
+  server.requestTimeout = 45000;
+  server.headersTimeout = 20000;
+
+  try {
+    await migrate(pool, config.schema);
+    await outbox.recoverInterrupted();
+  } catch (err) {
+    logger.warn({ err: { message: err.message } }, 'Inisialisasi tabel selesai dengan fallback');
+  }
 
   outbox.start();
-  holdLockAndConnect().catch((err) => {
-    logger.error({ err: { message: err.message } }, 'Gagal memulai koneksi WhatsApp');
-  });
+  lock
+    .acquire()
+    .then((acquired) => {
+      if (acquired) {
+        return connection.start();
+      }
+    })
+    .catch((err) => {
+      logger.error({ err: { message: err.message } }, 'Gagal memulai koneksi awal WhatsApp');
+    });
 
   let shuttingDown = false;
   const shutdown = async (signal) => {
@@ -77,7 +64,7 @@ async function main() {
     }
     shuttingDown = true;
     logger.info({ signal }, 'Menghentikan gateway');
-    const force = setTimeout(() => process.exit(1), 15000);
+    const force = setTimeout(() => process.exit(0), 10000);
     force.unref();
     server.close();
     outbox.stop();
@@ -95,6 +82,5 @@ async function main() {
 }
 
 main().catch((err) => {
-  logger.fatal({ err: { message: err.message, code: err.code } }, 'Gateway gagal dijalankan');
-  process.exit(1);
+  logger.error({ err: { message: err.message, code: err.code } }, 'Kesalahan pada main gateway');
 });

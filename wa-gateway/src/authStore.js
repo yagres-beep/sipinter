@@ -1,17 +1,13 @@
 import { BufferJSON, initAuthCreds, proto } from '@whiskeysockets/baileys';
 import { decrypt, encrypt } from './crypto.js';
-import { quoteIdent } from './db.js';
+import { authStateTable } from './db.js';
 
 /**
- * Penyimpanan sesi Baileys di Postgres, terenkripsi AES-256-GCM per baris.
- * Render Free tidak punya disk persisten, jadi useMultiFileAuthState bawaan
- * akan kehilangan sesi setiap kali layanan tidur/restart/redeploy.
- *
- * Baca dibatch (satu query per pemanggilan keys.get) dan tulis dalam satu
- * transaksi, supaya sesi tidak setengah tersimpan bila proses mati di tengah.
+ * Penyimpanan sesi Baileys di Postgres (dengan fallback berkas lokal otomatis),
+ * terenkripsi AES-256-GCM per baris.
  */
 export async function createPostgresAuthState({ pool, schema, encryptionKey }) {
-  const table = `${quoteIdent(schema)}.auth_state`;
+  const table = authStateTable(schema);
 
   const serialize = (id, value) => encrypt(encryptionKey, JSON.stringify(value, BufferJSON.replacer), id);
   const deserialize = (id, data) => {
@@ -34,26 +30,16 @@ export async function createPostgresAuthState({ pool, schema, encryptionKey }) {
     if (!upserts.length && !deletes.length) {
       return;
     }
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      if (upserts.length) {
-        await client.query(
-          `INSERT INTO ${table} (id, data, updated_at)
-           SELECT * , now() FROM unnest($1::text[], $2::text[])
-           ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()`,
-          [upserts.map(([id]) => id), upserts.map(([id, value]) => serialize(id, value))]
-        );
-      }
-      if (deletes.length) {
-        await client.query(`DELETE FROM ${table} WHERE id = ANY($1::text[])`, [deletes]);
-      }
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK').catch(() => {});
-      throw err;
-    } finally {
-      client.release();
+    if (upserts.length) {
+      await pool.query(
+        `INSERT INTO ${table} (id, data, updated_at)
+         SELECT * , now() FROM unnest($1::text[], $2::text[])
+         ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()`,
+        [upserts.map(([id]) => id), upserts.map(([id, value]) => serialize(id, value))]
+      );
+    }
+    if (deletes.length) {
+      await pool.query(`DELETE FROM ${table} WHERE id = ANY($1::text[])`, [deletes]);
     }
   }
 
@@ -74,8 +60,6 @@ export async function createPostgresAuthState({ pool, schema, encryptionKey }) {
       return result;
     },
     set: async (data) => {
-      // Map: kunci yang muncul dua kali dalam satu batch cukup ditulis sekali
-      // (ON CONFLICT tidak boleh menyentuh baris yang sama dua kali).
       const latest = new Map();
       for (const category of Object.keys(data)) {
         for (const id of Object.keys(data[category])) {
@@ -105,12 +89,9 @@ export class SessionDecryptError extends Error {
 }
 
 export async function clearAuthState(pool, schema) {
-  await pool.query(`DELETE FROM ${quoteIdent(schema)}.auth_state`);
+  await pool.query(`DELETE FROM ${authStateTable(schema)}`);
 }
 
-// Sesi dianggap ada hanya bila pairing benar-benar selesai: requestPairingCode
-// mengisi creds.me lebih dulu, sedangkan creds.account baru diisi setelah
-// WhatsApp mengonfirmasi pairing.
 export function hasCompletedPairing(creds) {
   return Boolean(creds?.me?.id && creds?.account);
 }

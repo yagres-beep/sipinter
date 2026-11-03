@@ -94,10 +94,11 @@ export function createApp({ config, logger, connection, outbox, lock, startedAt 
 
   secured.get('/status', async (req, res, next) => {
     try {
+      const counts = await outbox.counts().catch(() => ({ queued: 0, sending: 0, unknown: 0 }));
       res.json({
         ...connection.snapshot(),
         lock_held: lock.held,
-        outbox: await outbox.counts(),
+        outbox: counts,
         started_at: startedAt.toISOString(),
       });
     } catch (err) {

@@ -169,16 +169,20 @@ class WhatsAppGatewayClient
 
         try {
             $cwd = base_path('wa-gateway');
+            $logPath = storage_path('logs/wa-gateway.log');
             if (PHP_OS_FAMILY === 'Windows') {
-                $cmd = 'start /B "" node '.escapeshellarg($script).' >NUL 2>&1';
+                $cmd = 'start /B "" node '.escapeshellarg($script).' >> '.escapeshellarg($logPath).' 2>&1';
                 pclose(popen('cd /d '.escapeshellarg($cwd).' && '.$cmd, 'r'));
             } else {
-                $cmd = 'nohup node '.escapeshellarg($script).' >/dev/null 2>&1 &';
+                $nodeBin = is_executable('/usr/local/bin/node')
+                    ? '/usr/local/bin/node'
+                    : (is_executable('/usr/bin/node') ? '/usr/bin/node' : 'node');
+                $cmd = 'nohup '.escapeshellarg($nodeBin).' '.escapeshellarg($script).' >> '.escapeshellarg($logPath).' 2>&1 &';
                 exec('cd '.escapeshellarg($cwd).' && '.$cmd);
             }
 
-            // Tunggu hingga port 3001 siap menerima koneksi (maks 3 detik)
-            for ($i = 0; $i < 12; $i++) {
+            // Tunggu hingga port 3001 siap menerima koneksi (maks 4 detik)
+            for ($i = 0; $i < 16; $i++) {
                 usleep(250_000);
                 $fp = @fsockopen('127.0.0.1', 3001, $errno, $errstr, 0.2);
                 if (is_resource($fp)) {

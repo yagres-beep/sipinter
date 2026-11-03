@@ -114,7 +114,7 @@ export function loadConfig(rawEnv = process.env) {
     encryptionKey = createHmac('sha256', appKey).update('sipinter-wa-gateway-session-key').digest();
   }
 
-  const schema = env.DB_SCHEMA?.trim() || 'wa_gateway';
+  const schema = env.DB_SCHEMA?.trim() || 'public';
   if (!/^[a-z_][a-z0-9_]{0,62}$/.test(schema)) {
     throw new Error('DB_SCHEMA hanya boleh huruf kecil, angka, dan garis bawah.');
   }

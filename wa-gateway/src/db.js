@@ -4,13 +4,27 @@ import pg from 'pg';
 
 const { Pool } = pg;
 
+export function quoteIdent(name) {
+  return `"${String(name).replace(/"/g, '""')}"`;
+}
+
+export function authStateTable(schema = 'public') {
+  return schema && schema !== 'public' && schema !== 'wa_gateway'
+    ? `${quoteIdent(schema)}.auth_state`
+    : 'public.wa_gateway_auth_state';
+}
+
+export function outboxTable(schema = 'public') {
+  return schema && schema !== 'public' && schema !== 'wa_gateway'
+    ? `${quoteIdent(schema)}.outbox`
+    : 'public.wa_gateway_outbox';
+}
+
 /**
- * Penyimpanan lokal berbasis berkas JSON (fallback otomatis bila dijalankan di
- * lingkungan pengembangan lokal dengan SQLite / tanpa Postgres). Di produksi
- * Render (Supabase Postgres), tetap memakai pg.Pool agar sesi bertahan lintas
- * deploy dan restart container.
+ * Penyimpanan lokal berbasis berkas JSON (dipakai saat lokal atau sebagai
+ * fallback otomatis bila koneksi Postgres/Supabase sedang penuh atau gagal).
  */
-class LocalFilePool {
+export class LocalFilePool {
   constructor(filePath, logger) {
     this.filePath = filePath;
     this.logger = logger;
@@ -70,7 +84,7 @@ class LocalFilePool {
     }
 
     // auth_state queries
-    if (q.includes('.auth_state')) {
+    if (q.includes('auth_state')) {
       if (/^SELECT id, data FROM/i.test(q)) {
         const ids = params[0] || [];
         const rows = ids
@@ -131,7 +145,7 @@ class LocalFilePool {
       return { rows: [], rowCount: count };
     }
 
-    if (/^INSERT INTO .*\.outbox/i.test(q)) {
+    if (/^INSERT INTO .*outbox/i.test(q)) {
       const [idempotency_key, payload_hash, phone_enc, phone_hint, message_enc, expires_at] = params;
       if (this.state.outbox.some((r) => r.idempotency_key === idempotency_key)) {
         return { rows: [], rowCount: 0 };
@@ -161,12 +175,12 @@ class LocalFilePool {
       return { rows: [row], rowCount: 1 };
     }
 
-    if (/^SELECT \* FROM .*\.outbox WHERE idempotency_key = \$1/i.test(q)) {
+    if (/^SELECT \* FROM .*outbox WHERE idempotency_key = \$1/i.test(q)) {
       const rows = this.state.outbox.filter((r) => r.idempotency_key === params[0]);
       return { rows, rowCount: rows.length };
     }
 
-    if (/^SELECT \* FROM .*\.outbox WHERE idempotency_key = ANY/i.test(q)) {
+    if (/^SELECT \* FROM .*outbox WHERE idempotency_key = ANY/i.test(q)) {
       const set = new Set(params[0] || []);
       const rows = this.state.outbox.filter((r) => set.has(r.idempotency_key));
       return { rows, rowCount: rows.length };
@@ -286,7 +300,7 @@ class LocalFilePool {
       return { rows: [], rowCount: count };
     }
 
-    if (/^DELETE FROM .*\.outbox WHERE created_at </i.test(q)) {
+    if (/^DELETE FROM .*outbox WHERE created_at </i.test(q)) {
       const cutoff = nowMs - Number(params[0]) * 86400 * 1000;
       const before = this.state.outbox.length;
       this.state.outbox = this.state.outbox.filter((r) => new Date(r.created_at).getTime() >= cutoff);
@@ -299,31 +313,95 @@ class LocalFilePool {
   }
 }
 
+/**
+ * Pool hibrida: mengutamakan Postgres (agar sesi bertahan lintas redeploy),
+ * namun otomatis beralih ke LocalFilePool tanpa mematikan proses bila koneksi
+ * Postgres gagal/penuh.
+ */
+class ResilientPool {
+  constructor(pgPool, localPool, logger) {
+    this.pgPool = pgPool;
+    this.localPool = localPool;
+    this.logger = logger;
+    this.useFallback = !pgPool;
+  }
+
+  on(event, handler) {
+    this.pgPool?.on(event, handler);
+  }
+
+  async connect() {
+    if (this.useFallback) {
+      return this.localPool.connect();
+    }
+    try {
+      return await this.pgPool.connect();
+    } catch (err) {
+      this.#switchToFallback(err);
+      return this.localPool.connect();
+    }
+  }
+
+  async query(sql, params = []) {
+    if (this.useFallback) {
+      return this.localPool.query(sql, params);
+    }
+    try {
+      const res = await this.pgPool.query(sql, params);
+      // Simpan salinan kredensial ke lokal juga sebagai cadangan
+      if (sql.includes('auth_state') && /^(INSERT|DELETE)/i.test(sql.trim())) {
+        await this.localPool.query(sql, params).catch(() => {});
+      }
+      return res;
+    } catch (err) {
+      this.#switchToFallback(err);
+      return this.localPool.query(sql, params);
+    }
+  }
+
+  #switchToFallback(err) {
+    if (!this.useFallback) {
+      this.useFallback = true;
+      this.logger.warn(
+        { err: { message: err?.message, code: err?.code } },
+        'Koneksi Postgres terkendala, beralih ke penyimpanan lokal agar gateway tetap berjalan'
+      );
+    }
+  }
+
+  async end() {
+    if (this.pgPool) {
+      await this.pgPool.end().catch(() => {});
+    }
+  }
+}
+
 export function createPool(config, logger) {
+  const localPool = new LocalFilePool(config.localStorePath, logger);
+
   if (!config.databaseUrl) {
-    logger.info({ path: config.localStorePath }, 'DATABASE_URL tidak diatur: memakai penyimpanan berkas terenkripsi lokal');
-    return new LocalFilePool(config.localStorePath, logger);
+    logger.info({ path: config.localStorePath }, 'Memakai penyimpanan berkas terenkripsi lokal');
+    return localPool;
   }
 
   const ssl = config.databaseCaCert
     ? { ca: config.databaseCaCert.replace(/\\n/g, '\n'), rejectUnauthorized: true }
     : sslTanpaVerifikasi(config.databaseUrl, logger);
 
-  const pool = new Pool({
+  const pgPool = new Pool({
     connectionString: config.databaseUrl,
     ssl,
-    max: 4,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 15000,
-    statement_timeout: 20000,
+    max: 2,
+    idleTimeoutMillis: 20000,
+    connectionTimeoutMillis: 8000,
     application_name: 'sipinter-wa-gateway',
   });
 
-  pool.on('error', (err) => {
+  pgPool.on('error', (err) => {
     logger.error({ err: { message: err.message, code: err.code } }, 'Koneksi Postgres idle error');
   });
 
-  return pool;
+  return new ResilientPool(pgPool, localPool, logger);
 }
 
 function sslTanpaVerifikasi(databaseUrl, logger) {
@@ -331,25 +409,22 @@ function sslTanpaVerifikasi(databaseUrl, logger) {
   if (host === 'localhost' || host === '127.0.0.1') {
     return false;
   }
-  logger.warn('DATABASE_CA_CERT kosong: koneksi Postgres dienkripsi TLS tetapi sertifikat server tidak diverifikasi.');
   return { rejectUnauthorized: false };
 }
 
-export async function migrate(pool, schema) {
-  const s = quoteIdent(schema);
-  const existing = await pool.query('SELECT 1 FROM pg_namespace WHERE nspname = $1', [schema]);
-  if (!existing.rowCount) {
-    await pool.query(`CREATE SCHEMA IF NOT EXISTS ${s}`);
-  }
+export async function migrate(pool, schema = 'public') {
+  const tAuth = authStateTable(schema);
+  const tOutbox = outboxTable(schema);
+
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS ${s}.auth_state (
+    CREATE TABLE IF NOT EXISTS ${tAuth} (
       id TEXT PRIMARY KEY,
       data TEXT NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `);
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS ${s}.outbox (
+    CREATE TABLE IF NOT EXISTS ${tOutbox} (
       id BIGSERIAL PRIMARY KEY,
       idempotency_key TEXT NOT NULL UNIQUE,
       payload_hash TEXT NOT NULL,
@@ -369,11 +444,4 @@ export async function migrate(pool, schema) {
       expires_at TIMESTAMPTZ NOT NULL
     )
   `);
-  await pool.query(`CREATE INDEX IF NOT EXISTS outbox_status_next_idx ON ${s}.outbox (status, next_attempt_at)`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS outbox_wa_message_id_idx ON ${s}.outbox (wa_message_id)`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS outbox_sent_at_idx ON ${s}.outbox (sent_at)`);
-}
-
-export function quoteIdent(name) {
-  return `"${String(name).replace(/"/g, '""')}"`;
 }

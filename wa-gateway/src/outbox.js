@@ -1,5 +1,5 @@
 import { decrypt, encrypt, sha256Hex } from './crypto.js';
-import { quoteIdent } from './db.js';
+import { outboxTable } from './db.js';
 import { maskPhone } from './logger.js';
 import { STATUS, isStatusUpgrade, receiptToStatus } from './policy.js';
 
@@ -44,7 +44,7 @@ export class Outbox {
     this.logger = logger.child({ module: 'outbox' });
     this.connection = connection;
     this.random = random;
-    this.table = `${quoteIdent(config.schema)}.outbox`;
+    this.table = outboxTable(config.schema);
     this.timer = null;
     this.busy = false;
     this.stopped = true;

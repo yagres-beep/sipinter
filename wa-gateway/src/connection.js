@@ -145,20 +145,22 @@ export class WhatsAppConnection extends EventEmitter {
   }
 
   async connectNow() {
-    if (this.status === STATUS.CONNECTED || this.status === STATUS.CONNECTING) {
+    if (this.status === STATUS.CONNECTED) {
       return this.snapshot();
     }
-    if (!hasCompletedPairing(this.creds) && this.creds?.me) {
-      await this.#closeSocket();
-      await this.#discardIncompletePairing();
-    } else if (this.status === STATUS.WAITING_QR && this.qr) {
-      return this.snapshot();
+    if (this.status !== STATUS.CONNECTING) {
+      if (!hasCompletedPairing(this.creds) && this.creds?.me) {
+        await this.#closeSocket();
+        await this.#discardIncompletePairing();
+      } else if (this.status === STATUS.WAITING_QR && this.qr) {
+        return this.snapshot();
+      }
+      if (this.stopping) {
+        throw new GatewayError('not_ready', 'Gateway belum memegang lock sesi atau sedang berhenti.', { retryable: true });
+      }
+      this.attempts = 0;
+      await this.connect('manual');
     }
-    if (this.stopping) {
-      throw new GatewayError('not_ready', 'Gateway belum memegang lock sesi atau sedang berhenti.', { retryable: true });
-    }
-    this.attempts = 0;
-    await this.connect('manual');
     if (this.status === STATUS.CONNECTING) {
       await new Promise((resolve) => {
         const timer = setTimeout(() => {
