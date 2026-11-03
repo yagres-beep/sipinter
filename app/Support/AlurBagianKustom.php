@@ -73,6 +73,15 @@ final class AlurBagianKustom
         self::NOTULA_DISETUJUI => 'Hanya isian yang sudah disetujui / ditandai Sesuai',
     ];
 
+    public const NOTULA_PERIODE_TRIWULAN = 'triwulan';
+
+    public const NOTULA_PERIODE_KUMULATIF = 'kumulatif';
+
+    public const NOTULA_PERIODE = [
+        self::NOTULA_PERIODE_TRIWULAN => 'Hanya triwulan berjalan',
+        self::NOTULA_PERIODE_KUMULATIF => 'Kumulatif (triwulan I s.d. triwulan notula)',
+    ];
+
     /** Batas jumlah tahap pemeriksaan berjenjang (mis. Tim SAKIP → Kepala). */
     public const TAHAP_MAKS = 3;
 
@@ -149,6 +158,9 @@ final class AlurBagianKustom
             'label_status' => $labelStatus,
             'ubah_setelah_disetujui' => (bool) ($tersimpan['ubah_setelah_disetujui'] ?? false),
             'notula' => array_key_exists((string) ($tersimpan['notula'] ?? ''), self::NOTULA) ? (string) $tersimpan['notula'] : self::NOTULA_SEMUA,
+            'notula_periode' => in_array((string) ($tersimpan['notula_periode'] ?? ''), [self::NOTULA_PERIODE_TRIWULAN, self::NOTULA_PERIODE_KUMULATIF], true)
+                ? (string) $tersimpan['notula_periode']
+                : self::NOTULA_PERIODE_TRIWULAN,
             'diatur' => $tersimpan !== [],
         ];
     }

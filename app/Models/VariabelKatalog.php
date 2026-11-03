@@ -28,7 +28,7 @@ class VariabelKatalog extends Model
     ];
 
     protected $fillable = [
-        'kode', 'nama', 'tipe', 'satuan', 'desimal', 'pemisah', 'ribuan', 'min', 'maks',
+        'kode', 'nama', 'tipe', 'satuan', 'desimal', 'pemisah', 'ribuan', 'nol_sebagai_strip', 'min', 'maks',
         'panjang_min', 'panjang_maks', 'opsi', 'sumber', 'keterangan', 'aktif',
         'kategori', 'contoh', 'catatan', 'pengganti_kode',
         'dibuat_oleh', 'diubah_oleh',
@@ -42,6 +42,7 @@ class VariabelKatalog extends Model
         return [
             'opsi' => 'array',
             'ribuan' => 'boolean',
+            'nol_sebagai_strip' => 'boolean',
             'aktif' => 'boolean',
             'desimal' => 'integer',
             'panjang_min' => 'integer',
@@ -104,6 +105,7 @@ class VariabelKatalog extends Model
             'desimal' => $this->desimal,
             'pemisah' => $this->pemisah ?: FormatAngkaKolom::PEMISAH_KOMA,
             'ribuan' => (bool) $this->ribuan,
+            'nol_sebagai_strip' => (bool) $this->nol_sebagai_strip,
             'min' => $this->min,
             'maks' => $this->maks,
             'panjang_min' => $this->panjang_min,

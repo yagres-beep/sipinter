@@ -444,7 +444,7 @@ class IsianBagianKustom extends Component
             'id' => null,
             'iku_id' => (string) $sumber->iku_id,
             'teks' => (string) $sumber->teks,
-            'kolom' => $bagian->nilaiKolomUntukForm($sumber->nilai_kolom),
+            'kolom' => \App\Support\LanjutanBagianKustom::salinNilaiKolom($bagian, $sumber),
             'lanjutan_dari_id' => $sumber->id,
         ];
 

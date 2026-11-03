@@ -490,6 +490,7 @@ class BagianKustomManager extends Component
                 ->mapWithKeys(fn ($bawaan, $s) => [$s => ($alur['label_status'][$s] ?? $bawaan) === $bawaan ? '' : $alur['label_status'][$s]])->all(),
             'ubah_setelah_disetujui' => $alur['ubah_setelah_disetujui'],
             'notula' => $alur['notula'],
+            'notula_periode' => $alur['notula_periode'] ?? AlurBagianKustom::NOTULA_PERIODE_TRIWULAN,
         ];
     }
 
@@ -1887,6 +1888,7 @@ class BagianKustomManager extends Component
             'pemeriksa' => $pemeriksa,
             'ubah_setelah_disetujui' => (bool) ($a['ubah_setelah_disetujui'] ?? false),
             'notula' => array_key_exists((string) ($a['notula'] ?? ''), AlurBagianKustom::NOTULA) ? (string) $a['notula'] : AlurBagianKustom::NOTULA_SEMUA,
+            'notula_periode' => array_key_exists((string) ($a['notula_periode'] ?? ''), AlurBagianKustom::NOTULA_PERIODE) ? (string) $a['notula_periode'] : AlurBagianKustom::NOTULA_PERIODE_TRIWULAN,
         ];
 
         // Tahapan berjenjang: disimpan hanya bila ada tahap lanjutan atau label tahap 1
@@ -2313,6 +2315,7 @@ class BagianKustomManager extends Component
             'bagianPratinjau' => $bagianPratinjau,
             'modeAlur' => AlurBagianKustom::MODE,
             'pilihanNotula' => AlurBagianKustom::NOTULA,
+            'pilihanNotulaPeriode' => AlurBagianKustom::NOTULA_PERIODE,
             'saatBukti' => AturanBuktiBagianKustom::SAAT,
             'operatorSyarat' => BagianKustom::OPERATOR_SYARAT,
             'tipeSubkolom' => \App\Support\JenisKolomBagianKustom::TIPE_SUBKOLOM,

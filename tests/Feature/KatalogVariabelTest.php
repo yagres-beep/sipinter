@@ -291,7 +291,7 @@ class KatalogVariabelTest extends TestCase
         foreach (['Ketua Tim', 'Kepala'] as $peran) {
             $this->sebagai($peran);
             Livewire::test(VariabelKatalogManager::class)->assertForbidden();
-            $this->get(route('template-notula.index'))->assertForbidden();
+            $this->get('/template-notula')->assertForbidden();
             $this->get(route('master-iku.index'))->assertForbidden();
         }
     }
@@ -503,5 +503,57 @@ class KatalogVariabelTest extends TestCase
             ->call('simpan', $b->id)
             ->assertHasErrors(["form.{$b->id}.format_notula"]);
         $this->assertSame('{kode_iku} {sasaran_iku}: {teks}', $b->fresh()->format_notula);
+    }
+
+    public function test_kolom_angka_dapat_diatur_nol_sebagai_strip_dan_tampil_strip(): void
+    {
+        $kolomBiasa = BagianKustom::normalkanKolom(['kunci' => 'skor', 'label' => 'Skor', 'tipe' => 'angka', 'nol_sebagai_strip' => false]);
+        $kolomStrip = BagianKustom::normalkanKolom(['kunci' => 'skor', 'label' => 'Skor', 'tipe' => 'angka', 'nol_sebagai_strip' => true]);
+
+        $this->assertSame('0', \App\Support\FormatAngkaKolom::tampil('0', $kolomBiasa));
+        $this->assertSame('-', \App\Support\FormatAngkaKolom::tampil('0', $kolomStrip));
+        $this->assertSame('-', \App\Support\FormatAngkaKolom::tampil('0.00', $kolomStrip));
+        $this->assertSame('15', \App\Support\FormatAngkaKolom::tampil('15', $kolomStrip));
+
+        // Melalui VariabelKatalog
+        $this->sebagai('Tim SAKIP');
+        Livewire::test(VariabelKatalogManager::class)
+            ->call('baru')
+            ->set('form.kode', 'angka_uji')
+            ->set('form.nama', 'Angka Uji')
+            ->set('form.tipe', 'angka')
+            ->set('form.nol_sebagai_strip', true)
+            ->call('simpan')
+            ->assertHasNoErrors();
+
+        $var = VariabelKatalog::where('kode', 'angka_uji')->firstOrFail();
+        $this->assertTrue($var->nol_sebagai_strip);
+        $def = $var->definisiKolom();
+        $this->assertTrue($def['nol_sebagai_strip']);
+    }
+
+    public function test_bagian_kustom_notula_kumulatif_dan_penarikan_dari_tw_sebelumnya(): void
+    {
+        // 1. Alur notula periode kumulatif
+        $alur = \App\Support\AlurBagianKustom::normalkan(['notula_periode' => \App\Support\AlurBagianKustom::NOTULA_PERIODE_KUMULATIF], ['Ketua Tim']);
+        $this->assertSame(\App\Support\AlurBagianKustom::NOTULA_PERIODE_KUMULATIF, $alur['notula_periode']);
+
+        $b = $this->bagian([
+            'nama' => 'Inovasi',
+            'alur' => ['notula_periode' => \App\Support\AlurBagianKustom::NOTULA_PERIODE_KUMULATIF],
+            'kolom' => [
+                ['kunci' => 'tahap_lalu', 'label' => 'Tahap Lalu', 'tipe' => 'teks', 'sumber_tw_lalu' => 'teks'],
+                ['kunci' => 'target_lalu', 'label' => 'Target Lalu', 'tipe' => 'angka', 'sumber_tw_lalu' => 'target'],
+                ['kunci' => 'target', 'label' => 'Target', 'tipe' => 'angka'],
+            ],
+        ]);
+        $this->assertTrue($b->notulaKumulatif());
+
+        // 2. Salin nilai kolom dengan aturan sumber_tw_lalu
+        $poinLama = $this->poin($b, 1, 'Uraian TW Lalu', ['target' => '50']);
+        $hasilSalin = \App\Support\LanjutanBagianKustom::salinNilaiKolom($b, $poinLama);
+
+        $this->assertSame('Uraian TW Lalu', $hasilSalin['tahap_lalu']);
+        $this->assertSame('50', $hasilSalin['target_lalu']);
     }
 }

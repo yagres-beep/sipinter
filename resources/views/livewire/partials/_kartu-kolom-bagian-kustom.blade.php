@@ -100,6 +100,21 @@
         <input type="text" class="inp filled" wire:model.blur="{{ $m }}.petunjuk" placeholder="mis. Isi sesuai register risiko terbaru">
     </div>
 
+    <div class="field" style="margin-bottom:8px">
+        <label>Ambil nilai dari triwulan sebelumnya <span style="color:var(--muted);font-weight:500">(opsional)</span></label>
+        <select class="inp filled" wire:model.live="{{ $m }}.sumber_tw_lalu">
+            <option value="">Tidak — diisi baru seperti biasa</option>
+            <option value="sama">Ambil dari kolom ini pada periode sebelumnya</option>
+            <option value="teks">Ambil dari Uraian (teks) pada periode sebelumnya</option>
+            @foreach ($f['kolom'] ?? [] as $kLain)
+                @if (($kLain['kunci'] ?? '') !== '' && ($kLain['kunci'] ?? '') !== ($kol['kunci'] ?? ''))
+                    <option value="{{ $kLain['kunci'] }}">Ambil dari kolom "{{ $kLain['label'] }}" ({ {{ $kLain['kunci'] }} }) pada periode sebelumnya</option>
+                @endif
+            @endforeach
+        </select>
+        <div class="fhint" style="margin-top:2px">Saat melanjutkan isian periode sebelumnya, nilai kolom ini otomatis disalin dari variabel yang dipilih.</div>
+    </div>
+
     @if ($varTerpilih)
         @if ($tipe === 'angka')
             <div class="field" style="margin-bottom:8px;max-width:320px">
@@ -242,6 +257,9 @@
                     <input type="checkbox" wire:model.live="{{ $m }}.ribuan"> Pakai pemisah ribuan
                 </label>
             @endif
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;align-self:end;padding-bottom:10px">
+                <input type="checkbox" wire:model.live="{{ $m }}.nol_sebagai_strip"> Tulis 0 sebagai "-"
+            </label>
             @if ($tipe !== 'hitung')
             <div class="field" style="margin-bottom:0">
                 <label>Nilai minimal</label>

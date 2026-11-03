@@ -71,7 +71,7 @@ class VariabelKatalogManager extends Component
     {
         return [
             'kode' => '', 'nama' => '', 'tipe' => 'angka', 'satuan' => '', 'desimal' => '', 'pemisah' => FormatAngkaKolom::PEMISAH_KOMA,
-            'ribuan' => true, 'min' => '', 'maks' => '', 'panjang_min' => '', 'panjang_maks' => '', 'opsi_teks' => '', 'keterangan' => '',
+            'ribuan' => true, 'nol_sebagai_strip' => false, 'min' => '', 'maks' => '', 'panjang_min' => '', 'panjang_maks' => '', 'opsi_teks' => '', 'keterangan' => '',
             'kategori' => VariabelKatalog::KATEGORI_BAWAAN, 'contoh' => '', 'catatan' => '', 'pengganti_kode' => '',
         ];
     }
@@ -109,7 +109,7 @@ class VariabelKatalogManager extends Component
         $this->form = [
             'kode' => $v->kode, 'nama' => $v->nama, 'tipe' => $v->tipe, 'satuan' => (string) $v->satuan,
             'desimal' => $v->desimal !== null ? (string) $v->desimal : '', 'pemisah' => $v->pemisah ?: FormatAngkaKolom::PEMISAH_KOMA,
-            'ribuan' => (bool) $v->ribuan, 'min' => (string) $v->min, 'maks' => (string) $v->maks,
+            'ribuan' => (bool) $v->ribuan, 'nol_sebagai_strip' => (bool) $v->nol_sebagai_strip, 'min' => (string) $v->min, 'maks' => (string) $v->maks,
             'panjang_min' => $v->panjang_min !== null ? (string) $v->panjang_min : '', 'panjang_maks' => $v->panjang_maks !== null ? (string) $v->panjang_maks : '',
             'opsi_teks' => implode(', ', (array) ($v->opsi ?? [])), 'keterangan' => (string) $v->keterangan,
             'kategori' => $v->kategori ?: VariabelKatalog::KATEGORI_BAWAAN, 'contoh' => (string) $v->contoh,
@@ -132,7 +132,7 @@ class VariabelKatalogManager extends Component
 
     protected static function sidik(VariabelKatalog $v): string
     {
-        return sha1((string) json_encode($v->only(['kode', 'nama', 'tipe', 'satuan', 'desimal', 'pemisah', 'ribuan', 'min', 'maks', 'panjang_min', 'panjang_maks', 'opsi', 'keterangan', 'aktif', 'kategori', 'contoh', 'catatan', 'pengganti_kode'])));
+        return sha1((string) json_encode($v->only(['kode', 'nama', 'tipe', 'satuan', 'desimal', 'pemisah', 'ribuan', 'nol_sebagai_strip', 'min', 'maks', 'panjang_min', 'panjang_maks', 'opsi', 'keterangan', 'aktif', 'kategori', 'contoh', 'catatan', 'pengganti_kode'])));
     }
 
     /** @return array<int, string> */
@@ -164,6 +164,7 @@ class VariabelKatalogManager extends Component
             'form.desimal' => ['nullable', 'integer', 'min:0', 'max:'.FormatAngkaKolom::DESIMAL_MAKS],
             'form.pemisah' => ['nullable', Rule::in(array_keys(FormatAngkaKolom::PEMISAH))],
             'form.ribuan' => ['boolean'],
+            'form.nol_sebagai_strip' => ['boolean'],
             'form.min' => ['nullable', 'string', 'max:30'],
             'form.maks' => ['nullable', 'string', 'max:30'],
             'form.panjang_min' => ['nullable', 'integer', 'min:0', 'max:5000'],
@@ -211,6 +212,7 @@ class VariabelKatalogManager extends Component
             'desimal' => $angka && filled($f['desimal']) ? (int) $f['desimal'] : null,
             'pemisah' => $angka ? ($f['pemisah'] ?: FormatAngkaKolom::PEMISAH_KOMA) : null,
             'ribuan' => (bool) ($f['ribuan'] ?? true),
+            'nol_sebagai_strip' => $angka && (bool) ($f['nol_sebagai_strip'] ?? false),
             'min' => $min,
             'maks' => $maks,
             'panjang_min' => JenisKolomBagianKustom::teks($tipe) && filled($f['panjang_min']) ? (int) $f['panjang_min'] : null,

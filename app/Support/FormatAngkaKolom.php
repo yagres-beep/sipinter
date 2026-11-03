@@ -153,6 +153,13 @@ final class FormatAngkaKolom
             return $nilai;
         }
 
+        if (! empty($kolom['nol_sebagai_strip'])) {
+            $angkaCek = self::urai($nilai, null);
+            if ($angkaCek !== null && (float) $angkaCek === 0.0) {
+                return '-';
+            }
+        }
+
         $teks = $nilai;
 
         if (self::diatur($kolom) && ($kanonik = self::urai($nilai, null)) !== null) {

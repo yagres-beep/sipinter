@@ -727,14 +727,25 @@
                             </label>
 
                             @if ($f['masuk_notula'] ?? false)
-                                <div class="field">
-                                    <label for="notula-isian-{{ $bagian->id }}">Isian yang dicetak di notula</label>
-                                    <select id="notula-isian-{{ $bagian->id }}" class="inp filled" wire:model.live="form.{{ $bagian->id }}.alur.notula">
-                                        @foreach ($pilihanNotula as $nilai => $label)
-                                            <option value="{{ $nilai }}">{{ $label }}</option>
-                                        @endforeach
-                                    </select>
-                                    <div class="fhint" style="margin-top:4px">"Hanya yang disetujui" mencetak poin yang sudah disetujui pemeriksa (alur pengajuan) atau ditandai Sesuai di Verifikasi (Isian Kegiatan). Berlaku sama untuk notula di layar, DOCX, dan PDF.</div>
+                                <div class="row2">
+                                    <div class="field">
+                                        <label for="notula-isian-{{ $bagian->id }}">Isian yang dicetak di notula</label>
+                                        <select id="notula-isian-{{ $bagian->id }}" class="inp filled" wire:model.live="form.{{ $bagian->id }}.alur.notula">
+                                            @foreach ($pilihanNotula as $nilai => $label)
+                                                <option value="{{ $nilai }}">{{ $label }}</option>
+                                            @endforeach
+                                        </select>
+                                        <div class="fhint" style="margin-top:4px">"Hanya yang disetujui" mencetak poin yang sudah disetujui pemeriksa (alur pengajuan) atau ditandai Sesuai di Verifikasi (Isian Kegiatan).</div>
+                                    </div>
+                                    <div class="field">
+                                        <label for="notula-periode-{{ $bagian->id }}">Cakupan periode notula</label>
+                                        <select id="notula-periode-{{ $bagian->id }}" class="inp filled" wire:model.live="form.{{ $bagian->id }}.alur.notula_periode">
+                                            @foreach ($pilihanNotulaPeriode as $nilai => $label)
+                                                <option value="{{ $nilai }}">{{ $label }}</option>
+                                            @endforeach
+                                        </select>
+                                        <div class="fhint" style="margin-top:4px">"Kumulatif" mencetak seluruh isian dari Triwulan I s.d. triwulan notula ini.</div>
+                                    </div>
                                 </div>
                                 <div class="row2">
                                     <div class="field">

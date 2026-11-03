@@ -699,6 +699,13 @@ final class JenisKolomBagianKustom
      */
     public static function tampilUang(string $nilai, array $kolom): string
     {
+        if (! empty($kolom['nol_sebagai_strip'])) {
+            $angkaCek = FormatAngkaKolom::urai($nilai, null);
+            if ($angkaCek !== null && (float) $angkaCek === 0.0) {
+                return '-';
+            }
+        }
+
         $angka = FormatAngkaKolom::tampil($nilai, ['satuan' => null] + self::sebagaiAngka($kolom));
         $simbol = trim((string) ($kolom['satuan'] ?? 'Rp')) ?: 'Rp';
 

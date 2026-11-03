@@ -70,6 +70,37 @@ final class LanjutanBagianKustom
         return ['lanjutan_dari_id' => $sumber->id, 'akar_id' => $sumber->identitasObjek()];
     }
 
+    /**
+     * Salin nilai kolom dari poin sumber ke bentuk formulir poin baru.
+     * Bila kolom punya aturan sumber_tw_lalu, nilai diambil dari variabel yang ditentukan
+     * (sama, teks, atau kunci kolom lain dari sumber periode sebelumnya).
+     *
+     * @return array<string, string|array<int, string>>
+     */
+    public static function salinNilaiKolom(BagianKustom $bagian, BagianKustomPoin $sumber): array
+    {
+        $nilaiLama = (array) ($sumber->nilai_kolom ?? []);
+        $hasil = $bagian->nilaiKolomUntukForm($nilaiLama);
+
+        foreach ($bagian->kolomList() as $kolom) {
+            $sumberTwLalu = $kolom['sumber_tw_lalu'] ?? null;
+            if (! filled($sumberTwLalu)) {
+                continue;
+            }
+
+            $kunci = $kolom['kunci'];
+            if ($sumberTwLalu === 'sama') {
+                $hasil[$kunci] = JenisKolomBagianKustom::untukForm((string) ($nilaiLama[$kunci] ?? ''), $kolom);
+            } elseif ($sumberTwLalu === 'teks') {
+                $hasil[$kunci] = (string) $sumber->teks;
+            } elseif (array_key_exists($sumberTwLalu, $nilaiLama)) {
+                $hasil[$kunci] = JenisKolomBagianKustom::untukForm((string) ($nilaiLama[$sumberTwLalu] ?? ''), $kolom);
+            }
+        }
+
+        return $hasil;
+    }
+
     /** "Februari 2026" untuk label "Lanjutan dari …". */
     public static function labelPeriode(?Periode $periode): string
     {

@@ -595,28 +595,46 @@ class NotulaService
         // triwulan ini ikut ditampilkan, termasuk yang sudah dinonaktifkan Tim SAKIP
         // setelahnya, supaya data historis notula tidak pernah hilang dari catatan.
         // Hanya bagian yang diatur "Tampilkan di notula" (masuk_notula) di Data Master.
+        $tahun = (int) $periode->tahun;
+
         $bagianKustomPerBagian = BagianKustom::query()
             ->where('masuk_notula', true)
             ->whereHas('poin', fn ($q) => $q->whereHas(
                 'periode',
-                fn ($q2) => $q2->where('tahun', $periode->tahun)->where('triwulan', $tw)
+                fn ($q2) => $q2->where('tahun', $tahun)->where('triwulan', '<=', $tw)
             ))
-            ->with(['poin' => function ($q) use ($periode, $tw) {
+            ->with(['poin' => function ($q) use ($tahun, $tw) {
                 $q->with(['masterIku', 'periode'])->whereHas(
                     'periode',
-                    fn ($q2) => $q2->where('tahun', $periode->tahun)->where('triwulan', $tw)
+                    fn ($q2) => $q2->where('tahun', $tahun)->where('triwulan', '<=', $tw)
                 );
             }])
             ->orderBy('urutan')
             ->orderBy('id')
             ->get()
-            // Pengaturan notula per bagian (tab Notula di Data Master): bila "hanya isian
-            // yang disetujui", poin draf/diajukan/dikembalikan tidak dicetak; bagian tanpa
+            // Pengaturan notula per bagian (tab Notula di Data Master):
+            // - Cakupan periode: hanya triwulan berjalan (bawaan) atau kumulatif s.d. triwulan notula.
+            // - Bila "hanya isian yang disetujui", poin draf/diajukan/dikembalikan tidak dicetak; bagian tanpa
             // poin tersisa tidak ditampilkan. Satu sumber data untuk notula web, DOCX, PDF.
-            ->each(function (BagianKustom $bagian) {
-                if ($bagian->alurKerja()['notula'] === \App\Support\AlurBagianKustom::NOTULA_DISETUJUI) {
-                    $bagian->setRelation('poin', $bagian->poin->where('status_verifikasi', 'terverifikasi')->values());
+            ->each(function (BagianKustom $bagian) use ($tw) {
+                $isKumulatif = $bagian->notulaKumulatif();
+                $poin = $bagian->poin->filter(function ($p) use ($tw, $isKumulatif) {
+                    $pTw = (int) ($p->periode?->triwulan ?? 0);
+
+                    return $isKumulatif ? ($pTw > 0 && $pTw <= $tw) : ($pTw === $tw);
+                });
+
+                if ($isKumulatif) {
+                    $poin = $poin->groupBy(fn ($p) => $p->identitasObjek())
+                        ->map(fn ($grup) => $grup->sortBy(fn ($p) => sprintf('%02d-%012d', (int) ($p->periode?->bulan ?? 0), $p->id))->last())
+                        ->values();
                 }
+
+                if ($bagian->alurKerja()['notula'] === \App\Support\AlurBagianKustom::NOTULA_DISETUJUI) {
+                    $poin = $poin->where('status_verifikasi', 'terverifikasi')->values();
+                }
+
+                $bagian->setRelation('poin', $poin);
             })
             ->filter(fn (BagianKustom $bagian) => $bagian->poin->isNotEmpty())
             ->values();

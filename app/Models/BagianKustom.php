@@ -500,6 +500,11 @@ class BagianKustom extends Model
         return filled($this->format_notula) ? $this->format_notula : TemplateBagianKustom::FORMAT_STANDAR;
     }
 
+    public function notulaKumulatif(): bool
+    {
+        return ($this->alurKerja()['notula_periode'] ?? '') === \App\Support\AlurBagianKustom::NOTULA_PERIODE_KUMULATIF;
+    }
+
     /**
      * SEMUA kolom isian (termasuk yang dinonaktifkan) dalam bentuk seragam — selalu ada
      * key-nya. Dipakai untuk menampilkan data tersimpan dan notula; untuk formulir isian
@@ -591,6 +596,8 @@ class BagianKustom extends Model
             'isi_info' => $tipe === 'informasi' && filled($k['isi_info'] ?? null) ? trim((string) $k['isi_info']) : null,
             'pemisah' => FormatAngkaKolom::pemisahDari($k),
             'ribuan' => (bool) ($k['ribuan'] ?? true),
+            'nol_sebagai_strip' => $angka && (bool) ($k['nol_sebagai_strip'] ?? false),
+            'sumber_tw_lalu' => filled($k['sumber_tw_lalu'] ?? null) ? (string) $k['sumber_tw_lalu'] : null,
             // Struktur & petunjuk (opsional; kolom lama tanpa kunci ini = perilaku lama).
             'subbagian' => filled($k['subbagian'] ?? null) ? (string) $k['subbagian'] : null,
             'petunjuk' => filled($k['petunjuk'] ?? null) ? trim((string) $k['petunjuk']) : null,
@@ -1164,9 +1171,17 @@ class BagianKustom extends Model
                 $bagian[] = 'satuan '.$kolom['satuan'];
             }
 
+            if ($kolom['nol_sebagai_strip'] ?? false) {
+                $bagian[] = '0 ditulis -';
+            }
+
             if (($kolom['min'] ?? null) !== null || ($kolom['maks'] ?? null) !== null) {
                 $bagian[] = 'rentang '.($kolom['min'] ?? '…').'–'.($kolom['maks'] ?? '…');
             }
+        }
+
+        if (filled($kolom['sumber_tw_lalu'] ?? null)) {
+            $bagian[] = 'ambil TW lalu: '.($kolom['sumber_tw_lalu'] === 'sama' ? 'kolom sama' : ($kolom['sumber_tw_lalu'] === 'teks' ? 'uraian' : '{'.$kolom['sumber_tw_lalu'].'}'));
         }
 
         if (($kolom['panjang_min'] ?? null) !== null || ($kolom['panjang_maks'] ?? null) !== null) {

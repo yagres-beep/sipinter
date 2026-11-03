@@ -179,6 +179,9 @@
                         <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;align-self:end;padding-bottom:10px">
                             <input type="checkbox" wire:model.live="form.ribuan"> Pemisah ribuan
                         </label>
+                        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;align-self:end;padding-bottom:10px">
+                            <input type="checkbox" wire:model.live="form.nol_sebagai_strip"> Tulis nilai 0 sebagai "-" (strip)
+                        </label>
                         <div class="field" style="margin-bottom:0">
                             <label for="v-min">Nilai minimal</label>
                             <input id="v-min" type="text" inputmode="decimal" class="inp filled" wire:model.blur="form.min" placeholder="kosong = bebas">

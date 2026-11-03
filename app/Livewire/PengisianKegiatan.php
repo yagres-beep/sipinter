@@ -2983,7 +2983,7 @@ class PengisianKegiatan extends Component
             return;
         }
 
-        $blok = ['id' => null, 'teks' => (string) $sumber->teks, 'kolom' => $bagian->nilaiKolomUntukForm($sumber->nilai_kolom), 'lanjutan_dari_id' => $sumber->id] + $this->emptyBagianKustomBlock();
+        $blok = ['id' => null, 'teks' => (string) $sumber->teks, 'kolom' => \App\Support\LanjutanBagianKustom::salinNilaiKolom($bagian, $sumber), 'lanjutan_dari_id' => $sumber->id] + $this->emptyBagianKustomBlock();
 
         // Satu blok kosong bawaan diganti, bukan ditambah di bawahnya.
         $daftar = collect($this->bagianKustomBlocks[$bagianId] ?? [])->filter(fn ($b) => filled($b['id'] ?? null) || $this->blokBagianKustomTerisi($b) || ! empty($b['bukti']))->values()->all();
