@@ -49,9 +49,7 @@
                             </td>
                             <td style="padding:6px;border-bottom:1px solid var(--line2);white-space:nowrap">
                                 <button type="button" class="btn {{ $rinci === $kode ? 'btn-primary' : 'btn-ghost' }} btn-sm" wire:click="lihat('{{ $kode }}')">👁 Rincian</button>
-                                @if ($b['jenis'] === 'B')
-                                    <button type="button" class="btn {{ $sunting === $kode ? 'btn-primary' : 'btn-ghost' }} btn-sm" wire:click="buka('{{ $kode }}')">✎ Label</button>
-                                @endif
+                                <button type="button" class="btn {{ $sunting === $kode ? 'btn-primary' : 'btn-ghost' }} btn-sm" wire:click="buka('{{ $kode }}')">✎ Pengaturan</button>
                             </td>
                         </tr>
 
@@ -61,7 +59,7 @@
                                     <div><span style="color:var(--muted)">Butuh IKU:</span> {{ $b['butuh_iku'] ? 'Ya' : 'Tidak' }}</div>
                                     <div><span style="color:var(--muted)">Periode:</span> {{ $b['periode'] }}</div>
                                     <div><span style="color:var(--muted)">Bukti dukung:</span> {{ $b['bukti'] }}</div>
-                                    <div><span style="color:var(--muted)">Notula:</span> {{ $b['notula'] }}</div>
+                                    <div><span style="color:var(--muted)">Notula:</span> {{ $t['judul_notula'] ?? $b['notula'] }} @if (! empty($t['notula_periode']) && $t['notula_periode'] === 'kumulatif')<span class="badge b-tunggu">kumulatif</span>@endif</div>
                                     <div><span style="color:var(--muted)">Tabel:</span> <code style="font-size:11px">{{ $b['tabel'] }}</code></div>
                                 </div>
                                 <div style="font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 4px">Hak akses (ditegakkan kode)</div>
@@ -72,6 +70,9 @@
                                 </table>
                                 <div style="margin-top:8px"><span style="color:var(--muted)">Alur:</span> {{ $b['alur'] }}</div>
                                 <div style="margin-top:4px"><span style="color:var(--muted)">Batasan:</span> {{ $b['batasan'] }}</div>
+                                @if (! empty($t['catatan']))
+                                    <div style="margin-top:6px;padding:6px 10px;background:var(--surface-1);border-radius:6px;font-size:12px"><b>Catatan Tim SAKIP:</b> {{ $t['catatan'] }}</div>
+                                @endif
                             </td></tr>
                         @endif
 
@@ -81,12 +82,12 @@
                                 <div class="row2">
                                     <div class="field">
                                         <label for="label-menu-{{ $kode }}">Label menu lompat</label>
-                                        <input id="label-menu-{{ $kode }}" type="text" class="inp filled" maxlength="40" wire:model="formLabel.label_menu" placeholder="Bawaan: {{ $b['label'] }}">
+                                        <input id="label-menu-{{ $kode }}" type="text" class="inp filled" maxlength="60" wire:model="formLabel.label_menu" placeholder="Bawaan: {{ $b['label'] }}">
                                         @error('formLabel.label_menu')<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>@enderror
                                     </div>
                                     <div class="field">
                                         <label for="judul-{{ $kode }}">Judul bagian</label>
-                                        <input id="judul-{{ $kode }}" type="text" class="inp filled" maxlength="120" wire:model="formLabel.judul" placeholder="Bawaan: {{ $b['judul'] }}">
+                                        <input id="judul-{{ $kode }}" type="text" class="inp filled" maxlength="150" wire:model="formLabel.judul" placeholder="Bawaan: {{ $b['judul'] }}">
                                         @error('formLabel.judul')<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>@enderror
                                     </div>
                                 </div>
@@ -95,9 +96,34 @@
                                     <textarea id="petunjuk-{{ $kode }}" class="inp filled" style="height:auto;display:block" rows="2" maxlength="1000" wire:model="formLabel.petunjuk"></textarea>
                                     @error('formLabel.petunjuk')<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>@enderror
                                 </div>
-                                <div class="fhint">Kosongkan isian untuk memakai label bawaan. {{ $b['batasan'] }}</div>
+                                <div class="row2">
+                                    <div class="field">
+                                        <label for="notula-periode-{{ $kode }}">Cakupan periode di notula</label>
+                                        <select id="notula-periode-{{ $kode }}" class="inp filled" wire:model="formLabel.notula_periode">
+                                            <option value="triwulan">Hanya triwulan berjalan</option>
+                                            <option value="kumulatif">Kumulatif (triwulan I s.d. triwulan notula)</option>
+                                        </select>
+                                    </div>
+                                    <div class="field">
+                                        <label for="judul-notula-{{ $kode }}">Judul di notula</label>
+                                        <input id="judul-notula-{{ $kode }}" type="text" class="inp filled" maxlength="150" wire:model="formLabel.judul_notula" placeholder="Bawaan: {{ $b['notula'] ?? $b['judul'] }}">
+                                    </div>
+                                </div>
+                                <div class="row2" style="align-items:center;margin-top:6px">
+                                    <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer">
+                                        <input type="checkbox" wire:model="formLabel.masuk_notula"> Tampilkan di notula
+                                    </label>
+                                    <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer">
+                                        <input type="checkbox" wire:model="formLabel.aktif"> Bagian aktif
+                                    </label>
+                                </div>
+                                <div class="field" style="margin-top:8px">
+                                    <label for="catatan-{{ $kode }}">Catatan internal / instruksi</label>
+                                    <textarea id="catatan-{{ $kode }}" class="inp filled" style="height:auto;display:block" rows="2" maxlength="2000" wire:model="formLabel.catatan" placeholder="Catatan tambahan untuk bagian ini"></textarea>
+                                </div>
+                                <div class="fhint">Pengaturan disimpan dinamis. Kosongkan isian untuk memakai bawaan kode sistem.</div>
                                 <div class="btn-row">
-                                    <button type="button" class="btn btn-primary btn-sm" wire:click="simpan" wire:loading.attr="disabled" wire:target="simpan">💾 Simpan label</button>
+                                    <button type="button" class="btn btn-primary btn-sm" wire:click="simpan" wire:loading.attr="disabled" wire:target="simpan">💾 Simpan Pengaturan</button>
                                     <button type="button" class="btn btn-ghost btn-sm" wire:click="kosongkan">Kembalikan ke bawaan</button>
                                     <button type="button" class="btn btn-ghost btn-sm" wire:click="tutup">Batal</button>
                                 </div>

@@ -35,10 +35,45 @@ final class KatalogVariabel
             }
         }
 
-        $definisi = VariabelKatalog::orderBy('nama')->get()
-            ->map(fn (VariabelKatalog $v) => self::entriDefinisi($v, $pemakaian[$v->kode] ?? []));
+        $semuaDb = VariabelKatalog::orderBy('nama')->get()->keyBy('kode');
 
-        return collect(RegistriVariabel::semua())->values()->concat($definisi)->concat($kolom)->values();
+        $katalogSistem = collect(RegistriVariabel::semua())->map(function (array $v) use ($semuaDb) {
+            $kode = $v['kode'];
+            if (! isset($semuaDb[$kode])) {
+                return $v + ['model_id' => null, 'disesuaikan' => false, 'nilai_override' => null];
+            }
+
+            $ov = $semuaDb[$kode];
+            $v['nama'] = $ov->nama ?: $v['nama'];
+            if (filled($ov->keterangan)) {
+                $v['deskripsi'] = $ov->keterangan;
+            }
+            if (filled($ov->contoh)) {
+                $v['contoh'] = $ov->contoh;
+            }
+            if (filled($ov->catatan)) {
+                $v['catatan'] = $ov->catatan;
+            }
+            if (! $ov->aktif) {
+                $v['status'] = 'nonaktif';
+            }
+            $v['model_id'] = $ov->id;
+            $v['disesuaikan'] = true;
+            $v['nilai_override'] = $ov->nilai_override;
+            $v['satuan'] = $ov->satuan;
+            $v['desimal'] = $ov->desimal;
+            $v['pemisah'] = $ov->pemisah;
+            $v['ribuan'] = (bool) $ov->ribuan;
+            $v['nol_sebagai_strip'] = (bool) $ov->nol_sebagai_strip;
+
+            return $v;
+        });
+
+        $definisi = $semuaDb->reject(fn ($v) => array_key_exists($v->kode, RegistriVariabel::semua()))
+            ->map(fn (VariabelKatalog $v) => self::entriDefinisi($v, $pemakaian[$v->kode] ?? []))
+            ->values();
+
+        return $katalogSistem->values()->concat($definisi)->concat($kolom)->values();
     }
 
     /**

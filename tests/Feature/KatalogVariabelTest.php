@@ -556,4 +556,44 @@ class KatalogVariabelTest extends TestCase
         $this->assertSame('Uraian TW Lalu', $hasilSalin['tahap_lalu']);
         $this->assertSame('50', $hasilSalin['target_lalu']);
     }
+
+    public function test_semua_variabel_sistem_dapat_diubah_dan_disesuaikan_nilainya_secara_dinamis(): void
+    {
+        $this->sebagai('Tim SAKIP');
+
+        $k = Livewire::test(VariabelKatalogManager::class)
+            ->call('ubahVariabel', 'nama_satker', 'sistem', null)
+            ->set('form.nama', 'Nama Satker Butur')
+            ->set('form.nilai_override', 'BPS KABUPATEN BUTON UTARA 2026')
+            ->call('simpan')
+            ->assertHasNoErrors();
+
+        $this->assertSame('BPS KABUPATEN BUTON UTARA 2026', VariabelKatalog::nilai('nama_satker'));
+
+        $varList = KatalogVariabel::semua();
+        $satker = $varList->firstWhere('kode', 'nama_satker');
+        $this->assertNotNull($satker);
+        $this->assertSame('Nama Satker Butur', $satker['nama']);
+        $this->assertTrue($satker['disesuaikan']);
+
+        // Reset ke bawaan
+        $k->call('kembalikanKeBawaan', 'nama_satker');
+        $this->assertSame('BPS Bawaan', VariabelKatalog::nilai('nama_satker', 'BPS Bawaan'));
+    }
+
+    public function test_bagian_bawaan_jenis_b_dan_c_dapat_dikonfigurasi_pengaturannya(): void
+    {
+        $this->sebagai('Tim SAKIP');
+
+        Livewire::test(\App\Livewire\DaftarBagianSipinter::class)
+            ->call('buka', 'notula')
+            ->set('formLabel.judul', 'Notula & Persetujuan Kustom')
+            ->set('formLabel.notula_periode', 'kumulatif')
+            ->call('simpan')
+            ->assertHasNoErrors();
+
+        $pengaturan = \App\Models\PengaturanBagianBawaan::where('kode', 'notula')->firstOrFail();
+        $this->assertSame('Notula & Persetujuan Kustom', $pengaturan->judul);
+        $this->assertSame('kumulatif', $pengaturan->notula_periode);
+    }
 }

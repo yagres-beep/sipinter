@@ -72,7 +72,7 @@ class VariabelKatalogManager extends Component
         return [
             'kode' => '', 'nama' => '', 'tipe' => 'angka', 'satuan' => '', 'desimal' => '', 'pemisah' => FormatAngkaKolom::PEMISAH_KOMA,
             'ribuan' => true, 'nol_sebagai_strip' => false, 'min' => '', 'maks' => '', 'panjang_min' => '', 'panjang_maks' => '', 'opsi_teks' => '', 'keterangan' => '',
-            'kategori' => VariabelKatalog::KATEGORI_BAWAAN, 'contoh' => '', 'catatan' => '', 'pengganti_kode' => '',
+            'kategori' => VariabelKatalog::KATEGORI_BAWAAN, 'contoh' => '', 'catatan' => '', 'pengganti_kode' => '', 'nilai_override' => '',
         ];
     }
 
@@ -114,7 +114,44 @@ class VariabelKatalogManager extends Component
             'opsi_teks' => implode(', ', (array) ($v->opsi ?? [])), 'keterangan' => (string) $v->keterangan,
             'kategori' => $v->kategori ?: VariabelKatalog::KATEGORI_BAWAAN, 'contoh' => (string) $v->contoh,
             'catatan' => (string) $v->catatan, 'pengganti_kode' => (string) $v->pengganti_kode,
+            'nilai_override' => (string) $v->nilai_override,
         ];
+    }
+
+    public function ubahVariabel(string $kode, string $jenis, ?int $modelId = null): void
+    {
+        if ($modelId !== null) {
+            $this->ubah($modelId);
+
+            return;
+        }
+
+        // Variabel sistem yang pertama kali disunting: buat baris override di DB
+        $sys = RegistriVariabel::semua()[$kode] ?? null;
+        abort_unless($sys, 404);
+
+        $v = VariabelKatalog::create([
+            'kode' => $kode,
+            'nama' => $sys['nama'],
+            'tipe' => $sys['tipe'] === 'angka' ? 'angka' : 'teks',
+            'kategori' => $sys['kategori'] ?? VariabelKatalog::KATEGORI_BAWAAN,
+            'keterangan' => $sys['deskripsi'] ?? null,
+            'contoh' => $sys['contoh'] ?? null,
+            'catatan' => $sys['catatan'] ?? null,
+            'sumber' => 'sistem',
+            'aktif' => true,
+            'dibuat_oleh' => auth()->id(),
+        ]);
+
+        VariabelKatalog::lupakanCache();
+        $this->ubah($v->id);
+    }
+
+    public function kembalikanKeBawaan(string $kode): void
+    {
+        VariabelKatalog::where('kode', $kode)->delete();
+        VariabelKatalog::lupakanCache();
+        session()->flash('status-katalog', "Variabel {$kode} dikembalikan ke pengaturan bawaan sistem.");
     }
 
     public function tutup(): void
@@ -132,7 +169,7 @@ class VariabelKatalogManager extends Component
 
     protected static function sidik(VariabelKatalog $v): string
     {
-        return sha1((string) json_encode($v->only(['kode', 'nama', 'tipe', 'satuan', 'desimal', 'pemisah', 'ribuan', 'nol_sebagai_strip', 'min', 'maks', 'panjang_min', 'panjang_maks', 'opsi', 'keterangan', 'aktif', 'kategori', 'contoh', 'catatan', 'pengganti_kode'])));
+        return sha1((string) json_encode($v->only(['kode', 'nama', 'tipe', 'satuan', 'desimal', 'pemisah', 'ribuan', 'nol_sebagai_strip', 'nilai_override', 'min', 'maks', 'panjang_min', 'panjang_maks', 'opsi', 'keterangan', 'aktif', 'kategori', 'contoh', 'catatan', 'pengganti_kode'])));
     }
 
     /** @return array<int, string> */
@@ -171,6 +208,7 @@ class VariabelKatalogManager extends Component
             'form.panjang_maks' => ['nullable', 'integer', 'min:1', 'max:5000'],
             'form.opsi_teks' => ['nullable', 'string', 'max:1000'],
             'form.keterangan' => ['nullable', 'string', 'max:1000'],
+            'form.nilai_override' => ['nullable', 'string', 'max:5000'],
         ], [
             'form.kode.regex' => 'Kode hanya huruf kecil, angka, dan garis bawah, diawali huruf (2–60 karakter), mis. persen_tindak_lanjut.',
             'form.kode.unique' => 'Kode tersebut sudah dipakai variabel lain.',
@@ -219,6 +257,7 @@ class VariabelKatalogManager extends Component
             'panjang_maks' => JenisKolomBagianKustom::teks($tipe) && filled($f['panjang_maks']) ? (int) $f['panjang_maks'] : null,
             'opsi' => in_array($tipe, ['pilihan', 'pilihan_ganda'], true) ? $opsi : null,
             'keterangan' => trim((string) $f['keterangan']) ?: null,
+            'nilai_override' => trim((string) ($f['nilai_override'] ?? '')) ?: null,
             'kategori' => filled($f['kategori'] ?? null) ? $f['kategori'] : VariabelKatalog::KATEGORI_BAWAAN,
             'contoh' => trim((string) ($f['contoh'] ?? '')) ?: null,
             'catatan' => trim((string) ($f['catatan'] ?? '')) ?: null,

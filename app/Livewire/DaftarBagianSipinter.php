@@ -60,12 +60,18 @@ class DaftarBagianSipinter extends Component
         abort_unless(RegistriBagian::bisaDiberiLabel($kode), 403);
 
         $baris = PengaturanBagianBawaan::where('kode', $kode)->first();
+        $bawaan = RegistriBagian::bawaan()[$kode] ?? [];
 
         $this->sunting = $kode;
         $this->formLabel = [
             'label_menu' => (string) $baris?->label_menu,
-            'judul' => (string) $baris?->judul,
+            'judul' => (string) ($baris?->judul ?: ($bawaan['judul'] ?? '')),
             'petunjuk' => (string) $baris?->petunjuk,
+            'masuk_notula' => $baris ? (bool) $baris->masuk_notula : (($bawaan['notula'] ?? '—') !== '—'),
+            'judul_notula' => (string) ($baris?->judul_notula ?: ($bawaan['notula'] ?? '')),
+            'notula_periode' => (string) ($baris?->notula_periode ?: 'triwulan'),
+            'aktif' => $baris ? (bool) $baris->aktif : true,
+            'catatan' => (string) $baris?->catatan,
         ];
         $this->versiLabel = self::versi($baris);
         $this->resetErrorBag();
@@ -81,7 +87,17 @@ class DaftarBagianSipinter extends Component
     /** Kosongkan semua isian form = kembali ke label bawaan (setelah disimpan). */
     public function kosongkan(): void
     {
-        $this->formLabel = ['label_menu' => '', 'judul' => '', 'petunjuk' => ''];
+        $bawaan = RegistriBagian::bawaan()[$this->sunting] ?? [];
+        $this->formLabel = [
+            'label_menu' => '',
+            'judul' => (string) ($bawaan['judul'] ?? ''),
+            'petunjuk' => '',
+            'masuk_notula' => (($bawaan['notula'] ?? '—') !== '—'),
+            'judul_notula' => (string) ($bawaan['notula'] ?? ''),
+            'notula_periode' => 'triwulan',
+            'aktif' => true,
+            'catatan' => '',
+        ];
     }
 
     public function simpan(): void
@@ -90,21 +106,27 @@ class DaftarBagianSipinter extends Component
         abort_unless(RegistriBagian::bisaDiberiLabel($kode), 403);
 
         $this->validate([
-            'formLabel.label_menu' => ['nullable', 'string', 'max:40'],
-            'formLabel.judul' => ['nullable', 'string', 'max:120'],
+            'formLabel.label_menu' => ['nullable', 'string', 'max:60'],
+            'formLabel.judul' => ['nullable', 'string', 'max:150'],
             'formLabel.petunjuk' => ['nullable', 'string', 'max:1000'],
-        ], [
-            'formLabel.label_menu.max' => 'Label menu maksimal 40 karakter.',
-            'formLabel.judul.max' => 'Judul maksimal 120 karakter.',
-            'formLabel.petunjuk.max' => 'Petunjuk maksimal 1000 karakter.',
+            'formLabel.judul_notula' => ['nullable', 'string', 'max:150'],
+            'formLabel.notula_periode' => ['required', 'string', 'in:triwulan,kumulatif'],
+            'formLabel.masuk_notula' => ['boolean'],
+            'formLabel.aktif' => ['boolean'],
+            'formLabel.catatan' => ['nullable', 'string', 'max:2000'],
         ]);
 
+        $bawaan = RegistriBagian::bawaan()[$kode];
         $baru = [
             'label_menu' => self::bersih($this->formLabel['label_menu'] ?? ''),
             'judul' => self::bersih($this->formLabel['judul'] ?? ''),
             'petunjuk' => self::bersih($this->formLabel['petunjuk'] ?? ''),
+            'masuk_notula' => (bool) ($this->formLabel['masuk_notula'] ?? true),
+            'judul_notula' => self::bersih($this->formLabel['judul_notula'] ?? ''),
+            'notula_periode' => (string) ($this->formLabel['notula_periode'] ?? 'triwulan'),
+            'aktif' => (bool) ($this->formLabel['aktif'] ?? true),
+            'catatan' => self::bersih($this->formLabel['catatan'] ?? ''),
         ];
-        $bawaan = RegistriBagian::bawaan()[$kode];
 
         $hasil = DB::transaction(function () use ($kode, $baru, $bawaan) {
             $baris = PengaturanBagianBawaan::where('kode', $kode)->lockForUpdate()->first();
@@ -117,6 +139,11 @@ class DaftarBagianSipinter extends Component
                 'label_menu' => $baris?->label_menu,
                 'judul' => $baris?->judul,
                 'petunjuk' => $baris?->petunjuk,
+                'masuk_notula' => (bool) ($baris?->masuk_notula ?? true),
+                'judul_notula' => $baris?->judul_notula,
+                'notula_periode' => (string) ($baris?->notula_periode ?? 'triwulan'),
+                'aktif' => (bool) ($baris?->aktif ?? true),
+                'catatan' => $baris?->catatan,
             ];
 
             if ($sebelum === $baru) {
@@ -139,7 +166,7 @@ class DaftarBagianSipinter extends Component
         });
 
         if ($hasil === 'bentrok') {
-            $this->addError('formLabel', 'Label bagian ini sudah diubah Tim SAKIP lain sejak Anda membukanya. Perubahan Anda belum disimpan. Tutup lalu buka kembali untuk memuat yang terbaru.');
+            $this->addError('formLabel', 'Pengaturan bagian ini sudah diubah Tim SAKIP lain sejak Anda membukanya. Perubahan Anda belum disimpan. Tutup lalu buka kembali untuk memuat yang terbaru.');
 
             return;
         }
@@ -149,7 +176,7 @@ class DaftarBagianSipinter extends Component
 
         session()->flash('status-bagian-bawaan', $hasil === 'sama'
             ? 'Tidak ada perubahan.'
-            : 'Label "'.$bawaan['label'].'" disimpan. Langsung berlaku di Isian Kegiatan. Notula, DOCX, dan folder Drive tidak berubah.');
+            : 'Pengaturan bagian "'.$bawaan['label'].'" berhasil disimpan.');
     }
 
     private static function bersih(string $teks): ?string
@@ -161,7 +188,7 @@ class DaftarBagianSipinter extends Component
 
     private static function versi(?PengaturanBagianBawaan $baris): string
     {
-        return sha1((string) json_encode([$baris?->label_menu, $baris?->judul, $baris?->petunjuk]));
+        return sha1((string) json_encode([$baris?->label_menu, $baris?->judul, $baris?->petunjuk, $baris?->masuk_notula, $baris?->judul_notula, $baris?->notula_periode, $baris?->aktif, $baris?->catatan]));
     }
 
     /**

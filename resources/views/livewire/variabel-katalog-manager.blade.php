@@ -221,6 +221,11 @@
                 @endif
 
                 <div class="field">
+                    <label for="v-override">Nilai tetap / pengganti di notula <span style="color:var(--muted);font-weight:500">(opsional — misal ubah nama satker atau teks baku)</span></label>
+                    <textarea id="v-override" class="inp filled" style="height:auto;display:block" rows="2" wire:model.blur="form.nilai_override" placeholder="Isi bila ingin mengganti nilai bawaan sistem"></textarea>
+                    @error('form.nilai_override')<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ $message }}</div>@enderror
+                </div>
+                <div class="field">
                     <label for="v-ket">Deskripsi <span style="color:var(--muted);font-weight:500">(opsional)</span></label>
                     <textarea id="v-ket" class="inp filled" style="height:auto;display:block" rows="2" wire:model.blur="form.keterangan" placeholder="Apa arti nilai ini?"></textarea>
                 </div>
@@ -282,6 +287,7 @@
                                     <span class="badge {{ $lencanaStatus[$v['status']] }}">{{ $labelStatus[$v['status']] }}</span>
                                     <span class="badge b-verif">{{ $labelJenisPendek[$v['jenis']] }}</span>
                                     <span class="badge b-draft">{{ $R::TIPE[$v['tipe']] ?? $v['tipe'] }}</span>
+                                    @if (! empty($v['disesuaikan']))<span class="badge b-tunggu">Disesuaikan</span>@endif
                                     @if ($v['bagian'])<span class="badge b-draft">Bagian: {{ $v['bagian'] }}</span>@endif
                                     @if ($v['lingkup'] && $v['lingkup'] !== 'global')<span class="badge b-draft">per {{ $v['lingkup'] === 'iku_blok' ? 'IKU' : ($v['lingkup'] === 'ro_row' ? 'rincian output' : 'proksi') }}</span>@endif
                                     @if ($v['jenis'] === 'definisi')<span class="badge b-draft">dipakai {{ count($v['pemakaian']) }} kolom</span>@endif
@@ -291,9 +297,11 @@
                             </div>
                             <div class="btn-row" style="margin-top:0;flex-wrap:wrap">
                                 <button type="button" class="btn btn-ghost btn-sm" wire:click="bukaDetail('{{ $v['id'] }}')" aria-expanded="{{ $detail === $v['id'] ? 'true' : 'false' }}">{{ $detail === $v['id'] ? 'Tutup' : 'Detail' }}</button>
-                                @if ($v['jenis'] === 'definisi')
-                                    <button type="button" class="btn btn-ghost btn-sm" wire:click="ubah({{ $v['model_id'] }})">✎ Ubah</button>
-                                    <button type="button" class="btn btn-ghost btn-sm" wire:click="toggleAktif({{ $v['model_id'] }})" @if ($v['aktif_model']) wire:confirm="Nonaktifkan variabel &quot;{{ $v['nama'] }}&quot;? Kolom yang sudah memakainya tetap berfungsi dan datanya tetap ada; variabel ini tidak bisa dipilih untuk kolom baru." @endif>{{ $v['aktif_model'] ? 'Nonaktifkan' : 'Aktifkan kembali' }}</button>
+                                <button type="button" class="btn btn-ghost btn-sm" wire:click="ubahVariabel('{{ $v['kode'] }}', '{{ $v['jenis'] }}', {{ ! empty($v['model_id']) ? $v['model_id'] : 'null' }})">✎ Ubah</button>
+                                @if (! empty($v['disesuaikan']))
+                                    <button type="button" class="btn btn-ghost btn-sm" style="color:var(--red)" wire:click="kembalikanKeBawaan('{{ $v['kode'] }}')" wire:confirm="Kembalikan variabel &quot;{{ $v['nama'] }}&quot; ke pengaturan bawaan sistem?">↺ Bawaan</button>
+                                @elseif ($v['jenis'] === 'definisi' && ! empty($v['model_id']))
+                                    <button type="button" class="btn btn-ghost btn-sm" wire:click="toggleAktif({{ $v['model_id'] }})" @if ($v['aktif_model'] ?? false) wire:confirm="Nonaktifkan variabel &quot;{{ $v['nama'] }}&quot;? Kolom yang sudah memakainya tetap berfungsi dan datanya tetap ada; variabel ini tidak bisa dipilih untuk kolom baru." @endif>{{ ($v['aktif_model'] ?? false) ? 'Nonaktifkan' : 'Aktifkan kembali' }}</button>
                                 @endif
                             </div>
                         </div>

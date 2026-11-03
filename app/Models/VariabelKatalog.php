@@ -29,7 +29,7 @@ class VariabelKatalog extends Model
 
     protected $fillable = [
         'kode', 'nama', 'tipe', 'satuan', 'desimal', 'pemisah', 'ribuan', 'nol_sebagai_strip', 'min', 'maks',
-        'panjang_min', 'panjang_maks', 'opsi', 'sumber', 'keterangan', 'aktif',
+        'panjang_min', 'panjang_maks', 'opsi', 'nilai_override', 'sumber', 'keterangan', 'aktif',
         'kategori', 'contoh', 'catatan', 'pengganti_kode',
         'dibuat_oleh', 'diubah_oleh',
     ];
@@ -106,11 +106,43 @@ class VariabelKatalog extends Model
             'pemisah' => $this->pemisah ?: FormatAngkaKolom::PEMISAH_KOMA,
             'ribuan' => (bool) $this->ribuan,
             'nol_sebagai_strip' => (bool) $this->nol_sebagai_strip,
+            'nilai_override' => $this->nilai_override,
             'min' => $this->min,
             'maks' => $this->maks,
             'panjang_min' => $this->panjang_min,
             'panjang_maks' => $this->panjang_maks,
         ];
+    }
+
+    /** Nilai override statis (mis. nama satker). */
+    public static function nilai(string $kode, mixed $default = null): mixed
+    {
+        $peta = static::peta();
+        if (isset($peta[$kode]) && filled($peta[$kode]['nilai_override'] ?? null)) {
+            return $peta[$kode]['nilai_override'];
+        }
+
+        return $default;
+    }
+
+    /** Format nilai dinamis mengikuti aturan override variabel katalog bila ada. */
+    public static function formatNilai(string $kode, mixed $nilai): ?string
+    {
+        if ($nilai === null || $nilai === '') {
+            return null;
+        }
+
+        $peta = static::peta();
+        if (! isset($peta[$kode])) {
+            return null;
+        }
+
+        $def = $peta[$kode];
+        if (! isset($def['desimal']) && ! isset($def['satuan']) && empty($def['nol_sebagai_strip'])) {
+            return null;
+        }
+
+        return FormatAngkaKolom::tampil((string) $nilai, $def);
     }
 
     /**

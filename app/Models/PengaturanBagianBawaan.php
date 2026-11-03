@@ -18,7 +18,15 @@ class PengaturanBagianBawaan extends Model
 {
     protected $table = 'pengaturan_bagian_bawaan';
 
-    protected $fillable = ['kode', 'label_menu', 'judul', 'petunjuk', 'diubah_oleh'];
+    protected $fillable = ['kode', 'label_menu', 'judul', 'petunjuk', 'masuk_notula', 'judul_notula', 'notula_periode', 'aktif', 'catatan', 'diubah_oleh'];
+
+    protected function casts(): array
+    {
+        return [
+            'masuk_notula' => 'boolean',
+            'aktif' => 'boolean',
+        ];
+    }
 
     private const KUNCI_CACHE = 'pengaturan-bagian-bawaan';
 
@@ -32,7 +40,7 @@ class PengaturanBagianBawaan extends Model
      * Tabel belum ada (migrasi belum jalan) = kosong, jadi layar tetap memakai label
      * bawaan dan tidak error.
      *
-     * @return array<string, array{label_menu: ?string, judul: ?string, petunjuk: ?string}>
+     * @return array<string, array{label_menu: ?string, judul: ?string, petunjuk: ?string, masuk_notula: bool, judul_notula: ?string, notula_periode: string, aktif: bool, catatan: ?string}>
      */
     public static function peta(): array
     {
@@ -45,6 +53,11 @@ class PengaturanBagianBawaan extends Model
                 'label_menu' => $p->label_menu,
                 'judul' => $p->judul,
                 'petunjuk' => $p->petunjuk,
+                'masuk_notula' => (bool) $p->masuk_notula,
+                'judul_notula' => $p->judul_notula,
+                'notula_periode' => (string) ($p->notula_periode ?: 'triwulan'),
+                'aktif' => (bool) $p->aktif,
+                'catatan' => $p->catatan,
             ]])->all();
         });
     }

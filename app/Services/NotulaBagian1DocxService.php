@@ -664,7 +664,7 @@ class NotulaBagian1DocxService
         // bisa menghitung "{{triwulan_angka-1}}" sendiri. TW I tidak punya triwulan
         // sebelumnya di tahun yang sama, jadi "…".
         $this->set($p, 'triwulan_sebelumnya', $periode->triwulan > 1 ? ['I', 'II', 'III'][$periode->triwulan - 2] : null);
-        $this->set($p, 'nama_satker', 'BPS KABUPATEN BUTON UTARA');
+        $this->set($p, 'nama_satker', \App\Models\VariabelKatalog::nilai('nama_satker', 'BPS KABUPATEN BUTON UTARA'));
         $this->set($p, 'agenda_pembahasan', "Monitoring Kinerja Triwulan {$data['labelTriwulan']} Tahun {$periode->tahun}");
         $this->set($p, 'hari_tanggal', $notula->hari_tanggal);
         $this->set($p, 'waktu', $notula->waktu);
@@ -822,13 +822,28 @@ class NotulaBagian1DocxService
         $this->set($sub, 'kode', $kode);
         $this->set($sub, 'indikator', $iku->indikator);
         $this->set($sub, 'sasaran', $iku->sasaran);
-        $this->set($sub, 'target_pk', PengaturanCapaian::formatAngka($rekap['target_pk'] ?? null));
-        $this->set($sub, 'target_tw', PengaturanCapaian::formatAngka($rekap['target_tw'] ?? null));
-        $this->set($sub, 'realisasi_tw', PengaturanCapaian::formatRealisasiKumulatif($iku->pakaiRasio()
+        $targetPk = \App\Models\VariabelKatalog::formatNilai('target_pk', $rekap['target_pk'] ?? null)
+            ?? PengaturanCapaian::formatAngka($rekap['target_pk'] ?? null);
+        $this->set($sub, 'target_pk', $targetPk);
+
+        $targetTw = \App\Models\VariabelKatalog::formatNilai('target_tw', $rekap['target_tw'] ?? null)
+            ?? PengaturanCapaian::formatAngka($rekap['target_tw'] ?? null);
+        $this->set($sub, 'target_tw', $targetTw);
+
+        $realisasiNilai = $iku->pakaiRasio()
             ? ($rekap['realisasi_kumulatif_persen'] ?? null)
-            : ($rekap['realisasi'] ?? null)));
-        $this->set($sub, 'capaian_tw', PengaturanCapaian::formatPersen($rekap['capaian_tw'] ?? null));
-        $this->set($sub, 'capaian_pk', PengaturanCapaian::formatPersen($rekap['capaian_pk'] ?? null));
+            : ($rekap['realisasi'] ?? null);
+        $realisasiTw = \App\Models\VariabelKatalog::formatNilai('realisasi_tw', $realisasiNilai)
+            ?? PengaturanCapaian::formatRealisasiKumulatif($realisasiNilai);
+        $this->set($sub, 'realisasi_tw', $realisasiTw);
+
+        $capaianTw = \App\Models\VariabelKatalog::formatNilai('capaian_tw', $rekap['capaian_tw'] ?? null)
+            ?? PengaturanCapaian::formatPersen($rekap['capaian_tw'] ?? null);
+        $this->set($sub, 'capaian_tw', $capaianTw);
+
+        $capaianPk = \App\Models\VariabelKatalog::formatNilai('capaian_pk', $rekap['capaian_pk'] ?? null)
+            ?? PengaturanCapaian::formatPersen($rekap['capaian_pk'] ?? null);
+        $this->set($sub, 'capaian_pk', $capaianPk);
 
         // Analisis Capaian Kinerja: narasi bebas dari Tim SAKIP, DIIKUTI daftar
         // bernomor kegiatan pendukung IKU ini pada triwulan berjalan (RF-37) --

@@ -127,17 +127,16 @@ final class RegistriBagian
         ];
     }
 
-    /** Kode bagian bawaan yang labelnya boleh diganti (jenis B). */
+    /** Kode bagian bawaan yang label dan pengaturannya boleh diganti. */
     public static function bisaDiberiLabel(string $kode): bool
     {
-        return (self::bawaan()[$kode]['jenis'] ?? null) === 'B';
+        return array_key_exists($kode, self::bawaan());
     }
 
     /**
-     * Label efektif bagian bawaan jenis B untuk layar Isian Kegiatan: pengaturan Tim
-     * SAKIP bila ada, selain itu label dari kode.
+     * Label efektif bagian bawaan untuk layar: pengaturan Tim SAKIP bila ada, selain itu label dari kode.
      *
-     * @return array<string, array{label: string, judul: string, petunjuk: ?string, diubah: bool}>
+     * @return array<string, array{label: string, judul: string, petunjuk: ?string, masuk_notula: bool, judul_notula: string, notula_periode: string, aktif: bool, catatan: ?string, diubah: bool}>
      */
     public static function tampilanBawaan(): array
     {
@@ -145,17 +144,18 @@ final class RegistriBagian
         $hasil = [];
 
         foreach (self::bawaan() as $kode => $b) {
-            if ($b['jenis'] !== 'B') {
-                continue;
-            }
-
             $p = $atur[$kode] ?? [];
 
             $hasil[$kode] = [
                 'label' => filled($p['label_menu'] ?? null) ? (string) $p['label_menu'] : $b['label'],
                 'judul' => filled($p['judul'] ?? null) ? (string) $p['judul'] : $b['judul'],
                 'petunjuk' => filled($p['petunjuk'] ?? null) ? (string) $p['petunjuk'] : null,
-                'diubah' => filled($p['label_menu'] ?? null) || filled($p['judul'] ?? null) || filled($p['petunjuk'] ?? null),
+                'masuk_notula' => (bool) ($p['masuk_notula'] ?? true),
+                'judul_notula' => filled($p['judul_notula'] ?? null) ? (string) $p['judul_notula'] : ($b['judul'] ?? $b['label']),
+                'notula_periode' => (string) ($p['notula_periode'] ?? 'triwulan'),
+                'aktif' => (bool) ($p['aktif'] ?? true),
+                'catatan' => filled($p['catatan'] ?? null) ? (string) $p['catatan'] : null,
+                'diubah' => filled($p['label_menu'] ?? null) || filled($p['judul'] ?? null) || filled($p['petunjuk'] ?? null) || isset($p['masuk_notula']),
             ];
         }
 
