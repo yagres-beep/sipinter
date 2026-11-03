@@ -839,3 +839,88 @@ button.mark:disabled{opacity:.65;cursor:progress}
 .progres-unggah .progres-unggah-item{display:flex;align-items:center;gap:8px}
 .progres-unggah .progres-unggah-item::before{content:"";width:13px;height:13px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--blue,#2563eb);flex:none;animation:progresSpin .7s linear infinite}
 @keyframes progresSpin{to{transform:rotate(360deg)}}
+
+/* ==========================================================================
+   REKAP KINERJA TAHUNAN (LAKIN) - RESPONSIVE & SPREADSHEET TABLE STYLES
+   ========================================================================== */
+
+/* Toolbar Rekap */
+.lakin-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px;padding:12px 16px;background:var(--bg);border:1px solid var(--line);border-radius:var(--radius-sm)}
+.lakin-toolbar-group{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+
+/* Mode Switcher (Tabel vs Kartu) */
+.lakin-view-switch{display:inline-flex;align-items:center;background:var(--white);border:1.5px solid var(--input-line);border-radius:10px;padding:3px;gap:3px;box-shadow:var(--sh-sm)}
+.lakin-view-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border:none;background:transparent;color:var(--muted);font-size:12.5px;font-weight:600;border-radius:8px;cursor:pointer;transition:all .15s}
+.lakin-view-btn:hover{color:var(--ink);background:var(--ro-bg)}
+.lakin-view-btn.active{background:var(--accent-a);color:#ffffff;box-shadow:0 1px 4px rgba(59,130,246,.35)}
+
+/* Filter & Search */
+.lakin-filter-inp{padding:6px 12px;font-size:12.5px;border:1.5px solid var(--input-line);border-radius:8px;background:var(--input-bg);color:var(--ink);min-width:180px}
+.lakin-filter-inp:focus{outline:none;border-color:var(--focus-ring);box-shadow:0 0 0 3px color-mix(in srgb, var(--focus-ring) 25%, transparent)}
+
+/* Container Tabel Spreadsheet */
+.lakin-table-wrap{position:relative;width:100%;overflow-x:auto;max-height:74vh;overflow-y:auto;border:1.5px solid var(--line);border-radius:var(--radius-sm);background:var(--white);box-shadow:var(--sh-sm);-webkit-overflow-scrolling:touch}
+.lakin-table{width:100%;min-width:1720px;border-collapse:separate;border-spacing:0;font-size:12.5px}
+
+/* Sticky Headers */
+.lakin-table thead th{position:sticky;top:0;z-index:10;background:var(--ro-bg);color:var(--ink);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;padding:12px 14px;border-bottom:2px solid var(--line);white-space:nowrap}
+.lakin-table thead th.th-sticky-left{position:sticky;left:0;z-index:25;background:var(--ro-bg);border-right:2px solid var(--line);box-shadow:3px 0 6px -2px rgba(16,32,70,.08)}
+.lakin-table thead th.th-sticky-right{position:sticky;right:0;z-index:25;background:var(--ro-bg);border-left:2px solid var(--line);box-shadow:-3px 0 6px -2px rgba(16,32,70,.08)}
+
+/* Sasaran Section Header Row */
+.lakin-sasaran-tr td{background:linear-gradient(90deg, var(--blue-soft) 0%, var(--surface-2) 100%);padding:10px 14px;border-top:2px solid var(--blue);border-bottom:1.5px solid var(--blue-line);color:var(--navy);font-weight:700;font-size:12px;letter-spacing:.3px}
+.lakin-sasaran-tr .sasaran-title-box{display:flex;align-items:center;gap:10px;position:sticky;left:14px;width:fit-content;max-width:calc(100vw - 300px)}
+
+/* Data Cells */
+.lakin-table tbody td{padding:8px 10px;border-bottom:1px solid var(--line2);vertical-align:middle;background:var(--white);transition:background .1s}
+.lakin-table tbody tr:hover td{background:var(--bg)}
+
+/* Sticky Data Cells */
+.lakin-table tbody td.td-sticky-left{position:sticky;left:0;z-index:8;background:inherit;border-right:2px solid var(--line);box-shadow:3px 0 6px -2px rgba(16,32,70,.08)}
+.lakin-table tbody td.td-sticky-right{position:sticky;right:0;z-index:8;background:inherit;border-left:2px solid var(--line);box-shadow:-3px 0 6px -2px rgba(16,32,70,.08)}
+.lakin-table tbody tr:hover td.td-sticky-left{background:var(--bg)}
+.lakin-table tbody tr:hover td.td-sticky-right{background:var(--bg)}
+
+/* Table Form Controls */
+.tbl-inp{width:100%;padding:7px 10px;border:1.5px solid var(--input-line);border-radius:7px;font-size:12.5px;background:var(--input-bg);color:var(--ink);transition:border-color .15s, box-shadow .15s}
+.tbl-inp:focus{outline:none;border-color:var(--focus-ring);box-shadow:0 0 0 3px color-mix(in srgb, var(--focus-ring) 25%, transparent)}
+.tbl-inp.num{text-align:right;font-variant-numeric:tabular-nums;-moz-appearance:textfield}
+.tbl-inp.num::-webkit-outer-spin-button, .tbl-inp.num::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+
+.tbl-textarea{width:100%;min-height:50px;height:50px;padding:7px 10px;border:1.5px solid var(--input-line);border-radius:7px;font-size:12px;line-height:1.4;background:var(--input-bg);color:var(--ink);resize:vertical;font-family:inherit;transition:border-color .15s, box-shadow .15s}
+.tbl-textarea:focus{outline:none;border-color:var(--focus-ring);box-shadow:0 0 0 3px color-mix(in srgb, var(--focus-ring) 25%, transparent)}
+
+/* Card View (Semua Device & Mobile) */
+.lakin-cards-wrap{display:flex;flex-direction:column;gap:18px}
+.lakin-group-card{background:var(--white);border:1.5px solid var(--line);border-radius:var(--radius);overflow:hidden;box-shadow:var(--sh-sm)}
+.lakin-group-header{padding:12px 18px;background:var(--blue-soft);border-bottom:1.5px solid var(--blue-line);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.lakin-group-title{font-size:13.5px;font-weight:700;color:var(--navy);display:flex;align-items:center;gap:8px}
+.lakin-group-body{padding:16px;display:flex;flex-direction:column;gap:14px}
+
+.lakin-card{background:var(--surface-2);border:1.5px solid var(--line2);border-radius:10px;padding:16px;box-shadow:var(--sh-sm);transition:border-color .15s, box-shadow .15s}
+.lakin-card:hover{border-color:var(--hover-line);box-shadow:var(--sh)}
+.lakin-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--line2)}
+.lakin-card-metrics{display:grid;grid-template-columns:repeat(3, 1fr);gap:10px;margin-bottom:14px;background:var(--bg);padding:10px 14px;border-radius:8px;border:1px solid var(--line)}
+.lakin-metric-box{display:flex;flex-direction:column;gap:3px}
+.lakin-metric-lbl{font-size:10.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.lakin-metric-val{font-size:15px;font-weight:800;color:var(--ink)}
+
+.lakin-card-grid{display:grid;grid-template-columns:repeat(2, 1fr);gap:12px;margin-bottom:12px}
+.lakin-card-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:12px;border-top:1px solid var(--line2);flex-wrap:wrap}
+
+@media(max-width:768px){
+  .lakin-card-metrics{grid-template-columns:1fr 1fr 1fr}
+  .lakin-card-grid{grid-template-columns:1fr}
+  .lakin-toolbar{flex-direction:column;align-items:stretch}
+  .lakin-toolbar-group{width:100%;justify-content:space-between}
+  .lakin-filter-inp{flex:1;min-width:0}
+  .lakin-view-switch{width:100%;display:grid;grid-template-columns:1fr 1fr}
+  .lakin-view-btn{justify-content:center}
+}
+
+@media(max-width:480px){
+  .lakin-card-metrics{grid-template-columns:1fr}
+  .lakin-card{padding:12px}
+  .lakin-card-foot .btn-row{width:100%;flex-direction:column}
+  .lakin-card-foot .btn{width:100%;justify-content:center}
+}

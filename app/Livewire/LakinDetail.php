@@ -59,6 +59,11 @@ class LakinDetail extends Component
 
     public ?int $pendingHapusBarisId = null;
 
+    /**
+     * Mode tampilan dokumen: 'tabel' (spreadsheet lebar) atau 'kartu' (responsif untuk tablet/ponsel).
+     */
+    public string $tampilan = 'tabel';
+
     public function mount(Lakin $lakin): void
     {
         $this->lakin = $lakin->load('baris');
@@ -241,6 +246,13 @@ class LakinDetail extends Component
         $this->lakin->load('baris');
 
         session()->flash('status', 'Baris dihapus.');
+    }
+
+    public function gantiTampilan(string $mode): void
+    {
+        if (in_array($mode, ['tabel', 'kartu'], true)) {
+            $this->tampilan = $mode;
+        }
     }
 
     /**
