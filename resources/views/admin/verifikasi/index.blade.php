@@ -1,26 +1,33 @@
 @extends('layouts.app')
 
-@section('title', 'Kelola Pengguna — SIPINTER')
+@section('title', 'Pengguna & Tim — SIPINTER')
 
-@section('breadcrumb', 'Kelola Pengguna')
+@section('breadcrumb', 'Pengguna & Tim')
 
 @section('content')
     @if (session('status'))
         <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>
     @endif
 
-    <div class="tabs-page-after-title" x-data="{ tab: 'verifikasi' }">
+    @php
+        $tabAktif = $tabAktif ?? (request()->route('tab') === 'penugasan' ? 'penugasan' : 'verifikasi');
+    @endphp
+
+    <div class="tabs-page-after-title" x-data="{
+        tab: @js($tabAktif),
+        pilihTab(t) {
+            this.tab = t;
+            history.replaceState(null, '', '{{ url('/kelola-pengguna') }}/' + t);
+        }
+    }">
         <div class="page-head-group">
             <div class="page-head">
-                <div class="page-title">Kelola Pengguna</div>
-                <div class="page-sub">Verifikasi akun, keanggotaan tim, penugasan IKU, dan akun penyimpanan Drive dalam satu tempat.</div>
+                <div class="page-title">Pengguna &amp; Tim</div>
+                <div class="page-sub">Verifikasi pendaftaran akun baru, akun aktif, keanggotaan tim kerja, dan penugasan IKU.</div>
             </div>
             <div class="subtabs">
-                <button type="button" class="subtab" :class="tab === 'verifikasi' ? 'on' : ''" @click="tab = 'verifikasi'">✅ Verifikasi &amp; Akun</button>
-                <button type="button" class="subtab" :class="tab === 'penugasan' ? 'on' : ''" @click="tab = 'penugasan'">📋 Penugasan IKU</button>
-                <button type="button" class="subtab" :class="tab === 'storage' ? 'on' : ''" @click="tab = 'storage'">☁️ Akun &amp; Storage</button>
-                <button type="button" class="subtab" :class="tab === 'backup' ? 'on' : ''" @click="tab = 'backup'">💾 Backup Database</button>
-                <button type="button" class="subtab" :class="tab === 'whatsapp' ? 'on' : ''" @click="tab = 'whatsapp'">📧 Pengingat</button>
+                <button type="button" class="subtab" :class="tab === 'verifikasi' ? 'on' : ''" @click="pilihTab('verifikasi')">✅ Verifikasi &amp; Akun</button>
+                <button type="button" class="subtab" :class="tab === 'penugasan' ? 'on' : ''" @click="pilihTab('penugasan')">📋 Penugasan IKU</button>
             </div>
         </div>
 
@@ -82,31 +89,6 @@
 
         <div x-show="tab === 'penugasan'" x-cloak>
             <livewire:penugasan-iku />
-        </div>
-
-        <div x-show="tab === 'storage'" x-cloak>
-            <livewire:storage-accounts />
-        </div>
-
-        <div x-show="tab === 'backup'" x-cloak>
-            <livewire:backup-database />
-        </div>
-
-        <div x-show="tab === 'whatsapp'" x-cloak>
-            <div class="page-head">
-                <div class="page-title">Pengingat</div>
-                <div class="page-sub">Pengingat otomatis (tenggat IKU, verifikasi, notula, dsb) dikirim lewat email, dan juga lewat WhatsApp kantor bagi pengguna yang menyetujuinya.</div>
-            </div>
-
-            <livewire:pengingat-email />
-
-            <livewire:pengaturan-whats-app />
-
-            <livewire:pengaturan-pengingat />
-
-            <livewire:pengaturan-penerima-pengingat />
-
-            <livewire:pengaturan-template-pengingat />
         </div>
     </div>
 @endsection

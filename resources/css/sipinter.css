@@ -137,31 +137,16 @@ a{text-decoration:none;color:inherit}
 .page-title{font-size:20px;font-weight:700;letter-spacing:-.3px;margin-bottom:3px}
 .page-sub{color:var(--muted);font-size:13px;margin-bottom:18px}
 
-/* .page-head membungkus .page-title + .page-sub SATU UNIT sticky — dengan begitu
-   tinggi areanya otomatis mengikuti konten sesungguhnya (tidak perlu angka top
-   hasil hitungan manual per elemen, yang gampang meleset beberapa piksel dan
-   menyisakan celah tak tertutup saat discroll, mis. baris atas kartu ringkasan
-   ikut mengintip di celah itu). */
-/* display:flow-root mencegah margin-bottom milik .page-sub (anak terakhir) "kolaps"
-   keluar dari .page-head — tanpa ini, margin itu jadi celah transparan tak tercat
-   warna latar sticky-nya, tempat konten di baliknya bisa mengintip saat discroll. */
-.page-head{position:sticky;top:var(--topbar-h);background:var(--bg);z-index:14;display:flow-root}
+/* .page-head membungkus .page-title + .page-sub — sekarang bergulir alami bersama
+   konten halaman, sehingga area kerja (tabel/form) lebih luas dan bilah periode/subtabs
+   bisa menempel rapi tepat di bawah topbar tanpa terhalang judul. */
+.page-head{position:static;background:none;display:flow-root}
 
-/* .page-head-group membungkus .page-head + .subtabs SATU UNIT sticky (Kelola
-   Pengguna, satu-satunya halaman dengan urutan judul dulu baru subtabs) — sama
-   seperti alasan .page-head sendiri: tinggi otomatis mengikuti konten, tidak ada
-   angka top yang bisa meleset. .page-head & .subtabs di dalamnya kembali statis
-   (lihat aturan masing-masing), karena grup ini yang menangani stickiness. */
-.page-head-group{position:sticky;top:var(--topbar-h);background:var(--bg);z-index:14}
+/* .page-head-group — subtabs menempel rapi di bawah topbar */
+.page-head-group{position:static;background:none}
 
-/* .tabs-page bungkus halaman yang subtabs-nya tampil di ATAS judul (Dasbor, Master
-   IKU, Verifikasi & Notula) — judul (di dalam komponen tab aktif) ikut sticky tepat
-   di bawah subtabs, bukan di bawah topbar langsung. */
-.tabs-page .page-head{top:calc(var(--topbar-h) + var(--subtabs-h))}
-
-/* Judul bertumpuk di dalam tab Kelola Pengguna (mis. "Akun & Storage") dibiarkan
-   scroll biasa (tidak sticky) — judul luar + subtabs (via .page-head-group) saja
-   yang sticky, supaya tidak tertumpuk 3 lapis dengan konten di bawahnya. */
+/* .tabs-page — subtabs menempel rapi di bawah topbar */
+.tabs-page .page-head{position:static;background:none}
 .tabs-page-after-title .page-head{position:static;background:none}
 
 /* period banner */
@@ -173,14 +158,15 @@ a{text-decoration:none;color:inherit}
 .pb-tag{font-size:10.5px;font-weight:700;color:#fff;background:var(--accent-b);padding:4px 11px;border-radius:20px;margin-left:auto}
 .period-banner.periode-loading{opacity:.6;transition:opacity .1s}
 
+/* .period-sticky-bar membungkus .period-banner agar menempel (sticky) di atas saat discroll,
+   sehingga pengguna bisa langsung mengganti periode tanpa perlu menggulir kembali ke atas */
+.period-sticky-bar{position:sticky;top:var(--topbar-h);background:var(--bg);z-index:12;padding:4px 0 10px;margin-bottom:8px;transition:box-shadow .2s ease}
+.tabs-page .period-sticky-bar{top:calc(var(--topbar-h) + var(--subtabs-h))}
+.period-sticky-bar .period-banner{margin-bottom:0;box-shadow:0 4px 14px -3px rgba(16,32,70,.12)}
+
 /* .bilah-lengket membungkus .period-banner + .nav-bagian SATU UNIT sticky tepat di
-   bawah .page-head (Isian Kegiatan) — --atas-lengket = batas bawah .page-head (atau
-   topbar bila .page-head tidak sticky) yang diukur langsung oleh navigasiBagian (app.js),
-   bukan angka tetap; rumus calc() hanya cadangan sebelum JS berjalan. Jarak ke konten di bawahnya
-   pakai padding (bukan margin) supaya ikut tercat latar sticky (lihat .subtabs).
-   Tingginya sengaja TIDAK berubah saat menempel: perubahan tinggi tepat di titik
-   menempel menggeser alur halaman dan bisa membuat bilah lepas-tempel bergantian. */
-.bilah-lengket{position:sticky;top:var(--atas-lengket, calc(var(--topbar-h) + var(--tinggi-judul, 0px)));z-index:13;background:var(--bg);padding-bottom:12px;margin-bottom:4px}
+   bawah topbar (Isian Kegiatan & Verifikasi Capaian) */
+.bilah-lengket{position:sticky;top:var(--atas-lengket, var(--topbar-h));z-index:13;background:var(--bg);padding-bottom:12px;margin-bottom:4px}
 .bilah-lengket.menempel{box-shadow:var(--sh-sticky)}
 .bilah-lengket .period-banner{margin-bottom:0;padding:10px 16px}
 /* overflow-x di .nav-bagian sendiri (bukan di induk .bilah-lengket) — overflow pada

@@ -43,20 +43,21 @@
                 @endphp
 
                 <nav class="nav" @click="sidebarOpen = false">
-                    <a wire:navigate href="{{ route('dashboard') }}" class="{{ request()->routeIs('dashboard') ? 'active' : '' }}"><span class="ic">🏠</span> Dasbor</a>
+                    <a wire:navigate href="{{ route('dashboard') }}" class="{{ request()->routeIs('dashboard*') ? 'active' : '' }}"><span class="ic">🏠</span> Dasbor</a>
 
                     @if ($role === 'Ketua Tim')
                         <a wire:navigate href="{{ route('pengisian.index') }}" class="{{ request()->routeIs('pengisian.*') ? 'active' : '' }}"><span class="ic">📝</span> Isian Kegiatan</a>
-                        <a wire:navigate href="{{ route('notula-riwayat.index') }}" class="{{ request()->routeIs('notula-riwayat.*') ? 'active' : '' }}"><span class="ic">📄</span> Notula</a>
+                        <a wire:navigate href="{{ route('notula-riwayat.index') }}" class="{{ request()->routeIs('notula-riwayat.*') ? 'active' : '' }}"><span class="ic">📄</span> Riwayat Notula</a>
                     @elseif ($role === 'Tim SAKIP')
                         <a wire:navigate href="{{ route('verifikasi.index') }}" class="{{ request()->routeIs('verifikasi.*', 'notula.*', 'template-notula.*') ? 'active' : '' }}"><span class="ic">✅</span> Verifikasi &amp; Notula</a>
-                        <a wire:navigate href="{{ route('master-iku.index') }}" class="{{ request()->routeIs('master-iku.*', 'folder-config.*') ? 'active' : '' }}"><span class="ic">📊</span> Data Master &amp; Konfigurasi</a>
+                        <a wire:navigate href="{{ route('master-iku.index') }}" class="{{ request()->routeIs('master-iku.*', 'folder-config.*') ? 'active' : '' }}"><span class="ic">📊</span> Data Master &amp; Form</a>
                         <a wire:navigate href="{{ route('bagian-kustom.index') }}" class="{{ request()->routeIs('bagian-kustom.*') ? 'active' : '' }}"><span class="ic">🧩</span> Isian Bagian Kustom</a>
-                        <a wire:navigate href="{{ route('verifikasi-akun.index') }}" class="{{ request()->routeIs('verifikasi-akun.*', 'storage-accounts.*') ? 'active' : '' }}"><span class="ic">👥</span> Kelola Pengguna</a>
+                        <a wire:navigate href="{{ route('verifikasi-akun.index') }}" class="{{ request()->routeIs('verifikasi-akun.*') ? 'active' : '' }}"><span class="ic">👥</span> Pengguna &amp; Tim</a>
+                        <a wire:navigate href="{{ route('pengaturan-sistem.index') }}" class="{{ request()->routeIs('pengaturan-sistem.*', 'storage-accounts.*') ? 'active' : '' }}"><span class="ic">⚙️</span> Sistem &amp; Integrasi</a>
                     @elseif ($role === 'Kepala')
                         <a wire:navigate href="{{ route('persetujuan.index') }}" class="{{ request()->routeIs('persetujuan.*') ? 'active' : '' }}"><span class="ic">✍️</span> Persetujuan</a>
                         <a wire:navigate href="{{ route('bagian-kustom.index') }}" class="{{ request()->routeIs('bagian-kustom.*') ? 'active' : '' }}"><span class="ic">🧩</span> Isian Bagian Kustom</a>
-                        <a wire:navigate href="{{ route('notula-riwayat.index') }}" class="{{ request()->routeIs('notula-riwayat.*') ? 'active' : '' }}"><span class="ic">📄</span> Notula</a>
+                        <a wire:navigate href="{{ route('notula-riwayat.index') }}" class="{{ request()->routeIs('notula-riwayat.*') ? 'active' : '' }}"><span class="ic">📄</span> Riwayat Notula</a>
                     @endif
 
                     <a wire:navigate href="{{ route('lakin.index') }}" class="{{ request()->routeIs('lakin.*') ? 'active' : '' }}"><span class="ic">📈</span> Rekap Kinerja Tahunan</a>

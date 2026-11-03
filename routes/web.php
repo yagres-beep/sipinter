@@ -18,52 +18,110 @@ Route::view('/kebijakan-privasi', 'legal.kebijakan-privasi')->name('kebijakan-pr
 Route::view('/ketentuan-layanan', 'legal.ketentuan-layanan')->name('ketentuan-layanan');
 
 Route::middleware(['auth', 'profile.complete'])->group(function () {
-    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    // 🏠 DASBOR (semua peran) — Tim SAKIP & Kepala memiliki sub-tab Pemantauan Pengisian & Capaian Kinerja
+    Route::get('/dasbor/{tab?}', [DashboardController::class, 'index'])
+        ->whereIn('tab', ['pemantauan', 'kinerja', 'capaian-kinerja'])
+        ->name('dashboard');
+    Route::redirect('/dashboard', '/dasbor');
+    Route::redirect('/dasbor-kinerja', '/dasbor/capaian-kinerja');
 
-    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::put('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password');
+    // ⚙️ PENGATURAN AKUN (semua peran)
+    Route::get('/pengaturan-akun', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/pengaturan-akun', [ProfileController::class, 'update'])->name('profile.update');
+    Route::put('/pengaturan-akun/password', [ProfileController::class, 'updatePassword'])->name('profile.password');
+    Route::redirect('/profile', '/pengaturan-akun');
 
-    Route::middleware('role:Tim SAKIP')->prefix('verifikasi-akun')->name('verifikasi-akun.')->group(function () {
-        Route::get('/', [UserVerificationController::class, 'index'])->name('index');
+    // 👥 PENGGUNA & TIM (Tim SAKIP) — Verifikasi Pendaftaran & Penugasan IKU
+    Route::middleware('role:Tim SAKIP')->prefix('kelola-pengguna')->name('verifikasi-akun.')->group(function () {
+        Route::get('/{tab?}', [UserVerificationController::class, 'index'])
+            ->whereIn('tab', ['verifikasi', 'penugasan'])
+            ->name('index');
         Route::post('/{user}/approve', [UserVerificationController::class, 'approve'])->name('approve');
         Route::post('/{user}/reject', [UserVerificationController::class, 'reject'])->name('reject');
     });
+    Route::redirect('/verifikasi-akun', '/kelola-pengguna');
 
+    // ⚙️ SISTEM & INTEGRASI (Tim SAKIP) — Storage Google Drive, Pengingat, Backup, dan Log Aktivitas
+    Route::middleware('role:Tim SAKIP')->prefix('pengaturan-sistem')->name('pengaturan-sistem.')->group(function () {
+        Route::get('/{tab?}', function (?string $tab = 'storage') {
+            $tab = match ($tab) {
+                'storage', 'akun-storage' => 'storage',
+                'pengingat', 'whatsapp' => 'pengingat',
+                'backup', 'cadangan' => 'backup',
+                'log', 'log-aktivitas' => 'log',
+                default => 'storage',
+            };
+            return view('pengaturan-sistem.index', ['tabAktif' => $tab]);
+        })->whereIn('tab', ['storage', 'akun-storage', 'pengingat', 'whatsapp', 'backup', 'cadangan', 'log', 'log-aktivitas'])
+          ->name('index');
+    });
+    Route::redirect('/akun-storage', '/pengaturan-sistem/storage');
+    Route::middleware('role:Tim SAKIP')->group(function () {
+        Route::get('/akun-storage-redirect', fn () => redirect()->route('pengaturan-sistem.index', ['tab' => 'storage']))->name('storage-accounts.index');
+        Route::get('/akun-storage/{storageAccount}/google/redirect', [GoogleOAuthController::class, 'redirect'])->name('storage-accounts.google-redirect');
+        Route::get('/akun-storage/google/callback', [GoogleOAuthController::class, 'callback'])->name('storage-accounts.google-callback');
+    });
+
+    // 📝 ISIAN KEGIATAN (Ketua Tim)
     Route::middleware('role:Ketua Tim')->group(function () {
-        Route::view('/pengisian', 'pengisian.index')->name('pengisian.index');
+        Route::view('/isian-kegiatan', 'pengisian.index')->name('pengisian.index');
+        Route::redirect('/pengisian', '/isian-kegiatan');
         Route::view('/rtl-evaluasi', 'rtl-evaluasi.index')->name('rtl-evaluasi.index');
     });
 
-    // Pratinjau/unduh satu berkas bukti — dipakai Tim SAKIP saat verifikasi MAUPUN
-    // Ketua Tim untuk melihat kembali bukti yang sudah diunggahnya sendiri (RF-40a
-    // + permintaan supaya Ketua Tim tidak perlu hanya mengandalkan nama berkas).
-    // Kepala hanya untuk bukti Bagian Kustom yang diisi/dibaca perannya — diperiksa
-    // per berkas di BerkasDownloadController::bolehMembuka().
+    // Pratinjau/unduh berkas bukti
     Route::middleware('role:Tim SAKIP,Ketua Tim,Kepala')
         ->get('/berkas/{berkas}/buka', [BerkasDownloadController::class, 'show'])
         ->name('berkas.show');
 
+    // ✅ VERIFIKASI & NOTULA (Tim SAKIP) — Verifikasi Capaian, Kompilasi Notula, Template Notula
     Route::middleware('role:Tim SAKIP')->group(function () {
-        Route::view('/verifikasi', 'verifikasi.index')->name('verifikasi.index');
-        Route::get('/verifikasi/{capaian}', [VerifikasiController::class, 'show'])->name('verifikasi.show');
-        Route::view('/master-iku', 'master-iku.index')->name('master-iku.index');
-        Route::view('/akun-storage', 'storage-accounts.index')->name('storage-accounts.index');
-        Route::get('/akun-storage/{storageAccount}/google/redirect', [GoogleOAuthController::class, 'redirect'])->name('storage-accounts.google-redirect');
-        Route::get('/akun-storage/google/callback', [GoogleOAuthController::class, 'callback'])->name('storage-accounts.google-callback');
-        Route::view('/konfigurasi', 'folder-config.index')->name('folder-config.index');
-        Route::view('/notula', 'notula.index')->name('notula.index');
-        Route::view('/template-notula', 'template-notula.index')->name('template-notula.index');
+        Route::get('/verifikasi-notula/{tab?}', function (?string $tab = 'verifikasi') {
+            $tab = match ($tab) {
+                'verifikasi' => 'verifikasi',
+                'kompilasi', 'notula' => 'kompilasi',
+                'template', 'template-notula' => 'template',
+                default => 'verifikasi',
+            };
+            return view('verifikasi.index', ['tabAktif' => $tab]);
+        })->whereIn('tab', ['verifikasi', 'kompilasi', 'notula', 'template', 'template-notula'])
+          ->name('verifikasi.index');
+        Route::redirect('/verifikasi', '/verifikasi-notula');
+        Route::redirect('/notula', '/verifikasi-notula/kompilasi');
+        Route::redirect('/template-notula', '/verifikasi-notula/template');
+
+        Route::get('/verifikasi-notula/verifikasi/{capaian}', [VerifikasiController::class, 'show'])->name('verifikasi.show');
+        Route::get('/verifikasi/{capaian}', fn ($capaian) => redirect()->route('verifikasi.show', $capaian));
+
+        // 📊 DATA MASTER & FORM (Tim SAKIP)
+        Route::get('/master-data/{tab?}', function (?string $tab = 'iku') {
+            $tab = match ($tab) {
+                'iku' => 'iku',
+                'target', 'target-tahunan' => 'target',
+                'rumus', 'rumus-capaian' => 'rumus',
+                'folder', 'struktur-folder' => 'folder',
+                'bagian', 'pengelolaan-bagian' => 'bagian',
+                'variabel', 'katalog-variabel' => 'variabel',
+                default => 'iku',
+            };
+            return view('master-iku.index', ['tabAktif' => $tab]);
+        })->whereIn('tab', ['iku', 'target', 'target-tahunan', 'rumus', 'rumus-capaian', 'folder', 'struktur-folder', 'bagian', 'pengelolaan-bagian', 'variabel', 'katalog-variabel'])
+          ->name('master-iku.index');
+        Route::redirect('/master-iku', '/master-data');
+        Route::redirect('/konfigurasi', '/master-data/struktur-folder');
+
+        // Unduh template notula
         Route::get('/notula/template-bagian1', [NotulaDownloadController::class, 'templateBagian1'])->name('notula.template-bagian1');
         Route::get('/notula/template-bagian2', [NotulaDownloadController::class, 'templateBagian2'])->name('notula.template-bagian2');
         Route::get('/notula/template-bagian3', [NotulaDownloadController::class, 'templateBagian3'])->name('notula.template-bagian3');
     });
 
+    // ✍️ PERSETUJUAN (Kepala)
     Route::middleware('role:Kepala')->group(function () {
         Route::view('/persetujuan', 'persetujuan.index')->name('persetujuan.index');
     });
 
-    // Diakses Tim SAKIP (kompilasi) maupun Kepala (tinjau/unduh) — lihat NotulaDownloadController.
+    // Unduhan & Pratinjau Notula
     Route::middleware('role:Tim SAKIP,Kepala')->prefix('notula/{notula}')->name('notula.')->group(function () {
         Route::get('/draf', [NotulaDownloadController::class, 'draf'])->name('unduh-draf');
         Route::get('/pratinjau', [NotulaDownloadController::class, 'pratinjau'])->name('pratinjau');
@@ -73,31 +131,22 @@ Route::middleware(['auth', 'profile.complete'])->group(function () {
         Route::get('/pratinjau-cepat-pdf', [NotulaDownloadController::class, 'pratinjauCepatPdf'])->name('pratinjau-cepat-pdf');
     });
 
-    // Unduh final (ber-TTD) juga dibuka untuk Ketua Tim — supaya bisa melihat hasil
-    // akhir notula yang sudah disetujui Kepala (NotulaDownloadController::final()
-    // tetap menggerbang internal: hanya tersedia bila status sudah "disetujui").
     Route::middleware('role:Tim SAKIP,Kepala,Ketua Tim')
         ->get('/notula/{notula}/final', [NotulaDownloadController::class, 'final'])
         ->name('notula.unduh-final');
 
-    // RF-44a: riwayat notula per triwulan (baca saja) untuk Ketua Tim & Kepala — Tim
-    // SAKIP memakai halaman Kompilasi Notula (/notula) yang lebih lengkap.
+    // 📄 RIWAYAT NOTULA (Ketua Tim & Kepala)
     Route::middleware('role:Ketua Tim,Kepala')->group(function () {
-        Route::view('/notula-riwayat', 'notula-riwayat.index')->name('notula-riwayat.index');
+        Route::view('/riwayat-notula', 'notula-riwayat.index')->name('notula-riwayat.index');
+        Route::redirect('/notula-riwayat', '/riwayat-notula');
     });
 
-    // RF-48 s.d. RF-50: filter periode & dasbor kinerja (progres + rekapitulasi per IKU
-    // dalam satu halaman) — dipakai Tim SAKIP & Kepala.
+    // 🧩 ISIAN BAGIAN KUSTOM (Tim SAKIP & Kepala)
     Route::middleware('role:Tim SAKIP,Kepala')->group(function () {
         Route::view('/isian-bagian-kustom', 'bagian-kustom.index')->name('bagian-kustom.index');
     });
 
-    Route::middleware('role:Tim SAKIP,Kepala')->group(function () {
-        Route::view('/dasbor-kinerja', 'dasbor-kinerja.index')->name('dasbor-kinerja.index');
-    });
-
-    // LAKIN — semua peran bisa melihat; hanya Tim SAKIP yang bisa membentuk/mengubah
-    // (digerbang lagi di dalam LakinList/LakinDetail karena satu rute dipakai 3 peran sekaligus).
+    // 📈 REKAP KINERJA TAHUNAN (LAKIN — semua peran)
     Route::middleware('role:Ketua Tim,Tim SAKIP,Kepala')->prefix('rekap-kinerja-tahunan')->name('lakin.')->group(function () {
         Route::view('/', 'lakin.index')->name('index');
         Route::get('/{lakin}', function (\App\Models\Lakin $lakin) {

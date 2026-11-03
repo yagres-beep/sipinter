@@ -240,17 +240,8 @@ document.addEventListener('alpine:init', () => {
         // ikut dihitung, bilah ini langsung lengket di bawah topbar.
         ukur() {
             const html = document.documentElement.style;
-            const judulLengket = this.judul && getComputedStyle(this.judul).position === 'sticky';
-            html.setProperty('--tinggi-judul', (judulLengket ? this.judul.offsetHeight : 0) + 'px');
-            // Batas bawah sebenarnya dari elemen lengket di atas bilah ini (.page-head, atau
-            // topbar bila .page-head tidak sticky) — --topbar-h (69px) tidak selalu sama
-            // dengan tinggi topbar sesungguhnya (mis. di layar sempit), dan selisihnya jadi
-            // celah tempat konten mengintip. Dibulatkan ke bawah: lebih baik sedikit
-            // tertumpuk (tertutup topbar/judul yang z-index-nya lebih tinggi) daripada bercelah.
             const topbar = document.querySelector('.topbar');
-            const atas = judulLengket
-                ? (parseFloat(getComputedStyle(this.judul).top) || 0) + this.judul.getBoundingClientRect().height
-                : (topbar ? topbar.getBoundingClientRect().height : 0);
+            const atas = topbar ? topbar.getBoundingClientRect().height : 69;
             html.setProperty('--atas-lengket', Math.floor(atas) + 'px');
             html.setProperty('--offset-lengket', Math.ceil(this.atasLengket() + this.wadah.offsetHeight + 12) + 'px');
         },

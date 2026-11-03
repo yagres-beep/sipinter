@@ -8,24 +8,26 @@
         <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>
     @endif
 
-    <div class="period-banner">
-        <span class="pb-ico">📅</span>
-        <div>
-            <div class="pb-lbl">Periode Berjalan</div>
-            <div class="pb-val">
-                <select wire:model.live="bulan" style="border:none;background:transparent;font-weight:700;color:var(--ink);font-size:14px">
-                    @foreach (['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'] as $idx => $namaBulan)
-                        <option value="{{ $idx + 1 }}">{{ $namaBulan }}</option>
-                    @endforeach
-                </select>
-                <select wire:model.live="tahun" style="border:none;background:transparent;font-weight:700;color:var(--ink);font-size:14px">
-                    @foreach (range(now()->year - 1, now()->year + 1) as $tahunOpsi)
-                        <option value="{{ $tahunOpsi }}">{{ $tahunOpsi }}</option>
-                    @endforeach
-                </select>
+    <div class="period-sticky-bar">
+        <div class="period-banner">
+            <span class="pb-ico">📅</span>
+            <div>
+                <div class="pb-lbl">Periode Berjalan</div>
+                <div class="pb-val">
+                    <select wire:model.live="bulan" style="border:none;background:transparent;font-weight:700;color:var(--ink);font-size:14px">
+                        @foreach (['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'] as $idx => $namaBulan)
+                            <option value="{{ $idx + 1 }}">{{ $namaBulan }}</option>
+                        @endforeach
+                    </select>
+                    <select wire:model.live="tahun" style="border:none;background:transparent;font-weight:700;color:var(--ink);font-size:14px">
+                        @foreach (range(now()->year - 1, now()->year + 1) as $tahunOpsi)
+                            <option value="{{ $tahunOpsi }}">{{ $tahunOpsi }}</option>
+                        @endforeach
+                    </select>
+                </div>
             </div>
+            <span class="pb-tag">TW {{ ['I', 'II', 'III', 'IV'][$triwulan - 1] }}</span>
         </div>
-        <span class="pb-tag">TW {{ ['I', 'II', 'III', 'IV'][$triwulan - 1] }}</span>
     </div>
 
     <div class="card">

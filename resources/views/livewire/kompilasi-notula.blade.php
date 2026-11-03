@@ -40,21 +40,23 @@
         </div>
     @endif
 
-    <div class="period-banner">
-        <span class="pb-ico">📅</span>
-        <div>
-            <div class="pb-lbl">Triwulan</div>
-            <div class="pb-val">
-                <select wire:model.live="triwulan" style="border:none;background:transparent;font-weight:700;color:var(--ink);font-size:14px">
-                    @foreach (['I', 'II', 'III', 'IV'] as $idx => $label)
-                        <option value="{{ $idx + 1 }}">Triwulan {{ $label }}</option>
-                    @endforeach
-                </select>
-                <select wire:model.live="tahun" style="border:none;background:transparent;font-weight:700;color:var(--ink);font-size:14px">
-                    @foreach (range(now()->year - 1, now()->year + 1) as $tahunOpsi)
-                        <option value="{{ $tahunOpsi }}">{{ $tahunOpsi }}</option>
-                    @endforeach
-                </select>
+    <div class="period-sticky-bar">
+        <div class="period-banner">
+            <span class="pb-ico">📅</span>
+            <div>
+                <div class="pb-lbl">Triwulan</div>
+                <div class="pb-val">
+                    <select wire:model.live="triwulan" style="border:none;background:transparent;font-weight:700;color:var(--ink);font-size:14px">
+                        @foreach (['I', 'II', 'III', 'IV'] as $idx => $label)
+                            <option value="{{ $idx + 1 }}">Triwulan {{ $label }}</option>
+                        @endforeach
+                    </select>
+                    <select wire:model.live="tahun" style="border:none;background:transparent;font-weight:700;color:var(--ink);font-size:14px">
+                        @foreach (range(now()->year - 1, now()->year + 1) as $tahunOpsi)
+                            <option value="{{ $tahunOpsi }}">{{ $tahunOpsi }}</option>
+                        @endforeach
+                    </select>
+                </div>
             </div>
         </div>
     </div>

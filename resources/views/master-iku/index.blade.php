@@ -1,32 +1,53 @@
 @extends('layouts.app')
 
-@section('title', 'Data Master & Konfigurasi — SIPINTER')
+@section('title', 'Data Master & Form — SIPINTER')
 
-@section('breadcrumb', 'Data Master & Konfigurasi')
+@section('breadcrumb', 'Data Master & Form')
 
 @section('content')
-    {{-- Tab awal ikut #hash di URL kalau ada (dipakai tautan dari halaman lain,
-        mis. Verifikasi -> "Ubah di Target Tahunan") supaya langsung terbuka di
-        tab yang dimaksud, bukan selalu jatuh ke tab Master IKU.
-
-        Urutan tab SENGAJA: Master IKU, Target Tahunan, Rumus Capaian bersebelahan
-        — ketiganya sama-sama "seputar Capaian" (definisi IKU -> target tahunannya
-        -> rumus/plafon yang dipakai menilainya), baru disusul Struktur Folder &
-        Bagian Kustom yang topiknya beda. Target Tahunan & Rumus Capaian sengaja
-        TIDAK digabung jadi satu tab meski berhubungan erat — Rumus Capaian itu
-        pengaturan organisasi-wide yang jarang diubah (2-3 angka plafon), sedangkan
-        Target Tahunan itu data operasional per-IKU yang diisi ulang tiap tahun
-        (tabel besar) — digabung akan membuat yang satu "menumpang" di tab yang
-        ritme pemakaiannya beda. Cukup ditautkan silang (lihat masing-masing view). --}}
-    <div class="tabs-page" x-data="{ tab: ['iku', 'target', 'rumus', 'folder', 'bagian', 'variabel', 'log'].includes(window.location.hash.slice(1)) ? window.location.hash.slice(1) : 'iku' }">
+    @php
+        $tabMapping = [
+            'iku' => 'iku',
+            'target' => 'target',
+            'target-tahunan' => 'target',
+            'rumus' => 'rumus',
+            'rumus-capaian' => 'rumus',
+            'folder' => 'folder',
+            'struktur-folder' => 'folder',
+            'bagian' => 'bagian',
+            'pengelolaan-bagian' => 'bagian',
+            'variabel' => 'variabel',
+            'katalog-variabel' => 'variabel',
+        ];
+        $tabUrlMap = [
+            'iku' => 'iku',
+            'target' => 'target-tahunan',
+            'rumus' => 'rumus-capaian',
+            'folder' => 'struktur-folder',
+            'bagian' => 'bagian',
+            'variabel' => 'variabel',
+        ];
+        $ruteTab = request()->route('tab');
+        $tabAktif = $tabMapping[$ruteTab] ?? ($tabAktif ?? 'iku');
+    @endphp
+    <div class="tabs-page" x-data="{
+        tab: ['iku', 'target', 'rumus', 'folder', 'bagian', 'variabel'].includes(window.location.hash.slice(1))
+            ? window.location.hash.slice(1)
+            : @js($tabAktif),
+        urlMap: @js($tabUrlMap),
+        pilihTab(t) {
+            this.tab = t;
+            const seg = this.urlMap[t] || t;
+            history.replaceState(null, '', '{{ url('/master-data') }}/' + seg);
+        }
+    }">
         <div class="subtabs">
-            <button type="button" class="subtab" :class="tab === 'iku' ? 'on' : ''" @click="tab = 'iku'; window.location.hash = 'iku'">📊 Master IKU</button>
-            <button type="button" class="subtab" :class="tab === 'target' ? 'on' : ''" @click="tab = 'target'; window.location.hash = 'target'">🎯 Target Tahunan</button>
-            <button type="button" class="subtab" :class="tab === 'rumus' ? 'on' : ''" @click="tab = 'rumus'; window.location.hash = 'rumus'">🧮 Rumus Capaian</button>
-            <button type="button" class="subtab" :class="tab === 'folder' ? 'on' : ''" @click="tab = 'folder'; window.location.hash = 'folder'">📁 Struktur Folder</button>
-            <button type="button" class="subtab" :class="tab === 'bagian' ? 'on' : ''" @click="tab = 'bagian'; window.location.hash = 'bagian'">🧩 Pengelolaan Bagian</button>
-            <button type="button" class="subtab" :class="tab === 'variabel' ? 'on' : ''" @click="tab = 'variabel'; window.location.hash = 'variabel'">🔣 Katalog Variabel</button>
-            <button type="button" class="subtab" :class="tab === 'log' ? 'on' : ''" @click="tab = 'log'; window.location.hash = 'log'">📜 Log Aktivitas</button>
+            <button type="button" class="subtab" :class="tab === 'iku' ? 'on' : ''" @click="pilihTab('iku')">📊 Master IKU</button>
+            <button type="button" class="subtab" :class="tab === 'target' ? 'on' : ''" @click="pilihTab('target')">🎯 Target Tahunan</button>
+            <button type="button" class="subtab" :class="tab === 'rumus' ? 'on' : ''" @click="pilihTab('rumus')">🧮 Rumus Capaian</button>
+            <button type="button" class="subtab" :class="tab === 'folder' ? 'on' : ''" @click="pilihTab('folder')">📁 Struktur Folder</button>
+            <button type="button" class="subtab" :class="tab === 'bagian' ? 'on' : ''" @click="pilihTab('bagian')">🧩 Pengelolaan Bagian</button>
+            <button type="button" class="subtab" :class="tab === 'variabel' ? 'on' : ''" @click="pilihTab('variabel')">🔣 Katalog Variabel</button>
         </div>
 
         <div x-show="tab === 'iku'">
@@ -49,12 +70,6 @@
         </div>
         <div x-show="tab === 'variabel'" x-cloak>
             <livewire:variabel-katalog-manager />
-        </div>
-        {{-- Hanya baca, khusus Tim SAKIP (halaman ini sudah dibatasi role:Tim SAKIP;
-            komponennya juga memeriksa peran di setiap request). Dimuat lazy supaya
-            tab lain tidak ikut menunggu query log. --}}
-        <div x-show="tab === 'log'" x-cloak>
-            <livewire:log-aktivitas-viewer lazy />
         </div>
     </div>
 @endsection

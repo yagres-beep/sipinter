@@ -8,29 +8,31 @@
         <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>
     @endif
 
-    <div class="period-banner">
-        <span class="pb-ico">📅</span>
-        <div>
-            <div class="pb-lbl">Triwulan</div>
-            <div class="pb-val">
-                <select wire:model.live="triwulan" style="border:none;background:transparent;font-weight:700;color:var(--ink);font-size:14px">
-                    @foreach (['I', 'II', 'III', 'IV'] as $idx => $label)
-                        <option value="{{ $idx + 1 }}">Triwulan {{ $label }}</option>
-                    @endforeach
-                </select>
-                <select wire:model.live="tahun" style="border:none;background:transparent;font-weight:700;color:var(--ink);font-size:14px">
-                    @foreach (range(now()->year - 1, now()->year + 1) as $tahunOpsi)
-                        <option value="{{ $tahunOpsi }}">{{ $tahunOpsi }}</option>
-                    @endforeach
-                </select>
+    <div class="period-sticky-bar">
+        <div class="period-banner">
+            <span class="pb-ico">📅</span>
+            <div>
+                <div class="pb-lbl">Triwulan</div>
+                <div class="pb-val">
+                    <select wire:model.live="triwulan" style="border:none;background:transparent;font-weight:700;color:var(--ink);font-size:14px">
+                        @foreach (['I', 'II', 'III', 'IV'] as $idx => $label)
+                            <option value="{{ $idx + 1 }}">Triwulan {{ $label }}</option>
+                        @endforeach
+                    </select>
+                    <select wire:model.live="tahun" style="border:none;background:transparent;font-weight:700;color:var(--ink);font-size:14px">
+                        @foreach (range(now()->year - 1, now()->year + 1) as $tahunOpsi)
+                            <option value="{{ $tahunOpsi }}">{{ $tahunOpsi }}</option>
+                        @endforeach
+                    </select>
+                </div>
             </div>
+            @if ($notula)
+                <x-badge-status :status="$notula->status" />
+                <x-badge-versi :versi="$notula->versiSaatIni()" />
+            @else
+                <span class="badge b-draft">-</span>
+            @endif
         </div>
-        @if ($notula)
-            <x-badge-status :status="$notula->status" />
-            <x-badge-versi :versi="$notula->versiSaatIni()" />
-        @else
-            <span class="badge b-draft">-</span>
-        @endif
     </div>
 
     @if ($notula && $notula->status === \App\Models\Notula::STATUS_DRAFT && $notula->versiSaatIni() > 1)

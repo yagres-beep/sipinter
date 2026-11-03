@@ -9,9 +9,15 @@ use Illuminate\View\View;
 
 class UserVerificationController extends Controller
 {
-    public function index(): View
+    public function index(?string $tab = 'verifikasi'): View
     {
+        $tab = match ($tab) {
+            'penugasan' => 'penugasan',
+            default => 'verifikasi',
+        };
+
         return view('admin.verifikasi.index', [
+            'tabAktif' => $tab,
             // timList: akun yang mendaftar sebagai Ketua Tim bisa sekalian mengajukan
             // tim (lihat RegisteredUserController) — ditampilkan di tabel "Menunggu
             // Persetujuan" supaya Tim SAKIP langsung tahu tanpa buka halaman lain.

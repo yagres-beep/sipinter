@@ -28,13 +28,10 @@ final class MenuBagianKustom
         return [
             'dasbor' => ['label' => 'Dasbor', 'route' => 'dashboard', 'peran' => [$ketua, $sakip, $kepala]],
             'pengisian' => ['label' => 'Isian Kegiatan', 'route' => 'pengisian.index', 'peran' => [$ketua]],
-            'rtl_evaluasi' => ['label' => 'RTL & Evaluasi', 'route' => 'rtl-evaluasi.index', 'peran' => [$ketua]],
-            'notula_riwayat' => ['label' => 'Notula (riwayat)', 'route' => 'notula-riwayat.index', 'peran' => [$ketua, $kepala]],
+            'notula_riwayat' => ['label' => 'Riwayat Notula', 'route' => 'notula-riwayat.index', 'peran' => [$ketua, $kepala]],
             'verifikasi' => ['label' => 'Verifikasi & Notula', 'route' => 'verifikasi.index', 'peran' => [$sakip]],
-            'notula' => ['label' => 'Notula (kompilasi)', 'route' => 'notula.index', 'peran' => [$sakip]],
-            'master_iku' => ['label' => 'Data Master & Konfigurasi', 'route' => 'master-iku.index', 'peran' => [$sakip]],
+            'master_iku' => ['label' => 'Data Master & Form', 'route' => 'master-iku.index', 'peran' => [$sakip]],
             'persetujuan' => ['label' => 'Persetujuan', 'route' => 'persetujuan.index', 'peran' => [$kepala]],
-            'dasbor_kinerja' => ['label' => 'Dasbor Kinerja', 'route' => 'dasbor-kinerja.index', 'peran' => [$sakip, $kepala]],
             'lakin' => ['label' => 'Rekap Kinerja Tahunan', 'route' => 'lakin.index', 'peran' => [$ketua, $sakip, $kepala]],
             'isian_bagian_kustom' => ['label' => 'Isian Bagian Kustom', 'route' => 'bagian-kustom.index', 'peran' => [$sakip, $kepala]],
         ];
