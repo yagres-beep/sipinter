@@ -14,6 +14,15 @@
 
 @section('content')
     @if (in_array(auth()->user()->namaRole(), ['Tim SAKIP', 'Kepala']))
+        <div class="subtabs" style="margin-bottom:16px">
+            <a wire:navigate href="{{ route('dashboard', ['tab' => 'pemantauan']) }}" class="subtab {{ !$isKinerja ? 'on' : '' }}">
+                <span>📋 Pemantauan Pengisian</span>
+            </a>
+            <a wire:navigate href="{{ route('dashboard', ['tab' => 'capaian-kinerja']) }}" class="subtab {{ $isKinerja ? 'on' : '' }}">
+                <span>📈 Capaian Kinerja</span>
+            </a>
+        </div>
+
         @if ($isKinerja)
             <livewire:dasbor-capaian />
         @else

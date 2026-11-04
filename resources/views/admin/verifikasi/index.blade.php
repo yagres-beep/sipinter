@@ -12,6 +12,15 @@
 @endsection
 
 @section('content')
+    <div class="subtabs" style="margin-bottom:16px">
+        <a wire:navigate href="{{ route('verifikasi-akun.index', ['tab' => 'verifikasi']) }}" class="subtab {{ $tabAktif === 'verifikasi' ? 'on' : '' }}">
+            <span>👥 Verifikasi &amp; Akun</span>
+        </a>
+        <a wire:navigate href="{{ route('verifikasi-akun.index', ['tab' => 'penugasan']) }}" class="subtab {{ $tabAktif === 'penugasan' ? 'on' : '' }}">
+            <span>🎯 Penugasan IKU</span>
+        </a>
+    </div>
+
     @if (session('status'))
         <div class="badge b-approve" style="display:block;margin-bottom:14px">{{ session('status') }}</div>
     @endif

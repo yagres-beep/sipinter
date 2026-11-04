@@ -20,6 +20,21 @@
 @endsection
 
 @section('content')
+    <div class="subtabs" style="margin-bottom:16px">
+        <a wire:navigate href="{{ route('pengaturan-sistem.index', ['tab' => 'storage']) }}" class="subtab {{ $tabAktif === 'storage' ? 'on' : '' }}">
+            <span>☁️ Akun &amp; Storage</span>
+        </a>
+        <a wire:navigate href="{{ route('pengaturan-sistem.index', ['tab' => 'pengingat']) }}" class="subtab {{ $tabAktif === 'pengingat' ? 'on' : '' }}">
+            <span>🔔 Pengingat &amp; Notifikasi</span>
+        </a>
+        <a wire:navigate href="{{ route('pengaturan-sistem.index', ['tab' => 'backup']) }}" class="subtab {{ $tabAktif === 'backup' ? 'on' : '' }}">
+            <span>💾 Cadangan Data</span>
+        </a>
+        <a wire:navigate href="{{ route('pengaturan-sistem.index', ['tab' => 'log']) }}" class="subtab {{ $tabAktif === 'log' ? 'on' : '' }}">
+            <span>📜 Log Aktivitas</span>
+        </a>
+    </div>
+
     <div class="page-head" style="margin-bottom:18px">
         <div class="page-title">{{ $judulSub }}</div>
         <div class="page-sub">

@@ -33,6 +33,27 @@
 @endsection
 
 @section('content')
+    <div class="subtabs" style="margin-bottom:16px">
+        <a wire:navigate href="{{ route('master-iku.index', ['tab' => 'iku']) }}" class="subtab {{ $tabAktif === 'iku' ? 'on' : '' }}">
+            <span>📊 Master IKU</span>
+        </a>
+        <a wire:navigate href="{{ route('master-iku.index', ['tab' => 'target']) }}" class="subtab {{ $tabAktif === 'target' ? 'on' : '' }}">
+            <span>🎯 Target Tahunan</span>
+        </a>
+        <a wire:navigate href="{{ route('master-iku.index', ['tab' => 'rumus']) }}" class="subtab {{ $tabAktif === 'rumus' ? 'on' : '' }}">
+            <span>📐 Rumus Capaian</span>
+        </a>
+        <a wire:navigate href="{{ route('master-iku.index', ['tab' => 'folder']) }}" class="subtab {{ $tabAktif === 'folder' ? 'on' : '' }}">
+            <span>📁 Struktur Folder</span>
+        </a>
+        <a wire:navigate href="{{ route('master-iku.index', ['tab' => 'bagian']) }}" class="subtab {{ $tabAktif === 'bagian' ? 'on' : '' }}">
+            <span>📑 Pengelolaan Bagian</span>
+        </a>
+        <a wire:navigate href="{{ route('master-iku.index', ['tab' => 'variabel']) }}" class="subtab {{ $tabAktif === 'variabel' ? 'on' : '' }}">
+            <span>📚 Katalog Variabel</span>
+        </a>
+    </div>
+
     @if ($tabAktif === 'iku')
         <livewire:master-iku />
     @elseif ($tabAktif === 'target')

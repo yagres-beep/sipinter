@@ -40,24 +40,55 @@
                         'Kepala' => 'Kepala',
                         default => $role,
                     };
+
+                    $currentActiveNavKey = null;
+                    if ($role === 'Ketua Tim') {
+                        if (request()->routeIs('pengisian.*', 'rtl-evaluasi.*')) $currentActiveNavKey = 'pengisian';
+                    } elseif ($role === 'Tim SAKIP') {
+                        if (request()->routeIs('dashboard*')) $currentActiveNavKey = 'dasbor';
+                        elseif (request()->routeIs('verifikasi.*', 'notula.*', 'template-notula.*')) $currentActiveNavKey = 'verifikasi';
+                        elseif (request()->routeIs('master-iku.*', 'folder-config.*')) $currentActiveNavKey = 'master';
+                        elseif (request()->routeIs('verifikasi-akun.*')) $currentActiveNavKey = 'pengguna';
+                        elseif (request()->routeIs('pengaturan-sistem.*', 'storage-accounts.*')) $currentActiveNavKey = 'sistem';
+                    } elseif ($role === 'Kepala') {
+                        if (request()->routeIs('dashboard*')) $currentActiveNavKey = 'dasbor';
+                    }
                 @endphp
 
                 <nav class="nav" x-data="{
-                    opened: JSON.parse(localStorage.getItem('sipinter_nav_open') || '{}'),
-                    isOpen(key, isCurrentActive) {
-                        if (isCurrentActive) return true;
+                    opened: (function() {
+                        try {
+                            return JSON.parse(localStorage.getItem('sipinter_nav_open') || '{}');
+                        } catch (e) {
+                            return {};
+                        }
+                    })(),
+                    init() {
+                        const activeKey = @js($currentActiveNavKey);
+                        if (activeKey) {
+                            this.opened[activeKey] = true;
+                            this.save();
+                        }
+                    },
+                    isOpen(key) {
                         return !!this.opened[key];
                     },
-                    toggle(key, isCurrentActive) {
-                        const currentlyOpen = this.isOpen(key, isCurrentActive);
-                        this.opened[key] = !currentlyOpen;
-                        localStorage.setItem('sipinter_nav_open', JSON.stringify(this.opened));
+                    toggle(key) {
+                        this.opened[key] = !this.isOpen(key);
+                        this.save();
                     },
                     buka(key) {
                         this.opened[key] = true;
-                        localStorage.setItem('sipinter_nav_open', JSON.stringify(this.opened));
+                        this.save();
+                    },
+                    save() {
+                        try {
+                            localStorage.setItem('sipinter_nav_open', JSON.stringify(this.opened));
+                        } catch (e) {}
                     }
-                }" @click="if ($event.target.closest('a')) sidebarOpen = false">
+                }"
+                x-init="init()"
+                @click="if ($event.target.closest('a')) sidebarOpen = false">
                     @if ($role === 'Ketua Tim')
                         <a wire:navigate href="{{ route('dashboard') }}" class="{{ request()->routeIs('dashboard*') ? 'active' : '' }}"><span class="ic">🏠</span> Dasbor</a>
 
@@ -70,15 +101,15 @@
                                     <span class="ic">📝</span>
                                     <span>Isian Kegiatan</span>
                                 </a>
-                                <button type="button" class="nav-chevron-btn" @click.stop="toggle('pengisian', @js($isPengisianRoute))" aria-label="Buka/tutup sub-menu">
-                                    <span class="nav-chevron" :class="{ 'open': isOpen('pengisian', @js($isPengisianRoute)) }">›</span>
+                                <button type="button" class="nav-chevron-btn" @click.stop="toggle('pengisian')" aria-label="Buka/tutup sub-menu">
+                                    <span class="nav-chevron" :class="{ 'open': isOpen('pengisian') }">›</span>
                                 </button>
                             </div>
-                            <div class="nav-sublist" x-show="isOpen('pengisian', @js($isPengisianRoute))" x-cloak>
-                                <a wire:navigate href="{{ route('pengisian.index') }}" class="nav-subitem {{ request()->routeIs('pengisian.*') ? 'active' : '' }}">
+                            <div class="nav-sublist" x-show="isOpen('pengisian')" x-cloak>
+                                <a wire:navigate href="{{ route('pengisian.index') }}" class="nav-subitem {{ request()->routeIs('pengisian.*') ? 'active' : '' }}" @click="buka('pengisian')">
                                     <span class="sub-bullet"></span> Isian Capaian
                                 </a>
-                                <a wire:navigate href="{{ route('rtl-evaluasi.index') }}" class="nav-subitem {{ request()->routeIs('rtl-evaluasi.*') ? 'active' : '' }}">
+                                <a wire:navigate href="{{ route('rtl-evaluasi.index') }}" class="nav-subitem {{ request()->routeIs('rtl-evaluasi.*') ? 'active' : '' }}" @click="buka('pengisian')">
                                     <span class="sub-bullet"></span> RTL &amp; Evaluasi
                                 </a>
                             </div>
@@ -98,15 +129,15 @@
                                     <span class="ic">🏠</span>
                                     <span>Dasbor</span>
                                 </a>
-                                <button type="button" class="nav-chevron-btn" @click.stop="toggle('dasbor', @js($isDasborActive))" aria-label="Buka/tutup sub-menu">
-                                    <span class="nav-chevron" :class="{ 'open': isOpen('dasbor', @js($isDasborActive)) }">›</span>
+                                <button type="button" class="nav-chevron-btn" @click.stop="toggle('dasbor')" aria-label="Buka/tutup sub-menu">
+                                    <span class="nav-chevron" :class="{ 'open': isOpen('dasbor') }">›</span>
                                 </button>
                             </div>
-                            <div class="nav-sublist" x-show="isOpen('dasbor', @js($isDasborActive))" x-cloak>
-                                <a wire:navigate href="{{ route('dashboard', ['tab' => 'pemantauan']) }}" class="nav-subitem {{ $isPemantauanActive ? 'active' : '' }}">
+                            <div class="nav-sublist" x-show="isOpen('dasbor')" x-cloak>
+                                <a wire:navigate href="{{ route('dashboard', ['tab' => 'pemantauan']) }}" class="nav-subitem {{ $isPemantauanActive ? 'active' : '' }}" @click="buka('dasbor')">
                                     <span class="sub-bullet"></span> Pemantauan Pengisian
                                 </a>
-                                <a wire:navigate href="{{ route('dashboard', ['tab' => 'capaian-kinerja']) }}" class="nav-subitem {{ $isKinerjaActive ? 'active' : '' }}">
+                                <a wire:navigate href="{{ route('dashboard', ['tab' => 'capaian-kinerja']) }}" class="nav-subitem {{ $isKinerjaActive ? 'active' : '' }}" @click="buka('dasbor')">
                                     <span class="sub-bullet"></span> Capaian Kinerja
                                 </a>
                             </div>
@@ -125,18 +156,18 @@
                                     <span class="ic">✅</span>
                                     <span>Verifikasi &amp; Notula</span>
                                 </a>
-                                <button type="button" class="nav-chevron-btn" @click.stop="toggle('verifikasi', @js($isVerifRoute))" aria-label="Buka/tutup sub-menu">
-                                    <span class="nav-chevron" :class="{ 'open': isOpen('verifikasi', @js($isVerifRoute)) }">›</span>
+                                <button type="button" class="nav-chevron-btn" @click.stop="toggle('verifikasi')" aria-label="Buka/tutup sub-menu">
+                                    <span class="nav-chevron" :class="{ 'open': isOpen('verifikasi') }">›</span>
                                 </button>
                             </div>
-                            <div class="nav-sublist" x-show="isOpen('verifikasi', @js($isVerifRoute))" x-cloak>
-                                <a wire:navigate href="{{ route('verifikasi.index', ['tab' => 'verifikasi']) }}" class="nav-subitem {{ $isSubVerif ? 'active' : '' }}">
+                            <div class="nav-sublist" x-show="isOpen('verifikasi')" x-cloak>
+                                <a wire:navigate href="{{ route('verifikasi.index', ['tab' => 'verifikasi']) }}" class="nav-subitem {{ $isSubVerif ? 'active' : '' }}" @click="buka('verifikasi')">
                                     <span class="sub-bullet"></span> Verifikasi Capaian
                                 </a>
-                                <a wire:navigate href="{{ route('verifikasi.index', ['tab' => 'kompilasi']) }}" class="nav-subitem {{ $isSubKompilasi ? 'active' : '' }}">
+                                <a wire:navigate href="{{ route('verifikasi.index', ['tab' => 'kompilasi']) }}" class="nav-subitem {{ $isSubKompilasi ? 'active' : '' }}" @click="buka('verifikasi')">
                                     <span class="sub-bullet"></span> Kompilasi Notula
                                 </a>
-                                <a wire:navigate href="{{ route('verifikasi.index', ['tab' => 'template']) }}" class="nav-subitem {{ $isSubTemplate ? 'active' : '' }}">
+                                <a wire:navigate href="{{ route('verifikasi.index', ['tab' => 'template']) }}" class="nav-subitem {{ $isSubTemplate ? 'active' : '' }}" @click="buka('verifikasi')">
                                     <span class="sub-bullet"></span> Template Notula
                                 </a>
                             </div>
@@ -158,27 +189,27 @@
                                     <span class="ic">📊</span>
                                     <span>Data Master &amp; Form</span>
                                 </a>
-                                <button type="button" class="nav-chevron-btn" @click.stop="toggle('master', @js($isMasterRoute))" aria-label="Buka/tutup sub-menu">
-                                    <span class="nav-chevron" :class="{ 'open': isOpen('master', @js($isMasterRoute)) }">›</span>
+                                <button type="button" class="nav-chevron-btn" @click.stop="toggle('master')" aria-label="Buka/tutup sub-menu">
+                                    <span class="nav-chevron" :class="{ 'open': isOpen('master') }">›</span>
                                 </button>
                             </div>
-                            <div class="nav-sublist" x-show="isOpen('master', @js($isMasterRoute))" x-cloak>
-                                <a wire:navigate href="{{ route('master-iku.index', ['tab' => 'iku']) }}" class="nav-subitem {{ $isSubIku ? 'active' : '' }}">
+                            <div class="nav-sublist" x-show="isOpen('master')" x-cloak>
+                                <a wire:navigate href="{{ route('master-iku.index', ['tab' => 'iku']) }}" class="nav-subitem {{ $isSubIku ? 'active' : '' }}" @click="buka('master')">
                                     <span class="sub-bullet"></span> Master IKU
                                 </a>
-                                <a wire:navigate href="{{ route('master-iku.index', ['tab' => 'target']) }}" class="nav-subitem {{ $isSubTarget ? 'active' : '' }}">
+                                <a wire:navigate href="{{ route('master-iku.index', ['tab' => 'target']) }}" class="nav-subitem {{ $isSubTarget ? 'active' : '' }}" @click="buka('master')">
                                     <span class="sub-bullet"></span> Target Tahunan
                                 </a>
-                                <a wire:navigate href="{{ route('master-iku.index', ['tab' => 'rumus']) }}" class="nav-subitem {{ $isSubRumus ? 'active' : '' }}">
+                                <a wire:navigate href="{{ route('master-iku.index', ['tab' => 'rumus']) }}" class="nav-subitem {{ $isSubRumus ? 'active' : '' }}" @click="buka('master')">
                                     <span class="sub-bullet"></span> Rumus Capaian
                                 </a>
-                                <a wire:navigate href="{{ route('master-iku.index', ['tab' => 'folder']) }}" class="nav-subitem {{ $isSubFolder ? 'active' : '' }}">
+                                <a wire:navigate href="{{ route('master-iku.index', ['tab' => 'folder']) }}" class="nav-subitem {{ $isSubFolder ? 'active' : '' }}" @click="buka('master')">
                                     <span class="sub-bullet"></span> Struktur Folder
                                 </a>
-                                <a wire:navigate href="{{ route('master-iku.index', ['tab' => 'bagian']) }}" class="nav-subitem {{ $isSubBagian ? 'active' : '' }}">
+                                <a wire:navigate href="{{ route('master-iku.index', ['tab' => 'bagian']) }}" class="nav-subitem {{ $isSubBagian ? 'active' : '' }}" @click="buka('master')">
                                     <span class="sub-bullet"></span> Pengelolaan Bagian
                                 </a>
-                                <a wire:navigate href="{{ route('master-iku.index', ['tab' => 'variabel']) }}" class="nav-subitem {{ $isSubVariabel ? 'active' : '' }}">
+                                <a wire:navigate href="{{ route('master-iku.index', ['tab' => 'variabel']) }}" class="nav-subitem {{ $isSubVariabel ? 'active' : '' }}" @click="buka('master')">
                                     <span class="sub-bullet"></span> Katalog Variabel
                                 </a>
                             </div>
@@ -198,15 +229,15 @@
                                     <span class="ic">👥</span>
                                     <span>Pengguna &amp; Tim</span>
                                 </a>
-                                <button type="button" class="nav-chevron-btn" @click.stop="toggle('pengguna', @js($isUserRoute))" aria-label="Buka/tutup sub-menu">
-                                    <span class="nav-chevron" :class="{ 'open': isOpen('pengguna', @js($isUserRoute)) }">›</span>
+                                <button type="button" class="nav-chevron-btn" @click.stop="toggle('pengguna')" aria-label="Buka/tutup sub-menu">
+                                    <span class="nav-chevron" :class="{ 'open': isOpen('pengguna') }">›</span>
                                 </button>
                             </div>
-                            <div class="nav-sublist" x-show="isOpen('pengguna', @js($isUserRoute))" x-cloak>
-                                <a wire:navigate href="{{ route('verifikasi-akun.index', ['tab' => 'verifikasi']) }}" class="nav-subitem {{ $isSubVerifAkun ? 'active' : '' }}">
+                            <div class="nav-sublist" x-show="isOpen('pengguna')" x-cloak>
+                                <a wire:navigate href="{{ route('verifikasi-akun.index', ['tab' => 'verifikasi']) }}" class="nav-subitem {{ $isSubVerifAkun ? 'active' : '' }}" @click="buka('pengguna')">
                                     <span class="sub-bullet"></span> Verifikasi &amp; Akun
                                 </a>
-                                <a wire:navigate href="{{ route('verifikasi-akun.index', ['tab' => 'penugasan']) }}" class="nav-subitem {{ $isSubPenugasan ? 'active' : '' }}">
+                                <a wire:navigate href="{{ route('verifikasi-akun.index', ['tab' => 'penugasan']) }}" class="nav-subitem {{ $isSubPenugasan ? 'active' : '' }}" @click="buka('pengguna')">
                                     <span class="sub-bullet"></span> Penugasan IKU
                                 </a>
                             </div>
@@ -226,21 +257,21 @@
                                     <span class="ic">⚙️</span>
                                     <span>Sistem &amp; Integrasi</span>
                                 </a>
-                                <button type="button" class="nav-chevron-btn" @click.stop="toggle('sistem', @js($isSistemRoute))" aria-label="Buka/tutup sub-menu">
-                                    <span class="nav-chevron" :class="{ 'open': isOpen('sistem', @js($isSistemRoute)) }">›</span>
+                                <button type="button" class="nav-chevron-btn" @click.stop="toggle('sistem')" aria-label="Buka/tutup sub-menu">
+                                    <span class="nav-chevron" :class="{ 'open': isOpen('sistem') }">›</span>
                                 </button>
                             </div>
-                            <div class="nav-sublist" x-show="isOpen('sistem', @js($isSistemRoute))" x-cloak>
-                                <a wire:navigate href="{{ route('pengaturan-sistem.index', ['tab' => 'storage']) }}" class="nav-subitem {{ $isSubStorage ? 'active' : '' }}">
+                            <div class="nav-sublist" x-show="isOpen('sistem')" x-cloak>
+                                <a wire:navigate href="{{ route('pengaturan-sistem.index', ['tab' => 'storage']) }}" class="nav-subitem {{ $isSubStorage ? 'active' : '' }}" @click="buka('sistem')">
                                     <span class="sub-bullet"></span> Akun &amp; Storage
                                 </a>
-                                <a wire:navigate href="{{ route('pengaturan-sistem.index', ['tab' => 'pengingat']) }}" class="nav-subitem {{ $isSubPengingat ? 'active' : '' }}">
+                                <a wire:navigate href="{{ route('pengaturan-sistem.index', ['tab' => 'pengingat']) }}" class="nav-subitem {{ $isSubPengingat ? 'active' : '' }}" @click="buka('sistem')">
                                     <span class="sub-bullet"></span> Pengingat &amp; Notifikasi
                                 </a>
-                                <a wire:navigate href="{{ route('pengaturan-sistem.index', ['tab' => 'backup']) }}" class="nav-subitem {{ $isSubBackup ? 'active' : '' }}">
+                                <a wire:navigate href="{{ route('pengaturan-sistem.index', ['tab' => 'backup']) }}" class="nav-subitem {{ $isSubBackup ? 'active' : '' }}" @click="buka('sistem')">
                                     <span class="sub-bullet"></span> Cadangan Data
                                 </a>
-                                <a wire:navigate href="{{ route('pengaturan-sistem.index', ['tab' => 'log']) }}" class="nav-subitem {{ $isSubLog ? 'active' : '' }}">
+                                <a wire:navigate href="{{ route('pengaturan-sistem.index', ['tab' => 'log']) }}" class="nav-subitem {{ $isSubLog ? 'active' : '' }}" @click="buka('sistem')">
                                     <span class="sub-bullet"></span> Log Aktivitas
                                 </a>
                             </div>
@@ -258,15 +289,15 @@
                                     <span class="ic">🏠</span>
                                     <span>Dasbor</span>
                                 </a>
-                                <button type="button" class="nav-chevron-btn" @click.stop="toggle('dasbor', @js($isDasborActive))" aria-label="Buka/tutup sub-menu">
-                                    <span class="nav-chevron" :class="{ 'open': isOpen('dasbor', @js($isDasborActive)) }">›</span>
+                                <button type="button" class="nav-chevron-btn" @click.stop="toggle('dasbor')" aria-label="Buka/tutup sub-menu">
+                                    <span class="nav-chevron" :class="{ 'open': isOpen('dasbor') }">›</span>
                                 </button>
                             </div>
-                            <div class="nav-sublist" x-show="isOpen('dasbor', @js($isDasborActive))" x-cloak>
-                                <a wire:navigate href="{{ route('dashboard', ['tab' => 'pemantauan']) }}" class="nav-subitem {{ $isPemantauanActive ? 'active' : '' }}">
+                            <div class="nav-sublist" x-show="isOpen('dasbor')" x-cloak>
+                                <a wire:navigate href="{{ route('dashboard', ['tab' => 'pemantauan']) }}" class="nav-subitem {{ $isPemantauanActive ? 'active' : '' }}" @click="buka('dasbor')">
                                     <span class="sub-bullet"></span> Pemantauan Pengisian
                                 </a>
-                                <a wire:navigate href="{{ route('dashboard', ['tab' => 'capaian-kinerja']) }}" class="nav-subitem {{ $isKinerjaActive ? 'active' : '' }}">
+                                <a wire:navigate href="{{ route('dashboard', ['tab' => 'capaian-kinerja']) }}" class="nav-subitem {{ $isKinerjaActive ? 'active' : '' }}" @click="buka('dasbor')">
                                     <span class="sub-bullet"></span> Capaian Kinerja
                                 </a>
                             </div>
