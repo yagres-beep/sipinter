@@ -60,20 +60,25 @@ class LakinDetail extends Component
     public ?int $pendingHapusBarisId = null;
 
     /**
-     * Mode tampilan dokumen: 'tabel' (spreadsheet lebar) atau 'kartu' (responsif untuk tablet/ponsel).
+     * ID baris yang sedang dibuka di modal sunting (khusus Tim SAKIP).
      */
-    public string $tampilan = 'tabel';
+    public ?int $editingBarisId = null;
+
+    /**
+     * Mode tampilan dokumen: 'rapi' (tabel bersih & rapi), 'edit' (tabel sunting massal), atau 'kartu' (kartu responsif).
+     */
+    public string $tampilan = 'rapi';
 
     public function mount(Lakin $lakin): void
     {
-        $this->lakin = $lakin->load('baris');
+        $this->lakin = $lakin->load('baris.masterIku');
 
         // Bila ada baris IKU yang kolom tindak lanjutnya masih kosong (mis. dibentuk
         // sebelum otomatisasi tindak lanjut), segarkan otomatis agar data kegiatan,
         // kendala & solusi, RTL, dan link terverifikasi langsung terisi ke tabel.
         if ($this->adaBarisIkuKosong()) {
             app(LakinBuilderService::class)->segarkanBaris($this->lakin);
-            $this->lakin->load('baris');
+            $this->lakin->load('baris.masterIku');
         }
 
         $this->muatEdit();
@@ -191,10 +196,38 @@ class LakinDetail extends Component
             'link_rtl_sebelumnya' => trim($data['link_rtl_sebelumnya'] ?? '') ?: null,
         ]);
 
-        $this->lakin->load('baris');
+        $this->lakin->load('baris.masterIku');
         $this->muatEdit();
 
         session()->flash('status', 'Baris tersimpan.');
+    }
+
+    public function bukaEditBaris(int $id): void
+    {
+        $this->pastikanSakip();
+        if (! isset($this->edit[$id])) {
+            $this->muatEdit();
+        }
+        $this->editingBarisId = $id;
+    }
+
+    public function tutupEditBaris(): void
+    {
+        $this->editingBarisId = null;
+    }
+
+    public function simpanBarisModal(): void
+    {
+        if ($this->editingBarisId === null) {
+            return;
+        }
+
+        $id = $this->editingBarisId;
+        $this->simpanBaris($id);
+
+        if (! $this->getErrorBag()->has("edit.{$id}.indikator")) {
+            $this->editingBarisId = null;
+        }
     }
 
     public function tambahBaris(): void
@@ -233,7 +266,7 @@ class LakinDetail extends Component
             'batasWaktuTindakLanjutBaru', 'linkBuktiDukungKinerjaBaru', 'linkRtlSebelumnyaBaru',
         ]);
 
-        $this->lakin->load('baris');
+        $this->lakin->load('baris.masterIku');
         $this->muatEdit();
 
         session()->flash('status', 'Baris baru ditambahkan.');
@@ -264,15 +297,15 @@ class LakinDetail extends Component
 
         $this->pendingHapusBarisId = null;
 
-        $this->lakin->load('baris');
+        $this->lakin->load('baris.masterIku');
 
         session()->flash('status', 'Baris dihapus.');
     }
 
     public function gantiTampilan(string $mode): void
     {
-        if (in_array($mode, ['tabel', 'kartu'], true)) {
-            $this->tampilan = $mode;
+        if (in_array($mode, ['rapi', 'edit', 'kartu', 'tabel'], true)) {
+            $this->tampilan = $mode === 'tabel' ? 'rapi' : $mode;
         }
     }
 
@@ -315,7 +348,7 @@ class LakinDetail extends Component
         app(LakinBuilderService::class)->tambahDariIku($this->lakin, $this->ikuTerpilihUntukTambah);
 
         $this->ikuTerpilihUntukTambah = [];
-        $this->lakin->load('baris');
+        $this->lakin->load('baris.masterIku');
         $this->muatEdit();
 
         session()->flash('status', 'IKU terpilih berhasil ditambahkan ke rekap.');
@@ -346,7 +379,7 @@ class LakinDetail extends Component
 
         app(LakinBuilderService::class)->segarkanBaris($this->lakin);
 
-        $this->lakin->load('baris');
+        $this->lakin->load('baris.masterIku');
         $this->muatEdit();
 
         session()->flash('status', 'Data baris berhasil disegarkan dari capaian dan verifikasi terbaru. Baris custom tidak berubah.');
@@ -356,7 +389,7 @@ class LakinDetail extends Component
     {
         if ($this->adaBarisIkuKosong()) {
             app(LakinBuilderService::class)->segarkanBaris($this->lakin);
-            $this->lakin->load('baris');
+            $this->lakin->load('baris.masterIku');
         }
 
         return ExcelFacade::download(new LakinExport($this->lakin), "rekap-kinerja-tahunan-{$this->lakin->tahun}.xlsx");

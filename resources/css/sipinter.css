@@ -119,10 +119,13 @@ a{text-decoration:none;color:inherit}
 
 /* nav collapsible / dropdown accordion */
 .nav-collapsible{margin-bottom:3px}
-.nav-parent{display:flex;align-items:center;justify-content:space-between;padding:9px 11px;border-radius:10px;color:var(--nav-text);font-size:13px;font-weight:500;cursor:pointer;user-select:none;transition:background-color .15s,color .15s}
-.nav-parent:hover{background:rgba(255,255,255,.07);color:#fff}
-.nav-parent.parent-active{color:#fff;font-weight:600;background:rgba(255,255,255,.05)}
-.nav-parent-text{display:flex;align-items:center;gap:11px;min-width:0}
+.nav-parent-row{display:flex;align-items:center;border-radius:10px;color:var(--nav-text);font-size:13px;font-weight:500;transition:background-color .15s,color .15s}
+.nav-parent-row:hover{background:rgba(255,255,255,.07);color:#fff}
+.nav-parent-row.parent-active{color:#fff;font-weight:600;background:rgba(255,255,255,.05)}
+.nav-parent-link{flex:1;display:flex!important;align-items:center!important;gap:11px!important;padding:9px 4px 9px 11px!important;color:inherit!important;text-decoration:none!important;font-size:13px!important;font-weight:inherit!important;min-width:0;background:none!important;border:none!important;margin-bottom:0!important}
+.nav-parent-link:hover{background:none!important;color:#fff!important}
+.nav-chevron-btn{background:none;border:none;padding:9px 11px 9px 6px;color:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.nav-chevron-btn:hover{color:#fff}
 .nav-chevron{font-size:14px;color:var(--nav-dim);transition:transform .2s ease;display:inline-block;font-weight:700;line-height:1}
 .nav-chevron.open{transform:rotate(90deg);color:#fff}
 .nav-sublist{display:flex;flex-direction:column;gap:2px;padding:3px 0 5px 12px;margin-left:14px;border-left:1.5px solid rgba(255,255,255,.1)}
@@ -885,23 +888,41 @@ button.mark:disabled{opacity:.65;cursor:progress}
    REKAP KINERJA TAHUNAN (LAKIN) - RESPONSIVE & SPREADSHEET TABLE STYLES
    ========================================================================== */
 
-/* Toolbar Rekap */
-.lakin-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px;padding:12px 16px;background:var(--bg);border:1px solid var(--line);border-radius:var(--radius-sm)}
-.lakin-toolbar-group{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+/* Header & Banner Rekap */
+.lakin-header-banner{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:16px 20px;background:linear-gradient(135deg, var(--white) 0%, var(--surface-2) 100%);border:1.5px solid var(--line);border-radius:var(--radius);box-shadow:var(--sh-sm);margin-bottom:18px}
+.lakin-banner-left{display:flex;align-items:center;gap:14px;min-width:0}
+.lakin-banner-icon{width:46px;height:46px;border-radius:12px;background:var(--blue-soft);color:var(--blue-600);display:flex;align-items:center;justify-content:center;font-size:24px;flex:none;box-shadow:inset 0 0 0 1px var(--blue-line)}
 
-/* Mode Switcher (Tabel vs Kartu) */
-.lakin-view-switch{display:inline-flex;align-items:center;background:var(--white);border:1.5px solid var(--input-line);border-radius:10px;padding:3px;gap:3px;box-shadow:var(--sh-sm)}
-.lakin-view-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border:none;background:transparent;color:var(--muted);font-size:12.5px;font-weight:600;border-radius:8px;cursor:pointer;transition:all .15s}
+/* Stat Grid Rekap */
+.lakin-stat-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(230px, 1fr));gap:14px;margin-bottom:18px}
+.lakin-stat-card{background:var(--white);border:1.5px solid var(--line);border-radius:var(--radius-sm);padding:14px 18px;display:flex;flex-direction:column;justify-content:space-between;gap:8px;box-shadow:var(--sh-sm);transition:all .15s}
+.lakin-stat-card:hover{box-shadow:var(--sh);border-color:var(--hover-line)}
+.lakin-stat-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.lakin-stat-label{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.2px}
+.lakin-stat-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;background:var(--bg)}
+.lakin-stat-val{font-size:22px;font-weight:800;color:var(--ink);display:flex;align-items:baseline;gap:8px;font-variant-numeric:tabular-nums}
+.lakin-stat-sub{font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:6px}
+
+/* Toolbar & Filter Bar */
+.lakin-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px;padding:12px 16px;background:var(--surface-2);border:1.5px solid var(--line);border-radius:var(--radius-sm)}
+.lakin-toolbar-group{display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex:1;min-width:280px}
+
+/* Mode Switcher */
+.lakin-view-switch{display:inline-flex;align-items:center;background:var(--bg);border:1.5px solid var(--input-line);border-radius:10px;padding:3px;gap:3px}
+.lakin-view-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 13px;border:none;background:transparent;color:var(--muted);font-size:12px;font-weight:600;border-radius:7px;cursor:pointer;transition:all .15s;white-space:nowrap}
 .lakin-view-btn:hover{color:var(--ink);background:var(--ro-bg)}
 .lakin-view-btn.active{background:var(--accent-a);color:#ffffff;box-shadow:0 1px 4px rgba(59,130,246,.35)}
 
-/* Filter & Search */
-.lakin-filter-inp{padding:6px 12px;font-size:12.5px;border:1.5px solid var(--input-line);border-radius:8px;background:var(--input-bg);color:var(--ink);min-width:180px}
+/* Filter Controls */
+.lakin-filter-inp{padding:7px 12px;font-size:12.5px;border:1.5px solid var(--input-line);border-radius:8px;background:var(--input-bg);color:var(--ink);min-width:180px;transition:border-color .15s, box-shadow .15s}
 .lakin-filter-inp:focus{outline:none;border-color:var(--focus-ring);box-shadow:0 0 0 3px color-mix(in srgb, var(--focus-ring) 25%, transparent)}
 
+/* Hint Alert */
+.lakin-hint-alert{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);background:var(--bg);padding:6px 12px;border-radius:8px;border:1px dashed var(--line)}
+
 /* Container Tabel Spreadsheet */
-.lakin-table-wrap{position:relative;width:100%;overflow-x:auto;max-height:74vh;overflow-y:auto;border:1.5px solid var(--line);border-radius:var(--radius-sm);background:var(--white);box-shadow:var(--sh-sm);-webkit-overflow-scrolling:touch}
-.lakin-table{width:100%;min-width:1720px;border-collapse:separate;border-spacing:0;font-size:12.5px}
+.lakin-table-wrap{position:relative;width:100%;overflow-x:auto;max-height:76vh;overflow-y:auto;border:1.5px solid var(--line);border-radius:var(--radius-sm);background:var(--white);box-shadow:var(--sh-sm);-webkit-overflow-scrolling:touch}
+.lakin-table{width:100%;min-width:1760px;border-collapse:separate;border-spacing:0;font-size:12.5px}
 
 /* Sticky Headers */
 .lakin-table thead th{position:sticky;top:0;z-index:10;background:var(--ro-bg);color:var(--ink);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;padding:12px 14px;border-bottom:2px solid var(--line);white-space:nowrap}
@@ -909,47 +930,67 @@ button.mark:disabled{opacity:.65;cursor:progress}
 .lakin-table thead th.th-sticky-right{position:sticky;right:0;z-index:25;background:var(--ro-bg);border-left:2px solid var(--line);box-shadow:-3px 0 6px -2px rgba(16,32,70,.08)}
 
 /* Sasaran Section Header Row */
-.lakin-sasaran-tr td{background:linear-gradient(90deg, var(--blue-soft) 0%, var(--surface-2) 100%);padding:10px 14px;border-top:2px solid var(--blue);border-bottom:1.5px solid var(--blue-line);color:var(--navy);font-weight:700;font-size:12px;letter-spacing:.3px}
-.lakin-sasaran-tr .sasaran-title-box{display:flex;align-items:center;gap:10px;position:sticky;left:14px;width:fit-content;max-width:calc(100vw - 300px)}
+.lakin-sasaran-tr td{background:color-mix(in srgb, var(--blue-soft) 80%, var(--white));padding:9px 16px;border-top:2px solid var(--line);border-bottom:1.5px solid var(--blue-line);color:var(--navy);font-weight:700;font-size:12.5px;letter-spacing:.2px;border-left:4px solid var(--blue)}
+.lakin-sasaran-tr .sasaran-title-box{display:flex;align-items:center;gap:10px;position:sticky;left:14px;width:fit-content;max-width:calc(100vw - 320px)}
 
 /* Data Cells */
-.lakin-table tbody td{padding:8px 10px;border-bottom:1px solid var(--line2);vertical-align:middle;background:var(--white);transition:background .1s}
-.lakin-table tbody tr:hover td{background:var(--bg)}
+.lakin-table tbody td{padding:12px 14px;border-bottom:1px solid var(--line2);vertical-align:top;background:var(--white);transition:background .1s;line-height:1.5}
+.lakin-table tbody tr:hover td{background:color-mix(in srgb, var(--blue-soft) 30%, var(--white))}
 
 /* Sticky Data Cells */
 .lakin-table tbody td.td-sticky-left{position:sticky;left:0;z-index:8;background:inherit;border-right:2px solid var(--line);box-shadow:3px 0 6px -2px rgba(16,32,70,.08)}
 .lakin-table tbody td.td-sticky-right{position:sticky;right:0;z-index:8;background:inherit;border-left:2px solid var(--line);box-shadow:-3px 0 6px -2px rgba(16,32,70,.08)}
-.lakin-table tbody tr:hover td.td-sticky-left{background:var(--bg)}
-.lakin-table tbody tr:hover td.td-sticky-right{background:var(--bg)}
+.lakin-table tbody tr:hover td.td-sticky-left{background:color-mix(in srgb, var(--blue-soft) 40%, var(--white))}
+.lakin-table tbody tr:hover td.td-sticky-right{background:color-mix(in srgb, var(--blue-soft) 40%, var(--white))}
+
+/* Format Teks Baca Rapi */
+.lakin-text-cell{font-size:12.5px;color:var(--ink);line-height:1.55;word-break:break-word;white-space:pre-line}
+.lakin-text-empty{color:var(--faint);font-style:italic}
+.lakin-solusi-box{display:flex;flex-direction:column;gap:6px;font-size:12px}
+.lakin-solusi-item{display:flex;align-items:flex-start;gap:6px;line-height:1.45}
+.lakin-badge-kendala{font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:var(--red-soft);color:var(--red);flex:none;margin-top:2px}
+.lakin-badge-solusi{font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:var(--teal-soft);color:var(--teal);flex:none;margin-top:2px}
+
+/* Mini Progress Meter */
+.lakin-progress-wrap{width:100%;max-width:86px;height:5px;background:var(--line);border-radius:999px;overflow:hidden;margin-top:4px}
+.lakin-progress-fill{height:100%;border-radius:999px;transition:width .3s}
+.lakin-progress-fill.green{background:var(--green)}
+.lakin-progress-fill.amber{background:var(--amber)}
+.lakin-progress-fill.red{background:var(--red)}
 
 /* Table Form Controls */
-.tbl-inp{width:100%;padding:7px 10px;border:1.5px solid var(--input-line);border-radius:7px;font-size:12.5px;background:var(--input-bg);color:var(--ink);transition:border-color .15s, box-shadow .15s}
+.tbl-inp{width:100%;padding:7px 10px;border:1.5px solid var(--input-line);border-radius:7px;font-size:12px;background:var(--input-bg);color:var(--ink);transition:border-color .15s, box-shadow .15s}
 .tbl-inp:focus{outline:none;border-color:var(--focus-ring);box-shadow:0 0 0 3px color-mix(in srgb, var(--focus-ring) 25%, transparent)}
 .tbl-inp.num{text-align:right;font-variant-numeric:tabular-nums;-moz-appearance:textfield}
 .tbl-inp.num::-webkit-outer-spin-button, .tbl-inp.num::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 
-.tbl-textarea{width:100%;min-height:50px;height:50px;padding:7px 10px;border:1.5px solid var(--input-line);border-radius:7px;font-size:12px;line-height:1.4;background:var(--input-bg);color:var(--ink);resize:vertical;font-family:inherit;transition:border-color .15s, box-shadow .15s}
+.tbl-textarea{width:100%;min-height:72px;padding:8px 10px;border:1.5px solid var(--input-line);border-radius:7px;font-size:12px;line-height:1.45;background:var(--input-bg);color:var(--ink);resize:vertical;font-family:inherit;transition:border-color .15s, box-shadow .15s}
 .tbl-textarea:focus{outline:none;border-color:var(--focus-ring);box-shadow:0 0 0 3px color-mix(in srgb, var(--focus-ring) 25%, transparent)}
 
 /* Card View (Semua Device & Mobile) */
 .lakin-cards-wrap{display:flex;flex-direction:column;gap:18px}
 .lakin-group-card{background:var(--white);border:1.5px solid var(--line);border-radius:var(--radius);overflow:hidden;box-shadow:var(--sh-sm)}
-.lakin-group-header{padding:12px 18px;background:var(--blue-soft);border-bottom:1.5px solid var(--blue-line);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.lakin-group-header{padding:12px 18px;background:color-mix(in srgb, var(--blue-soft) 80%, var(--white));border-bottom:1.5px solid var(--blue-line);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;border-left:4px solid var(--blue)}
 .lakin-group-title{font-size:13.5px;font-weight:700;color:var(--navy);display:flex;align-items:center;gap:8px}
 .lakin-group-body{padding:16px;display:flex;flex-direction:column;gap:14px}
 
-.lakin-card{background:var(--surface-2);border:1.5px solid var(--line2);border-radius:10px;padding:16px;box-shadow:var(--sh-sm);transition:border-color .15s, box-shadow .15s}
+.lakin-card{background:var(--surface-2);border:1.5px solid var(--line2);border-radius:12px;padding:16px 18px;box-shadow:var(--sh-sm);transition:border-color .15s, box-shadow .15s}
 .lakin-card:hover{border-color:var(--hover-line);box-shadow:var(--sh)}
-.lakin-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--line2)}
-.lakin-card-metrics{display:grid;grid-template-columns:repeat(3, 1fr);gap:10px;margin-bottom:14px;background:var(--bg);padding:10px 14px;border-radius:8px;border:1px solid var(--line)}
+.lakin-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--line2)}
+.lakin-card-metrics{display:grid;grid-template-columns:repeat(3, 1fr);gap:12px;margin-bottom:14px;background:var(--bg);padding:12px 16px;border-radius:10px;border:1px solid var(--line)}
 .lakin-metric-box{display:flex;flex-direction:column;gap:3px}
 .lakin-metric-lbl{font-size:10.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
-.lakin-metric-val{font-size:15px;font-weight:800;color:var(--ink)}
+.lakin-metric-val{font-size:16px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums}
 
-.lakin-card-grid{display:grid;grid-template-columns:repeat(2, 1fr);gap:12px;margin-bottom:12px}
+.lakin-card-grid{display:grid;grid-template-columns:repeat(2, 1fr);gap:12px;margin-bottom:14px}
 .lakin-card-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:12px;border-top:1px solid var(--line2);flex-wrap:wrap}
 
+/* Modal Sunting Form */
+.lakin-modal-grid{display:grid;grid-template-columns:repeat(2, 1fr);gap:14px}
+
 @media(max-width:768px){
+  .lakin-header-banner{flex-direction:column;align-items:stretch}
+  .lakin-header-banner .btn-row{width:100%;justify-content:flex-start}
   .lakin-card-metrics{grid-template-columns:1fr 1fr 1fr}
   .lakin-card-grid{grid-template-columns:1fr}
   .lakin-toolbar{flex-direction:column;align-items:stretch}
@@ -957,9 +998,11 @@ button.mark:disabled{opacity:.65;cursor:progress}
   .lakin-filter-inp{flex:1;min-width:0}
   .lakin-view-switch{width:100%;display:grid;grid-template-columns:1fr 1fr}
   .lakin-view-btn{justify-content:center}
+  .lakin-modal-grid{grid-template-columns:1fr}
 }
 
 @media(max-width:480px){
+  .lakin-stat-grid{grid-template-columns:1fr}
   .lakin-card-metrics{grid-template-columns:1fr}
   .lakin-card{padding:12px}
   .lakin-card-foot .btn-row{width:100%;flex-direction:column}

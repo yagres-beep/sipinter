@@ -42,19 +42,39 @@
                     };
                 @endphp
 
-                <nav class="nav" @click="if ($event.target.closest('a')) sidebarOpen = false">
+                <nav class="nav" x-data="{
+                    opened: JSON.parse(localStorage.getItem('sipinter_nav_open') || '{}'),
+                    isOpen(key, isCurrentActive) {
+                        if (isCurrentActive) return true;
+                        return !!this.opened[key];
+                    },
+                    toggle(key, isCurrentActive) {
+                        const currentlyOpen = this.isOpen(key, isCurrentActive);
+                        this.opened[key] = !currentlyOpen;
+                        localStorage.setItem('sipinter_nav_open', JSON.stringify(this.opened));
+                    },
+                    buka(key) {
+                        this.opened[key] = true;
+                        localStorage.setItem('sipinter_nav_open', JSON.stringify(this.opened));
+                    }
+                }" @click="if ($event.target.closest('a')) sidebarOpen = false">
                     @if ($role === 'Ketua Tim')
                         <a wire:navigate href="{{ route('dashboard') }}" class="{{ request()->routeIs('dashboard*') ? 'active' : '' }}"><span class="ic">🏠</span> Dasbor</a>
 
                         @php
                             $isPengisianRoute = request()->routeIs('pengisian.*', 'rtl-evaluasi.*');
                         @endphp
-                        <div class="nav-collapsible" x-data="{ open: @js($isPengisianRoute) }">
-                            <div class="nav-parent {{ $isPengisianRoute ? 'parent-active' : '' }}" @click="open = !open">
-                                <span class="nav-parent-text"><span class="ic">📝</span> Isian Kegiatan</span>
-                                <span class="nav-chevron" :class="{ 'open': open }">›</span>
+                        <div class="nav-collapsible">
+                            <div class="nav-parent-row {{ $isPengisianRoute ? 'parent-active' : '' }}">
+                                <a wire:navigate href="{{ route('pengisian.index') }}" class="nav-parent-link" @click="buka('pengisian')">
+                                    <span class="ic">📝</span>
+                                    <span>Isian Kegiatan</span>
+                                </a>
+                                <button type="button" class="nav-chevron-btn" @click.stop="toggle('pengisian', @js($isPengisianRoute))" aria-label="Buka/tutup sub-menu">
+                                    <span class="nav-chevron" :class="{ 'open': isOpen('pengisian', @js($isPengisianRoute)) }">›</span>
+                                </button>
                             </div>
-                            <div class="nav-sublist" x-show="open" x-cloak>
+                            <div class="nav-sublist" x-show="isOpen('pengisian', @js($isPengisianRoute))" x-cloak>
                                 <a wire:navigate href="{{ route('pengisian.index') }}" class="nav-subitem {{ request()->routeIs('pengisian.*') ? 'active' : '' }}">
                                     <span class="sub-bullet"></span> Isian Capaian
                                 </a>
@@ -72,12 +92,17 @@
                             $isPemantauanActive = $isDasborActive && ($tabDasbor === 'pemantauan' || empty($tabDasbor));
                             $isKinerjaActive = $isDasborActive && in_array($tabDasbor, ['kinerja', 'capaian-kinerja']);
                         @endphp
-                        <div class="nav-collapsible" x-data="{ open: @js($isDasborActive) }">
-                            <div class="nav-parent {{ $isDasborActive ? 'parent-active' : '' }}" @click="open = !open">
-                                <span class="nav-parent-text"><span class="ic">🏠</span> Dasbor</span>
-                                <span class="nav-chevron" :class="{ 'open': open }">›</span>
+                        <div class="nav-collapsible">
+                            <div class="nav-parent-row {{ $isDasborActive ? 'parent-active' : '' }}">
+                                <a wire:navigate href="{{ route('dashboard', ['tab' => 'pemantauan']) }}" class="nav-parent-link" @click="buka('dasbor')">
+                                    <span class="ic">🏠</span>
+                                    <span>Dasbor</span>
+                                </a>
+                                <button type="button" class="nav-chevron-btn" @click.stop="toggle('dasbor', @js($isDasborActive))" aria-label="Buka/tutup sub-menu">
+                                    <span class="nav-chevron" :class="{ 'open': isOpen('dasbor', @js($isDasborActive)) }">›</span>
+                                </button>
                             </div>
-                            <div class="nav-sublist" x-show="open" x-cloak>
+                            <div class="nav-sublist" x-show="isOpen('dasbor', @js($isDasborActive))" x-cloak>
                                 <a wire:navigate href="{{ route('dashboard', ['tab' => 'pemantauan']) }}" class="nav-subitem {{ $isPemantauanActive ? 'active' : '' }}">
                                     <span class="sub-bullet"></span> Pemantauan Pengisian
                                 </a>
@@ -94,12 +119,17 @@
                             $isSubKompilasi = $isVerifRoute && (in_array($tabVerif, ['kompilasi', 'notula']) || request()->routeIs('notula.*'));
                             $isSubTemplate = $isVerifRoute && (in_array($tabVerif, ['template', 'template-notula']) || request()->routeIs('template-notula.*'));
                         @endphp
-                        <div class="nav-collapsible" x-data="{ open: @js($isVerifRoute) }">
-                            <div class="nav-parent {{ $isVerifRoute ? 'parent-active' : '' }}" @click="open = !open">
-                                <span class="nav-parent-text"><span class="ic">✅</span> Verifikasi &amp; Notula</span>
-                                <span class="nav-chevron" :class="{ 'open': open }">›</span>
+                        <div class="nav-collapsible">
+                            <div class="nav-parent-row {{ $isVerifRoute ? 'parent-active' : '' }}">
+                                <a wire:navigate href="{{ route('verifikasi.index', ['tab' => 'verifikasi']) }}" class="nav-parent-link" @click="buka('verifikasi')">
+                                    <span class="ic">✅</span>
+                                    <span>Verifikasi &amp; Notula</span>
+                                </a>
+                                <button type="button" class="nav-chevron-btn" @click.stop="toggle('verifikasi', @js($isVerifRoute))" aria-label="Buka/tutup sub-menu">
+                                    <span class="nav-chevron" :class="{ 'open': isOpen('verifikasi', @js($isVerifRoute)) }">›</span>
+                                </button>
                             </div>
-                            <div class="nav-sublist" x-show="open" x-cloak>
+                            <div class="nav-sublist" x-show="isOpen('verifikasi', @js($isVerifRoute))" x-cloak>
                                 <a wire:navigate href="{{ route('verifikasi.index', ['tab' => 'verifikasi']) }}" class="nav-subitem {{ $isSubVerif ? 'active' : '' }}">
                                     <span class="sub-bullet"></span> Verifikasi Capaian
                                 </a>
@@ -122,12 +152,17 @@
                             $isSubBagian = $isMasterRoute && in_array($tabMaster, ['bagian', 'pengelolaan-bagian']);
                             $isSubVariabel = $isMasterRoute && in_array($tabMaster, ['variabel', 'katalog-variabel']);
                         @endphp
-                        <div class="nav-collapsible" x-data="{ open: @js($isMasterRoute) }">
-                            <div class="nav-parent {{ $isMasterRoute ? 'parent-active' : '' }}" @click="open = !open">
-                                <span class="nav-parent-text"><span class="ic">📊</span> Data Master &amp; Form</span>
-                                <span class="nav-chevron" :class="{ 'open': open }">›</span>
+                        <div class="nav-collapsible">
+                            <div class="nav-parent-row {{ $isMasterRoute ? 'parent-active' : '' }}">
+                                <a wire:navigate href="{{ route('master-iku.index', ['tab' => 'iku']) }}" class="nav-parent-link" @click="buka('master')">
+                                    <span class="ic">📊</span>
+                                    <span>Data Master &amp; Form</span>
+                                </a>
+                                <button type="button" class="nav-chevron-btn" @click.stop="toggle('master', @js($isMasterRoute))" aria-label="Buka/tutup sub-menu">
+                                    <span class="nav-chevron" :class="{ 'open': isOpen('master', @js($isMasterRoute)) }">›</span>
+                                </button>
                             </div>
-                            <div class="nav-sublist" x-show="open" x-cloak>
+                            <div class="nav-sublist" x-show="isOpen('master', @js($isMasterRoute))" x-cloak>
                                 <a wire:navigate href="{{ route('master-iku.index', ['tab' => 'iku']) }}" class="nav-subitem {{ $isSubIku ? 'active' : '' }}">
                                     <span class="sub-bullet"></span> Master IKU
                                 </a>
@@ -157,12 +192,17 @@
                             $isSubVerifAkun = $isUserRoute && ($tabUser === 'verifikasi' || empty($tabUser));
                             $isSubPenugasan = $isUserRoute && $tabUser === 'penugasan';
                         @endphp
-                        <div class="nav-collapsible" x-data="{ open: @js($isUserRoute) }">
-                            <div class="nav-parent {{ $isUserRoute ? 'parent-active' : '' }}" @click="open = !open">
-                                <span class="nav-parent-text"><span class="ic">👥</span> Pengguna &amp; Tim</span>
-                                <span class="nav-chevron" :class="{ 'open': open }">›</span>
+                        <div class="nav-collapsible">
+                            <div class="nav-parent-row {{ $isUserRoute ? 'parent-active' : '' }}">
+                                <a wire:navigate href="{{ route('verifikasi-akun.index', ['tab' => 'verifikasi']) }}" class="nav-parent-link" @click="buka('pengguna')">
+                                    <span class="ic">👥</span>
+                                    <span>Pengguna &amp; Tim</span>
+                                </a>
+                                <button type="button" class="nav-chevron-btn" @click.stop="toggle('pengguna', @js($isUserRoute))" aria-label="Buka/tutup sub-menu">
+                                    <span class="nav-chevron" :class="{ 'open': isOpen('pengguna', @js($isUserRoute)) }">›</span>
+                                </button>
                             </div>
-                            <div class="nav-sublist" x-show="open" x-cloak>
+                            <div class="nav-sublist" x-show="isOpen('pengguna', @js($isUserRoute))" x-cloak>
                                 <a wire:navigate href="{{ route('verifikasi-akun.index', ['tab' => 'verifikasi']) }}" class="nav-subitem {{ $isSubVerifAkun ? 'active' : '' }}">
                                     <span class="sub-bullet"></span> Verifikasi &amp; Akun
                                 </a>
@@ -180,12 +220,17 @@
                             $isSubBackup = $isSistemRoute && in_array($tabSistem, ['backup', 'cadangan']);
                             $isSubLog = $isSistemRoute && in_array($tabSistem, ['log', 'log-aktivitas']);
                         @endphp
-                        <div class="nav-collapsible" x-data="{ open: @js($isSistemRoute) }">
-                            <div class="nav-parent {{ $isSistemRoute ? 'parent-active' : '' }}" @click="open = !open">
-                                <span class="nav-parent-text"><span class="ic">⚙️</span> Sistem &amp; Integrasi</span>
-                                <span class="nav-chevron" :class="{ 'open': open }">›</span>
+                        <div class="nav-collapsible">
+                            <div class="nav-parent-row {{ $isSistemRoute ? 'parent-active' : '' }}">
+                                <a wire:navigate href="{{ route('pengaturan-sistem.index', ['tab' => 'storage']) }}" class="nav-parent-link" @click="buka('sistem')">
+                                    <span class="ic">⚙️</span>
+                                    <span>Sistem &amp; Integrasi</span>
+                                </a>
+                                <button type="button" class="nav-chevron-btn" @click.stop="toggle('sistem', @js($isSistemRoute))" aria-label="Buka/tutup sub-menu">
+                                    <span class="nav-chevron" :class="{ 'open': isOpen('sistem', @js($isSistemRoute)) }">›</span>
+                                </button>
                             </div>
-                            <div class="nav-sublist" x-show="open" x-cloak>
+                            <div class="nav-sublist" x-show="isOpen('sistem', @js($isSistemRoute))" x-cloak>
                                 <a wire:navigate href="{{ route('pengaturan-sistem.index', ['tab' => 'storage']) }}" class="nav-subitem {{ $isSubStorage ? 'active' : '' }}">
                                     <span class="sub-bullet"></span> Akun &amp; Storage
                                 </a>
@@ -207,12 +252,17 @@
                             $isPemantauanActive = $isDasborActive && ($tabDasbor === 'pemantauan' || empty($tabDasbor));
                             $isKinerjaActive = $isDasborActive && in_array($tabDasbor, ['kinerja', 'capaian-kinerja']);
                         @endphp
-                        <div class="nav-collapsible" x-data="{ open: @js($isDasborActive) }">
-                            <div class="nav-parent {{ $isDasborActive ? 'parent-active' : '' }}" @click="open = !open">
-                                <span class="nav-parent-text"><span class="ic">🏠</span> Dasbor</span>
-                                <span class="nav-chevron" :class="{ 'open': open }">›</span>
+                        <div class="nav-collapsible">
+                            <div class="nav-parent-row {{ $isDasborActive ? 'parent-active' : '' }}">
+                                <a wire:navigate href="{{ route('dashboard', ['tab' => 'pemantauan']) }}" class="nav-parent-link" @click="buka('dasbor')">
+                                    <span class="ic">🏠</span>
+                                    <span>Dasbor</span>
+                                </a>
+                                <button type="button" class="nav-chevron-btn" @click.stop="toggle('dasbor', @js($isDasborActive))" aria-label="Buka/tutup sub-menu">
+                                    <span class="nav-chevron" :class="{ 'open': isOpen('dasbor', @js($isDasborActive)) }">›</span>
+                                </button>
                             </div>
-                            <div class="nav-sublist" x-show="open" x-cloak>
+                            <div class="nav-sublist" x-show="isOpen('dasbor', @js($isDasborActive))" x-cloak>
                                 <a wire:navigate href="{{ route('dashboard', ['tab' => 'pemantauan']) }}" class="nav-subitem {{ $isPemantauanActive ? 'active' : '' }}">
                                     <span class="sub-bullet"></span> Pemantauan Pengisian
                                 </a>
