@@ -5,7 +5,14 @@
     $sudahDigabung = filled($notula->pdf_gabungan);
 @endphp
 
-<div>
+<div x-data="{
+    tabBagian: (window.location.hash && ['kesiapan', 'rapat', 'bagian2', 'bagian3', 'lengkap', 'riwayat', 'semua'].includes(window.location.hash.slice(1))) ? window.location.hash.slice(1) : 'kesiapan',
+    pilihBagian(b) {
+        this.tabBagian = b;
+        history.replaceState(null, '', '#' + b);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+}">
     <div class="page-head">
         <div class="page-title">Kompilasi Notula Triwulan {{ ['I', 'II', 'III', 'IV'][$triwulan - 1] }} {{ $tahun }}</div>
         <div class="page-sub">
@@ -61,8 +68,43 @@
         </div>
     </div>
 
+    <div class="subtabs notula-bagian-tabs" style="margin-bottom:18px">
+        <button type="button" class="subtab" :class="tabBagian === 'kesiapan' ? 'on' : ''" @click="pilihBagian('kesiapan')">
+            <span>🎯 Kesiapan Sasaran</span>
+            @if ($kesiapanSasaran->isNotEmpty())
+                <span class="subtab-badge">{{ $kesiapanSasaran->where('iku_siap', '==', 'iku_total')->count() }}/{{ $kesiapanSasaran->count() }}</span>
+            @endif
+        </button>
+        <button type="button" class="subtab" :class="tabBagian === 'rapat' ? 'on' : ''" @click="pilihBagian('rapat')">
+            <span>📅 Detail Rapat</span>
+            @if (filled($hariTanggal) && filled($waktu) && filled($tempat))
+                <span class="subtab-badge badge-done">✓</span>
+            @endif
+        </button>
+        <button type="button" class="subtab" :class="tabBagian === 'bagian2' ? 'on' : ''" @click="pilihBagian('bagian2')">
+            <span>📌 Bagian II (Prioritas)</span>
+            <span class="subtab-badge {{ $bagian2Siap ? 'badge-done' : 'badge-wait' }}">{{ $bagian2Siap ? '✓' : 'Belum' }}</span>
+        </button>
+        <button type="button" class="subtab" :class="tabBagian === 'bagian3' ? 'on' : ''" @click="pilihBagian('bagian3')">
+            <span>💰 Bagian III (Anggaran)</span>
+            <span class="subtab-badge {{ $bagian3Siap ? 'badge-done' : 'badge-wait' }}">{{ $bagian3Siap ? '✓' : 'Belum' }}</span>
+        </button>
+        <button type="button" class="subtab" :class="tabBagian === 'lengkap' ? 'on' : ''" @click="pilihBagian('lengkap')">
+            <span>📝 Notula Lengkap &amp; Kirim</span>
+            <span class="subtab-badge {{ $bagian1Siap && $bagian2Siap && $bagian3Siap ? 'badge-done' : 'badge-wait' }}">{{ $bagian1Siap && $bagian2Siap && $bagian3Siap ? 'Siap' : 'Draft' }}</span>
+        </button>
+        @if ($riwayatDisetujui->isNotEmpty())
+            <button type="button" class="subtab" :class="tabBagian === 'riwayat' ? 'on' : ''" @click="pilihBagian('riwayat')">
+                <span>📜 Riwayat ({{ $riwayatDisetujui->count() }})</span>
+            </button>
+        @endif
+        <button type="button" class="subtab subtab-ghost" :class="tabBagian === 'semua' ? 'on' : ''" @click="pilihBagian('semua')" title="Tampilkan semua bagian sekaligus">
+            <span>👁️ Tampilkan Semua</span>
+        </button>
+    </div>
+
     @if ($kesiapanSasaran->isNotEmpty())
-        <div class="card">
+        <div class="card" x-show="tabBagian === 'kesiapan' || tabBagian === 'semua'" x-cloak>
             <div class="sec"><span>Kesiapan per Sasaran</span></div>
             <div class="scroll-y" style="max-height:320px">
                 <table>
@@ -84,10 +126,14 @@
                     </tbody>
                 </table>
             </div>
+            <div class="tab-step-nav" x-show="tabBagian === 'kesiapan'">
+                <span class="step-hint">Periksa kesiapan data capaian sebelum melengkapi Detail Rapat.</span>
+                <button type="button" class="btn btn-primary btn-sm" @click="pilihBagian('rapat')">Lanjut ke Detail Rapat →</button>
+            </div>
         </div>
     @endif
 
-    <div class="card" x-data="{
+    <div class="card" x-show="tabBagian === 'rapat' || tabBagian === 'semua'" x-cloak x-data="{
         namaHari: ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'],
         namaBulan: ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'],
         tanggalIso: '',
@@ -215,24 +261,26 @@
             </div>
         </div>
 
-        <div class="btn-row">
+        <div class="btn-row" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
             <button type="button" class="btn btn-primary" wire:click="simpanDetailRapat" wire:loading.attr="disabled" wire:target="simpanDetailRapat">
                 <span wire:loading.remove wire:target="simpanDetailRapat">Simpan Detail Rapat</span>
                 <span wire:loading wire:target="simpanDetailRapat"><i class="spin"></i> Menyimpan…</span>
             </button>
+            <button type="button" class="btn btn-ghost btn-sm" x-show="tabBagian === 'rapat'" @click="pilihBagian('bagian2')">
+                Lanjut ke Bagian II (Prioritas) →
+            </button>
         </div>
     </div>
 
-    <div class="card">
-        <div class="sec"><span>Pratinjau &amp; Sunting Notula — Bagian I, II, III</span></div>
+    {{-- BAGIAN II --}}
+    <div class="card" x-show="tabBagian === 'bagian2' || tabBagian === 'semua'" x-cloak>
+        <div class="sec"><span>Bagian II — Peran BPS dalam Prioritas Nasional &amp; Isu Strategis</span></div>
         <p style="color:var(--muted);font-size:12.5px;margin-bottom:16px">
-            Satu dokumen utuh dari atas ke bawah, sama seperti membuka file Word yang sudah lengkap. Unduh
-            template Bagian II/III di bawah, isi di Word mengikuti strukturnya (jangan diubah tata letaknya),
+            Unduh template Bagian II di bawah, isi di Word mengikuti strukturnya (jangan diubah tata letaknya),
             baru unggah kembali — supaya hasil gabungannya rapi menyambung mengikuti tata letak Bagian I dan
             tidak berantakan. Berkasnya harus berformat <b>.docx (Word)</b>.
         </p>
 
-        {{-- BAGIAN II — berkas unggahan, tampil sebagai kelanjutan dokumen yang sama --}}
         <div class="doc-bagian-head">
             <span class="doc-bagian-badge">Bagian II</span> Peran BPS dalam Prioritas Nasional &amp; Isu Strategis
             <span class="st {{ $bagian2Siap ? 'ok' : 'no' }}" style="margin-left:auto">{{ $bagian2Siap ? '✓ Siap' : '✕ Belum lengkap' }}</span>
@@ -268,8 +316,22 @@
             </div>
         @endif
 
-        {{-- BAGIAN III — sama seperti Bagian II --}}
-        <div class="doc-bagian-head" style="margin-top:28px">
+        <div class="tab-step-nav" x-show="tabBagian === 'bagian2'">
+            <span class="step-hint">Status: {{ $bagian2Siap ? 'Bagian II siap.' : 'Unggah berkas Bagian II bila sudah selesai diisi.' }}</span>
+            <button type="button" class="btn btn-primary btn-sm" @click="pilihBagian('bagian3')">Lanjut ke Bagian III (Anggaran) →</button>
+        </div>
+    </div>
+
+    {{-- BAGIAN III --}}
+    <div class="card" x-show="tabBagian === 'bagian3' || tabBagian === 'semua'" x-cloak>
+        <div class="sec"><span>Bagian III — Realisasi Anggaran &amp; Upaya Efisiensi</span></div>
+        <p style="color:var(--muted);font-size:12.5px;margin-bottom:16px">
+            Unduh template Bagian III di bawah, isi di Word mengikuti strukturnya (jangan diubah tata letaknya),
+            baru unggah kembali — supaya hasil gabungannya rapi menyambung mengikuti tata letak Bagian I dan
+            tidak berantakan. Berkasnya harus berformat <b>.docx (Word)</b>.
+        </p>
+
+        <div class="doc-bagian-head">
             <span class="doc-bagian-badge">Bagian III</span> Realisasi Anggaran &amp; Upaya Efisiensi
             <span class="st {{ $bagian3Siap ? 'ok' : 'no' }}" style="margin-left:auto">{{ $bagian3Siap ? '✓ Siap' : '✕ Belum lengkap' }}</span>
         </div>
@@ -304,10 +366,21 @@
             </div>
         @endif
 
-        {{-- NOTULA LENGKAP — gabungan I+II+III; Bagian I disunting LANGSUNG di sini
-             (satu-satunya editor Bagian I di halaman ini, supaya tidak dobel dengan
-             pratinjau), Bagian II/III mengikuti berkas yang diunggah di atas apa adanya. --}}
-        <div class="doc-bagian-head" style="margin-top:28px">
+        <div class="tab-step-nav" x-show="tabBagian === 'bagian3'">
+            <span class="step-hint">Status: {{ $bagian3Siap ? 'Bagian III siap.' : 'Unggah berkas Bagian III bila sudah selesai diisi.' }}</span>
+            <button type="button" class="btn btn-primary btn-sm" @click="pilihBagian('lengkap')">Lanjut ke Notula Lengkap &amp; Kirim →</button>
+        </div>
+    </div>
+
+    {{-- NOTULA LENGKAP --}}
+    <div class="card" x-show="tabBagian === 'lengkap' || tabBagian === 'semua'" x-cloak>
+        <div class="sec"><span>Notula Lengkap &amp; Finalisasi — Bagian I, II, III</span></div>
+        <p style="color:var(--muted);font-size:12.5px;margin-bottom:16px">
+            Satu dokumen utuh dari atas ke bawah, sama seperti membuka file Word yang sudah lengkap.
+            Sunting langsung Bagian I di bawah ini, periksa kelengkapannya, lalu kirim ke Kepala untuk persetujuan.
+        </p>
+
+        <div class="doc-bagian-head">
             <span class="doc-bagian-badge">Notula Lengkap</span> Bagian I, II, III
             <span class="st {{ $bagian1Siap ? 'ok' : 'no' }}" style="margin-left:auto">{{ $bagian1Siap ? '✓ Bagian I siap' : '✕ Bagian I belum disusun' }}</span>
         </div>
@@ -613,7 +686,7 @@
     </div>
 
     @if ($riwayatDisetujui->isNotEmpty())
-        <div class="card" style="margin-top:16px">
+        <div class="card" x-show="tabBagian === 'riwayat' || tabBagian === 'semua'" x-cloak style="margin-top:16px">
             <div class="sec"><span>Riwayat Versi Ber-TTD</span></div>
             @foreach ($riwayatDisetujui as $n)
                 <div class="filechip ok" wire:key="riwayat-{{ $n->id }}">

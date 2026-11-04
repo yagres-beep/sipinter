@@ -116,6 +116,21 @@ a{text-decoration:none;color:inherit}
 .nav a:focus-visible{outline:2px solid #93c5fd;outline-offset:-2px}
 .nav a.active{background:linear-gradient(135deg,var(--accent-a),var(--accent-b));color:#fff;box-shadow:var(--sh-nav)}
 .nav a .ic,.nav a .ni{width:17px;text-align:center;font-size:16px;display:flex;justify-content:center}
+
+/* nav collapsible / dropdown accordion */
+.nav-collapsible{margin-bottom:3px}
+.nav-parent{display:flex;align-items:center;justify-content:space-between;padding:9px 11px;border-radius:10px;color:var(--nav-text);font-size:13px;font-weight:500;cursor:pointer;user-select:none;transition:background-color .15s,color .15s}
+.nav-parent:hover{background:rgba(255,255,255,.07);color:#fff}
+.nav-parent.parent-active{color:#fff;font-weight:600;background:rgba(255,255,255,.05)}
+.nav-parent-text{display:flex;align-items:center;gap:11px;min-width:0}
+.nav-chevron{font-size:14px;color:var(--nav-dim);transition:transform .2s ease;display:inline-block;font-weight:700;line-height:1}
+.nav-chevron.open{transform:rotate(90deg);color:#fff}
+.nav-sublist{display:flex;flex-direction:column;gap:2px;padding:3px 0 5px 12px;margin-left:14px;border-left:1.5px solid rgba(255,255,255,.1)}
+.nav-subitem{display:flex!important;align-items:center!important;gap:9px!important;padding:7px 11px!important;font-size:12px!important;border-radius:8px!important;color:var(--nav-text)!important;text-decoration:none!important;transition:all .15s ease!important;margin-bottom:2px!important}
+.nav-subitem:hover{background:rgba(255,255,255,.08)!important;color:#fff!important}
+.nav-subitem.active{background:linear-gradient(135deg,var(--accent-a),var(--accent-b))!important;color:#fff!important;font-weight:600!important;box-shadow:var(--sh-nav)!important}
+.nav-subitem .sub-bullet{width:5px;height:5px;border-radius:50%;background:var(--nav-dim);flex-shrink:0;transition:background .15s}
+.nav-subitem:hover .sub-bullet,.nav-subitem.active .sub-bullet{background:#fff}
 .sidebar-foot{padding:12px;border-top:1px solid rgba(255,255,255,.06);display:flex;flex-direction:column;gap:8px}
 .sidebar-foot .sf-version{font-size:10px;color:var(--nav-dim);padding:0 4px}
 
@@ -487,15 +502,25 @@ th.th-sort.active .th-arrow{opacity:1;color:var(--blue-600);font-weight:700}
    margin tidak ikut dicat warna latar elemen sticky, jadi kalau dipakai di sini
    akan menyisakan celah transparan tempat konten di baliknya mengintip saat
    discroll (lihat .page-head untuk alasan serupa). */
-.subtabs{display:flex;gap:7px;padding:2px 0 16px;flex-wrap:wrap;
+.subtabs{display:flex;gap:7px;padding:2px 0 16px;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;
   position:sticky;top:var(--topbar-h);background:var(--bg);z-index:13}
+.subtabs::-webkit-scrollbar{display:none}
 /* Di dalam .page-head-group (Kelola Pengguna), judul dan subtabs sudah sticky
    BERSAMA sebagai satu unit — subtabs di sini kembali ke posisi normal, tidak
    sticky sendiri (lihat .page-head-group). */
 .page-head-group .subtabs{position:static;background:none;padding-top:0}
-.subtab{display:inline-flex;align-items:center;gap:7px;padding:9px 15px;border-radius:10px;border:1.5px solid var(--line);background:var(--white);font-size:12.5px;font-weight:600;color:var(--muted);cursor:pointer}
-.subtab.on{background:linear-gradient(135deg,var(--accent-a),var(--accent-b));color:#fff;border-color:transparent}
+.subtab{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:10px;border:1.5px solid var(--line);background:var(--white);font-size:12.5px;font-weight:600;color:var(--muted);cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all .15s ease}
+.subtab:hover:not(.on):not(.disabled){border-color:var(--blue);color:var(--ink);background:var(--ro-bg)}
+.subtab.on{background:linear-gradient(135deg,var(--accent-a),var(--accent-b));color:#fff;border-color:transparent;box-shadow:0 3px 10px rgba(26,108,240,.25)}
+.subtab.subtab-ghost{border-style:dashed;background:transparent}
+.subtab.subtab-ghost.on{border-style:solid;background:linear-gradient(135deg,var(--accent-a),var(--accent-b))}
 .subtab.disabled{opacity:max(.5,var(--op-dis-min));cursor:not-allowed}
+.subtab-badge{display:inline-flex;align-items:center;justify-content:center;padding:2px 7px;border-radius:999px;font-size:10.5px;font-weight:700;background:var(--line2);color:var(--muted);margin-left:4px}
+.subtab.on .subtab-badge{background:rgba(255,255,255,.25);color:#fff}
+.subtab-badge.badge-done{background:#10b981;color:#fff}
+.subtab-badge.badge-wait{background:#f59e0b;color:#fff}
+.tab-step-nav{display:flex;justify-content:space-between;align-items:center;margin-top:20px;padding-top:14px;border-top:1px solid var(--line);flex-wrap:wrap;gap:10px}
+.tab-step-nav .step-hint{font-size:12px;color:var(--muted)}
 
 /* sel penanggung jawab (tab Penugasan IKU) — chip beserta satu dropdown ramping
    untuk menambah PJ manual, dipilih langsung tanpa panel/tombol terpisah supaya
@@ -731,6 +756,18 @@ th.th-sort.active .th-arrow{opacity:1;color:var(--blue-600);font-weight:700}
   .bilah-lengket .period-banner{padding:8px 12px;gap:8px}
   .bilah-lengket .pb-ico{display:none}
   th,td{padding:9px 8px;font-size:12px}
+
+  /* Form fields responsive stack */
+  .fl-row{flex-direction:column!important;gap:12px!important}
+  .fl-row > .field{min-width:0!important;width:100%!important}
+  .doc-preview-frame iframe{height:380px!important}
+  .merge-bar{flex-direction:column;align-items:stretch;gap:8px}
+  .merge-bar .btn,.merge-bar a.btn{width:100%;text-align:center;justify-content:center}
+  .tab-step-nav{flex-direction:column;align-items:stretch}
+  .tab-step-nav .btn{width:100%;justify-content:center}
+  .doc-toolbar{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .doc-toolbar::-webkit-scrollbar{display:none}
+  .notula-bagian-tabs{padding-bottom:10px}
 }
 
 @media(max-width:480px){
@@ -738,6 +775,10 @@ th.th-sort.active .th-arrow{opacity:1;color:var(--blue-600);font-weight:700}
   .num-grid{grid-template-columns:1fr 1fr}
   .btn-row{flex-direction:column;align-items:stretch}
   .btn-row .btn{justify-content:center}
+  .crumb{max-width:180px}
+  .topbar{padding:10px 12px}
+  .content{padding:12px}
+  .period-banner select{font-size:13px}
 }
 .auth-row a{color:var(--blue-600);font-weight:600;text-decoration:none}
 .chk{display:flex;align-items:center;gap:7px}
