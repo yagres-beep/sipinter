@@ -65,6 +65,11 @@ class LakinDetail extends Component
     public ?int $editingBarisId = null;
 
     /**
+     * Filter triwulan yang sedang aktif: 'semua' (Setahun Penuh), '1', '2', '3', '4'.
+     */
+    public string $filterTriwulan = 'semua';
+
+    /**
      * Mode tampilan dokumen: 'rapi' (tabel bersih & rapi), 'edit' (tabel sunting massal), atau 'kartu' (kartu responsif).
      */
     public string $tampilan = 'rapi';
@@ -400,6 +405,7 @@ class LakinDetail extends Component
         return view('livewire.lakin-detail', [
             'ikuList' => MasterIku::daftarUrutKode(),
             'ikuBelumDitambahkan' => $this->ikuBelumDitambahkan(),
+            'capaianTahunanMap' => CapaianTahunan::where('tahun', $this->lakin->tahun)->get()->keyBy('iku_id'),
         ]);
     }
 }

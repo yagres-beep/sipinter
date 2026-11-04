@@ -152,8 +152,13 @@ class LakinBuilderService
             ];
 
             foreach (['kegiatan', 'solusi_kendala', 'rtl', 'pic', 'batas_waktu_tindak_lanjut', 'link_bukti_dukung_kinerja', 'link_rtl_sebelumnya'] as $kolom) {
-                if (blank($baris->{$kolom}) && ! blank($tindakLanjut[$kolom] ?? null)) {
+                if (! blank($tindakLanjut[$kolom] ?? null)) {
                     $updateData[$kolom] = $tindakLanjut[$kolom];
+                } elseif (in_array($kolom, ['link_bukti_dukung_kinerja', 'link_rtl_sebelumnya'], true)) {
+                    // Bersihkan tautan file lama (/file/d/...) jika bukan folder
+                    if (str_contains((string) $baris->{$kolom}, '/file/d/')) {
+                        $updateData[$kolom] = null;
+                    }
                 }
             }
 
@@ -163,7 +168,8 @@ class LakinBuilderService
 
     /**
      * Kumpulkan data tindak lanjut (kegiatan, kendala & solusi, RTL, PIC, batas waktu,
-     * dan tautan bukti dukung) dari data terverifikasi IKU ini pada tahun bersangkutan.
+     * dan tautan folder bukti dukung) dari data terverifikasi IKU ini pada tahun bersangkutan,
+     * dikelompokkan per Triwulan secara jelas.
      *
      * @return array{
      *     kegiatan: ?string,
@@ -177,8 +183,9 @@ class LakinBuilderService
      */
     public function ekstrakDataTindakLanjut(MasterIku $iku, int $tahun): array
     {
-        // 1. Kegiatan: ambil dari data kegiatan terverifikasi/disetujui (atau diajukan bila belum disetujui)
+        // 1. Kegiatan: dikelompokkan per Triwulan
         $kegiatanQuery = Kegiatan::query()
+            ->with('periode')
             ->where('iku_id', $iku->id)
             ->whereHas('periode', fn ($q) => $q->where('tahun', $tahun));
 
@@ -196,18 +203,32 @@ class LakinBuilderService
         }
 
         Kegiatan::terapkanNamaInduk($kegiatanList);
-        $uraianList = $kegiatanList
-            ->map(fn ($k) => trim((string) ($k->uraian_kegiatan ?: $k->nama_folder_kustom ?: '')))
-            ->filter()
-            ->unique()
-            ->values();
 
-        $kegiatanTeks = $uraianList->count() > 1
-            ? $uraianList->map(fn ($u, $i) => ($i + 1).'. '.$u)->implode("\n")
-            : ($uraianList->first() ?: null);
+        $kegiatanPerTw = $kegiatanList->groupBy(fn ($k) => (int) ($k->periode?->triwulan ?? 0))->sortKeys();
+        $kegiatanBlok = [];
+        foreach ($kegiatanPerTw as $tw => $list) {
+            $twLabel = $tw > 0 ? "Triwulan " . ['I', 'II', 'III', 'IV'][$tw - 1] : "Tahunan";
+            $uraianList = $list
+                ->map(fn ($k) => trim((string) ($k->uraian_kegiatan ?: $k->nama_folder_kustom ?: '')))
+                ->filter()
+                ->unique()
+                ->values();
 
-        // 2. Kendala & Solusi: utamakan yang terverifikasi (atau tidak ditolak)
+            if ($uraianList->isEmpty()) {
+                continue;
+            }
+
+            $items = $uraianList->count() > 1
+                ? $uraianList->map(fn ($u, $i) => ($i + 1) . '. ' . $u)->implode("\n")
+                : '• ' . $uraianList->first();
+
+            $kegiatanBlok[] = "[{$twLabel}]\n" . $items;
+        }
+        $kegiatanTeks = ! empty($kegiatanBlok) ? implode("\n\n", $kegiatanBlok) : null;
+
+        // 2. Kendala & Solusi: dikelompokkan per Triwulan
         $ksQuery = KendalaSolusi::query()
+            ->with('periode')
             ->where('iku_id', $iku->id)
             ->whereHas('periode', fn ($q) => $q->where('tahun', $tahun));
 
@@ -224,41 +245,52 @@ class LakinBuilderService
             $ksList = $ksQuery->get();
         }
 
-        $poinKsList = $ksList->map(function ($ks) {
-            $kendala = trim((string) ($ks->kendala ?? ''));
-            $solusi = trim((string) ($ks->solusi ?? ''));
+        $ksPerTw = $ksList->groupBy(fn ($ks) => (int) ($ks->periode?->triwulan ?? 0))->sortKeys();
+        $ksBlok = [];
+        foreach ($ksPerTw as $tw => $list) {
+            $twLabel = $tw > 0 ? "Triwulan " . ['I', 'II', 'III', 'IV'][$tw - 1] : "Tahunan";
+            $poinKsList = $list->map(function ($ks) {
+                $kendala = trim((string) ($ks->kendala ?? ''));
+                $solusi = trim((string) ($ks->solusi ?? ''));
 
-            if ($kendala !== '' && $solusi !== '') {
-                return "Kendala: {$kendala}\nSolusi: {$solusi}";
-            } elseif ($kendala !== '') {
-                return "Kendala: {$kendala}";
-            } elseif ($solusi !== '') {
-                return "Solusi: {$solusi}";
-            }
-
-            return null;
-        })->filter()->unique()->values();
-
-        if ($poinKsList->count() > 1) {
-            $solusiKendalaTeks = $poinKsList->map(function ($item, $i) {
-                $nomor = ($i + 1).'. ';
-                $indent = str_repeat(' ', strlen($nomor));
-                $baris = explode("\n", $item);
-                $baris[0] = $nomor.$baris[0];
-                for ($b = 1; $b < count($baris); $b++) {
-                    $baris[$b] = $indent.$baris[$b];
+                if ($kendala !== '' && $solusi !== '') {
+                    return "Kendala: {$kendala}\nSolusi: {$solusi}";
+                } elseif ($kendala !== '') {
+                    return "Kendala: {$kendala}";
+                } elseif ($solusi !== '') {
+                    return "Solusi: {$solusi}";
                 }
 
-                return implode("\n", $baris);
-            })->implode("\n");
-        } elseif ($poinKsList->count() === 1) {
-            $solusiKendalaTeks = $poinKsList->first();
-        } else {
-            $solusiKendalaTeks = null;
-        }
+                return null;
+            })->filter()->unique()->values();
 
-        // 3. RTL: utamakan yang terverifikasi (atau tidak ditolak)
+            if ($poinKsList->isEmpty()) {
+                continue;
+            }
+
+            if ($poinKsList->count() > 1) {
+                $items = $poinKsList->map(function ($item, $i) {
+                    $nomor = ($i + 1) . '. ';
+                    $indent = str_repeat(' ', strlen($nomor));
+                    $baris = explode("\n", $item);
+                    $baris[0] = $nomor . $baris[0];
+                    for ($b = 1; $b < count($baris); $b++) {
+                        $baris[$b] = $indent . $baris[$b];
+                    }
+
+                    return implode("\n", $baris);
+                })->implode("\n");
+            } else {
+                $items = '• ' . $poinKsList->first();
+            }
+
+            $ksBlok[] = "[{$twLabel}]\n" . $items;
+        }
+        $solusiKendalaTeks = ! empty($ksBlok) ? implode("\n\n", $ksBlok) : null;
+
+        // 3. RTL: dikelompokkan per Triwulan
         $rtlQuery = RtlEvaluasi::query()
+            ->with('periode')
             ->where('iku_id', $iku->id)
             ->whereHas('periode', fn ($q) => $q->where('tahun', $tahun));
 
@@ -275,15 +307,27 @@ class LakinBuilderService
             $rtlList = $rtlQuery->get();
         }
 
-        $rtlTeksList = $rtlList
-            ->map(fn ($r) => trim((string) ($r->rtl_teks ?? '')))
-            ->filter()
-            ->unique()
-            ->values();
+        $rtlPerTw = $rtlList->groupBy(fn ($r) => (int) ($r->periode?->triwulan ?? 0))->sortKeys();
+        $rtlBlok = [];
+        foreach ($rtlPerTw as $tw => $list) {
+            $twLabel = $tw > 0 ? "Triwulan " . ['I', 'II', 'III', 'IV'][$tw - 1] : "Tahunan";
+            $rtlTeksList = $list
+                ->map(fn ($r) => trim((string) ($r->rtl_teks ?? '')))
+                ->filter()
+                ->unique()
+                ->values();
 
-        $rtlTeks = $rtlTeksList->count() > 1
-            ? $rtlTeksList->map(fn ($item, $i) => ($i + 1).'. '.$item)->implode("\n")
-            : ($rtlTeksList->first() ?: null);
+            if ($rtlTeksList->isEmpty()) {
+                continue;
+            }
+
+            $items = $rtlTeksList->count() > 1
+                ? $rtlTeksList->map(fn ($item, $i) => ($i + 1) . '. ' . $item)->implode("\n")
+                : '• ' . $rtlTeksList->first();
+
+            $rtlBlok[] = "[{$twLabel}]\n" . $items;
+        }
+        $rtlTeks = ! empty($rtlBlok) ? implode("\n\n", $rtlBlok) : null;
 
         // 4. PIC: dari RTL atau fallback ke Tim IKU
         $picList = $rtlList->pluck('pic')->map(fn ($p) => trim((string) ($p ?? '')))->filter()->unique()->values();
@@ -305,59 +349,15 @@ class LakinBuilderService
             $batasWaktu = "{$tahun}-12-31";
         }
 
-        // 6. Link Bukti Dukung Kinerja: folder Drive kegiatan, berkas Drive capaian, atau tautan folder IKU
+        // 6. Link Bukti Dukung Kinerja: HANYA link FOLDER kegiatan yang sudah ada di sistem (bukan file!)
         $linkBukti = null;
-        $folderId = $kegiatanList->whereNotNull('drive_folder_id')->pluck('drive_folder_id')->first();
+        $folderId = $kegiatanList->whereNotNull('drive_folder_id')->pluck('drive_folder_id')->last();
         if ($folderId) {
             $linkBukti = "https://drive.google.com/drive/folders/{$folderId}";
-        } else {
-            $berkas = Berkas::where('kategori', 'capaian')
-                ->whereNotNull('drive_file_id')
-                ->whereHasMorph('ref', [Kegiatan::class], fn ($q) => $q->where('iku_id', $iku->id)->whereHas('periode', fn ($p) => $p->where('tahun', $tahun)))
-                ->first();
-
-            if ($berkas) {
-                $linkBukti = "https://drive.google.com/file/d/{$berkas->drive_file_id}/view";
-            }
         }
 
-        if (! $linkBukti) {
-            try {
-                $periode = Periode::where('tahun', $tahun)->orderByDesc('triwulan')->orderByDesc('bulan')->first()
-                    ?? new Periode(['tahun' => $tahun, 'triwulan' => 4]);
-                $linkBukti = app(FolderStructureService::class)->linkKategoriIku($periode, $iku, 'capaian')
-                    ?? app(FolderStructureService::class)->linkBuktiDukungIku($periode, $iku);
-            } catch (\Throwable) {
-            }
-        }
-
-        // 7. Link RTL Sebelumnya: salinan bukti RTL di Drive, berkas evaluasi RTL, atau folder evaluasi RTL
+        // 7. Link RTL Sebelumnya: HANYA jika ada folder yang sudah masuk di sistem. Kalau tidak ada, ga usah (null).
         $linkRtl = null;
-        $salinan = SalinanBuktiRtl::whereNotNull('drive_file_id')
-            ->whereHas('rtlEvaluasi', fn ($q) => $q->where('iku_id', $iku->id)->whereHas('periode', fn ($p) => $p->where('tahun', $tahun)))
-            ->first();
-
-        if ($salinan) {
-            $linkRtl = "https://drive.google.com/file/d/{$salinan->drive_file_id}/view";
-        } else {
-            $berkasRtl = Berkas::where('kategori', 'evaluasi_rtl')
-                ->whereNotNull('drive_file_id')
-                ->whereHasMorph('ref', [RtlEvaluasi::class], fn ($q) => $q->where('iku_id', $iku->id)->whereHas('periode', fn ($p) => $p->where('tahun', $tahun)))
-                ->first();
-
-            if ($berkasRtl) {
-                $linkRtl = "https://drive.google.com/file/d/{$berkasRtl->drive_file_id}/view";
-            }
-        }
-
-        if (! $linkRtl) {
-            try {
-                $periode = Periode::where('tahun', $tahun)->orderByDesc('triwulan')->orderByDesc('bulan')->first()
-                    ?? new Periode(['tahun' => $tahun, 'triwulan' => 4]);
-                $linkRtl = app(FolderStructureService::class)->linkKategoriIku($periode, $iku, 'evaluasi_rtl');
-            } catch (\Throwable) {
-            }
-        }
 
         return [
             'kegiatan' => $kegiatanTeks,

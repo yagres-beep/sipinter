@@ -913,6 +913,14 @@ button.mark:disabled{opacity:.65;cursor:progress}
 .lakin-view-btn:hover{color:var(--ink);background:var(--ro-bg)}
 .lakin-view-btn.active{background:var(--accent-a);color:#ffffff;box-shadow:0 1px 4px rgba(59,130,246,.35)}
 
+/* Triwulan Switcher & Badges */
+.lakin-tw-switch{display:inline-flex;align-items:center;background:var(--bg);border:1.5px solid var(--input-line);border-radius:10px;padding:3px;gap:3px}
+.lakin-tw-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border:none;background:transparent;color:var(--muted);font-size:12px;font-weight:600;border-radius:7px;cursor:pointer;transition:all .15s;white-space:nowrap}
+.lakin-tw-btn:hover{color:var(--ink);background:var(--ro-bg)}
+.lakin-tw-btn.active{background:var(--accent-a);color:#ffffff;box-shadow:0 1px 4px rgba(59,130,246,.35)}
+.lakin-tw-strip{display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:wrap;margin-top:6px}
+.lakin-tw-badge{display:inline-flex;align-items:center;padding:2px 8px;font-size:10.5px;font-weight:700;border-radius:6px;background:var(--blue-soft);color:var(--blue-600);border:1px solid var(--blue-line);margin-bottom:4px;letter-spacing:.3px}
+
 /* Filter Controls */
 .lakin-filter-inp{padding:7px 12px;font-size:12.5px;border:1.5px solid var(--input-line);border-radius:8px;background:var(--input-bg);color:var(--ink);min-width:180px;transition:border-color .15s, box-shadow .15s}
 .lakin-filter-inp:focus{outline:none;border-color:var(--focus-ring);box-shadow:0 0 0 3px color-mix(in srgb, var(--focus-ring) 25%, transparent)}

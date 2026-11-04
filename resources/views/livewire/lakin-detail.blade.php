@@ -10,13 +10,62 @@
         return $persen >= 90 ? 'b-approve' : ($persen >= 70 ? 'b-tunggu' : 'b-tolak');
     };
 
-    $rataRata = $lakin->baris->pluck('capaian_persen')->filter(fn ($p) => $p !== null);
+    $formatTeksPerTw = function (?string $teks) {
+        if (blank($teks)) {
+            return null;
+        }
+
+        if (str_contains($teks, '[Triwulan ') || str_contains($teks, '[Tahunan]')) {
+            $lines = explode("\n", $teks);
+            $output = [];
+            foreach ($lines as $line) {
+                $trimmed = trim($line);
+                if (preg_match('/^\[(Triwulan [I|V|X]+|Tahunan)\]$/', $trimmed, $m)) {
+                    $output[] = '<div style="margin-top:6px;margin-bottom:3px"><span class="lakin-tw-badge">' . e($m[1]) . '</span></div>';
+                } else {
+                    $output[] = e($line);
+                }
+            }
+            return implode('<br>', $output);
+        }
+
+        return nl2br(e($teks));
+    };
+
+    $twAktif = $filterTriwulan !== 'semua' ? (int) $filterTriwulan : null;
+
+    $rataRata = $lakin->baris->map(function ($b) use ($twAktif, $capaianTahunanMap) {
+        if ($twAktif === null || ! $b->iku_id) {
+            return $b->capaian_persen;
+        }
+        $ct = $capaianTahunanMap[$b->iku_id] ?? null;
+        return $ct ? $ct->capaianTriwulanan($twAktif) : $b->capaian_persen;
+    })->filter(fn ($p) => $p !== null);
+
     $jumlahSasaran = $lakin->baris->pluck('sasaran')->filter()->unique()->count();
     $barisPerSasaran = $lakin->baris->groupBy(fn ($b) => $b->sasaran ?: 'Tanpa Sasaran');
 
-    $jumlahTinggi = $lakin->baris->where('capaian_persen', '>=', 90)->count();
-    $jumlahSedang = $lakin->baris->filter(fn ($b) => $b->capaian_persen !== null && $b->capaian_persen >= 70 && $b->capaian_persen < 90)->count();
-    $jumlahRendah = $lakin->baris->filter(fn ($b) => $b->capaian_persen !== null && $b->capaian_persen < 70)->count();
+    $jumlahTinggi = $lakin->baris->filter(function ($b) use ($twAktif, $capaianTahunanMap) {
+        $cap = $twAktif && $b->iku_id && isset($capaianTahunanMap[$b->iku_id])
+            ? $capaianTahunanMap[$b->iku_id]->capaianTriwulanan($twAktif)
+            : $b->capaian_persen;
+        return $cap !== null && $cap >= 90;
+    })->count();
+
+    $jumlahSedang = $lakin->baris->filter(function ($b) use ($twAktif, $capaianTahunanMap) {
+        $cap = $twAktif && $b->iku_id && isset($capaianTahunanMap[$b->iku_id])
+            ? $capaianTahunanMap[$b->iku_id]->capaianTriwulanan($twAktif)
+            : $b->capaian_persen;
+        return $cap !== null && $cap >= 70 && $cap < 90;
+    })->count();
+
+    $jumlahRendah = $lakin->baris->filter(function ($b) use ($twAktif, $capaianTahunanMap) {
+        $cap = $twAktif && $b->iku_id && isset($capaianTahunanMap[$b->iku_id])
+            ? $capaianTahunanMap[$b->iku_id]->capaianTriwulanan($twAktif)
+            : $b->capaian_persen;
+        return $cap !== null && $cap < 70;
+    })->count();
+
     $sudahAdaRtl = $lakin->baris->filter(fn ($b) => !blank($b->rtl))->count();
 @endphp
 
@@ -44,7 +93,7 @@
 }">
     <div class="page-head">
         <div class="page-title">Rekap Kinerja Tahunan {{ $lakin->tahun }}</div>
-        <div class="page-sub">Laporan kinerja tahunan komprehensif — sasaran, indikator, target, realisasi, capaian %, dan tindak lanjut.</div>
+        <div class="page-sub">Laporan kinerja tahunan komprehensif — sasaran, indikator, alokasi per triwulan, capaian %, dan tindak lanjut.</div>
     </div>
 
     @if (session('status'))
@@ -59,7 +108,12 @@
             <div class="lakin-banner-icon">📈</div>
             <div>
                 <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px">Tahun Laporan</div>
-                <div style="font-size:20px;font-weight:800;color:var(--ink);line-height:1.2">{{ $lakin->tahun }}</div>
+                <div style="font-size:20px;font-weight:800;color:var(--ink);line-height:1.2">
+                    {{ $lakin->tahun }}
+                    @if ($filterTriwulan !== 'semua')
+                        <span style="font-size:15px;color:var(--blue-600);font-weight:700">· Triwulan {{ ['I', 'II', 'III', 'IV'][$filterTriwulan - 1] }}</span>
+                    @endif
+                </div>
             </div>
         </div>
         <div class="btn-row" style="margin:0;gap:8px;flex-wrap:wrap">
@@ -71,8 +125,8 @@
                 <span wire:loading wire:target="unduhExcel"><i class="spin"></i> Menyiapkan…</span>
             </button>
             @if ($this->isTimSakip())
-                <button type="button" class="btn btn-ghost btn-sm" wire:click="bukaKonfirmasiSegarkan" wire:loading.attr="disabled" wire:target="segarkanAngka" title="Segarkan data capaian & verifikasi terbaru">
-                    <span wire:loading.remove wire:target="segarkanAngka">↻ Segarkan Angka</span>
+                <button type="button" class="btn btn-ghost btn-sm" wire:click="bukaKonfirmasiSegarkan" wire:loading.attr="disabled" wire:target="segarkanAngka" title="Segarkan rincian per triwulan & tautan folder dari sistem terkini">
+                    <span wire:loading.remove wire:target="segarkanAngka">↻ Segarkan Angka &amp; Rincian</span>
                     <span wire:loading wire:target="segarkanAngka"><i class="spin"></i> Menyegarkan…</span>
                 </button>
             @endif
@@ -94,7 +148,9 @@
 
         <div class="lakin-stat-card">
             <div class="lakin-stat-top">
-                <span class="lakin-stat-label">Rata-rata Capaian</span>
+                <span class="lakin-stat-label">
+                    {{ $filterTriwulan === 'semua' ? 'Rata-rata Capaian Setahun' : 'Rata-rata Capaian TW ' . ['I', 'II', 'III', 'IV'][$filterTriwulan - 1] }}
+                </span>
                 <span class="lakin-stat-icon">🎯</span>
             </div>
             <div class="lakin-stat-val">
@@ -134,7 +190,7 @@
                     {{ $jumlahRendah }} Rendah
                 </span>
             </div>
-            <div class="lakin-stat-sub">Berdasarkan standar capaian organisasi</div>
+            <div class="lakin-stat-sub">{{ $filterTriwulan === 'semua' ? 'Berdasarkan capaian kumulatif setahun' : 'Berdasarkan capaian triwulan terpilih' }}</div>
         </div>
 
         <div class="lakin-stat-card">
@@ -151,28 +207,42 @@
 
     {{-- CARD UTAMA: TABEL / KARTU REKAP --}}
     <div class="card">
-        <div class="card-h" style="justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div class="card-h" style="justify-content:space-between;flex-wrap:wrap;gap:12px">
             <div style="display:flex;align-items:center;gap:10px">
                 <span style="font-size:15px;font-weight:700">📋 Tabel Rekap Kinerja</span>
                 <span class="badge" style="font-size:11.5px;font-weight:700">{{ $lakin->baris->count() }} Baris</span>
             </div>
 
-            <!-- Switcher Tampilan -->
-            <div class="lakin-view-switch">
-                <button type="button" class="lakin-view-btn {{ in_array($tampilan, ['rapi', 'tabel'], true) ? 'active' : '' }}" wire:click="gantiTampilan('rapi')" title="Tampilan tabel bersih, rapi, dan mudah dibaca">
-                    <span>👁️</span>
-                    <span>Tabel Rapi</span>
-                </button>
-                @if ($this->isTimSakip())
-                    <button type="button" class="lakin-view-btn {{ $tampilan === 'edit' ? 'active' : '' }}" wire:click="gantiTampilan('edit')" title="Mode sunting massal langsung di tabel (spreadsheet)">
-                        <span>✏️</span>
-                        <span>Sunting Tabel</span>
+            <!-- Pilihan Triwulan (Per Triwulan vs Setahun Penuh) -->
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <div class="lakin-tw-switch" title="Pilih Triwulan untuk memfilter angka target, realisasi, dan rincian triwulan">
+                    <button type="button" class="lakin-tw-btn {{ $filterTriwulan === 'semua' ? 'active' : '' }}" wire:click="$set('filterTriwulan', 'semua')">
+                        <span>🗓️</span> Setahun Penuh
                     </button>
-                @endif
-                <button type="button" class="lakin-view-btn {{ $tampilan === 'kartu' ? 'active' : '' }}" wire:click="gantiTampilan('kartu')" title="Tampilan kartu responsif untuk smartphone, tablet, atau tinjauan santai">
-                    <span>📱</span>
-                    <span>Mode Kartu</span>
-                </button>
+                    @foreach ([1 => 'TW I', 2 => 'TW II', 3 => 'TW III', 4 => 'TW IV'] as $tNum => $tLbl)
+                        <button type="button" class="lakin-tw-btn {{ $filterTriwulan === (string)$tNum ? 'active' : '' }}" wire:click="$set('filterTriwulan', '{{ $tNum }}')">
+                            {{ $tLbl }}
+                        </button>
+                    @endforeach
+                </div>
+
+                <!-- Switcher Tampilan -->
+                <div class="lakin-view-switch">
+                    <button type="button" class="lakin-view-btn {{ in_array($tampilan, ['rapi', 'tabel'], true) ? 'active' : '' }}" wire:click="gantiTampilan('rapi')" title="Tampilan tabel bersih, rapi, dan mudah dibaca">
+                        <span>👁️</span>
+                        <span>Tabel Rapi</span>
+                    </button>
+                    @if ($this->isTimSakip())
+                        <button type="button" class="lakin-view-btn {{ $tampilan === 'edit' ? 'active' : '' }}" wire:click="gantiTampilan('edit')" title="Mode sunting massal langsung di tabel (spreadsheet)">
+                            <span>✏️</span>
+                            <span>Sunting Tabel</span>
+                        </button>
+                    @endif
+                    <button type="button" class="lakin-view-btn {{ $tampilan === 'kartu' ? 'active' : '' }}" wire:click="gantiTampilan('kartu')" title="Tampilan kartu responsif untuk smartphone, tablet, atau tinjauan santai">
+                        <span>📱</span>
+                        <span>Mode Kartu</span>
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -198,12 +268,10 @@
                 </div>
 
                 <div class="lakin-hint-alert">
-                    @if (in_array($tampilan, ['rapi', 'tabel'], true))
-                        <span>💡 Kolom Indikator terkunci di kiri. Klik <b>✏️ Sunting</b> untuk mengubah data per baris.</span>
-                    @elseif ($tampilan === 'edit')
-                        <span>✏️ <em>Mode Sunting Tabel: Anda dapat mengedit isian langsung di sel tabel lalu tekan Simpan.</em></span>
+                    @if ($filterTriwulan === 'semua')
+                        <span>💡 Rekapitulasi menampilkan capaian setahun penuh beserta rincian histori TW I s.d. TW IV.</span>
                     @else
-                        <span>📱 <em>Mode Kartu: Format kartu memudahkan evaluasi rincian kinerja indikator secara fokus.</em></span>
+                        <span>💡 Menampilkan capaian dan rincian khusus <b>Triwulan {{ ['I', 'II', 'III', 'IV'][$filterTriwulan - 1] }}</b>.</span>
                     @endif
                 </div>
             </div>
@@ -227,14 +295,21 @@
                     <thead>
                         <tr>
                             <th class="th-sticky-left" style="width:340px;min-width:340px">Indikator Kinerja</th>
-                            <th style="text-align:right;width:110px;min-width:110px">Target</th>
-                            <th style="text-align:right;width:110px;min-width:110px">Realisasi</th>
-                            <th style="text-align:center;width:110px;min-width:110px">Capaian %</th>
-                            <th style="width:260px;min-width:260px">Kegiatan</th>
-                            <th style="width:260px;min-width:260px">Solusi &amp; Kendala</th>
-                            <th style="width:260px;min-width:260px">RTL (Rencana Tindak Lanjut)</th>
+                            @if ($filterTriwulan === 'semua')
+                                <th style="text-align:right;width:115px;min-width:115px">Target (Setahun)</th>
+                                <th style="text-align:right;width:115px;min-width:115px">Realisasi (Setahun)</th>
+                                <th style="text-align:center;width:130px;min-width:130px">Capaian %</th>
+                            @else
+                                @php $romTw = ['I', 'II', 'III', 'IV'][$filterTriwulan - 1]; @endphp
+                                <th style="text-align:right;width:115px;min-width:115px">Target (TW {{ $romTw }})</th>
+                                <th style="text-align:right;width:115px;min-width:115px">Realisasi (TW {{ $romTw }})</th>
+                                <th style="text-align:center;width:125px;min-width:125px">Capaian % (TW {{ $romTw }})</th>
+                            @endif
+                            <th style="width:270px;min-width:270px">Kegiatan</th>
+                            <th style="width:270px;min-width:270px">Solusi &amp; Kendala</th>
+                            <th style="width:270px;min-width:270px">RTL (Rencana Tindak Lanjut)</th>
                             <th style="width:160px;min-width:160px">PIC &amp; Batas Waktu</th>
-                            <th style="width:140px;min-width:140px">Tautan Bukti</th>
+                            <th style="width:140px;min-width:140px">Folder Bukti</th>
                             @if ($this->isTimSakip())
                                 <th class="th-sticky-right" style="width:115px;min-width:115px;text-align:center">Aksi</th>
                             @endif
@@ -259,9 +334,24 @@
                             @foreach ($daftarBaris as $baris)
                                 @php
                                     $indikatorEscaped = addslashes($baris->indikator);
-                                    $capaianVal = $baris->capaian_persen !== null ? (float) $baris->capaian_persen : 'null';
+                                    $ct = $baris->iku_id ? ($capaianTahunanMap[$baris->iku_id] ?? null) : null;
+
+                                    if ($filterTriwulan === 'semua' || ! $ct) {
+                                        $targetBaris = $baris->target;
+                                        $realisasiBaris = $baris->realisasi;
+                                        $capaianBaris = $baris->capaian_persen;
+                                    } else {
+                                        $twN = (int) $filterTriwulan;
+                                        $targetBaris = $ct->alokasiKumulatif($twN);
+                                        $realisasiBaris = $ct->realisasiKumulatif($twN);
+                                        $capaianBaris = $ct->capaianTriwulanan($twN);
+                                    }
+
+                                    $capaianVal = $capaianBaris !== null ? (float) $capaianBaris : 'null';
+                                    $isFolderBukti = ! empty($baris->link_bukti_dukung_kinerja) && str_contains($baris->link_bukti_dukung_kinerja, '/drive/folders/');
+                                    $isFolderRtl = ! empty($baris->link_rtl_sebelumnya) && str_contains($baris->link_rtl_sebelumnya, '/drive/folders/');
                                 @endphp
-                                <tr wire:key="baris-rapi-{{ $baris->id }}" x-show="cocok('{{ $indikatorEscaped }}', '{{ $sasaranEscaped }}', {{ $capaianVal }})">
+                                <tr wire:key="baris-rapi-{{ $baris->id }}-{{ $filterTriwulan }}" x-show="cocok('{{ $indikatorEscaped }}', '{{ $sasaranEscaped }}', {{ $capaianVal }})">
                                     {{-- 1. Indikator Kinerja (Sticky Kiri) --}}
                                     <td class="td-sticky-left">
                                         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
@@ -281,52 +371,70 @@
 
                                     {{-- 2. Target --}}
                                     <td style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap">
-                                        {{ $formatAngka($baris->target) }}
+                                        {{ $formatAngka($targetBaris) }}
                                     </td>
 
                                     {{-- 3. Realisasi --}}
                                     <td style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap">
-                                        {{ $formatAngka($baris->realisasi) }}
+                                        {{ $formatAngka($realisasiBaris) }}
                                     </td>
 
                                     {{-- 4. Capaian % --}}
                                     <td style="text-align:center">
-                                        <span class="badge {{ $badgeCapaian($baris->capaian_persen) }}" style="font-weight:800;padding:4px 9px;font-size:12px;box-shadow:var(--sh-sm)">
-                                            {{ $formatPersen($baris->capaian_persen) }}
+                                        <span class="badge {{ $badgeCapaian($capaianBaris) }}" style="font-weight:800;padding:4px 9px;font-size:12px;box-shadow:var(--sh-sm)">
+                                            {{ $formatPersen($capaianBaris) }}
                                         </span>
-                                        @if ($baris->capaian_persen !== null)
+                                        @if ($capaianBaris !== null)
                                             @php
-                                                $pct = min(100, max(0, (float) $baris->capaian_persen));
-                                                $colorCls = $baris->capaian_persen >= 90 ? 'green' : ($baris->capaian_persen >= 70 ? 'amber' : 'red');
+                                                $pct = min(100, max(0, (float) $capaianBaris));
+                                                $colorCls = $capaianBaris >= 90 ? 'green' : ($capaianBaris >= 70 ? 'amber' : 'red');
                                             @endphp
-                                            <div class="lakin-progress-wrap" style="margin:6px auto 0" title="{{ $formatPersen($baris->capaian_persen) }}">
+                                            <div class="lakin-progress-wrap" style="margin:5px auto 0" title="{{ $formatPersen($capaianBaris) }}">
                                                 <div class="lakin-progress-fill {{ $colorCls }}" style="width:{{ $pct }}%"></div>
+                                            </div>
+                                        @endif
+
+                                        {{-- Strip Breakdown Per-Triwulan (jika melihat setahun penuh) --}}
+                                        @if ($filterTriwulan === 'semua' && $ct)
+                                            <div class="lakin-tw-strip">
+                                                @foreach ([1 => 'I', 2 => 'II', 3 => 'III', 4 => 'IV'] as $tN => $tRom)
+                                                    @php
+                                                        $cVal = $ct->capaianTriwulanan($tN);
+                                                        $tVal = $ct->alokasiKumulatif($tN);
+                                                        $rVal = $ct->realisasiKumulatif($tN);
+                                                        $tCls = $cVal !== null ? ($cVal >= 90 ? 'b-approve' : ($cVal >= 70 ? 'b-tunggu' : 'b-tolak')) : 'b-draft';
+                                                    @endphp
+                                                    <span class="badge {{ $tCls }}" style="font-size:9.5px;padding:1px 5px;font-weight:700"
+                                                          title="Triwulan {{ $tRom }} — Target: {{ $formatAngka($tVal) }} | Real: {{ $formatAngka($rVal) }} | Capaian: {{ $formatPersen($cVal) }}">
+                                                        TW {{ $tRom }}: {{ $formatPersen($cVal) }}
+                                                    </span>
+                                                @endforeach
                                             </div>
                                         @endif
                                     </td>
 
-                                    {{-- 5. Kegiatan --}}
+                                    {{-- 5. Kegiatan (dengan Penanda Triwulan) --}}
                                     <td>
                                         @if ($baris->kegiatan)
-                                            <div class="lakin-text-cell">{{ $baris->kegiatan }}</div>
+                                            <div class="lakin-text-cell">{!! $formatTeksPerTw($baris->kegiatan) !!}</div>
                                         @else
                                             <span class="lakin-text-empty">—</span>
                                         @endif
                                     </td>
 
-                                    {{-- 6. Solusi & Kendala --}}
+                                    {{-- 6. Solusi & Kendala (dengan Penanda Triwulan) --}}
                                     <td>
                                         @if ($baris->solusi_kendala)
-                                            <div class="lakin-text-cell">{{ $baris->solusi_kendala }}</div>
+                                            <div class="lakin-text-cell">{!! $formatTeksPerTw($baris->solusi_kendala) !!}</div>
                                         @else
                                             <span class="lakin-text-empty">—</span>
                                         @endif
                                     </td>
 
-                                    {{-- 7. RTL --}}
+                                    {{-- 7. RTL (dengan Penanda Triwulan) --}}
                                     <td>
                                         @if ($baris->rtl)
-                                            <div class="lakin-text-cell">{{ $baris->rtl }}</div>
+                                            <div class="lakin-text-cell">{!! $formatTeksPerTw($baris->rtl) !!}</div>
                                         @else
                                             <span class="lakin-text-empty">—</span>
                                         @endif
@@ -342,23 +450,24 @@
                                         </div>
                                     </td>
 
-                                    {{-- 9. Link Bukti & RTL --}}
+                                    {{-- 9. Folder Bukti & RTL (Hanya Folder dari Sistem) --}}
                                     <td>
-                                        <div style="display:flex;flex-direction:column;gap:5px">
-                                            @if ($baris->link_bukti_dukung_kinerja)
-                                                <a href="{{ $baris->link_bukti_dukung_kinerja }}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:11px;display:inline-flex;align-items:center;gap:4px">
-                                                    <span>🔗</span> Bukti
-                                                </a>
-                                            @endif
-                                            @if ($baris->link_rtl_sebelumnya)
-                                                <a href="{{ $baris->link_rtl_sebelumnya }}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:11px;display:inline-flex;align-items:center;gap:4px">
-                                                    <span>🔗</span> RTL Lalu
-                                                </a>
-                                            @endif
-                                            @if (!$baris->link_bukti_dukung_kinerja && !$baris->link_rtl_sebelumnya)
-                                                <span class="lakin-text-empty">—</span>
-                                            @endif
-                                        </div>
+                                        @if ($isFolderBukti || $isFolderRtl)
+                                            <div style="display:flex;flex-direction:column;gap:5px">
+                                                @if ($isFolderBukti)
+                                                    <a href="{{ $baris->link_bukti_dukung_kinerja }}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:11px;display:inline-flex;align-items:center;gap:4px">
+                                                        <span>📁</span> Folder Bukti
+                                                    </a>
+                                                @endif
+                                                @if ($isFolderRtl)
+                                                    <a href="{{ $baris->link_rtl_sebelumnya }}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:11px;display:inline-flex;align-items:center;gap:4px">
+                                                        <span>📁</span> Folder RTL
+                                                    </a>
+                                                @endif
+                                            </div>
+                                        @else
+                                            <span class="lakin-text-empty">—</span>
+                                        @endif
                                     </td>
 
                                     {{-- 10. Aksi (Sticky Kanan, khusus Tim SAKIP) --}}
@@ -382,7 +491,7 @@
             </div>
 
         {{-- ============================================================== --}}
-        {{-- MODE 2: SUNTEK TABEL (SPREADSHEET INLINE MASS EDITING)          --}}
+        {{-- MODE 2: SUNTING TABEL (SPREADSHEET INLINE MASS EDITING)         --}}
         {{-- ============================================================== --}}
         @elseif ($tampilan === 'edit')
             <div class="lakin-table-wrap">
@@ -393,13 +502,13 @@
                             <th style="text-align:right;width:115px;min-width:115px">Target</th>
                             <th style="text-align:right;width:115px;min-width:115px">Realisasi</th>
                             <th style="text-align:center;width:105px;min-width:105px">Capaian %</th>
-                            <th style="width:240px;min-width:240px">Kegiatan</th>
-                            <th style="width:240px;min-width:240px">Solusi &amp; Kendala</th>
-                            <th style="width:240px;min-width:240px">RTL (Rencana Tindak Lanjut)</th>
+                            <th style="width:250px;min-width:250px">Kegiatan</th>
+                            <th style="width:250px;min-width:250px">Solusi &amp; Kendala</th>
+                            <th style="width:250px;min-width:250px">RTL</th>
                             <th style="width:140px;min-width:140px">PIC</th>
                             <th style="width:150px;min-width:150px">Batas Waktu</th>
-                            <th style="width:190px;min-width:190px">Link Bukti Dukung</th>
-                            <th style="width:190px;min-width:190px">Link RTL Sebelumnya</th>
+                            <th style="width:190px;min-width:190px">Folder Bukti Dukung</th>
+                            <th style="width:190px;min-width:190px">Folder RTL Sebelumnya</th>
                             <th class="th-sticky-right" style="width:115px;min-width:115px;text-align:center">Aksi</th>
                         </tr>
                     </thead>
@@ -425,7 +534,6 @@
                                     $capaianVal = $baris->capaian_persen !== null ? (float) $baris->capaian_persen : 'null';
                                 @endphp
                                 <tr wire:key="baris-edt-{{ $baris->id }}" x-show="cocok('{{ $indikatorEscaped }}', '{{ $sasaranEscaped }}', {{ $capaianVal }})">
-                                    {{-- 1. Indikator (Sticky Kiri) --}}
                                     <td class="td-sticky-left">
                                         <textarea class="tbl-textarea" style="height:62px;font-weight:600" placeholder="Ketik indikator…" wire:model="edit.{{ $baris->id }}.indikator"></textarea>
                                         <input type="text" class="tbl-inp" style="margin-top:5px;font-size:11px;color:var(--muted);padding:4px 8px" placeholder="🏷️ Sasaran (opsional)" wire:model="edit.{{ $baris->id }}.sasaran">
@@ -434,69 +542,58 @@
                                         @enderror
                                     </td>
 
-                                    {{-- 2. Target --}}
                                     <td style="text-align:right">
                                         <input type="number" step="0.01" class="tbl-inp num" placeholder="0" wire:model="edit.{{ $baris->id }}.target">
                                     </td>
 
-                                    {{-- 3. Realisasi --}}
                                     <td style="text-align:right">
                                         <input type="number" step="0.01" class="tbl-inp num" placeholder="0" wire:model="edit.{{ $baris->id }}.realisasi">
                                     </td>
 
-                                    {{-- 4. Capaian % --}}
                                     <td style="text-align:center">
                                         <span class="badge {{ $badgeCapaian($baris->capaian_persen) }}" style="font-weight:700;padding:4px 8px;font-size:12px">
                                             {{ $formatPersen($baris->capaian_persen) }}
                                         </span>
                                     </td>
 
-                                    {{-- 5. Kegiatan --}}
                                     <td>
-                                        <textarea class="tbl-textarea" placeholder="Rincian kegiatan…" wire:model="edit.{{ $baris->id }}.kegiatan"></textarea>
+                                        <textarea class="tbl-textarea" placeholder="Rincian kegiatan per triwulan…" wire:model="edit.{{ $baris->id }}.kegiatan"></textarea>
                                     </td>
 
-                                    {{-- 6. Solusi & Kendala --}}
                                     <td>
-                                        <textarea class="tbl-textarea" placeholder="Kendala & solusi…" wire:model="edit.{{ $baris->id }}.solusi_kendala"></textarea>
+                                        <textarea class="tbl-textarea" placeholder="Kendala & solusi per triwulan…" wire:model="edit.{{ $baris->id }}.solusi_kendala"></textarea>
                                     </td>
 
-                                    {{-- 7. RTL --}}
                                     <td>
-                                        <textarea class="tbl-textarea" placeholder="Rencana tindak lanjut…" wire:model="edit.{{ $baris->id }}.rtl"></textarea>
+                                        <textarea class="tbl-textarea" placeholder="Rencana tindak lanjut per triwulan…" wire:model="edit.{{ $baris->id }}.rtl"></textarea>
                                     </td>
 
-                                    {{-- 8. PIC --}}
                                     <td>
                                         <input type="text" class="tbl-inp" placeholder="Nama PIC…" wire:model="edit.{{ $baris->id }}.pic">
                                     </td>
 
-                                    {{-- 9. Batas Waktu Tindak Lanjut --}}
                                     <td>
                                         <input type="date" class="tbl-inp" wire:model="edit.{{ $baris->id }}.batas_waktu_tindak_lanjut">
                                     </td>
 
-                                    {{-- 10. Link Bukti Dukung Kinerja --}}
                                     <td>
                                         <div style="display:flex;align-items:center;gap:5px">
-                                            <input type="url" class="tbl-inp" placeholder="https://…" wire:model="edit.{{ $baris->id }}.link_bukti_dukung_kinerja">
-                                            @if (!empty($baris->link_bukti_dukung_kinerja))
-                                                <a href="{{ $baris->link_bukti_dukung_kinerja }}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="padding:6px 8px;flex:none" title="Buka tautan bukti">🔗</a>
+                                            <input type="url" class="tbl-inp" placeholder="https://drive.google.com/drive/folders/…" wire:model="edit.{{ $baris->id }}.link_bukti_dukung_kinerja">
+                                            @if (!empty($baris->link_bukti_dukung_kinerja) && str_contains($baris->link_bukti_dukung_kinerja, '/drive/folders/'))
+                                                <a href="{{ $baris->link_bukti_dukung_kinerja }}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="padding:6px 8px;flex:none" title="Buka Folder Drive">📁</a>
                                             @endif
                                         </div>
                                     </td>
 
-                                    {{-- 11. Link RTL Sebelumnya --}}
                                     <td>
                                         <div style="display:flex;align-items:center;gap:5px">
-                                            <input type="url" class="tbl-inp" placeholder="https://…" wire:model="edit.{{ $baris->id }}.link_rtl_sebelumnya">
-                                            @if (!empty($baris->link_rtl_sebelumnya))
-                                                <a href="{{ $baris->link_rtl_sebelumnya }}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="padding:6px 8px;flex:none" title="Buka tautan RTL">🔗</a>
+                                            <input type="url" class="tbl-inp" placeholder="https://drive.google.com/drive/folders/…" wire:model="edit.{{ $baris->id }}.link_rtl_sebelumnya">
+                                            @if (!empty($baris->link_rtl_sebelumnya) && str_contains($baris->link_rtl_sebelumnya, '/drive/folders/'))
+                                                <a href="{{ $baris->link_rtl_sebelumnya }}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="padding:6px 8px;flex:none" title="Buka Folder RTL">📁</a>
                                             @endif
                                         </div>
                                     </td>
 
-                                    {{-- 12. Aksi (Sticky Kanan) --}}
                                     <td class="td-sticky-right">
                                         <div style="display:flex;align-items:center;justify-content:center;gap:6px">
                                             <button type="button" class="btn btn-primary btn-sm" style="padding:6px 10px" title="Simpan baris" wire:click="simpanBaris({{ $baris->id }})" wire:loading.attr="disabled" wire:target="simpanBaris({{ $baris->id }}),hapusBaris({{ $baris->id }})">
@@ -526,7 +623,6 @@
                         $sasaranEscaped = addslashes($sasaran);
                     @endphp
                     <div class="lakin-group-card" x-show="cocokSasaran('{{ $sasaranEscaped }}')">
-                        {{-- Header Grup Sasaran --}}
                         <div class="lakin-group-header">
                             <div class="lakin-group-title">
                                 <span style="font-size:16px">🎯</span>
@@ -537,17 +633,30 @@
                             </span>
                         </div>
 
-                        {{-- Daftar Kartu Indikator --}}
                         <div class="lakin-group-body">
                             @foreach ($daftarBaris as $baris)
                                 @php
                                     $indikatorEscaped = addslashes($baris->indikator);
-                                    $persenAngka = $baris->capaian_persen !== null ? min(100, max(0, (float) $baris->capaian_persen)) : 0;
-                                    $capaianVal = $baris->capaian_persen !== null ? (float) $baris->capaian_persen : 'null';
-                                    $barisBadge = $badgeCapaian($baris->capaian_persen);
+                                    $ct = $baris->iku_id ? ($capaianTahunanMap[$baris->iku_id] ?? null) : null;
+
+                                    if ($filterTriwulan === 'semua' || ! $ct) {
+                                        $targetBaris = $baris->target;
+                                        $realisasiBaris = $baris->realisasi;
+                                        $capaianBaris = $baris->capaian_persen;
+                                    } else {
+                                        $twN = (int) $filterTriwulan;
+                                        $targetBaris = $ct->alokasiKumulatif($twN);
+                                        $realisasiBaris = $ct->realisasiKumulatif($twN);
+                                        $capaianBaris = $ct->capaianTriwulanan($twN);
+                                    }
+
+                                    $persenAngka = $capaianBaris !== null ? min(100, max(0, (float) $capaianBaris)) : 0;
+                                    $capaianVal = $capaianBaris !== null ? (float) $capaianBaris : 'null';
+                                    $barisBadge = $badgeCapaian($capaianBaris);
+                                    $isFolderBukti = ! empty($baris->link_bukti_dukung_kinerja) && str_contains($baris->link_bukti_dukung_kinerja, '/drive/folders/');
+                                    $isFolderRtl = ! empty($baris->link_rtl_sebelumnya) && str_contains($baris->link_rtl_sebelumnya, '/drive/folders/');
                                 @endphp
-                                <div class="lakin-card" wire:key="baris-crd-{{ $baris->id }}" x-show="cocok('{{ $indikatorEscaped }}', '{{ $sasaranEscaped }}', {{ $capaianVal }})">
-                                    {{-- Baris Atas: Kode & Indikator & Capaian --}}
+                                <div class="lakin-card" wire:key="baris-crd-{{ $baris->id }}-{{ $filterTriwulan }}" x-show="cocok('{{ $indikatorEscaped }}', '{{ $sasaranEscaped }}', {{ $capaianVal }})">
                                     <div class="lakin-card-head">
                                         <div style="flex:1;min-width:0">
                                             <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
@@ -567,52 +676,65 @@
 
                                         <div style="flex:none;text-align:right">
                                             <span class="badge {{ $barisBadge }}" style="font-size:13px;font-weight:800;padding:5px 11px">
-                                                {{ $formatPersen($baris->capaian_persen) }}
+                                                {{ $formatPersen($capaianBaris) }}
                                             </span>
                                         </div>
                                     </div>
 
-                                    {{-- Strip Metrik Capaian --}}
                                     <div class="lakin-card-metrics">
                                         <div class="lakin-metric-box">
-                                            <div class="lakin-metric-lbl">Target</div>
-                                            <div class="lakin-metric-val">{{ $formatAngka($baris->target) }}</div>
+                                            <div class="lakin-metric-lbl">{{ $filterTriwulan === 'semua' ? 'Target Setahun' : 'Target TW ' . ['I', 'II', 'III', 'IV'][$filterTriwulan - 1] }}</div>
+                                            <div class="lakin-metric-val">{{ $formatAngka($targetBaris) }}</div>
                                         </div>
 
                                         <div class="lakin-metric-box">
-                                            <div class="lakin-metric-lbl">Realisasi</div>
-                                            <div class="lakin-metric-val">{{ $formatAngka($baris->realisasi) }}</div>
+                                            <div class="lakin-metric-lbl">{{ $filterTriwulan === 'semua' ? 'Realisasi Setahun' : 'Realisasi TW ' . ['I', 'II', 'III', 'IV'][$filterTriwulan - 1] }}</div>
+                                            <div class="lakin-metric-val">{{ $formatAngka($realisasiBaris) }}</div>
                                         </div>
 
                                         <div class="lakin-metric-box">
                                             <div class="lakin-metric-lbl">Capaian %</div>
-                                            <div class="lakin-metric-val" style="color:var(--blue-600)">{{ $formatPersen($baris->capaian_persen) }}</div>
-                                            <div class="quota-bar" style="height:5px;margin-top:4px" title="Capaian {{ $formatPersen($baris->capaian_persen) }}">
-                                                <div class="quota-fill {{ $baris->capaian_persen >= 90 ? '' : ($baris->capaian_persen >= 70 ? 'warn' : 'danger') }}" style="width:{{ $persenAngka }}%"></div>
+                                            <div class="lakin-metric-val" style="color:var(--blue-600)">{{ $formatPersen($capaianBaris) }}</div>
+                                            <div class="quota-bar" style="height:5px;margin-top:4px" title="Capaian {{ $formatPersen($capaianBaris) }}">
+                                                <div class="quota-fill {{ $capaianBaris >= 90 ? '' : ($capaianBaris >= 70 ? 'warn' : 'danger') }}" style="width:{{ $persenAngka }}%"></div>
                                             </div>
                                         </div>
                                     </div>
 
-                                    {{-- Grid Rincian Kegiatan & RTL --}}
+                                    @if ($filterTriwulan === 'semua' && $ct)
+                                        <div style="background:var(--bg);padding:8px 12px;border-radius:8px;margin-bottom:12px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                                            <span style="font-size:11px;font-weight:700;color:var(--muted)">Histori Triwulan:</span>
+                                            @foreach ([1 => 'I', 2 => 'II', 3 => 'III', 4 => 'IV'] as $tN => $tRom)
+                                                @php
+                                                    $cVal = $ct->capaianTriwulanan($tN);
+                                                    $tCls = $cVal !== null ? ($cVal >= 90 ? 'b-approve' : ($cVal >= 70 ? 'b-tunggu' : 'b-tolak')) : 'b-draft';
+                                                @endphp
+                                                <span class="badge {{ $tCls }}" style="font-size:10px;padding:2px 6px">
+                                                    TW {{ $tRom }}: {{ $formatPersen($cVal) }}
+                                                </span>
+                                            @endforeach
+                                        </div>
+                                    @endif
+
                                     <div class="lakin-card-grid">
                                         <div>
                                             <label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase">📝 Kegiatan</label>
-                                            <div style="background:var(--bg);padding:9px 12px;border-radius:8px;font-size:12.5px;min-height:48px;white-space:pre-wrap;line-height:1.5;color:var(--ink)">
-                                                {{ $baris->kegiatan ?: '—' }}
+                                            <div style="background:var(--bg);padding:9px 12px;border-radius:8px;font-size:12.5px;min-height:48px;line-height:1.5;color:var(--ink)">
+                                                {!! $formatTeksPerTw($baris->kegiatan) ?: '<span class="lakin-text-empty">—</span>' !!}
                                             </div>
                                         </div>
 
                                         <div>
                                             <label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase">💡 Solusi &amp; Kendala</label>
-                                            <div style="background:var(--bg);padding:9px 12px;border-radius:8px;font-size:12.5px;min-height:48px;white-space:pre-wrap;line-height:1.5;color:var(--ink)">
-                                                {{ $baris->solusi_kendala ?: '—' }}
+                                            <div style="background:var(--bg);padding:9px 12px;border-radius:8px;font-size:12.5px;min-height:48px;line-height:1.5;color:var(--ink)">
+                                                {!! $formatTeksPerTw($baris->solusi_kendala) ?: '<span class="lakin-text-empty">—</span>' !!}
                                             </div>
                                         </div>
 
                                         <div style="grid-column: 1 / -1">
                                             <label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase">🔄 Rencana Tindak Lanjut (RTL)</label>
-                                            <div style="background:var(--bg);padding:9px 12px;border-radius:8px;font-size:12.5px;min-height:48px;white-space:pre-wrap;line-height:1.5;color:var(--ink)">
-                                                {{ $baris->rtl ?: '—' }}
+                                            <div style="background:var(--bg);padding:9px 12px;border-radius:8px;font-size:12.5px;min-height:48px;line-height:1.5;color:var(--ink)">
+                                                {!! $formatTeksPerTw($baris->rtl) ?: '<span class="lakin-text-empty">—</span>' !!}
                                             </div>
                                         </div>
 
@@ -631,29 +753,28 @@
                                         </div>
 
                                         <div>
-                                            <label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase">🔗 Bukti Dukung Kinerja</label>
-                                            @if ($baris->link_bukti_dukung_kinerja)
+                                            <label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase">📁 Folder Bukti Dukung</label>
+                                            @if ($isFolderBukti)
                                                 <a href="{{ $baris->link_bukti_dukung_kinerja }}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="display:inline-flex;align-items:center;gap:6px">
-                                                    <span>🔗</span> Buka Tautan Bukti Dukung
+                                                    <span>📁</span> Buka Folder Bukti Dukung
                                                 </a>
                                             @else
-                                                <div style="background:var(--bg);padding:7px 12px;border-radius:8px;font-size:12px;color:var(--faint)">Belum ada tautan</div>
+                                                <div style="background:var(--bg);padding:7px 12px;border-radius:8px;font-size:12px;color:var(--faint)">Belum ada folder</div>
                                             @endif
                                         </div>
 
                                         <div>
-                                            <label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase">🔗 RTL Sebelumnya</label>
-                                            @if ($baris->link_rtl_sebelumnya)
+                                            <label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase">📁 Folder RTL</label>
+                                            @if ($isFolderRtl)
                                                 <a href="{{ $baris->link_rtl_sebelumnya }}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="display:inline-flex;align-items:center;gap:6px">
-                                                    <span>🔗</span> Buka Tautan RTL Sebelumnya
+                                                    <span>📁</span> Buka Folder RTL
                                                 </a>
                                             @else
-                                                <div style="background:var(--bg);padding:7px 12px;border-radius:8px;font-size:12px;color:var(--faint)">Belum ada tautan</div>
+                                                <div style="background:var(--bg);padding:7px 12px;border-radius:8px;font-size:12px;color:var(--faint)">Belum ada folder</div>
                                             @endif
                                         </div>
                                     </div>
 
-                                    {{-- Tombol Aksi di Bawah Kartu --}}
                                     @if ($this->isTimSakip())
                                         <div class="lakin-card-foot">
                                             <span style="font-size:11.5px;color:var(--muted)">
@@ -805,13 +926,13 @@
                 </div>
 
                 <div class="field">
-                    <label>Link Bukti Dukung Kinerja (opsional)</label>
-                    <input type="url" class="inp filled" placeholder="https://…" wire:model="linkBuktiDukungKinerjaBaru">
+                    <label>Link Folder Bukti Dukung (opsional)</label>
+                    <input type="url" class="inp filled" placeholder="https://drive.google.com/drive/folders/…" wire:model="linkBuktiDukungKinerjaBaru">
                 </div>
 
                 <div class="field">
-                    <label>Link RTL Sebelumnya (opsional)</label>
-                    <input type="url" class="inp filled" placeholder="https://…" wire:model="linkRtlSebelumnyaBaru">
+                    <label>Link Folder RTL Sebelumnya (opsional)</label>
+                    <input type="url" class="inp filled" placeholder="https://drive.google.com/drive/folders/…" wire:model="linkRtlSebelumnyaBaru">
                 </div>
             </div>
 
@@ -878,18 +999,18 @@
                         @endif
 
                         <div class="field" style="grid-column: 1 / -1">
-                            <label>Uraian Kegiatan</label>
-                            <textarea class="inp filled" rows="3" placeholder="Rincian kegiatan yang dilaksanakan…" wire:model="edit.{{ $editingBarisId }}.kegiatan"></textarea>
+                            <label>Uraian Kegiatan (per Triwulan)</label>
+                            <textarea class="inp filled" rows="4" placeholder="[Triwulan II]&#10;1. Kegiatan A&#10;&#10;[Triwulan III]&#10;1. Kegiatan B" wire:model="edit.{{ $editingBarisId }}.kegiatan"></textarea>
                         </div>
 
                         <div class="field" style="grid-column: 1 / -1">
-                            <label>Kendala &amp; Solusi</label>
-                            <textarea class="inp filled" rows="3" placeholder="Kendala yang dihadapi serta solusi penyelesaiannya…" wire:model="edit.{{ $editingBarisId }}.solusi_kendala"></textarea>
+                            <label>Kendala &amp; Solusi (per Triwulan)</label>
+                            <textarea class="inp filled" rows="4" placeholder="[Triwulan II]&#10;1. Kendala: ...&#10;   Solusi: ..." wire:model="edit.{{ $editingBarisId }}.solusi_kendala"></textarea>
                         </div>
 
                         <div class="field" style="grid-column: 1 / -1">
-                            <label>RTL (Rencana Tindak Lanjut)</label>
-                            <textarea class="inp filled" rows="3" placeholder="Rencana tindak lanjut ke depan…" wire:model="edit.{{ $editingBarisId }}.rtl"></textarea>
+                            <label>RTL (Rencana Tindak Lanjut per Triwulan)</label>
+                            <textarea class="inp filled" rows="4" placeholder="[Triwulan III]&#10;1. Rencana A&#10;&#10;[Triwulan IV]&#10;1. Rencana B" wire:model="edit.{{ $editingBarisId }}.rtl"></textarea>
                         </div>
 
                         <div class="field">
@@ -903,13 +1024,13 @@
                         </div>
 
                         <div class="field">
-                            <label>Link Bukti Dukung Kinerja</label>
-                            <input type="url" class="inp filled" placeholder="https://…" wire:model="edit.{{ $editingBarisId }}.link_bukti_dukung_kinerja">
+                            <label>Link Folder Bukti Dukung (Google Drive)</label>
+                            <input type="url" class="inp filled" placeholder="https://drive.google.com/drive/folders/…" wire:model="edit.{{ $editingBarisId }}.link_bukti_dukung_kinerja">
                         </div>
 
                         <div class="field">
-                            <label>Link RTL Sebelumnya</label>
-                            <input type="url" class="inp filled" placeholder="https://…" wire:model="edit.{{ $editingBarisId }}.link_rtl_sebelumnya">
+                            <label>Link Folder RTL Sebelumnya (Google Drive)</label>
+                            <input type="url" class="inp filled" placeholder="https://drive.google.com/drive/folders/…" wire:model="edit.{{ $editingBarisId }}.link_rtl_sebelumnya">
                         </div>
                     </div>
 
@@ -927,7 +1048,7 @@
 
     {{-- Modal Konfirmasi Segarkan --}}
     <x-confirm-modal :show="$showSegarkanConfirm" title="Segarkan Data Rekap?" :danger="false"
-        message="Segarkan angka dan rincian tindak lanjut (kegiatan, kendala &amp; solusi, RTL, PIC, tautan bukti) dari data capaian &amp; verifikasi terbaru? Baris custom dan kolom yang sudah Anda sunting tidak akan berubah.">
+        message="Segarkan angka capaian dan rincian tindak lanjut per triwulan (kegiatan, kendala &amp; solusi, RTL, PIC, tautan folder bukti) dari data capaian &amp; verifikasi terbaru? Baris custom tidak akan berubah.">
         <button type="button" class="btn btn-ghost" wire:click="batalkanSegarkan" wire:loading.attr="disabled" wire:target="segarkanAngka">Batal</button>
         <button type="button" class="btn btn-primary" wire:click="segarkanAngka" wire:loading.attr="disabled" wire:target="segarkanAngka">
             <span wire:loading.remove wire:target="segarkanAngka">Segarkan</span>
