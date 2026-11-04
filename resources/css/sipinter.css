@@ -921,6 +921,14 @@ button.mark:disabled{opacity:.65;cursor:progress}
 .lakin-tw-strip{display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:wrap;margin-top:6px}
 .lakin-tw-badge{display:inline-flex;align-items:center;padding:2px 8px;font-size:10.5px;font-weight:700;border-radius:6px;background:var(--blue-soft);color:var(--blue-600);border:1px solid var(--blue-line);margin-bottom:4px;letter-spacing:.3px}
 
+/* Triwulan Section Badges (Color-coded for clarity) */
+.lakin-section-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;font-size:10.5px;font-weight:800;border-radius:6px;margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px}
+.lakin-section-badge.tw-1{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
+.lakin-section-badge.tw-2{background:#ecfdf5;color:#047857;border:1px solid #a7f3d0}
+.lakin-section-badge.tw-3{background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe}
+.lakin-section-badge.tw-4{background:#fffbeb;color:#b45309;border:1px solid #fde68a}
+.lakin-section-badge.tw-def{background:#f1f5f9;color:#334155;border:1px solid #cbd5e1}
+
 /* Filter Controls */
 .lakin-filter-inp{padding:7px 12px;font-size:12.5px;border:1.5px solid var(--input-line);border-radius:8px;background:var(--input-bg);color:var(--ink);min-width:180px;transition:border-color .15s, box-shadow .15s}
 .lakin-filter-inp:focus{outline:none;border-color:var(--focus-ring);box-shadow:0 0 0 3px color-mix(in srgb, var(--focus-ring) 25%, transparent)}
@@ -933,9 +941,9 @@ button.mark:disabled{opacity:.65;cursor:progress}
 .lakin-table{width:100%;min-width:1760px;border-collapse:separate;border-spacing:0;font-size:12.5px}
 
 /* Sticky Headers */
-.lakin-table thead th{position:sticky;top:0;z-index:10;background:var(--ro-bg);color:var(--ink);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;padding:12px 14px;border-bottom:2px solid var(--line);white-space:nowrap}
-.lakin-table thead th.th-sticky-left{position:sticky;left:0;z-index:25;background:var(--ro-bg);border-right:2px solid var(--line);box-shadow:3px 0 6px -2px rgba(16,32,70,.08)}
-.lakin-table thead th.th-sticky-right{position:sticky;right:0;z-index:25;background:var(--ro-bg);border-left:2px solid var(--line);box-shadow:-3px 0 6px -2px rgba(16,32,70,.08)}
+.lakin-table thead th{position:sticky;top:0;z-index:15;background:var(--ro-bg);color:var(--ink);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;padding:12px 14px;border-bottom:2px solid var(--line);white-space:nowrap}
+.lakin-table thead th.th-sticky-left{position:sticky;left:0;top:0;z-index:35;background:var(--ro-bg) !important;border-right:2px solid var(--line);box-shadow:4px 0 10px rgba(16,32,70,.08)}
+.lakin-table thead th.th-sticky-right{position:sticky;right:0;top:0;z-index:35;background:var(--ro-bg) !important;border-left:2px solid var(--line);box-shadow:-4px 0 10px rgba(16,32,70,.08)}
 
 /* Sasaran Section Header Row */
 .lakin-sasaran-tr td{background:color-mix(in srgb, var(--blue-soft) 80%, var(--white));padding:9px 16px;border-top:2px solid var(--line);border-bottom:1.5px solid var(--blue-line);color:var(--navy);font-weight:700;font-size:12.5px;letter-spacing:.2px;border-left:4px solid var(--blue)}
@@ -943,21 +951,58 @@ button.mark:disabled{opacity:.65;cursor:progress}
 
 /* Data Cells */
 .lakin-table tbody td{padding:12px 14px;border-bottom:1px solid var(--line2);vertical-align:top;background:var(--white);transition:background .1s;line-height:1.5}
-.lakin-table tbody tr:hover td{background:color-mix(in srgb, var(--blue-soft) 30%, var(--white))}
+.lakin-table tbody tr:hover td{background:color-mix(in srgb, var(--blue-soft) 25%, var(--white))}
 
-/* Sticky Data Cells */
-.lakin-table tbody td.td-sticky-left{position:sticky;left:0;z-index:8;background:inherit;border-right:2px solid var(--line);box-shadow:3px 0 6px -2px rgba(16,32,70,.08)}
-.lakin-table tbody td.td-sticky-right{position:sticky;right:0;z-index:8;background:inherit;border-left:2px solid var(--line);box-shadow:-3px 0 6px -2px rgba(16,32,70,.08)}
-.lakin-table tbody tr:hover td.td-sticky-left{background:color-mix(in srgb, var(--blue-soft) 40%, var(--white))}
-.lakin-table tbody tr:hover td.td-sticky-right{background:color-mix(in srgb, var(--blue-soft) 40%, var(--white))}
+/* Sticky Data Cells — WAJIB SOLID OPAQUE (TIDAK TRANSPARAN) AGAR TEKS TIDAK TABRAKAN */
+.lakin-table tbody td.td-sticky-left{position:sticky;left:0;z-index:12;background-color:#ffffff !important;border-right:2px solid var(--line);box-shadow:4px 0 10px rgba(16,32,70,.08)}
+.lakin-table tbody td.td-sticky-right{position:sticky;right:0;z-index:12;background-color:#ffffff !important;border-left:2px solid var(--line);box-shadow:-4px 0 10px rgba(16,32,70,.08)}
+.lakin-table tbody tr:hover td.td-sticky-left{background-color:#f8fafc !important}
+.lakin-table tbody tr:hover td.td-sticky-right{background-color:#f8fafc !important}
 
-/* Format Teks Baca Rapi */
-.lakin-text-cell{font-size:12.5px;color:var(--ink);line-height:1.55;word-break:break-word;white-space:pre-line}
-.lakin-text-empty{color:var(--faint);font-style:italic}
-.lakin-solusi-box{display:flex;flex-direction:column;gap:6px;font-size:12px}
-.lakin-solusi-item{display:flex;align-items:flex-start;gap:6px;line-height:1.45}
-.lakin-badge-kendala{font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:var(--red-soft);color:var(--red);flex:none;margin-top:2px}
-.lakin-badge-solusi{font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:var(--teal-soft);color:var(--teal);flex:none;margin-top:2px}
+/* Format Teks & Konten Baca Rapi */
+.lakin-text-cell{font-size:12.5px;color:var(--ink);line-height:1.55;word-break:break-word;max-height:220px;overflow-y:auto;padding-right:4px}
+.lakin-text-cell::-webkit-scrollbar{width:4px}
+.lakin-text-cell::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px}
+.lakin-text-empty{color:var(--faint);font-style:italic;font-size:12px}
+
+/* List Konten & Section */
+.lakin-content-section{margin-bottom:10px}
+.lakin-content-section:last-child{margin-bottom:0}
+.lakin-item-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:5px}
+.lakin-item-list li{display:flex;align-items:flex-start;gap:6px;font-size:12px;line-height:1.45;color:var(--ink)}
+.lakin-bullet{color:var(--blue-600);font-size:11px;margin-top:1px;flex:none}
+
+/* Box Kendala & Solusi */
+.lakin-ks-box{display:flex;flex-direction:column;gap:6px;margin-bottom:6px;background:#f8fafc;border:1px solid var(--line);border-radius:7px;padding:8px 10px}
+.lakin-ks-box:last-child{margin-bottom:0}
+.lakin-ks-item{display:flex;align-items:flex-start;gap:7px;font-size:12px;line-height:1.45}
+.lakin-ks-tag{font-size:9.5px;font-weight:800;padding:2px 6px;border-radius:4px;flex:none;margin-top:2px;text-transform:uppercase;letter-spacing:.3px}
+.lakin-ks-tag.tag-k{background:#fee2e2;color:#b91c1c;border:1px solid #fecaca}
+.lakin-ks-tag.tag-s{background:#dcfce7;color:#15803d;border:1px solid #bbf7d0}
+.lakin-ks-desc{color:var(--ink);flex:1}
+
+/* List RTL */
+.lakin-rtl-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:5px}
+.lakin-rtl-list li{display:flex;align-items:flex-start;gap:7px;font-size:12px;line-height:1.45;color:var(--ink);background:#f8fafc;border:1px solid var(--line2);border-radius:6px;padding:6px 9px}
+.lakin-rtl-num{font-size:10px;font-weight:800;width:18px;height:18px;border-radius:50%;background:var(--blue-soft);color:var(--blue-600);display:flex;align-items:center;justify-content:center;flex:none;margin-top:1px}
+
+/* Matriks 4-Triwulan di Kolom Capaian % Tabel */
+.lakin-tw-matrix{display:grid;grid-template-columns:repeat(4, 1fr);gap:3px;margin-top:6px;background:#f8fafc;border:1px solid var(--line);border-radius:6px;padding:4px}
+.lakin-tw-cell{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3px 2px;border-radius:4px;font-size:9px;line-height:1.2;text-align:center}
+.lakin-tw-cell .m-lbl{font-size:8px;font-weight:700;color:#64748b}
+.lakin-tw-cell .m-val{font-size:9.5px;font-weight:800;font-variant-numeric:tabular-nums}
+.lakin-tw-cell.up{background:#ecfdf5;color:#047857}
+.lakin-tw-cell.mid{background:#fffbeb;color:#b45309}
+.lakin-tw-cell.low{background:#fef2f2;color:#b91c1c}
+.lakin-tw-cell.empty{background:#f1f5f9;color:#94a3b8}
+
+/* Pill Tautan Google Drive Folder */
+.lakin-drive-pill{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;font-size:11px;font-weight:700;border-radius:6px;text-decoration:none;transition:all .15s;white-space:nowrap}
+.lakin-drive-pill.bukti{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
+.lakin-drive-pill.bukti:hover{background:#dbeafe;color:#1e40af;box-shadow:var(--sh-sm)}
+.lakin-drive-pill.rtl{background:#f5f3ff;color:#6d28d9;border:1px solid #ddd6fe}
+.lakin-drive-pill.rtl:hover{background:#ede9fe;color:#5b21b6;box-shadow:var(--sh-sm)}
+.lakin-drive-pill .ext{font-size:11px;opacity:.7}
 
 /* Mini Progress Meter */
 .lakin-progress-wrap{width:100%;max-width:86px;height:5px;background:var(--line);border-radius:999px;overflow:hidden;margin-top:4px}
@@ -975,32 +1020,44 @@ button.mark:disabled{opacity:.65;cursor:progress}
 .tbl-textarea{width:100%;min-height:72px;padding:8px 10px;border:1.5px solid var(--input-line);border-radius:7px;font-size:12px;line-height:1.45;background:var(--input-bg);color:var(--ink);resize:vertical;font-family:inherit;transition:border-color .15s, box-shadow .15s}
 .tbl-textarea:focus{outline:none;border-color:var(--focus-ring);box-shadow:0 0 0 3px color-mix(in srgb, var(--focus-ring) 25%, transparent)}
 
-/* Card View (Semua Device & Mobile) */
+/* Card View (Executive Scorecard View) */
 .lakin-cards-wrap{display:flex;flex-direction:column;gap:18px}
 .lakin-group-card{background:var(--white);border:1.5px solid var(--line);border-radius:var(--radius);overflow:hidden;box-shadow:var(--sh-sm)}
 .lakin-group-header{padding:12px 18px;background:color-mix(in srgb, var(--blue-soft) 80%, var(--white));border-bottom:1.5px solid var(--blue-line);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;border-left:4px solid var(--blue)}
 .lakin-group-title{font-size:13.5px;font-weight:700;color:var(--navy);display:flex;align-items:center;gap:8px}
-.lakin-group-body{padding:16px;display:flex;flex-direction:column;gap:14px}
+.lakin-group-body{padding:16px;display:flex;flex-direction:column;gap:16px}
 
-.lakin-card{background:var(--surface-2);border:1.5px solid var(--line2);border-radius:12px;padding:16px 18px;box-shadow:var(--sh-sm);transition:border-color .15s, box-shadow .15s}
+.lakin-card{background:var(--white);border:1.5px solid var(--line);border-radius:12px;padding:18px 20px;box-shadow:var(--sh-sm);transition:border-color .15s, box-shadow .15s}
 .lakin-card:hover{border-color:var(--hover-line);box-shadow:var(--sh)}
-.lakin-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--line2)}
-.lakin-card-metrics{display:grid;grid-template-columns:repeat(3, 1fr);gap:12px;margin-bottom:14px;background:var(--bg);padding:12px 16px;border-radius:10px;border:1px solid var(--line)}
-.lakin-metric-box{display:flex;flex-direction:column;gap:3px}
-.lakin-metric-lbl{font-size:10.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
-.lakin-metric-val{font-size:16px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums}
+.lakin-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--line2)}
 
-.lakin-card-grid{display:grid;grid-template-columns:repeat(2, 1fr);gap:12px;margin-bottom:14px}
-.lakin-card-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:12px;border-top:1px solid var(--line2);flex-wrap:wrap}
+/* 5-Column Quarterly Metric Strip in Executive Cards */
+.lakin-card-5col{display:grid;grid-template-columns:repeat(5, 1fr);gap:10px;margin-bottom:16px;background:#f8fafc;padding:10px;border-radius:10px;border:1px solid var(--line)}
+.lakin-col-metric{display:flex;flex-direction:column;gap:3px;padding:8px 10px;background:#ffffff;border-radius:8px;border:1px solid var(--line2)}
+.lakin-col-metric.highlight{background:#eff6ff;border-color:#bfdbfe}
+.lakin-col-metric-lbl{font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;justify-content:space-between}
+.lakin-col-metric-val{font-size:14px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;margin-top:2px}
+.lakin-col-metric-sub{font-size:10px;color:var(--muted);margin-top:1px}
+
+/* 3-Column Content Breakdown in Executive Cards */
+.lakin-card-3col{display:grid;grid-template-columns:repeat(3, 1fr);gap:14px;margin-bottom:14px}
+.lakin-card-sec{display:flex;flex-direction:column;background:#fbfcfe;border:1px solid var(--line2);border-radius:9px;padding:12px;min-height:120px}
+.lakin-card-sec-head{display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:800;color:var(--navy);margin-bottom:8px;padding-bottom:6px;border-bottom:1.5px solid var(--line2);text-transform:uppercase;letter-spacing:.4px}
+
+.lakin-card-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:12px;border-top:1px solid var(--line2);flex-wrap:wrap}
 
 /* Modal Sunting Form */
 .lakin-modal-grid{display:grid;grid-template-columns:repeat(2, 1fr);gap:14px}
 
+@media(max-width:1100px){
+  .lakin-card-3col{grid-template-columns:1fr}
+  .lakin-card-5col{grid-template-columns:repeat(3, 1fr)}
+}
+
 @media(max-width:768px){
   .lakin-header-banner{flex-direction:column;align-items:stretch}
   .lakin-header-banner .btn-row{width:100%;justify-content:flex-start}
-  .lakin-card-metrics{grid-template-columns:1fr 1fr 1fr}
-  .lakin-card-grid{grid-template-columns:1fr}
+  .lakin-card-5col{grid-template-columns:repeat(2, 1fr)}
   .lakin-toolbar{flex-direction:column;align-items:stretch}
   .lakin-toolbar-group{width:100%;justify-content:space-between}
   .lakin-filter-inp{flex:1;min-width:0}
@@ -1011,8 +1068,8 @@ button.mark:disabled{opacity:.65;cursor:progress}
 
 @media(max-width:480px){
   .lakin-stat-grid{grid-template-columns:1fr}
-  .lakin-card-metrics{grid-template-columns:1fr}
-  .lakin-card{padding:12px}
+  .lakin-card-5col{grid-template-columns:1fr}
+  .lakin-card{padding:14px}
   .lakin-card-foot .btn-row{width:100%;flex-direction:column}
   .lakin-card-foot .btn{width:100%;justify-content:center}
 }
